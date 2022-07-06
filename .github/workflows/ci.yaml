@@ -28,8 +28,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v2
-        with:
-          submodules: recursive
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
@@ -41,7 +39,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: fmt
-          args: --manifest-path=${{ matrix.crates }} --all -- --check
+          args: --manifest-path=${{ matrix.crates }} -- --check
 
   "lint_clippy":
     name: lint:clippy
