@@ -86,16 +86,12 @@ async fn worker() -> Result<(), ReturnStatus> {
                 consensus_state,
             } => {
                 if let ConsensusState::Active {
-                    active_state,
+                    active_state:
+                        ActiveConsensusState::Active {
+                            ..
+                        },
                 } = consensus_state
                 {
-                    if let ActiveConsensusState::Active {
-                        ..
-                    } = active_state
-                    {
-                    } else {
-                        return Err(ReturnStatus::NotABaker);
-                    }
                 } else {
                     return Err(ReturnStatus::NotABaker);
                 }
