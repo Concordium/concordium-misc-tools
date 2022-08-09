@@ -1,0 +1,28 @@
+pipeline {
+    agent any
+    environment {
+        aws_s3_bucket_name = 's3://node-deb.concordium.com'
+    }
+    stages {
+        stage('build') {
+            agent {
+                dockerfile {
+                    additionalBuildArgs "--build-arg=base_image=rust:${rust_image_tag}"
+                    reuseNode true // run on same node as top-level
+                }
+            }
+            steps {
+               sh '''\
+                   cargo build --release
+               '''.stripIndent()
+               stash includes: 'node_liveness_checker', name: 'target'
+            }
+        }
+        stage('push') {
+            steps {
+                unstash 'target'
+                sh 'aws s3 cp ./target/release/node_liveness_checker "${aws_s3_bucket_name}/node_liveness_checker-${version}"'
+            }
+        }
+    }
+}
