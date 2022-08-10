@@ -13,6 +13,7 @@ pipeline {
             }
             steps {
                sh '''\
+                   cd node_liveness_checker
                    cargo build --release
                '''.stripIndent()
                stash includes: 'node_liveness_checker', name: 'target'
