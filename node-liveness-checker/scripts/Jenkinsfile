@@ -7,6 +7,7 @@ pipeline {
         stage('build and ship') {
             agent {
                 dockerfile {
+                    filename 'scripts/Dockerfile'
                     dir 'node-liveness-checker'
                     additionalBuildArgs "--build-arg=base_image=rust:${rust_image_tag}"
                     reuseNode true // run on same node as top-level
