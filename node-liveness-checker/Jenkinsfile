@@ -14,16 +14,16 @@ pipeline {
             }
             steps {
                sh '''\
-                   cd node_liveness_checker
+                   cd node-liveness-checker
                    cargo build --release
                '''.stripIndent()
-               stash includes: 'node_liveness_checker', name: 'target'
+               stash includes: 'node-liveness-checker', name: 'target'
             }
         }
         stage('push') {
             steps {
                 unstash 'target'
-                sh 'aws s3 cp ./target/release/node_liveness_checker "${aws_s3_bucket_name}/node_liveness_checker-${version}"'
+                sh 'aws s3 cp ./target/release/node-liveness-checker "${aws_s3_bucket_name}/node_liveness_checker-${version}"'
             }
         }
     }
