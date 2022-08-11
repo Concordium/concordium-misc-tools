@@ -24,7 +24,7 @@ pipeline {
         stage('push') {
             steps {
                 unstash 'artifact'
-			sh 'aws s3 cp ./concordium-node-liveness-checker "${aws_s3_bucket_name}/node_liveness_checker-${version}"'
+			sh 'aws s3 cp ./node-liveness-checker/target/release/concordium-node-liveness-checker "${aws_s3_bucket_name}/node_liveness_checker-${version}"'
             }
         }
     }
