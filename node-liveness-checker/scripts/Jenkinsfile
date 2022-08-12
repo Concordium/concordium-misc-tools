@@ -1,0 +1,31 @@
+pipeline {
+    agent any
+    environment {
+        aws_s3_bucket_name = 's3://node-deb.concordium.com'
+    }
+    stages {
+        stage('build and ship') {
+            agent {
+                dockerfile {
+                    filename 'scripts/Dockerfile'
+                    dir 'node-liveness-checker'
+                    additionalBuildArgs "--build-arg=base_image=rust:${rust_image_tag}"
+                    reuseNode true // run on same node as top-level
+                }
+            }
+            steps {
+               sh '''\
+                   cd node-liveness-checker
+                   cargo build --release
+               '''.stripIndent()
+               stash includes: 'node-liveness-checker/target/release/concordium-node-liveness-checker', name: 'artifact'
+            }
+        }
+        stage('push') {
+            steps {
+                unstash 'artifact'
+			sh 'aws s3 cp ./node-liveness-checker/target/release/concordium-node-liveness-checker "${aws_s3_bucket_name}/node_liveness_checker-${version}"'
+            }
+        }
+    }
+}
