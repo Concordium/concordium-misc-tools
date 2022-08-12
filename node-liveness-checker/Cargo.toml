@@ -8,9 +8,9 @@ edition = "2021"
 [dependencies]
 concordium-rust-sdk = { path = "../deps/concordium-rust-sdk", version = "*" }
 anyhow = "1"
-tokio = {version = "1.8", features = ["rt-multi-thread"]}
+tokio = {version = "1.20", features = ["rt-multi-thread"]}
 thiserror = "1.0.28"
 clap = { version = "3", features = ["derive", "env"] }
-chrono = "0.4.19"
-tonic = "0.7"
+chrono = "0.4"
+tonic = "0.8"
 
