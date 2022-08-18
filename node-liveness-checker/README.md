@@ -48,7 +48,7 @@ Everything in this repository should build with stable rust at the moment (at le
 ```shell
  cargo +nightly-2021-06-09 fmt
 ```
-(the exact version used by the CI can be found in [.github/workflows/ci.yaml](.github/workflows/ci.yaml) file).
+(the exact version used by the CI can be found in [.github/workflows/ci.yaml](https://github.com/Concordium/concordium-misc-tools/blob/main/.github/workflows/ci.yaml) file).
 You will need to have a recent enough nightly version installed, which can be done via
 
 ```shell

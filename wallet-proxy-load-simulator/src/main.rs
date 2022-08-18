@@ -1,0 +1,95 @@
+use anyhow::Context;
+use clap::Parser;
+
+#[derive(clap::Parser, Debug)]
+#[clap(arg_required_else_help(true))]
+#[clap(version, author)]
+struct App {
+    #[clap(
+        long = "wp-url",
+        help = "Base URL of the wallet-proxy.",
+        default_value = "http://wallet-proxy.stagenet.concordium.com",
+        env = "WP_LOAD_SIMULATOR_URL"
+    )]
+    url:      reqwest::Url,
+    #[clap(
+        long = "accounts",
+        help = "Require the node to be a baker.",
+        env = "WP_LOAD_SIMULATOR_ACCOUNTS"
+    )]
+    accounts: std::path::PathBuf,
+    #[clap(
+        long = "delay",
+        help = "Delay between requests between requests by parallel workers.",
+        env = "WP_LOAD_SIMULATOR_DELAY"
+    )]
+    delay:    u64,
+    #[clap(
+        long = "max-parallel",
+        help = "Number of parallel queries to make at the same time.",
+        env = "WP_MAX_PARALLEL"
+    )]
+    num:      usize,
+}
+
+#[tokio::main(flavor = "multi_thread")]
+async fn main() -> anyhow::Result<()> {
+    let app = App::parse();
+    let accounts: Vec<String> = serde_json::from_reader(
+        std::fs::File::open(app.accounts).context("Unable to open accounts list file.")?,
+    )
+    .context("Invalid account list")?;
+    let mut handles = Vec::new();
+    let delay = app.delay;
+
+    let mut senders = Vec::new();
+    let mut receivers = Vec::new();
+    for _ in 0..app.num {
+        let (sender, receiver) = tokio::sync::mpsc::channel(100);
+        senders.push(sender);
+        receivers.push(receiver);
+    }
+
+    let url = app.url.clone();
+    let sender_task = tokio::spawn(async move {
+        let mut i: usize = 0;
+        for account in accounts.iter().cycle() {
+            let mut url = url.clone();
+            url.set_path(&format!("v0/accBalance/{}", account));
+            senders[i].send(url).await.context(format!("Receiver {i} died."))?;
+            i += 1;
+            i %= senders.len();
+        }
+        Ok::<(), anyhow::Error>(())
+    });
+
+    for (i, mut receiver) in receivers.into_iter().enumerate() {
+        let client = reqwest::Client::new();
+        let handle = tokio::spawn(async move {
+            let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(delay));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            loop {
+                interval.tick().await;
+                let url = receiver.recv().await.unwrap();
+                let start = chrono::Utc::now();
+                let response = client.get(url.clone()).send().await;
+                let end = chrono::Utc::now();
+                let diff = end.signed_duration_since(start).num_milliseconds();
+                match response {
+                    Ok(response) => {
+                        let code = response.status().as_u16();
+                        let body = response.json::<serde_json::Value>().await;
+                        println!("{i}, {url}, {diff}ms, {}, {}", code, body.is_ok());
+                    }
+                    Err(_) => {
+                        println!("{i}, {url}, {diff}ms, 0, false");
+                    }
+                }
+            }
+        });
+        handles.push(handle);
+    }
+    futures::future::join_all(handles).await.clear();
+    sender_task.abort();
+    Ok(())
+}

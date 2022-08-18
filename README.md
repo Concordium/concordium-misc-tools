@@ -10,6 +10,9 @@ The tools are
   A tool that determines whether a node is up and running, and whether it is
   sufficiently up to date. The purpose of this tool is to help automate node
   management.
+- [wallet-proxy-load-simulator](./wallet-proxy-load-simulator)
+  A tool to simulate the load on the wallet-proxy similar to what mobile wallets
+  are expected to do.
 
 # Contributing
 

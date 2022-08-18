@@ -25,6 +25,7 @@ jobs:
       matrix:
         crates:
           - node-liveness-checker/Cargo.toml
+          - wallet-proxy-load-simulator/Cargo.toml
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -51,6 +52,7 @@ jobs:
       matrix:
         crates:
           - node-liveness-checker/Cargo.toml
+          - wallet-proxy-load-simulator/Cargo.toml
     steps:
       - name: Install system packages
         run: |
