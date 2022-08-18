@@ -77,15 +77,12 @@ async fn main() -> anyhow::Result<()> {
                 let diff = end.signed_duration_since(start).num_milliseconds();
                 match response {
                     Ok(response) => {
-                        if response.status().is_success() {
-                            let body = response.json::<serde_json::Value>().await;
-                            println!("{i}, {url}, {diff}ms, true, {}", body.is_ok());
-                        } else {
-                            println!("{i}, {url}, {diff}ms, false");
-                        }
+                        let code = response.status().as_u16();
+                        let body = response.json::<serde_json::Value>().await;
+                        println!("{i}, {url}, {diff}ms, {}, {}", code, body.is_ok());
                     }
                     Err(_) => {
-                        println!("{i}, {url}, {diff}ms, false");
+                        println!("{i}, {url}, {diff}ms, 0, false");
                     }
                 }
             }

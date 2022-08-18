@@ -27,8 +27,8 @@ The tool outputs to `stdout`. Each line contains the
 - `i`, the identifier of the worker that sent the request
 - `url` the path of the URL that was queried
 - `diff` the time in milliseconds until the server responded
-- `success`, whether the request was successful, i.e., whether the server
-  responded with an OK-like status code (200-299).
+- `code`, the HTTP status code of the response, or if there is a network error,
+  `0`.
 
 # Contributing
 
