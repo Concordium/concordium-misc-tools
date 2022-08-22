@@ -14,7 +14,7 @@ struct App {
     url:      reqwest::Url,
     #[clap(
         long = "accounts",
-        help = "Require the node to be a baker.",
+        help = "List of accounts to query.",
         env = "WP_LOAD_SIMULATOR_ACCOUNTS"
     )]
     accounts: std::path::PathBuf,
