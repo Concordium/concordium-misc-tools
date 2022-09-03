@@ -18,7 +18,7 @@ use concordium_rust_sdk::{
             AccountCredentialWithoutProofs, AccountKeys, ArData, ArIdentity, ArInfo, ChainArData,
             CredentialData, CredentialDeploymentCommitments, CredentialDeploymentValues,
             CredentialHolderInfo, GlobalContext, IpData, IpIdentity, IpInfo, Policy,
-            PublicCredentialData, SignatureThreshold, YearMonth,
+            PublicCredentialData, SignatureThreshold, YearMonth, account_address_from_registration_id,
         },
     },
     types::{
@@ -964,7 +964,7 @@ fn accounts(
                         let ga = GenesisAccount {
                             account_keys,
                             aci,
-                            address: AccountAddress::new(&cred_id),
+                            address: account_address_from_registration_id(&cred_id),
                             credentials: Versioned::new(
                                 VERSION_0,
                                 [(
@@ -1015,7 +1015,7 @@ fn accounts(
                         };
 
                         Ok(GenesisAccountPublic {
-                            address: AccountAddress::new(&cred_id),
+                            address: account_address_from_registration_id(&cred_id),
                             account_threshold: 1.try_into().unwrap(),
                             credentials: ga.credentials.value,
                             balance,
