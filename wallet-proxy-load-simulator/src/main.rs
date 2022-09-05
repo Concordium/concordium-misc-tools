@@ -20,7 +20,7 @@ struct App {
     accounts: std::path::PathBuf,
     #[clap(
         long = "delay",
-        help = "Delay between requests between requests by parallel workers.",
+        help = "Delay between requests by each parallel workers, in milliseconds.",
         env = "WP_LOAD_SIMULATOR_DELAY"
     )]
     delay:    u64,
@@ -63,8 +63,11 @@ async fn main() -> anyhow::Result<()> {
         Ok::<(), anyhow::Error>(())
     });
 
+    let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+
     for (i, mut receiver) in receivers.into_iter().enumerate() {
         let client = reqwest::Client::new();
+        let sender = sender.clone();
         let handle = tokio::spawn(async move {
             let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(delay));
             interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -78,16 +81,31 @@ async fn main() -> anyhow::Result<()> {
                 match response {
                     Ok(response) => {
                         let code = response.status().as_u16();
-                        let body = response.json::<serde_json::Value>().await;
-                        println!("{i}, {url}, {diff}ms, {}, {}", code, body.is_ok());
+                        let _body = response.json::<serde_json::Value>().await;
+                        sender.send((true, i, url, diff, code)).unwrap();
+                        //println!("{i}, {url}, {diff}ms, {}, {}", code,
+                        // body.is_ok());
                     }
                     Err(_) => {
-                        println!("{i}, {url}, {diff}ms, 0, false");
+                        sender.send((false, i, url, diff, 0)).unwrap();
+                        // println!("{i}, {url}, {diff}ms, 0, false");
                     }
                 }
             }
         });
         handles.push(handle);
+    }
+    {
+        let mut start = chrono::Utc::now();
+        let mut count = 0;
+        while let Some((success, i, url, diff, code)) = receiver.recv().await {
+            if chrono::Utc::now().signed_duration_since(start).num_milliseconds() > 1000 {
+                count = 0;
+                start = chrono::Utc::now();
+            }
+            count += 1;
+            println!("{count}, {i}, {url}, {diff}ms, {code}, {success}",);
+        }
     }
     futures::future::join_all(handles).await.clear();
     sender_task.abort();
