@@ -1,4 +1,4 @@
-use anyhow::{bail, ensure, Context};
+use anyhow::{anyhow, bail, ensure, Context};
 use clap::Parser;
 use concordium_rust_sdk::{
     common::{
@@ -14,22 +14,22 @@ use concordium_rust_sdk::{
         constants::{ArCurve, IpPairing},
         curve_arithmetic::{Curve, Value},
         types::{
-            mk_dummy_description, AccCredentialInfo, AccountAddress,
-            AccountCredentialWithoutProofs, AccountKeys, ArData, ArIdentity, ArInfo, ChainArData,
-            CredentialData, CredentialDeploymentCommitments, CredentialDeploymentValues,
-            CredentialHolderInfo, GlobalContext, IpData, IpIdentity, IpInfo, Policy,
-            PublicCredentialData, SignatureThreshold, YearMonth, account_address_from_registration_id,
+            account_address_from_registration_id, mk_dummy_description, AccCredentialInfo,
+            AccountAddress, AccountCredentialWithoutProofs, AccountKeys, ArData, ArIdentity,
+            ArInfo, ChainArData, CredentialData, CredentialDeploymentCommitments,
+            CredentialDeploymentValues, CredentialHolderInfo, GlobalContext, IpData, IpIdentity,
+            IpInfo, Policy, PublicCredentialData, SignatureThreshold, YearMonth,
         },
     },
     types::{
         hashes::LeadershipElectionNonce, AccessStructure, AccountIndex, AccountThreshold,
-        AuthorizationsV0, BakerAggregationVerifyKey, BakerCredentials, BakerElectionVerifyKey,
-        BakerId, BakerKeyPairs, BakerSignatureVerifyKey, BlockHeight, ChainParameterVersion0,
-        ChainParameterVersion1, ChainParameters, ChainParametersV0, CooldownParameters,
-        ElectionDifficulty, Energy, Epoch, ExchangeRate, HigherLevelAccessStructure,
-        PoolParameters, ProtocolVersion, RewardParameters, SlotDuration, TimeParameters,
-        UpdateKeyPair, UpdateKeysCollection, UpdateKeysCollectionSkeleton, UpdateKeysIndex,
-        UpdateKeysThreshold, UpdatePublicKey,
+        AuthorizationsV0, AuthorizationsV1, BakerAggregationVerifyKey, BakerCredentials,
+        BakerElectionVerifyKey, BakerId, BakerKeyPairs, BakerSignatureVerifyKey, BlockHeight,
+        ChainParameterVersion0, ChainParameterVersion1, ChainParameters, ChainParametersV0,
+        ChainParametersV1, CooldownParameters, ElectionDifficulty, Energy, Epoch, ExchangeRate,
+        HigherLevelAccessStructure, PoolParameters, ProtocolVersion, RewardParameters,
+        SlotDuration, TimeParameters, UpdateKeyPair, UpdateKeysCollection,
+        UpdateKeysCollectionSkeleton, UpdateKeysIndex, UpdateKeysThreshold, UpdatePublicKey,
     },
 };
 use gcd::Gcd;
@@ -81,17 +81,6 @@ enum IdentityProviderConfig {
     },
 }
 
-#[derive(SerdeDeserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-struct GenesisBaker {
-    aggregation_verify_key: BakerAggregationVerifyKey,
-    election_verify_key:    BakerElectionVerifyKey,
-    signature_verify_key:   BakerSignatureVerifyKey,
-    baker_id:               BakerId,
-    stake:                  Amount,
-    restake_earnings:       bool,
-}
-
 #[derive(SerdeDeserialize, SerdeSerialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct GenesisAccount {
@@ -108,7 +97,7 @@ struct GenesisAccount {
     encryption_secret_key: id::elgamal::SecretKey<id::constants::ArCurve>,
 }
 
-#[derive(Serialize, SerdeDeserialize, Debug)]
+#[derive(Serialize, SerdeSerialize, SerdeDeserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct GenesisBakerPublic {
     stake:                  Amount,
@@ -123,7 +112,7 @@ type GenesisCredentials = BTreeMap<
     CredentialIndex,
     AccountCredentialWithoutProofs<id::constants::ArCurve, id::constants::AttributeKind>,
 >;
-#[derive(Serialize, SerdeDeserialize, Debug)]
+#[derive(Serialize, SerdeSerialize, SerdeDeserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct GenesisAccountPublic {
     address:           AccountAddress,
@@ -335,16 +324,41 @@ impl GenesisChainParametersV0 {
 #[derive(SerdeDeserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct GenesisChainParametersV1 {
-    election_difficulty:          ElectionDifficulty,
-    euro_per_energy:              ExchangeRate,
+    election_difficulty:    ElectionDifficulty,
+    euro_per_energy:        ExchangeRate,
     #[serde(rename = "microCCDPerEuro")]
-    micro_ccd_per_euro:           ExchangeRate,
-    account_creation_limit:       u32,
-    reward_parameters:            RewardParameters<ChainParameterVersion1>,
-    time_parameters:              TimeParameters,
-    pool_parameters:              PoolParameters,
-    cooldown_parameters:          CooldownParameters,
-    minimum_threshold_for_baking: Amount,
+    micro_ccd_per_euro:     ExchangeRate,
+    account_creation_limit: u16,
+    reward_parameters:      RewardParameters<ChainParameterVersion1>,
+    time_parameters:        TimeParameters,
+    pool_parameters:        PoolParameters,
+    cooldown_parameters:    CooldownParameters,
+}
+
+impl GenesisChainParametersV1 {
+    pub fn to_chain_parameters(self, foundation_account_index: AccountIndex) -> ChainParametersV1 {
+        let Self {
+            election_difficulty,
+            euro_per_energy,
+            micro_ccd_per_euro,
+            account_creation_limit,
+            time_parameters,
+            pool_parameters,
+            cooldown_parameters,
+            reward_parameters,
+        } = self;
+        ChainParametersV1 {
+            election_difficulty,
+            euro_per_energy,
+            micro_gtu_per_euro: micro_ccd_per_euro,
+            time_parameters,
+            pool_parameters,
+            cooldown_parameters,
+            account_creation_limit: account_creation_limit.into(),
+            reward_parameters,
+            foundation_account_index,
+        }
+    }
 }
 
 #[derive(SerdeDeserialize, Debug)]
@@ -460,14 +474,15 @@ impl GenesisParameters {
 #[derive(SerdeDeserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct OutputConfig {
-    update_keys:        PathBuf,
-    account_keys:       PathBuf,
-    baker_keys:         PathBuf,
-    identity_providers: PathBuf,
-    anonymity_revokers: PathBuf,
-    genesis:            PathBuf,
+    update_keys:              PathBuf,
+    account_keys:             PathBuf,
+    baker_keys:               PathBuf,
+    identity_providers:       PathBuf,
+    anonymity_revokers:       PathBuf,
+    genesis:                  PathBuf,
+    cryptographic_parameters: Option<PathBuf>,
     #[serde(default)]
-    delete_existing:    bool,
+    delete_existing:          bool,
 }
 
 #[derive(SerdeDeserialize, Debug)]
@@ -483,7 +498,10 @@ struct Config {
     accounts: Vec<AccountConfig>,
 }
 
-fn crypto_parameters(cfg: CryptoParamsConfig) -> anyhow::Result<GlobalContext<ArCurve>> {
+fn crypto_parameters(
+    global_out: Option<PathBuf>,
+    cfg: CryptoParamsConfig,
+) -> anyhow::Result<GlobalContext<ArCurve>> {
     match cfg {
         CryptoParamsConfig::Existing {
             source,
@@ -503,7 +521,19 @@ fn crypto_parameters(cfg: CryptoParamsConfig) -> anyhow::Result<GlobalContext<Ar
         }
         CryptoParamsConfig::Generate {
             genesis_string,
-        } => Ok(GlobalContext::generate(genesis_string)),
+        } => {
+            let ver_global: Versioned<GlobalContext<ArCurve>> = Versioned {
+                version: VERSION_0,
+                value:   GlobalContext::generate(genesis_string),
+            };
+            if let Some(out) = global_out {
+                let mut path = out;
+                path.push("cryptographic-parameters.json");
+                std::fs::write(path, serde_json::to_string_pretty(&ver_global).unwrap())
+                    .context("Unable to output account keys.")?;
+            }
+            Ok(ver_global.value)
+        }
     }
 }
 
@@ -564,7 +594,7 @@ fn identity_providers(
                     };
                     {
                         let mut path = idp_out.clone();
-                        path.push(format!("ip-info-{}.json", n));
+                        path.push(format!("ip-data-{}.json", n));
                         std::fs::write(path, serde_json::to_string_pretty(&ip_data).unwrap())
                             .context("Unable to write the identity provider.")?;
                     }
@@ -573,7 +603,17 @@ fn identity_providers(
             }
         }
     }
-    Ok(out)
+    let ver_idps = Versioned {
+        version: VERSION_0,
+        value:   out,
+    };
+    {
+        let mut path = idp_out;
+        path.push("identity-providers.json");
+        std::fs::write(path, serde_json::to_string_pretty(&ver_idps).unwrap())
+            .context("Unable to write the identity providers.")?;
+    }
+    Ok(ver_idps.value)
 }
 
 fn anonymity_revokers(
@@ -626,16 +666,26 @@ fn anonymity_revokers(
                     };
                     {
                         let mut path = ars_out.clone();
-                        path.push(format!("ar-info-{}.json", n));
+                        path.push(format!("ar-data-{}.json", n));
                         std::fs::write(path, serde_json::to_string_pretty(&ar_data).unwrap())
-                            .context("Unable to write the identity provider.")?;
+                            .context("Unable to write the anonymity revoker.")?;
                     }
                     out.insert(ar_identity, ar_data.public_ar_info);
                 }
             }
         }
     }
-    Ok(out)
+    let ver_ars = Versioned {
+        version: VERSION_0,
+        value:   out,
+    };
+    {
+        let mut path = ars_out;
+        path.push("anonymity-revokers.json");
+        std::fs::write(path, serde_json::to_string_pretty(&ver_ars).unwrap())
+            .context("Unable to write the anonymity revokers.")?;
+    }
+    Ok(ver_ars.value)
 }
 
 fn read_or_generate_update_keys<R: rand::Rng + rand::CryptoRng>(
@@ -747,6 +797,109 @@ fn updates_v0(
         },
         level_2_keys,
     };
+
+    {
+        let mut path = updates_out.to_path_buf();
+        path.push("governance-keys.json");
+        std::fs::write(path, serde_json::to_string_pretty(&uks).unwrap())
+            .context("Unable to write authorizations.")?;
+    }
+
+    Ok(uks)
+}
+
+fn updates_v1(
+    updates_out: PathBuf,
+    update_cfg: UpdateKeysConfig,
+) -> anyhow::Result<UpdateKeysCollection<ChainParameterVersion1>> {
+    let mut csprng = rand::thread_rng();
+    let root_keys =
+        read_or_generate_update_keys("root", &updates_out, &mut csprng, &update_cfg.root.keys)?;
+    ensure!(
+        usize::from(u16::from(update_cfg.root.threshold)) <= root_keys.len(),
+        "The number of root keys ({}) is less than the threshold ({}).",
+        root_keys.len(),
+        update_cfg.root.threshold
+    );
+
+    let level1_keys =
+        read_or_generate_update_keys("level1", &updates_out, &mut csprng, &update_cfg.level1.keys)?;
+    ensure!(
+        usize::from(u16::from(update_cfg.level1.threshold)) <= level1_keys.len(),
+        "The number of level_1 keys ({}) is less than the threshold ({}).",
+        level1_keys.len(),
+        update_cfg.level1.threshold
+    );
+
+    let level2_keys =
+        read_or_generate_update_keys("level2", &updates_out, &mut csprng, &update_cfg.level2.keys)?;
+    ensure!(!level2_keys.is_empty(), "There must be at least one level 2 key.",);
+
+    let level2 = update_cfg.level2;
+    let emergency = level2.emergency.to_access_structure(&level2_keys)?;
+    let protocol = level2.protocol.to_access_structure(&level2_keys)?;
+    let election_difficulty = level2.election_difficulty.to_access_structure(&level2_keys)?;
+    let euro_per_energy = level2.euro_per_energy.to_access_structure(&level2_keys)?;
+    let micro_gtu_per_euro = level2.micro_ccd_per_euro.to_access_structure(&level2_keys)?;
+    let foundation_account = level2.foundation_account.to_access_structure(&level2_keys)?;
+    let mint_distribution = level2.mint_distribution.to_access_structure(&level2_keys)?;
+    let transaction_fee_distribution =
+        level2.transaction_fee_distribution.to_access_structure(&level2_keys)?;
+    let param_gas_rewards = level2.gas_rewards.to_access_structure(&level2_keys)?;
+    let pool_parameters = level2.pool_parameters.to_access_structure(&level2_keys)?;
+    let add_anonymity_revoker = level2.add_anonymity_revoker.to_access_structure(&level2_keys)?;
+    let add_identity_provider = level2.add_identity_provider.to_access_structure(&level2_keys)?;
+    let cooldown_parameters = level2
+        .cooldown_parameters
+        .ok_or_else(|| anyhow!("Cooldown parameters missing"))?
+        .to_access_structure(&level2_keys)?;
+    let time_parameters = level2
+        .time_parameters
+        .ok_or_else(|| anyhow!("Time parameters missing"))?
+        .to_access_structure(&level2_keys)?;
+
+    let v0 = AuthorizationsV0 {
+        keys: level2_keys,
+        emergency,
+        protocol,
+        election_difficulty,
+        euro_per_energy,
+        micro_gtu_per_euro,
+        foundation_account,
+        mint_distribution,
+        transaction_fee_distribution,
+        param_gas_rewards,
+        pool_parameters,
+        add_anonymity_revoker,
+        add_identity_provider,
+    };
+    let level_2_keys = AuthorizationsV1 {
+        v0,
+        cooldown_parameters,
+        time_parameters,
+    };
+
+    let uks = UpdateKeysCollectionSkeleton {
+        root_keys: HigherLevelAccessStructure {
+            keys:      root_keys,
+            threshold: update_cfg.root.threshold,
+            _phantom:  Default::default(),
+        },
+        level_1_keys: HigherLevelAccessStructure {
+            keys:      level1_keys,
+            threshold: update_cfg.level1.threshold,
+            _phantom:  Default::default(),
+        },
+        level_2_keys,
+    };
+
+    {
+        let mut path = updates_out.to_path_buf();
+        path.push("governance-keys.json");
+        std::fs::write(path, serde_json::to_string_pretty(&uks).unwrap())
+            .context("Unable to write authorizations.")?;
+    }
+
     Ok(uks)
 }
 
@@ -800,14 +953,17 @@ fn accounts(
                                 creds.baker_id == baker_id,
                                 "Baker credential does not match the assign account index."
                             );
-
+                            creds
+                        } else {
+                            let creds = BakerCredentials::new(
+                                baker_id,
+                                BakerKeyPairs::generate(&mut csprng),
+                            );
                             let mut path = baker_keys_out.clone();
                             path.push(format!("baker-{}-credentials.json", idx));
                             std::fs::write(path, serde_json::to_string_pretty(&creds).unwrap())
                                 .context("Unable to output baker keys.")?;
                             creds
-                        } else {
-                            BakerCredentials::new(baker_id, BakerKeyPairs::generate(&mut csprng))
                         }
                     };
                     let gb = GenesisBakerPublic {
@@ -1028,6 +1184,12 @@ fn accounts(
             }
         }
     }
+    {
+        let mut path = account_keys_out;
+        path.push("accounts.json");
+        std::fs::write(path, serde_json::to_string_pretty(&gas).unwrap())
+            .context("Unable to output accounts.")?;
+    }
     if let Some(foundation_index) = foundation_index {
         Ok((foundation_index, gas))
     } else {
@@ -1058,7 +1220,7 @@ struct GenesisStateCPV0 {
 fn serialize_with_length_header(data: &impl Serial, buf: &mut Vec<u8>, out: &mut impl Buffer) {
     data.serial(buf);
     (buf.len() as u32).serial(out);
-    out.write_all(&buf).expect("Writing to buffers succeeds.");
+    out.write_all(buf).expect("Writing to buffers succeeds.");
     buf.clear();
 }
 
@@ -1083,17 +1245,36 @@ impl Serial for GenesisStateCPV0 {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug)]
 struct GenesisStateCPV1 {
     cryptographic_parameters:  GlobalContext<ArCurve>,
-    #[map_size_length = 4]
     identity_providers:        BTreeMap<IpIdentity, IpInfo<IpPairing>>,
-    #[map_size_length = 4]
     anonymity_revokers:        BTreeMap<ArIdentity, ArInfo<ArCurve>>,
     update_keys:               UpdateKeysCollection<ChainParameterVersion1>,
     chain_parameters:          ChainParameters<ChainParameterVersion1>,
     leadership_election_nonce: LeadershipElectionNonce,
     accounts:                  Vec<GenesisAccountPublic>,
+}
+
+impl Serial for GenesisStateCPV1 {
+    fn serial<B: Buffer>(&self, out: &mut B) {
+        let mut tmp = Vec::new();
+        serialize_with_length_header(&self.cryptographic_parameters, &mut tmp, out);
+        (self.identity_providers.len() as u32).serial(out);
+        for (k, v) in self.identity_providers.iter() {
+            k.serial(out);
+            serialize_with_length_header(v, &mut tmp, out);
+        }
+        (self.anonymity_revokers.len() as u32).serial(out);
+        for (k, v) in self.anonymity_revokers.iter() {
+            k.serial(out);
+            serialize_with_length_header(v, &mut tmp, out);
+        }
+        self.update_keys.serial(out);
+        self.chain_parameters.serial(out);
+        self.leadership_election_nonce.serial(out);
+        self.accounts.serial(out)
+    }
 }
 
 enum GenesisData {
@@ -1113,6 +1294,28 @@ enum GenesisData {
         core:          CoreGenesisParameters,
         initial_state: GenesisStateCPV1,
     },
+}
+
+fn make_genesis_data_cpv0(
+    pv: ProtocolVersion,
+    core: CoreGenesisParameters,
+    initial_state: GenesisStateCPV0,
+) -> Option<GenesisData> {
+    match pv {
+        ProtocolVersion::P1 => Some(GenesisData::P1 {
+            core,
+            initial_state,
+        }),
+        ProtocolVersion::P2 => Some(GenesisData::P2 {
+            core,
+            initial_state,
+        }),
+        ProtocolVersion::P3 => Some(GenesisData::P3 {
+            core,
+            initial_state,
+        }),
+        ProtocolVersion::P4 => None,
+    }
 }
 
 impl Serial for GenesisData {
@@ -1242,15 +1445,16 @@ fn make_relative(f1: &Path, f2: &Path) -> anyhow::Result<PathBuf> {
 fn handle_assemble(config_path: &Path) -> anyhow::Result<()> {
     let config_source =
         std::fs::read(config_path).context("Unable to read the configuration file.")?;
+    println!("hej");
     let config: AssembleGenesisConfig =
         toml::from_slice(&config_source).context("Unable to parse the configuration file.")?;
     // TODO: Make paths relative to the config file.
+    println!("hej 2");
     let accounts: Vec<GenesisAccountPublic> =
         read_json(&make_relative(config_path, &config.accounts)?)?;
     let global = read_json::<Versioned<_>>(&make_relative(config_path, &config.global)?)?;
     let idps = read_json::<Versioned<_>>(&make_relative(config_path, &config.idps)?)?;
     let ars = read_json::<Versioned<_>>(&make_relative(config_path, &config.ars)?)?;
-    let update_keys = read_json(&make_relative(config_path, &config.governance_keys)?)?;
 
     let idx = accounts
         .iter()
@@ -1267,6 +1471,7 @@ fn handle_assemble(config_path: &Path) -> anyhow::Result<()> {
     let core = config.parameters.to_core()?;
     match config.parameters.chain {
         GenesisChainParameters::V0(params) => {
+            let update_keys = read_json(&make_relative(config_path, &config.governance_keys)?)?;
             let initial_state = GenesisStateCPV0 {
                 cryptographic_parameters: global.value,
                 identity_providers: idps.value,
@@ -1276,7 +1481,47 @@ fn handle_assemble(config_path: &Path) -> anyhow::Result<()> {
                 leadership_election_nonce: config.parameters.leadership_election_nonce,
                 accounts,
             };
-            let genesis = GenesisData::P1 {
+            let mut out1 = Vec::new();
+            let mut out2 = Vec::new();
+            core.serial(&mut out1);
+            // initial_state.serial(&mut out2);
+            initial_state.update_keys.serial(&mut out2);
+            let some_bytes: Vec<u8> = vec![254, 254, 254, 0];
+            some_bytes.serial(&mut out2);
+            let some_bytes2: Vec<u8> = vec![254, 254, 254, 0];
+            let some_bytes3: Vec<u8> = vec![254, 254, 254, 0];
+            initial_state.chain_parameters.serial(&mut out2);
+            some_bytes2.serial(&mut out2);
+            initial_state.leadership_election_nonce.serial(&mut out2);
+            some_bytes3.serial(&mut out2);
+            initial_state.accounts.serial(&mut out2);
+            let p1 = "./mainnet-files/genesis1.dat".as_ref();
+            let p2 = "./mainnet-files/genesis2.dat".as_ref();
+            std::fs::write(make_relative(config_path, p1)?, out1)
+                .context("Unable to write genesis.")?;
+            std::fs::write(make_relative(config_path, p2)?, out2)
+                .context("Unable to write genesis.")?;
+            let genesis = make_genesis_data_cpv0(config.protocol_version, core, initial_state)
+                .context("P4 does not have CPV0")?;
+            {
+                let mut out = Vec::new();
+                genesis.serial(&mut out);
+                std::fs::write(make_relative(config_path, &config.genesis_out)?, out)
+                    .context("Unable to write genesis.")?;
+            }
+        }
+        GenesisChainParameters::V1(params) => {
+            let update_keys = read_json(&make_relative(config_path, &config.governance_keys)?)?;
+            let initial_state = GenesisStateCPV1 {
+                cryptographic_parameters: global.value,
+                identity_providers: idps.value,
+                anonymity_revokers: ars.value,
+                update_keys,
+                chain_parameters: params.to_chain_parameters(AccountIndex::from(idx)),
+                leadership_election_nonce: config.parameters.leadership_election_nonce,
+                accounts,
+            };
+            let genesis = GenesisData::P4 {
                 core,
                 initial_state,
             };
@@ -1287,7 +1532,6 @@ fn handle_assemble(config_path: &Path) -> anyhow::Result<()> {
                     .context("Unable to write genesis.")?;
             }
         }
-        GenesisChainParameters::V1(_) => todo!(),
     }
     Ok(())
 }
@@ -1308,34 +1552,39 @@ fn handle_generate(config_path: &Path) -> anyhow::Result<()> {
     check_and_create_dir(config.out.delete_existing, &config.out.identity_providers)?;
     check_and_create_dir(config.out.delete_existing, &config.out.anonymity_revokers)?;
     check_and_create_dir(config.out.delete_existing, &config.out.baker_keys)?;
+    if let Some(global) = &config.out.cryptographic_parameters {
+        check_and_create_dir(config.out.delete_existing, global)?;
+    }
 
-    match config.protocol_version {
-        ProtocolVersion::P1 => {
-            let core = config.parameters.to_core()?;
+    let core = config.parameters.to_core()?;
+    let cryptographic_parameters =
+        crypto_parameters(config.out.cryptographic_parameters, config.cryptographic_parameters)?;
+    let identity_providers =
+        identity_providers(config.out.identity_providers, config.identity_providers)?;
+    let anonymity_revokers = anonymity_revokers(
+        config.out.anonymity_revokers,
+        &cryptographic_parameters,
+        config.anonymity_revokers,
+    )?;
+    let (foundation_idx, accounts) = accounts(
+        config.out.baker_keys,
+        config.out.account_keys,
+        &cryptographic_parameters,
+        &anonymity_revokers,
+        config.accounts,
+    )?;
+    let genesis = match config.protocol_version {
+        ProtocolVersion::P1 | ProtocolVersion::P2 | ProtocolVersion::P3 => {
             let params = match config.parameters.chain {
                 GenesisChainParameters::V0(params) => params,
                 GenesisChainParameters::V1(_) => {
-                    bail!(
-                        "Protocol version 1 supports only chain parameters
-    version 0."
-                    )
+                    bail!(format!(
+                        "Protocol version {} supports only chain parameters
+    version 0.",
+                        config.protocol_version
+                    ))
                 }
             };
-            let cryptographic_parameters = crypto_parameters(config.cryptographic_parameters)?;
-            let identity_providers =
-                identity_providers(config.out.identity_providers, config.identity_providers)?;
-            let anonymity_revokers = anonymity_revokers(
-                config.out.anonymity_revokers,
-                &cryptographic_parameters,
-                config.anonymity_revokers,
-            )?;
-            let (foundation_idx, accounts) = accounts(
-                config.out.baker_keys,
-                config.out.account_keys,
-                &cryptographic_parameters,
-                &anonymity_revokers,
-                config.accounts,
-            )?;
             let update_keys = updates_v0(config.out.update_keys, config.updates)?;
             let initial_state = GenesisStateCPV0 {
                 cryptographic_parameters,
@@ -1346,22 +1595,41 @@ fn handle_generate(config_path: &Path) -> anyhow::Result<()> {
                 leadership_election_nonce: config.parameters.leadership_election_nonce,
                 accounts,
             };
-            let genesis = GenesisData::P1 {
+            make_genesis_data_cpv0(config.protocol_version, core, initial_state)
+                .context("Chain parameters version 0 should not be used in P4")?
+            // Should go well since we know we are not in P4.
+        }
+        ProtocolVersion::P4 => {
+            let core = config.parameters.to_core()?;
+            let params = match config.parameters.chain {
+                GenesisChainParameters::V1(params) => params,
+                GenesisChainParameters::V0(_) => {
+                    bail!(format!("Protocol version P4 supports only chain parameters version 1."))
+                }
+            };
+            let update_keys = updates_v1(config.out.update_keys, config.updates)?;
+            let initial_state = GenesisStateCPV1 {
+                cryptographic_parameters,
+                identity_providers,
+                anonymity_revokers,
+                update_keys,
+                chain_parameters: params.to_chain_parameters(foundation_idx),
+                leadership_election_nonce: config.parameters.leadership_election_nonce,
+                accounts,
+            };
+            GenesisData::P4 {
                 core,
                 initial_state,
-            };
-            {
-                let mut out = Vec::new();
-                genesis.serial(&mut out);
-                std::fs::write(config.out.genesis, out).context(
-                    "Unable to write
-    genesis.",
-                )?;
             }
         }
-        ProtocolVersion::P2 => todo!(),
-        ProtocolVersion::P3 => todo!(),
-        ProtocolVersion::P4 => todo!(),
+    };
+    {
+        let mut out = Vec::new();
+        genesis.serial(&mut out);
+        std::fs::write(config.out.genesis, out).context(
+            "Unable to write
+genesis.",
+        )?;
     }
     Ok(())
 }
