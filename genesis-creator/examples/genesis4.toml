@@ -1,0 +1,102 @@
+protocolVersion = 4
+
+[out]
+updateKeys = "./update-keys"
+accountKeys = "./accounts-out"
+bakerKeys = "./bakers-out"
+identityProviders = "./idps-out"
+anonymityRevokers = "./ars-out"
+genesis = "./genesis.dat"
+cryptographicParameters = "./global"
+deleteExisting = true
+
+[cryptographicParameters]
+kind = "generate"
+genesisString = "Test genesis parameters."
+
+[[anonymityRevokers]]
+kind = "fresh"
+id = 1
+repeat = 3
+
+[[identityProviders]]
+kind = "fresh"
+id = 0
+repeat = 3
+
+[[accounts]]
+kind = "fresh"
+balance = "1000000000"
+stake = "500000000"
+template = "foundation"
+identityProvider = 0
+numKeys = 1
+threshold = 1
+repeat = 5
+foundation = true
+
+[updates]
+root = { threshold = 5, keys = [{kind = "fresh", repeat = 7}]}
+level1 = { threshold = 7, keys = [{kind = "fresh", repeat = 15}]}
+
+[updates.level2]
+keys = [{kind = "fresh", repeat = 15}]
+emergency = {authorizedKeys = [0,1,2,3,4,5,6], threshold = 7}
+protocol = {authorizedKeys = [0,1,2,3,4,5,6], threshold = 7}
+electionDifficulty = {authorizedKeys = [0,1,2,3,4,5,6], threshold = 7}
+euroPerEnergy = {authorizedKeys = [0,1,2,3,4,5,6], threshold = 7}
+microCCDPerEuro = {authorizedKeys = [0,1,2,3,4,5,6], threshold = 7}
+foundationAccount = {authorizedKeys = [0,1,2,3,4,5,6], threshold = 7}
+mintDistribution = {authorizedKeys = [0,1,2,3,4,5,6], threshold = 7}
+transactionFeeDistribution = {authorizedKeys = [0,1,2,3,4,5,6], threshold = 7}
+gasRewards = {authorizedKeys = [0,1,2,3,4,5,6], threshold = 7}
+poolParameters = {authorizedKeys = [0,1,2,3,4,5,6], threshold = 7}
+addAnonymityRevoker = {authorizedKeys = [0,1,2,3,4,5,6], threshold = 7}
+addIdentityProvider = {authorizedKeys = [0,1,2,3,4,5,6], threshold = 7}
+cooldownParameters = {authorizedKeys = [0,1,2,3,4,5,6], threshold = 7}
+timeParameters = {authorizedKeys = [0,1,2,3,4,5,6], threshold = 7}
+
+[parameters]
+genesisTime = "2022-06-24T11:12:43Z"
+slotDuration = 250
+leadershipElectionNonce = "d1bc8d3ba4afc7e109612cb73acbdddac052c93025aa1f82942edabb7deb82a1"
+epochLength = 400
+maxBlockEnergy = 3_000_000
+
+[parameters.finalization]
+minimumSkip = 0
+committeeMaxSize = 1000
+waitingTime = 100
+skipShrinkFactor = 0.5
+skipGrowFactor = 2
+delayShrinkFactor = 0.5
+delayGrowFactor = 2
+allowZeroDelay = true
+
+[parameters.chain]
+version = "v1"
+electionDifficulty = 0.025
+euroPerEnergy = 0.00002
+microCCDPerEuro = 500_000
+accountCreationLimit = 10
+[parameters.chain.timeParameters]
+rewardPeriodLength = 24
+mintPerPayday = 2.61157877e-4
+[parameters.chain.poolParameters]
+"passiveFinalizationCommission" = 1.0
+"passiveBakingCommission" = 0.12
+"passiveTransactionCommission" = 0.12
+"finalizationCommissionRange" = {"max" = 1.0,"min" = 1.0}
+"bakingCommissionRange" = {"max" = 0.1,"min" = 0.1}
+"transactionCommissionRange" = {"max" = 0.1,"min" = 0.1}
+"minimumEquityCapital" = "1000"
+"capitalBound" = 0.1
+"leverageBound" = {"denominator" = 1, "numerator" = 3}
+[parameters.chain.cooldownParameters]
+"poolOwnerCooldown" = 1814400
+"delegatorCooldown" = 1209600
+[parameters.chain.rewardParameters]
+mintDistribution = { mintPerSlot = 0.0000000007555665, bakingReward = 0.85, finalizationReward = 0.05 }
+transactionFeeDistribution = { baker = 0.45, gasAccount = 0.45 }
+gASRewards = { baker = 0.25, finalizationProof = 0.005, accountCreation = 0.02, chainUpdate = 0.005 }
+
