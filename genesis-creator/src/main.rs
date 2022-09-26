@@ -1,3 +1,11 @@
+/// A command line tool for generating genesis files.
+///
+/// The tool has two modes: `generate` that can generate a new genesis, and
+/// `assemble` that can produce a genesis from existing files (for example to
+/// regenereate the Mainnet `genesis.dat`).
+///
+/// In both modes the tool takes a TOML configuration file that specify the
+/// genesis. For details, see the README.
 use anyhow::{anyhow, bail, ensure, Context};
 use clap::Parser;
 use concordium_rust_sdk::{
@@ -40,6 +48,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
+/// Struct for specifying the cryptographic parameters. Either a path to a file
+/// with existing gryptographic parameters, or the genesis string from which the
+/// cryptographic parameters should be generated.
 #[derive(SerdeDeserialize, Debug)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 enum CryptoParamsConfig {
@@ -53,6 +64,11 @@ enum CryptoParamsConfig {
     },
 }
 
+/// Struct for specifying one or more genesis anonymity revokers. Either a path
+/// to a file with an existing anonymity revoker, or an id for which an
+/// anonymity revoker should be generated freshly. If the `repeat` is `Some(n)`,
+/// it specifies that `n` anonymity revokers should be generated freshly,
+/// starting from the given id.
 #[derive(SerdeDeserialize, Debug)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 enum AnonymityRevokerConfig {
@@ -67,6 +83,11 @@ enum AnonymityRevokerConfig {
     },
 }
 
+/// Struct for specifying one or more genesis identity providers. Either a path
+/// to a file with an existing identity provider, or an id for which an identity
+/// provider should be generated freshly. If the `repeat` is `Some(n)`, it
+/// specifies that `n` identity providers should be generated freshly, starting
+/// from the given id.
 #[derive(SerdeDeserialize, Debug)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 enum IdentityProviderConfig {
@@ -81,6 +102,10 @@ enum IdentityProviderConfig {
     },
 }
 
+/// Private genesis account data. When generating fresh accounts, these are
+/// output as JSON files. When using existing accounts, these are instrad input
+/// as JSON files. The format is the same as what is expected when importing
+/// genesis accounts with concordium-client.
 #[derive(SerdeDeserialize, SerdeSerialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct GenesisAccount {
@@ -97,6 +122,8 @@ struct GenesisAccount {
     encryption_secret_key: id::elgamal::SecretKey<id::constants::ArCurve>,
 }
 
+/// Struct corresponding to the Haskell type `GenesisBaker` in
+/// haskell-src/Concordium/Genesis/Account.hs in concordium-base.
 #[derive(Serialize, SerdeSerialize, SerdeDeserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct GenesisBakerPublic {
@@ -112,6 +139,9 @@ type GenesisCredentials = BTreeMap<
     CredentialIndex,
     AccountCredentialWithoutProofs<id::constants::ArCurve, id::constants::AttributeKind>,
 >;
+
+/// Struct corresponding to the Haskell type `GenesisAccount` in
+/// haskell-src/Concordium/Genesis/Account.hs in concordium-base.
 #[derive(Serialize, SerdeSerialize, SerdeDeserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct GenesisAccountPublic {
@@ -132,6 +162,9 @@ fn deserialize_versioned_public_account<'de, D: de::Deserializer<'de>>(
     Ok(versioned.value)
 }
 
+/// Struct for specifying one or more genesis accounts. Either a path to a file
+/// with an existing account is given, or a fresh account should be generated
+/// freshly.
 #[derive(SerdeDeserialize, Debug)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 enum AccountConfig {
@@ -165,45 +198,9 @@ enum AccountConfig {
     },
 }
 
-#[derive(SerdeDeserialize, Debug)]
-#[serde(tag = "kind", rename_all = "camelCase")]
-enum Level2Key {
-    // An existing key that may be used for the specified update types.
-    // The set of update types may be empty.
-    Existing {
-        source: PathBuf,
-        types:  Vec<Level2UpdateKind>,
-        #[serde(default)]
-        except: bool,
-    },
-    Fresh {
-        types:  Vec<Level2UpdateKind>,
-        #[serde(default)]
-        except: bool,
-    },
-}
-
-#[derive(Debug, SerdeDeserialize)]
-#[serde(rename_all = "camelCase")]
-enum Level2UpdateKind {
-    Emergency,
-    Protocol,
-    ElectionDifficulty,
-    EuroPerEnergy,
-    #[serde(rename = "microCCDperEuro")]
-    MicroCCDPerEuro,
-    FoundationAccount,
-    MintDistribution,
-    TransactionFeeDistribution,
-    #[serde(rename = "GASRewards")]
-    GASRewards,
-    PoolParameters,
-    CooldownParameters,
-    TimeParameters,
-    AddAnonymityRevoker,
-    AddIdentityProvider,
-}
-
+/// Struct for specifying which level 2 keys can authorize a concrete level 2
+/// chain update, together with a threshold specifying how many of the given
+/// keys are needed.
 #[derive(SerdeDeserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct Level2UpdateConfig {
@@ -212,10 +209,7 @@ struct Level2UpdateConfig {
 }
 
 impl Level2UpdateConfig {
-    pub fn to_access_structure(
-        self,
-        ctx: &Vec<UpdatePublicKey>,
-    ) -> anyhow::Result<AccessStructure> {
+    pub fn access_structure(self, ctx: &Vec<UpdatePublicKey>) -> anyhow::Result<AccessStructure> {
         let num_given_keys = self.authorized_keys.len();
         let authorized_keys: BTreeSet<_> = self.authorized_keys.into_iter().collect();
         ensure!(authorized_keys.len() == num_given_keys, "Duplicate key index provided.");
@@ -237,6 +231,9 @@ impl Level2UpdateConfig {
     }
 }
 
+/// Struct holding all the level 2 keys and for each level 2 chain update the
+/// keys `Level2UpdateConfig` determining the keys that can authorize the
+/// update.
 #[derive(SerdeDeserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct Level2KeysConfig {
@@ -259,6 +256,7 @@ struct Level2KeysConfig {
     time_parameters: Option<Level2UpdateConfig>,
 }
 
+/// Struct holding the root or the level 1 keys, together with a threshold.
 #[derive(SerdeDeserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct HigherLevelKeysConfig {
@@ -266,6 +264,8 @@ struct HigherLevelKeysConfig {
     keys:      Vec<HigherLevelKey>,
 }
 
+/// Struct for specifying a key. Either a path to an existing key, or a `u32`
+/// specifying how many keys should be generated freshly.
 #[derive(SerdeDeserialize, Debug)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 enum HigherLevelKey {
@@ -277,13 +277,15 @@ enum HigherLevelKey {
     },
 }
 
+/// Struct holding all the root, level 1 and level 2 keys.
 #[derive(SerdeDeserialize, Debug)]
 struct UpdateKeysConfig {
     root:   HigherLevelKeysConfig,
     level1: HigherLevelKeysConfig,
     level2: Level2KeysConfig,
 }
-
+/// Genesis chain parameters version 0. Contains all version 0 chain paramters
+/// except for the foundation index.
 #[derive(SerdeDeserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct GenesisChainParametersV0 {
@@ -298,7 +300,7 @@ struct GenesisChainParametersV0 {
 }
 
 impl GenesisChainParametersV0 {
-    pub fn to_chain_parameters(self, foundation_account_index: AccountIndex) -> ChainParametersV0 {
+    pub fn chain_parameters(self, foundation_account_index: AccountIndex) -> ChainParametersV0 {
         let Self {
             election_difficulty,
             euro_per_energy,
@@ -321,6 +323,8 @@ impl GenesisChainParametersV0 {
     }
 }
 
+/// Genesis chain parameters version 0. Contains all version 1 chain paramters
+/// except for the foundation index.
 #[derive(SerdeDeserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct GenesisChainParametersV1 {
@@ -336,7 +340,7 @@ struct GenesisChainParametersV1 {
 }
 
 impl GenesisChainParametersV1 {
-    pub fn to_chain_parameters(self, foundation_account_index: AccountIndex) -> ChainParametersV1 {
+    pub fn chain_parameters(self, foundation_account_index: AccountIndex) -> ChainParametersV1 {
         let Self {
             election_difficulty,
             euro_per_energy,
@@ -361,6 +365,7 @@ impl GenesisChainParametersV1 {
     }
 }
 
+/// Genesis chain parameters and the version.
 #[derive(SerdeDeserialize, Debug)]
 #[serde(tag = "version")]
 enum GenesisChainParameters {
@@ -370,6 +375,7 @@ enum GenesisChainParameters {
     V1(GenesisChainParametersV1),
 }
 
+/// A ratio between two `u64` integers.
 #[derive(Debug, SerdeDeserialize, Serial, Clone, Copy)]
 #[serde(try_from = "rust_decimal::Decimal")]
 struct Ratio {
@@ -409,6 +415,8 @@ impl TryFrom<rust_decimal::Decimal> for Ratio {
     }
 }
 
+/// The finalization parameters. Corresponds to the Haskell type
+/// `FinalizationParameters` in haskell-src/Concordium/Types/Parameters.hs.
 #[derive(SerdeDeserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 struct FinalizationParameters {
@@ -437,6 +445,8 @@ struct FinalizationParameters {
     allow_zero_delay:    bool,
 }
 
+/// The core genesis parameters, the leadership election nonce and the chain
+/// parameters (except the foundation index).
 #[derive(SerdeDeserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct GenesisParameters {
@@ -471,6 +481,10 @@ impl GenesisParameters {
     }
 }
 
+/// For specifying where to ouput chain update keys, account keys, baker keys,
+/// identity providers, anonymity revokers, cryptographic parameters and the
+/// `genesis.dat` file. The `delete_existing` field specifies whether to delete
+/// existing files before generation.
 #[derive(SerdeDeserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct OutputConfig {
@@ -485,6 +499,7 @@ struct OutputConfig {
     delete_existing:          bool,
 }
 
+/// Struct representing the configuration specified by the input TOML file.
 #[derive(SerdeDeserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct Config {
@@ -498,6 +513,15 @@ struct Config {
     accounts: Vec<AccountConfig>,
 }
 
+/// Function for creating the cryptographic parameters (also called global
+/// context). The arguments are
+/// - global_out - if some, where to write the cryptographic parameters
+/// - cfg - The configuration deciding whether to use existing cryptographic
+///   parameters or
+/// to generate the freshly.
+///
+/// The function returns `anyhow::Result`, which upon success will contain the
+/// cryptographic parameters.
 fn crypto_parameters(
     global_out: Option<PathBuf>,
     cfg: CryptoParamsConfig,
@@ -537,6 +561,16 @@ fn crypto_parameters(
     }
 }
 
+/// Function for creating the genesis identity providers. The arguments are
+/// - idp_out - where to write the identity providers
+/// - cfgs - A vector of configurations, each deciding whether to use an
+///   existing identity provider or
+/// to generate one or more freshly.
+///
+/// For each generated anonymity revoker, the private identity provider data
+/// will be written to a file. The function returns a in a `anyhow::Result`,
+/// which upon success contains a `BTreeMap` with the public identity provider
+/// infos.
 fn identity_providers(
     idp_out: PathBuf,
     cfgs: Vec<IdentityProviderConfig>,
@@ -616,6 +650,16 @@ fn identity_providers(
     Ok(ver_idps.value)
 }
 
+/// Function for creating the genesis anonymity revokers. The arguments are
+/// - ars_out - where to write the anonymity revokers
+/// - cfgs - A vector of configurations, each deciding whether to use an
+///   existing anonymity revoker or
+/// to generate one or more freshly.
+///
+/// For each generated anonymity revoker, the private anonymity revoker data
+/// will be written to a file. The function returns a in a `anyhow::Result`,
+/// which upon success contains a `BTreeMap` with the public anonymity revoker
+/// infos.
 fn anonymity_revokers(
     ars_out: PathBuf,
     params: &GlobalContext<ArCurve>,
@@ -688,6 +732,17 @@ fn anonymity_revokers(
     Ok(ver_ars.value)
 }
 
+/// Function for creating a vector of root, level 1 or level 2 keys, where each
+/// key is either generated freshly or read from a file. The arguments are
+/// - ctx - description of the keys, e.g. "root", "level1" or "level2".
+/// - root_out - the directory in which the keys whould be placed.
+/// - csprng - a cryptographically secure random number generator.
+/// - key_cfgs - A vector of confiurations, each deciding whether to generate or
+///   to read from a file.
+///
+/// For each generated key, the private keypair will be written to a file.
+/// The function returns a `anyhow::Result`, which upon success will contain a
+/// vector with the public keys.
 fn read_or_generate_update_keys<R: rand::Rng + rand::CryptoRng>(
     ctx: &str,
     root_out: &Path,
@@ -726,6 +781,14 @@ fn read_or_generate_update_keys<R: rand::Rng + rand::CryptoRng>(
     Ok(out)
 }
 
+/// Function for creating a version 0 `UpdateKeysCollection` containing all
+/// root, level 1 and level 2 keys. The arguments are
+/// - updates_out - where to put all chain update keys
+/// - update_cfg - the configuration specifying all keys and thresholds
+///
+/// The function returns a `anyhow::Result`, whic upon success contains the
+/// version 0 `UpdateKeysCollection`. NB: To be used only in chain parameters
+/// version 0.
 fn updates_v0(
     updates_out: PathBuf,
     update_cfg: UpdateKeysConfig,
@@ -754,19 +817,19 @@ fn updates_v0(
     ensure!(!level2_keys.is_empty(), "There must be at least one level 2 key.",);
 
     let level2 = update_cfg.level2;
-    let emergency = level2.emergency.to_access_structure(&level2_keys)?;
-    let protocol = level2.protocol.to_access_structure(&level2_keys)?;
-    let election_difficulty = level2.election_difficulty.to_access_structure(&level2_keys)?;
-    let euro_per_energy = level2.euro_per_energy.to_access_structure(&level2_keys)?;
-    let micro_gtu_per_euro = level2.micro_ccd_per_euro.to_access_structure(&level2_keys)?;
-    let foundation_account = level2.foundation_account.to_access_structure(&level2_keys)?;
-    let mint_distribution = level2.mint_distribution.to_access_structure(&level2_keys)?;
+    let emergency = level2.emergency.access_structure(&level2_keys)?;
+    let protocol = level2.protocol.access_structure(&level2_keys)?;
+    let election_difficulty = level2.election_difficulty.access_structure(&level2_keys)?;
+    let euro_per_energy = level2.euro_per_energy.access_structure(&level2_keys)?;
+    let micro_gtu_per_euro = level2.micro_ccd_per_euro.access_structure(&level2_keys)?;
+    let foundation_account = level2.foundation_account.access_structure(&level2_keys)?;
+    let mint_distribution = level2.mint_distribution.access_structure(&level2_keys)?;
     let transaction_fee_distribution =
-        level2.transaction_fee_distribution.to_access_structure(&level2_keys)?;
-    let param_gas_rewards = level2.gas_rewards.to_access_structure(&level2_keys)?;
-    let pool_parameters = level2.pool_parameters.to_access_structure(&level2_keys)?;
-    let add_anonymity_revoker = level2.add_anonymity_revoker.to_access_structure(&level2_keys)?;
-    let add_identity_provider = level2.add_identity_provider.to_access_structure(&level2_keys)?;
+        level2.transaction_fee_distribution.access_structure(&level2_keys)?;
+    let param_gas_rewards = level2.gas_rewards.access_structure(&level2_keys)?;
+    let pool_parameters = level2.pool_parameters.access_structure(&level2_keys)?;
+    let add_anonymity_revoker = level2.add_anonymity_revoker.access_structure(&level2_keys)?;
+    let add_identity_provider = level2.add_identity_provider.access_structure(&level2_keys)?;
 
     let level_2_keys = AuthorizationsV0 {
         keys: level2_keys,
@@ -808,6 +871,14 @@ fn updates_v0(
     Ok(uks)
 }
 
+/// Function for creating a version 1 `UpdateKeysCollection` containing all
+/// root, level 1 and level 2 keys. The arguments are
+/// - updates_out - where to put all chain update keys
+/// - update_cfg - the configuration specifying all keys and thresholds
+///
+/// The function returns a `anyhow::Result`, whic upon success contains the
+/// version 1 `UpdateKeysCollection`. NB: To be used only in chain parameters
+/// version 1.
 fn updates_v1(
     updates_out: PathBuf,
     update_cfg: UpdateKeysConfig,
@@ -836,27 +907,27 @@ fn updates_v1(
     ensure!(!level2_keys.is_empty(), "There must be at least one level 2 key.",);
 
     let level2 = update_cfg.level2;
-    let emergency = level2.emergency.to_access_structure(&level2_keys)?;
-    let protocol = level2.protocol.to_access_structure(&level2_keys)?;
-    let election_difficulty = level2.election_difficulty.to_access_structure(&level2_keys)?;
-    let euro_per_energy = level2.euro_per_energy.to_access_structure(&level2_keys)?;
-    let micro_gtu_per_euro = level2.micro_ccd_per_euro.to_access_structure(&level2_keys)?;
-    let foundation_account = level2.foundation_account.to_access_structure(&level2_keys)?;
-    let mint_distribution = level2.mint_distribution.to_access_structure(&level2_keys)?;
+    let emergency = level2.emergency.access_structure(&level2_keys)?;
+    let protocol = level2.protocol.access_structure(&level2_keys)?;
+    let election_difficulty = level2.election_difficulty.access_structure(&level2_keys)?;
+    let euro_per_energy = level2.euro_per_energy.access_structure(&level2_keys)?;
+    let micro_gtu_per_euro = level2.micro_ccd_per_euro.access_structure(&level2_keys)?;
+    let foundation_account = level2.foundation_account.access_structure(&level2_keys)?;
+    let mint_distribution = level2.mint_distribution.access_structure(&level2_keys)?;
     let transaction_fee_distribution =
-        level2.transaction_fee_distribution.to_access_structure(&level2_keys)?;
-    let param_gas_rewards = level2.gas_rewards.to_access_structure(&level2_keys)?;
-    let pool_parameters = level2.pool_parameters.to_access_structure(&level2_keys)?;
-    let add_anonymity_revoker = level2.add_anonymity_revoker.to_access_structure(&level2_keys)?;
-    let add_identity_provider = level2.add_identity_provider.to_access_structure(&level2_keys)?;
+        level2.transaction_fee_distribution.access_structure(&level2_keys)?;
+    let param_gas_rewards = level2.gas_rewards.access_structure(&level2_keys)?;
+    let pool_parameters = level2.pool_parameters.access_structure(&level2_keys)?;
+    let add_anonymity_revoker = level2.add_anonymity_revoker.access_structure(&level2_keys)?;
+    let add_identity_provider = level2.add_identity_provider.access_structure(&level2_keys)?;
     let cooldown_parameters = level2
         .cooldown_parameters
         .ok_or_else(|| anyhow!("Cooldown parameters missing"))?
-        .to_access_structure(&level2_keys)?;
+        .access_structure(&level2_keys)?;
     let time_parameters = level2
         .time_parameters
         .ok_or_else(|| anyhow!("Time parameters missing"))?
-        .to_access_structure(&level2_keys)?;
+        .access_structure(&level2_keys)?;
 
     let v0 = AuthorizationsV0 {
         keys: level2_keys,
@@ -903,6 +974,20 @@ fn updates_v1(
     Ok(uks)
 }
 
+/// Function for creating a vector of genesis accounts, where each key is either
+/// generated freshly or read from a file. The arguments are
+/// - baker_keys_out - where to put baker keys for those accounts that are
+///   bakers.
+/// - account_keys_out - where to put the account keys.
+/// - params - the cryptographic parameters.
+/// - ars - the anonymity revokers
+/// - cfgs - A vector of confiurations, each deciding whether to generate or to
+///   read from a file.
+///
+/// For each generated account, the private account information will be written
+/// to a file. The function returns a `anyhow::Result`, which upon success will
+/// contain the foundation account index together with a vector with the public
+/// account parts.
 fn accounts(
     baker_keys_out: PathBuf,
     account_keys_out: PathBuf,
@@ -1197,6 +1282,8 @@ fn accounts(
     }
 }
 
+/// The core genesis parameters. This corresponds to the Haskell type in
+/// haskell-src/Concordium/Genesis/Data/Base.hs in concordium-base.
 #[derive(Debug, Serialize)]
 struct CoreGenesisParameters {
     time:                    Timestamp,
@@ -1206,6 +1293,9 @@ struct CoreGenesisParameters {
     finalization_parameters: FinalizationParameters,
 }
 
+/// The genesis state in chain parameters version 0. This corresponds to the
+/// Haskell type `GenesisState` from haskell-src/Concordium/Genesis/Data/Base.hs
+/// for those protocol versions having chain parameters version 0.
 #[derive(Debug)]
 struct GenesisStateCPV0 {
     cryptographic_parameters:  GlobalContext<ArCurve>,
@@ -1245,6 +1335,10 @@ impl Serial for GenesisStateCPV0 {
     }
 }
 
+/// The genesis state in chain parameters version 1. This corresponds to the
+/// Haskell type `GenesisState` from haskell-src/Concordium/Genesis/Data/Base.hs
+/// for those protocol versions having chain parameters version 1, currently
+/// only P4.
 #[derive(Debug)]
 struct GenesisStateCPV1 {
     cryptographic_parameters:  GlobalContext<ArCurve>,
@@ -1277,6 +1371,8 @@ impl Serial for GenesisStateCPV1 {
     }
 }
 
+/// The genesis data containing the core genesis parameters and the initial
+/// genesis state.
 enum GenesisData {
     P1 {
         core:          CoreGenesisParameters,
@@ -1380,6 +1476,10 @@ fn check_and_create_dir(delete_existing: bool, path: &Path) -> anyhow::Result<()
     Ok(())
 }
 
+/// Configuration struct for specifying protocol version, the genesis
+/// parameters, the foundation account and where to find genesis accounts,
+/// anonymity revokers, identity providers, cryptographic parameters and where
+/// to output the genesis data file.
 #[derive(SerdeDeserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct AssembleGenesisConfig {
@@ -1404,6 +1504,7 @@ struct AssembleGenesisConfig {
     genesis_out:        PathBuf,
 }
 
+/// For defining the two modes, generate and assemble.
 #[derive(clap::Subcommand, Debug)]
 #[clap(author, version, about)]
 enum GenesisCreatorCommand {
@@ -1442,14 +1543,15 @@ fn make_relative(f1: &Path, f2: &Path) -> anyhow::Result<PathBuf> {
     Ok(root)
 }
 
+/// Function for assembling the genesis data file given a path to TOML file that
+/// can be parsed as a `AssembleGenesisConfig`. Upon success it writes the
+/// genesis data to the a file and returns `Ok(())`.
 fn handle_assemble(config_path: &Path) -> anyhow::Result<()> {
     let config_source =
         std::fs::read(config_path).context("Unable to read the configuration file.")?;
-    println!("hej");
     let config: AssembleGenesisConfig =
         toml::from_slice(&config_source).context("Unable to parse the configuration file.")?;
     // TODO: Make paths relative to the config file.
-    println!("hej 2");
     let accounts: Vec<GenesisAccountPublic> =
         read_json(&make_relative(config_path, &config.accounts)?)?;
     let global = read_json::<Versioned<_>>(&make_relative(config_path, &config.global)?)?;
@@ -1477,30 +1579,10 @@ fn handle_assemble(config_path: &Path) -> anyhow::Result<()> {
                 identity_providers: idps.value,
                 anonymity_revokers: ars.value,
                 update_keys,
-                chain_parameters: params.to_chain_parameters(AccountIndex::from(idx)),
+                chain_parameters: params.chain_parameters(AccountIndex::from(idx)),
                 leadership_election_nonce: config.parameters.leadership_election_nonce,
                 accounts,
             };
-            let mut out1 = Vec::new();
-            let mut out2 = Vec::new();
-            core.serial(&mut out1);
-            // initial_state.serial(&mut out2);
-            initial_state.update_keys.serial(&mut out2);
-            let some_bytes: Vec<u8> = vec![254, 254, 254, 0];
-            some_bytes.serial(&mut out2);
-            let some_bytes2: Vec<u8> = vec![254, 254, 254, 0];
-            let some_bytes3: Vec<u8> = vec![254, 254, 254, 0];
-            initial_state.chain_parameters.serial(&mut out2);
-            some_bytes2.serial(&mut out2);
-            initial_state.leadership_election_nonce.serial(&mut out2);
-            some_bytes3.serial(&mut out2);
-            initial_state.accounts.serial(&mut out2);
-            let p1 = "./mainnet-files/genesis1.dat".as_ref();
-            let p2 = "./mainnet-files/genesis2.dat".as_ref();
-            std::fs::write(make_relative(config_path, p1)?, out1)
-                .context("Unable to write genesis.")?;
-            std::fs::write(make_relative(config_path, p2)?, out2)
-                .context("Unable to write genesis.")?;
             let genesis = make_genesis_data_cpv0(config.protocol_version, core, initial_state)
                 .context("P4 does not have CPV0")?;
             {
@@ -1517,7 +1599,7 @@ fn handle_assemble(config_path: &Path) -> anyhow::Result<()> {
                 identity_providers: idps.value,
                 anonymity_revokers: ars.value,
                 update_keys,
-                chain_parameters: params.to_chain_parameters(AccountIndex::from(idx)),
+                chain_parameters: params.chain_parameters(AccountIndex::from(idx)),
                 leadership_election_nonce: config.parameters.leadership_election_nonce,
                 accounts,
             };
@@ -1536,6 +1618,10 @@ fn handle_assemble(config_path: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Function for generating a new genesis data file given a path to TOML file
+/// that can be parsed as a `Config`. Upon success it writes the genesis data to
+/// the a file and writes all relevant private data to their desired locations
+/// and returns `Ok(())`.
 fn handle_generate(config_path: &Path) -> anyhow::Result<()> {
     let config_source = std::fs::read(config_path).context(
         "Unable to read the configuration
@@ -1591,7 +1677,7 @@ fn handle_generate(config_path: &Path) -> anyhow::Result<()> {
                 identity_providers,
                 anonymity_revokers,
                 update_keys,
-                chain_parameters: params.to_chain_parameters(foundation_idx),
+                chain_parameters: params.chain_parameters(foundation_idx),
                 leadership_election_nonce: config.parameters.leadership_election_nonce,
                 accounts,
             };
@@ -1613,7 +1699,7 @@ fn handle_generate(config_path: &Path) -> anyhow::Result<()> {
                 identity_providers,
                 anonymity_revokers,
                 update_keys,
-                chain_parameters: params.to_chain_parameters(foundation_idx),
+                chain_parameters: params.chain_parameters(foundation_idx),
                 leadership_election_nonce: config.parameters.leadership_election_nonce,
                 accounts,
             };

@@ -1,6 +1,6 @@
 # Concordium Genesis Creator
 
-This page describes how to create the `genesis.dat` file needed for stating up a node. The tool has two modes: `generate` that can generate a new genesis, and `assemble` that can produce a genesis from existing files (for example to regenereate the Mainnet `genesis.dat`).
+This page describes how to create the `genesis.dat` file needed for starting up a node. The tool has two modes: `generate` that can generate a new genesis, and `assemble` that can produce a genesis from existing files (for example to regenereate the Mainnet `genesis.dat`).
 
 ## The `generate` mode
 To generate a new genesis, run the command
