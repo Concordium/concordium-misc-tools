@@ -904,6 +904,14 @@ fn handle_assemble(config_path: &Path) -> anyhow::Result<()> {
                 std::fs::write(make_relative(config_path, &config.genesis_out)?, out)
                     .context("Unable to write genesis.")?;
             }
+
+            let genesis_hash = genesis.hash();
+            std::fs::write(
+                config.genesis_hash_out,
+                serde_json::to_vec_pretty(&[genesis_hash])
+                    .expect("JSON serialization of hashes should not fail."),
+            )
+            .context("Unable to write the genesis hash.")?;
         }
     }
     Ok(())
@@ -1011,6 +1019,14 @@ fn handle_generate(config_path: &Path) -> anyhow::Result<()> {
             "Unable to write
 genesis.",
         )?;
+
+        let genesis_hash = genesis.hash();
+        std::fs::write(
+            config.out.genesis_hash,
+            serde_json::to_vec_pretty(&[genesis_hash])
+                .expect("JSON serialization of hashes should not fail."),
+        )
+        .context("Unable to write the genesis hash.")?;
     }
     Ok(())
 }
@@ -1019,12 +1035,12 @@ genesis.",
 #[derive(clap::Subcommand, Debug)]
 #[clap(author, version, about)]
 enum GenesisCreatorCommand {
-    Generate {
+    Assemble {
         #[clap(long, short)]
         /// The TOML configuration file describing the genesis.
         config: PathBuf,
     },
-    Assemble {
+    Generate {
         #[clap(long, short)]
         /// The TOML configuration file describing the genesis.
         config: PathBuf,
@@ -1042,8 +1058,8 @@ fn main() -> anyhow::Result<()> {
     let args = GenesisCreator::parse();
 
     match &args.action {
-        GenesisCreatorCommand::Generate { config } => handle_generate(config),
         GenesisCreatorCommand::Assemble { config } => handle_assemble(config),
+        GenesisCreatorCommand::Generate { config } => handle_generate(config),
     }
 }
 

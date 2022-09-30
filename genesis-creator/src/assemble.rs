@@ -32,4 +32,6 @@ pub struct AssembleGenesisConfig {
     pub governance_keys:    PathBuf,
     /// Location where to output the genesis block.
     pub genesis_out:        PathBuf,
+    /// Location where to output the genesis block hash.
+    pub genesis_hash_out:   PathBuf,
 }

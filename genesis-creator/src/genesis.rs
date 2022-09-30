@@ -16,16 +16,17 @@ use concordium_rust_sdk::{
         },
     },
     types::{
-        hashes::LeadershipElectionNonce, AccountIndex, AccountThreshold, BakerAggregationVerifyKey,
-        BakerElectionVerifyKey, BakerId, BakerSignatureVerifyKey, BlockHeight,
-        ChainParameterVersion0, ChainParameterVersion1, ChainParameters, ChainParametersV0,
-        ChainParametersV1, CooldownParameters, ElectionDifficulty, Energy, Epoch, ExchangeRate,
-        PoolParameters, ProtocolVersion, RewardParameters, SlotDuration, TimeParameters,
-        UpdateKeysCollection,
+        hashes::{BlockHash, LeadershipElectionNonce},
+        AccountIndex, AccountThreshold, BakerAggregationVerifyKey, BakerElectionVerifyKey, BakerId,
+        BakerSignatureVerifyKey, BlockHeight, ChainParameterVersion0, ChainParameterVersion1,
+        ChainParameters, ChainParametersV0, ChainParametersV1, CooldownParameters,
+        ElectionDifficulty, Energy, Epoch, ExchangeRate, PoolParameters, ProtocolVersion,
+        RewardParameters, Slot, SlotDuration, TimeParameters, UpdateKeysCollection,
     },
 };
 use gcd::Gcd;
 use serde::de::{self};
+use sha2::Digest;
 use std::collections::BTreeMap;
 
 /// A type alias for credentials in a format suitable for genesis. Genesis
@@ -400,6 +401,57 @@ pub enum GenesisData {
         core:          CoreGenesisParameters,
         initial_state: GenesisStateCPV1,
     },
+}
+
+impl GenesisData {
+    pub fn hash(&self) -> BlockHash {
+        let mut hasher = sha2::Sha256::new();
+        Slot::from(0u64).serial(&mut hasher);
+        match self {
+            GenesisData::P1 {
+                core,
+                initial_state,
+            } => {
+                ProtocolVersion::P1.serial(&mut hasher);
+                // tag of initial genesis
+                0u8.serial(&mut hasher);
+                core.serial(&mut hasher);
+                initial_state.serial(&mut hasher);
+            }
+            GenesisData::P2 {
+                core,
+                initial_state,
+            } => {
+                ProtocolVersion::P2.serial(&mut hasher);
+                // tag of initial genesis
+                0u8.serial(&mut hasher);
+                core.serial(&mut hasher);
+                initial_state.serial(&mut hasher);
+            }
+            GenesisData::P3 {
+                core,
+                initial_state,
+            } => {
+                ProtocolVersion::P3.serial(&mut hasher);
+                // tag of initial genesis
+                0u8.serial(&mut hasher);
+                core.serial(&mut hasher);
+                initial_state.serial(&mut hasher);
+            }
+            GenesisData::P4 {
+                core,
+                initial_state,
+            } => {
+                ProtocolVersion::P4.serial(&mut hasher);
+                // tag of initial genesis
+                0u8.serial(&mut hasher);
+                core.serial(&mut hasher);
+                initial_state.serial(&mut hasher);
+            }
+        }
+        let bytes: [u8; 32] = hasher.finalize().into();
+        bytes.into()
+    }
 }
 
 pub fn make_genesis_data_cpv0(

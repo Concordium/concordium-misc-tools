@@ -193,6 +193,7 @@ pub struct OutputConfig {
     pub identity_providers:       PathBuf,
     pub anonymity_revokers:       PathBuf,
     pub genesis:                  PathBuf,
+    pub genesis_hash:             PathBuf,
     pub cryptographic_parameters: Option<PathBuf>,
     #[serde(default)]
     pub delete_existing:          bool,
