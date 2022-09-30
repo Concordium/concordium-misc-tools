@@ -11,11 +11,8 @@ use anyhow::{anyhow, bail, ensure, Context};
 use clap::Parser;
 use concordium_rust_sdk::{
     common::{
-        self as crypto_common,
-        derive::{Serial, Serialize},
-        types::{Amount, CredentialIndex, KeyIndex, KeyPair, Timestamp},
-        Buffer, Deserial, Get, ParseResult, ReadBytesExt, SerdeDeserialize, SerdeSerialize, Serial,
-        Versioned, VERSION_0,
+        types::{CredentialIndex, KeyIndex, KeyPair},
+        Serial, Versioned, VERSION_0,
     },
     id,
     id::{
@@ -24,496 +21,26 @@ use concordium_rust_sdk::{
         curve_arithmetic::{Curve, Value},
         types::{
             account_address_from_registration_id, mk_dummy_description, AccCredentialInfo,
-            AccountAddress, AccountCredentialWithoutProofs, AccountKeys, ArData, ArIdentity,
-            ArInfo, ChainArData, CredentialData, CredentialDeploymentCommitments,
-            CredentialDeploymentValues, CredentialHolderInfo, GlobalContext, IpData, IpIdentity,
-            IpInfo, Policy, PublicCredentialData, SignatureThreshold, YearMonth,
+            AccountCredentialWithoutProofs, AccountKeys, ArData, ArIdentity, ArInfo, ChainArData,
+            CredentialData, CredentialDeploymentCommitments, CredentialDeploymentValues,
+            CredentialHolderInfo, GlobalContext, IpData, IpIdentity, IpInfo, Policy,
+            PublicCredentialData, SignatureThreshold, YearMonth,
         },
     },
     types::{
-        hashes::LeadershipElectionNonce, AccessStructure, AccountIndex, AccountThreshold,
-        AuthorizationsV0, AuthorizationsV1, BakerAggregationVerifyKey, BakerCredentials,
-        BakerElectionVerifyKey, BakerId, BakerKeyPairs, BakerSignatureVerifyKey, BlockHeight,
-        ChainParameterVersion0, ChainParameterVersion1, ChainParameters, ChainParametersV0,
-        ChainParametersV1, CooldownParameters, ElectionDifficulty, Energy, Epoch, ExchangeRate,
-        HigherLevelAccessStructure, PoolParameters, ProtocolVersion, RewardParameters,
-        SlotDuration, TimeParameters, UpdateKeyPair, UpdateKeysCollection,
-        UpdateKeysCollectionSkeleton, UpdateKeysIndex, UpdateKeysThreshold, UpdatePublicKey,
+        AccountIndex, AuthorizationsV0, AuthorizationsV1, BakerCredentials, BakerId, BakerKeyPairs,
+        ChainParameterVersion0, ChainParameterVersion1, HigherLevelAccessStructure,
+        ProtocolVersion, UpdateKeyPair, UpdateKeysCollection, UpdateKeysCollectionSkeleton,
+        UpdatePublicKey,
     },
 };
-use gcd::Gcd;
+use genesis_creator::{assemble::AssembleGenesisConfig, config::*, genesis::*};
 use rayon::prelude::*;
-use serde::de::{self, DeserializeOwned};
+use serde::de::DeserializeOwned;
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeMap,
     path::{Path, PathBuf},
 };
-
-/// Struct for specifying the cryptographic parameters. Either a path to a file
-/// with existing gryptographic parameters, or the genesis string from which the
-/// cryptographic parameters should be generated.
-#[derive(SerdeDeserialize, Debug)]
-#[serde(tag = "kind", rename_all = "camelCase")]
-enum CryptoParamsConfig {
-    #[serde(rename_all = "camelCase")]
-    Existing {
-        source: PathBuf,
-    },
-    #[serde(rename_all = "camelCase")]
-    Generate {
-        genesis_string: String,
-    },
-}
-
-/// Struct for specifying one or more genesis anonymity revokers. Either a path
-/// to a file with an existing anonymity revoker, or an id for which an
-/// anonymity revoker should be generated freshly. If the `repeat` is `Some(n)`,
-/// it specifies that `n` anonymity revokers should be generated freshly,
-/// starting from the given id.
-#[derive(SerdeDeserialize, Debug)]
-#[serde(tag = "kind", rename_all = "camelCase")]
-enum AnonymityRevokerConfig {
-    #[serde(rename_all = "camelCase")]
-    Existing {
-        source: PathBuf,
-    },
-    #[serde(rename_all = "camelCase")]
-    Fresh {
-        id:     ArIdentity,
-        repeat: Option<u32>,
-    },
-}
-
-/// Struct for specifying one or more genesis identity providers. Either a path
-/// to a file with an existing identity provider, or an id for which an identity
-/// provider should be generated freshly. If the `repeat` is `Some(n)`, it
-/// specifies that `n` identity providers should be generated freshly, starting
-/// from the given id.
-#[derive(SerdeDeserialize, Debug)]
-#[serde(tag = "kind", rename_all = "camelCase")]
-enum IdentityProviderConfig {
-    #[serde(rename_all = "camelCase")]
-    Existing {
-        source: PathBuf,
-    },
-    #[serde(rename_all = "camelCase")]
-    Fresh {
-        id:     id::types::IpIdentity,
-        repeat: Option<u32>,
-    },
-}
-
-/// A type alias for credentials in a format suitable for genesis. Genesis
-/// credentials do not have any associated proofs.
-type GenesisCredentials = BTreeMap<
-    CredentialIndex,
-    AccountCredentialWithoutProofs<id::constants::ArCurve, id::constants::AttributeKind>,
->;
-
-/// Private genesis account data. When generating fresh accounts, these are
-/// output as JSON files. When using existing accounts, these are instead input
-/// as JSON files. The format is the same as what is expected when importing
-/// genesis accounts with concordium-client.
-#[derive(SerdeDeserialize, SerdeSerialize, Debug)]
-#[serde(rename_all = "camelCase")]
-struct GenesisAccount {
-    account_keys:          AccountKeys,
-    aci:                   AccCredentialInfo<id::constants::ArCurve>,
-    address:               AccountAddress,
-    credentials:           Versioned<GenesisCredentials>,
-    encryption_public_key: id::elgamal::PublicKey<id::constants::ArCurve>,
-    encryption_secret_key: id::elgamal::SecretKey<id::constants::ArCurve>,
-}
-
-/// Struct corresponding to the Haskell type `GenesisBaker` in
-/// `haskell-src/Concordium/Genesis/Account.hs` in `concordium-base`.
-#[derive(Serialize, SerdeSerialize, SerdeDeserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-struct GenesisBakerPublic {
-    /// Initial stake of the baker.
-    stake:                  Amount,
-    /// Whether earnings should be automatically restaked or not.
-    restake_earnings:       bool,
-    /// The ID of the baker. This must correspond to the account index, which is the
-    /// place in the list of genesis accounts.
-    baker_id:               BakerId,
-    election_verify_key:    BakerElectionVerifyKey,
-    signature_verify_key:   BakerSignatureVerifyKey,
-    aggregation_verify_key: BakerAggregationVerifyKey,
-}
-
-/// Struct corresponding to the Haskell type `GenesisAccount` in
-/// `haskell-src/Concordium/Genesis/Account.hs` in `concordium-base`.
-#[derive(Serialize, SerdeSerialize, SerdeDeserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-struct GenesisAccountPublic {
-    address:           AccountAddress,
-    account_threshold: AccountThreshold,
-    #[map_size_length = 8]
-    #[serde(deserialize_with = "deserialize_versioned_public_account")]
-    credentials:       GenesisCredentials,
-    balance:           Amount,
-    baker:             Option<GenesisBakerPublic>,
-}
-
-fn deserialize_versioned_public_account<'de, D: de::Deserializer<'de>>(
-    des: D,
-) -> Result<GenesisCredentials, D::Error> {
-    let versioned: Versioned<GenesisCredentials> =
-        Versioned::<GenesisCredentials>::deserialize(des)?;
-    Ok(versioned.value)
-}
-
-/// Struct for specifying one or more genesis accounts. Either a path to a file
-/// with an existing account is given, or a fresh account should be generated
-/// freshly.
-#[derive(SerdeDeserialize, Debug)]
-#[serde(tag = "kind", rename_all = "camelCase")]
-enum AccountConfig {
-    #[serde(rename_all = "camelCase")]
-    Existing {
-        source:           PathBuf,
-        balance:          Amount,
-        stake:            Option<Amount>,
-        #[serde(default)]
-        restake_earnings: bool,
-        baker_keys:       Option<PathBuf>,
-        #[serde(default)]
-        foundation:       bool,
-    },
-    #[serde(rename_all = "camelCase")]
-    Fresh {
-        // if repeat, the first account gets used as a foundation account
-        repeat:            Option<u32>,
-        stake:             Option<Amount>,
-        balance:           Amount,
-        template:          String,
-        identity_provider: IpIdentity,
-        // default to 1
-        num_keys:          Option<u8>,
-        // default to 1
-        threshold:         Option<SignatureThreshold>,
-        #[serde(default)]
-        restake_earnings:  bool,
-        #[serde(default)]
-        foundation:        bool,
-    },
-}
-
-/// Struct for specifying which level 2 keys can authorize a concrete level 2
-/// chain update, together with a threshold specifying how many of the given
-/// keys are needed.
-#[derive(SerdeDeserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-struct Level2UpdateConfig {
-    authorized_keys: Vec<UpdateKeysIndex>,
-    threshold:       UpdateKeysThreshold,
-}
-
-impl Level2UpdateConfig {
-    pub fn access_structure(self, ctx: &Vec<UpdatePublicKey>) -> anyhow::Result<AccessStructure> {
-        let num_given_keys = self.authorized_keys.len();
-        let authorized_keys: BTreeSet<_> = self.authorized_keys.into_iter().collect();
-        ensure!(authorized_keys.len() == num_given_keys, "Duplicate key index provided.");
-        for key_idx in authorized_keys.iter() {
-            ensure!(
-                usize::from(u16::from(*key_idx)) < ctx.len(),
-                "Key index {} does not specify a known update key.",
-                key_idx
-            );
-        }
-        ensure!(
-            usize::from(u16::from(self.threshold)) <= num_given_keys,
-            "Threshold exceeds the number of keys."
-        );
-        Ok(AccessStructure {
-            authorized_keys,
-            threshold: self.threshold,
-        })
-    }
-}
-
-/// Struct holding all the level 2 keys and for each level 2 chain update the
-/// keys `Level2UpdateConfig` determining the keys that can authorize the
-/// update.
-#[derive(SerdeDeserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-struct Level2KeysConfig {
-    keys: Vec<HigherLevelKey>,
-    emergency: Level2UpdateConfig,
-    protocol: Level2UpdateConfig,
-    election_difficulty: Level2UpdateConfig,
-    euro_per_energy: Level2UpdateConfig,
-    #[serde(rename = "microCCDPerEuro")]
-    micro_ccd_per_euro: Level2UpdateConfig,
-    foundation_account: Level2UpdateConfig,
-    mint_distribution: Level2UpdateConfig,
-    transaction_fee_distribution: Level2UpdateConfig,
-    gas_rewards: Level2UpdateConfig,
-    pool_parameters: Level2UpdateConfig,
-    add_anonymity_revoker: Level2UpdateConfig,
-    add_identity_provider: Level2UpdateConfig,
-    // Optional because it is not needed in P1-P3,
-    cooldown_parameters: Option<Level2UpdateConfig>,
-    time_parameters: Option<Level2UpdateConfig>,
-}
-
-/// Struct holding the root or the level 1 keys, together with a threshold.
-#[derive(SerdeDeserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-struct HigherLevelKeysConfig {
-    threshold: UpdateKeysThreshold,
-    keys:      Vec<HigherLevelKey>,
-}
-
-/// Struct for specifying a key. Either a path to an existing key, or a `u32`
-/// specifying how many keys should be generated freshly.
-#[derive(SerdeDeserialize, Debug)]
-#[serde(tag = "kind", rename_all = "camelCase")]
-enum HigherLevelKey {
-    Existing {
-        source: PathBuf,
-    },
-    Fresh {
-        repeat: u32,
-    },
-}
-
-/// Struct holding all the root, level 1 and level 2 keys.
-#[derive(SerdeDeserialize, Debug)]
-struct UpdateKeysConfig {
-    root:   HigherLevelKeysConfig,
-    level1: HigherLevelKeysConfig,
-    level2: Level2KeysConfig,
-}
-/// Genesis chain parameters version 0. Contains all version 0 chain paramters
-/// except for the foundation index.
-#[derive(SerdeDeserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-struct GenesisChainParametersV0 {
-    election_difficulty:          ElectionDifficulty,
-    euro_per_energy:              ExchangeRate,
-    #[serde(rename = "microCCDPerEuro")]
-    micro_ccd_per_euro:           ExchangeRate,
-    account_creation_limit:       u16,
-    baker_cooldown_epochs:        Epoch,
-    reward_parameters:            RewardParameters<ChainParameterVersion0>,
-    minimum_threshold_for_baking: Amount,
-}
-
-impl GenesisChainParametersV0 {
-    pub fn chain_parameters(self, foundation_account_index: AccountIndex) -> ChainParametersV0 {
-        let Self {
-            election_difficulty,
-            euro_per_energy,
-            micro_ccd_per_euro,
-            account_creation_limit,
-            baker_cooldown_epochs,
-            reward_parameters,
-            minimum_threshold_for_baking,
-        } = self;
-        ChainParametersV0 {
-            election_difficulty,
-            euro_per_energy,
-            micro_gtu_per_euro: micro_ccd_per_euro,
-            baker_cooldown_epochs,
-            account_creation_limit: account_creation_limit.into(),
-            reward_parameters,
-            foundation_account_index,
-            minimum_threshold_for_baking,
-        }
-    }
-}
-
-/// Genesis chain parameters version 0. Contains all version 1 chain paramters
-/// except for the foundation index.
-#[derive(SerdeDeserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-struct GenesisChainParametersV1 {
-    election_difficulty:    ElectionDifficulty,
-    euro_per_energy:        ExchangeRate,
-    #[serde(rename = "microCCDPerEuro")]
-    micro_ccd_per_euro:     ExchangeRate,
-    account_creation_limit: u16,
-    reward_parameters:      RewardParameters<ChainParameterVersion1>,
-    time_parameters:        TimeParameters,
-    pool_parameters:        PoolParameters,
-    cooldown_parameters:    CooldownParameters,
-}
-
-impl GenesisChainParametersV1 {
-    pub fn chain_parameters(self, foundation_account_index: AccountIndex) -> ChainParametersV1 {
-        let Self {
-            election_difficulty,
-            euro_per_energy,
-            micro_ccd_per_euro,
-            account_creation_limit,
-            time_parameters,
-            pool_parameters,
-            cooldown_parameters,
-            reward_parameters,
-        } = self;
-        ChainParametersV1 {
-            election_difficulty,
-            euro_per_energy,
-            micro_gtu_per_euro: micro_ccd_per_euro,
-            time_parameters,
-            pool_parameters,
-            cooldown_parameters,
-            account_creation_limit: account_creation_limit.into(),
-            reward_parameters,
-            foundation_account_index,
-        }
-    }
-}
-
-/// Genesis chain parameters and the version.
-#[derive(SerdeDeserialize, Debug)]
-#[serde(tag = "version")]
-enum GenesisChainParameters {
-    #[serde(rename = "v0")]
-    V0(GenesisChainParametersV0),
-    #[serde(rename = "v1")]
-    V1(GenesisChainParametersV1),
-}
-
-/// A ratio between two `u64` integers.
-#[derive(Debug, SerdeDeserialize, Serial, Clone, Copy)]
-#[serde(try_from = "rust_decimal::Decimal")]
-struct Ratio {
-    numerator:   u64,
-    denominator: u64,
-}
-
-impl Deserial for Ratio {
-    fn deserial<R: ReadBytesExt>(source: &mut R) -> ParseResult<Self> {
-        let numerator: u64 = source.get()?;
-        let denominator = source.get()?;
-        ensure!(denominator != 0, "Denominator cannot be 0.");
-        ensure!(numerator.gcd(denominator) == 1, "Numerator and denominator must be coprime.");
-        Ok(Self {
-            numerator,
-            denominator,
-        })
-    }
-}
-
-impl TryFrom<rust_decimal::Decimal> for Ratio {
-    type Error = anyhow::Error;
-
-    fn try_from(mut value: rust_decimal::Decimal) -> Result<Self, Self::Error> {
-        value.normalize_assign();
-        let mantissa = value.mantissa();
-        let scale = value.scale();
-        let denominator = 10u64.checked_pow(scale).context("Unrepresentable number")?;
-        let numerator: u64 = mantissa.try_into().context("Unrepresentable number")?;
-        let g = numerator.gcd(denominator);
-        let numerator = numerator / g;
-        let denominator = denominator / g;
-        Ok(Self {
-            numerator,
-            denominator,
-        })
-    }
-}
-
-/// The finalization parameters. Corresponds to the Haskell type
-/// `FinalizationParameters` in haskell-src/Concordium/Types/Parameters.hs.
-#[derive(SerdeDeserialize, Serialize, Debug, Clone)]
-#[serde(rename_all = "camelCase")]
-struct FinalizationParameters {
-    /// Number of levels to skip between finalizations.
-    minimum_skip:        BlockHeight,
-    /// Maximum size of the finalization committee; determines the minimum stake
-    ///  required to join the committee as @totalGTU /
-    /// finalizationCommitteeMaxSize@.
-    committee_max_size:  u32,
-    /// Base delay time used in finalization, in milliseconds.
-    waiting_time:        u64,
-    /// Factor used to shrink the finalization gap. Must be strictly between 0
-    /// and 1.
-    skip_shrink_factor:  Ratio,
-    /// Factor used to grow the finalization gap. Must be strictly greater than
-    /// 1.
-    skip_grow_factor:    Ratio,
-    /// Factor for shrinking the finalization delay (i.e. number of descendent
-    /// blocks required to be eligible as a finalization target).
-    delay_shrink_factor: Ratio,
-    /// Factor for growing the finalization delay when it takes more than one
-    /// round to finalize a block.
-    delay_grow_factor:   Ratio,
-    /// Whether to allow the delay to be 0. (This allows a block to be finalized
-    /// as soon as it is baked.)
-    allow_zero_delay:    bool,
-}
-
-/// The core genesis parameters, the leadership election nonce and the chain
-/// parameters (except the foundation index).
-#[derive(SerdeDeserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-struct GenesisParameters {
-    // Time at which the genesis will occur.
-    genesis_time:              chrono::DateTime<chrono::Utc>,
-    // Duration of a slot in milliseconds
-    slot_duration:             SlotDuration,
-    // Leadership election nonce.
-    leadership_election_nonce: LeadershipElectionNonce,
-    // Number of slots that go into an epoch.
-    epoch_length:              u64,
-    // Finalization parameters.
-    finalization:              FinalizationParameters,
-    // Max energy that is allowed for a block.
-    max_block_energy:          Energy,
-    chain:                     GenesisChainParameters,
-}
-
-impl GenesisParameters {
-    pub fn to_core(&self) -> anyhow::Result<CoreGenesisParameters> {
-        let time = self.genesis_time.timestamp_millis();
-        ensure!(time >= 0, "Genesis time before unix epoch is not supported.");
-        Ok(CoreGenesisParameters {
-            time:                    Timestamp {
-                millis: time as u64,
-            },
-            slot_duration:           self.slot_duration,
-            epoch_length:            self.epoch_length,
-            max_block_energy:        self.max_block_energy,
-            finalization_parameters: self.finalization.clone(),
-        })
-    }
-}
-
-/// For specifying where to ouput chain update keys, account keys, baker keys,
-/// identity providers, anonymity revokers, cryptographic parameters and the
-/// `genesis.dat` file. The `delete_existing` field specifies whether to delete
-/// existing files before generation.
-#[derive(SerdeDeserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-struct OutputConfig {
-    update_keys:              PathBuf,
-    account_keys:             PathBuf,
-    baker_keys:               PathBuf,
-    identity_providers:       PathBuf,
-    anonymity_revokers:       PathBuf,
-    genesis:                  PathBuf,
-    cryptographic_parameters: Option<PathBuf>,
-    #[serde(default)]
-    delete_existing:          bool,
-}
-
-/// Struct representing the configuration specified by the input TOML file.
-#[derive(SerdeDeserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-struct Config {
-    out: OutputConfig,
-    protocol_version: ProtocolVersion,
-    parameters: GenesisParameters,
-    updates: UpdateKeysConfig,
-    cryptographic_parameters: CryptoParamsConfig,
-    anonymity_revokers: Vec<AnonymityRevokerConfig>,
-    identity_providers: Vec<IdentityProviderConfig>,
-    accounts: Vec<AccountConfig>,
-}
 
 /// Function for creating the cryptographic parameters (also called global
 /// context). The arguments are
@@ -529,9 +56,7 @@ fn crypto_parameters(
     cfg: CryptoParamsConfig,
 ) -> anyhow::Result<GlobalContext<ArCurve>> {
     match cfg {
-        CryptoParamsConfig::Existing {
-            source,
-        } => {
+        CryptoParamsConfig::Existing { source } => {
             let data = std::fs::read(&source).context(format!(
                 "Could not read cryptographic parameters: {}",
                 source.display()
@@ -545,9 +70,7 @@ fn crypto_parameters(
             );
             Ok(data.value)
         }
-        CryptoParamsConfig::Generate {
-            genesis_string,
-        } => {
+        CryptoParamsConfig::Generate { genesis_string } => {
             let ver_global: Versioned<GlobalContext<ArCurve>> = Versioned {
                 version: VERSION_0,
                 value:   GlobalContext::generate(genesis_string),
@@ -581,9 +104,7 @@ fn identity_providers(
     let mut out = BTreeMap::new();
     for cfg in cfgs {
         match cfg {
-            IdentityProviderConfig::Existing {
-                source,
-            } => {
+            IdentityProviderConfig::Existing { source } => {
                 let data = std::fs::read(&source).context(format!(
                     "Could not read the identity provider file: {}",
                     source.display()
@@ -595,10 +116,7 @@ fn identity_providers(
                     bail!("Duplicate identity provider id {}", ip_identity);
                 }
             }
-            IdentityProviderConfig::Fresh {
-                id,
-                repeat,
-            } => {
+            IdentityProviderConfig::Fresh { id, repeat } => {
                 let num = repeat.unwrap_or(1);
                 for n in id.0..id.0 + num {
                     let ip_identity = IpIdentity::from(n);
@@ -671,9 +189,7 @@ fn anonymity_revokers(
     let mut out = BTreeMap::new();
     for cfg in cfgs {
         match cfg {
-            AnonymityRevokerConfig::Existing {
-                source,
-            } => {
+            AnonymityRevokerConfig::Existing { source } => {
                 let data = std::fs::read(&source).context(format!(
                     "Could not read the identity provider file: {}",
                     source.display()
@@ -685,10 +201,7 @@ fn anonymity_revokers(
                     bail!("Duplicate anonymity revoker id {}", ar_identity);
                 }
             }
-            AnonymityRevokerConfig::Fresh {
-                id,
-                repeat,
-            } => {
+            AnonymityRevokerConfig::Fresh { id, repeat } => {
                 let num = repeat.unwrap_or(1);
                 for n in u32::from(id)..u32::from(id) + num {
                     let ar_identity = ArIdentity::try_from(n).map_err(|_| {
@@ -754,9 +267,7 @@ fn read_or_generate_update_keys<R: rand::Rng + rand::CryptoRng>(
     let mut out = Vec::new();
     for key_cfg in key_cfgs {
         match key_cfg {
-            HigherLevelKey::Existing {
-                source,
-            } => {
+            HigherLevelKey::Existing { source } => {
                 let data = std::fs::read(&source).context(format!(
                     "Could not read the {} key: {}",
                     ctx,
@@ -766,9 +277,7 @@ fn read_or_generate_update_keys<R: rand::Rng + rand::CryptoRng>(
                     .context(format!("Could not parse the {} key.", ctx))?;
                 out.push(key);
             }
-            HigherLevelKey::Fresh {
-                repeat,
-            } => {
+            HigherLevelKey::Fresh { repeat } => {
                 for _ in 0..*repeat {
                     let new_key = UpdateKeyPair::generate(csprng);
                     let mut path = root_out.to_path_buf();
@@ -816,7 +325,10 @@ fn updates_v0(
 
     let level2_keys =
         read_or_generate_update_keys("level2", &updates_out, &mut csprng, &update_cfg.level2.keys)?;
-    ensure!(!level2_keys.is_empty(), "There must be at least one level 2 key.",);
+    ensure!(
+        !level2_keys.is_empty(),
+        "There must be at least one level 2 key.",
+    );
 
     let level2 = update_cfg.level2;
     let emergency = level2.emergency.access_structure(&level2_keys)?;
@@ -826,12 +338,17 @@ fn updates_v0(
     let micro_gtu_per_euro = level2.micro_ccd_per_euro.access_structure(&level2_keys)?;
     let foundation_account = level2.foundation_account.access_structure(&level2_keys)?;
     let mint_distribution = level2.mint_distribution.access_structure(&level2_keys)?;
-    let transaction_fee_distribution =
-        level2.transaction_fee_distribution.access_structure(&level2_keys)?;
+    let transaction_fee_distribution = level2
+        .transaction_fee_distribution
+        .access_structure(&level2_keys)?;
     let param_gas_rewards = level2.gas_rewards.access_structure(&level2_keys)?;
     let pool_parameters = level2.pool_parameters.access_structure(&level2_keys)?;
-    let add_anonymity_revoker = level2.add_anonymity_revoker.access_structure(&level2_keys)?;
-    let add_identity_provider = level2.add_identity_provider.access_structure(&level2_keys)?;
+    let add_anonymity_revoker = level2
+        .add_anonymity_revoker
+        .access_structure(&level2_keys)?;
+    let add_identity_provider = level2
+        .add_identity_provider
+        .access_structure(&level2_keys)?;
 
     let level_2_keys = AuthorizationsV0 {
         keys: level2_keys,
@@ -906,7 +423,10 @@ fn updates_v1(
 
     let level2_keys =
         read_or_generate_update_keys("level2", &updates_out, &mut csprng, &update_cfg.level2.keys)?;
-    ensure!(!level2_keys.is_empty(), "There must be at least one level 2 key.",);
+    ensure!(
+        !level2_keys.is_empty(),
+        "There must be at least one level 2 key.",
+    );
 
     let level2 = update_cfg.level2;
     let emergency = level2.emergency.access_structure(&level2_keys)?;
@@ -916,12 +436,17 @@ fn updates_v1(
     let micro_gtu_per_euro = level2.micro_ccd_per_euro.access_structure(&level2_keys)?;
     let foundation_account = level2.foundation_account.access_structure(&level2_keys)?;
     let mint_distribution = level2.mint_distribution.access_structure(&level2_keys)?;
-    let transaction_fee_distribution =
-        level2.transaction_fee_distribution.access_structure(&level2_keys)?;
+    let transaction_fee_distribution = level2
+        .transaction_fee_distribution
+        .access_structure(&level2_keys)?;
     let param_gas_rewards = level2.gas_rewards.access_structure(&level2_keys)?;
     let pool_parameters = level2.pool_parameters.access_structure(&level2_keys)?;
-    let add_anonymity_revoker = level2.add_anonymity_revoker.access_structure(&level2_keys)?;
-    let add_identity_provider = level2.add_identity_provider.access_structure(&level2_keys)?;
+    let add_anonymity_revoker = level2
+        .add_anonymity_revoker
+        .access_structure(&level2_keys)?;
+    let add_identity_provider = level2
+        .add_identity_provider
+        .access_structure(&level2_keys)?;
     let cooldown_parameters = level2
         .cooldown_parameters
         .ok_or_else(|| anyhow!("Cooldown parameters missing"))?
@@ -1014,13 +539,14 @@ fn accounts(
                 restake_earnings,
                 baker_keys,
             } => {
-                if foundation_index.is_some() && foundation {
-                    bail!(
-                        "There are two accounts marked as foundation accounts. That will not work."
-                    );
-                }
                 if foundation {
-                    foundation_index = Some(AccountIndex::from(idx));
+                    let old = foundation_index.replace(AccountIndex::from(idx));
+                    if old.is_some() {
+                        bail!(
+                            "There are two accounts marked as foundation accounts. That will not \
+                             work."
+                        );
+                    }
                 }
                 let ga: GenesisAccount = serde_json::from_slice(
                     &std::fs::read(source).context("Could not read existing account file.")?,
@@ -1210,14 +736,9 @@ fn accounts(
                             address: account_address_from_registration_id(&cred_id),
                             credentials: Versioned::new(
                                 VERSION_0,
-                                [(
-                                    CredentialIndex {
-                                        index: 0,
-                                    },
-                                    acc_cred,
-                                )]
-                                .into_iter()
-                                .collect(),
+                                [(CredentialIndex { index: 0 }, acc_cred)]
+                                    .into_iter()
+                                    .collect(),
                             ),
                             encryption_public_key: (&encryption_secret_key).into(),
                             encryption_secret_key,
@@ -1284,251 +805,6 @@ fn accounts(
     }
 }
 
-/// The core genesis parameters. This corresponds to the Haskell type in
-/// haskell-src/Concordium/Genesis/Data/Base.hs in concordium-base.
-#[derive(Debug, Serialize)]
-struct CoreGenesisParameters {
-    time:                    Timestamp,
-    slot_duration:           SlotDuration,
-    epoch_length:            u64,
-    max_block_energy:        Energy,
-    finalization_parameters: FinalizationParameters,
-}
-
-/// The genesis state in chain parameters version 0. This corresponds to the
-/// Haskell type `GenesisState` from haskell-src/Concordium/Genesis/Data/Base.hs
-/// for those protocol versions having chain parameters version 0.
-#[derive(Debug)]
-struct GenesisStateCPV0 {
-    cryptographic_parameters:  GlobalContext<ArCurve>,
-    identity_providers:        BTreeMap<IpIdentity, IpInfo<IpPairing>>,
-    anonymity_revokers:        BTreeMap<ArIdentity, ArInfo<ArCurve>>,
-    update_keys:               UpdateKeysCollection<ChainParameterVersion0>,
-    chain_parameters:          ChainParameters<ChainParameterVersion0>,
-    leadership_election_nonce: LeadershipElectionNonce,
-    accounts:                  Vec<GenesisAccountPublic>,
-}
-
-fn serialize_with_length_header(data: &impl Serial, buf: &mut Vec<u8>, out: &mut impl Buffer) {
-    data.serial(buf);
-    (buf.len() as u32).serial(out);
-    out.write_all(buf).expect("Writing to buffers succeeds.");
-    buf.clear();
-}
-
-impl Serial for GenesisStateCPV0 {
-    fn serial<B: Buffer>(&self, out: &mut B) {
-        let mut tmp = Vec::new();
-        serialize_with_length_header(&self.cryptographic_parameters, &mut tmp, out);
-        (self.identity_providers.len() as u32).serial(out);
-        for (k, v) in self.identity_providers.iter() {
-            k.serial(out);
-            serialize_with_length_header(v, &mut tmp, out);
-        }
-        (self.anonymity_revokers.len() as u32).serial(out);
-        for (k, v) in self.anonymity_revokers.iter() {
-            k.serial(out);
-            serialize_with_length_header(v, &mut tmp, out);
-        }
-        self.update_keys.serial(out);
-        self.chain_parameters.serial(out);
-        self.leadership_election_nonce.serial(out);
-        self.accounts.serial(out)
-    }
-}
-
-/// The genesis state in chain parameters version 1. This corresponds to the
-/// Haskell type `GenesisState` from haskell-src/Concordium/Genesis/Data/Base.hs
-/// for those protocol versions having chain parameters version 1, currently
-/// only P4.
-#[derive(Debug)]
-struct GenesisStateCPV1 {
-    cryptographic_parameters:  GlobalContext<ArCurve>,
-    identity_providers:        BTreeMap<IpIdentity, IpInfo<IpPairing>>,
-    anonymity_revokers:        BTreeMap<ArIdentity, ArInfo<ArCurve>>,
-    update_keys:               UpdateKeysCollection<ChainParameterVersion1>,
-    chain_parameters:          ChainParameters<ChainParameterVersion1>,
-    leadership_election_nonce: LeadershipElectionNonce,
-    accounts:                  Vec<GenesisAccountPublic>,
-}
-
-impl Serial for GenesisStateCPV1 {
-    fn serial<B: Buffer>(&self, out: &mut B) {
-        let mut tmp = Vec::new();
-        serialize_with_length_header(&self.cryptographic_parameters, &mut tmp, out);
-        (self.identity_providers.len() as u32).serial(out);
-        for (k, v) in self.identity_providers.iter() {
-            k.serial(out);
-            serialize_with_length_header(v, &mut tmp, out);
-        }
-        (self.anonymity_revokers.len() as u32).serial(out);
-        for (k, v) in self.anonymity_revokers.iter() {
-            k.serial(out);
-            serialize_with_length_header(v, &mut tmp, out);
-        }
-        self.update_keys.serial(out);
-        self.chain_parameters.serial(out);
-        self.leadership_election_nonce.serial(out);
-        self.accounts.serial(out)
-    }
-}
-
-/// The genesis data containing the core genesis parameters and the initial
-/// genesis state.
-enum GenesisData {
-    P1 {
-        core:          CoreGenesisParameters,
-        initial_state: GenesisStateCPV0,
-    },
-    P2 {
-        core:          CoreGenesisParameters,
-        initial_state: GenesisStateCPV0,
-    },
-    P3 {
-        core:          CoreGenesisParameters,
-        initial_state: GenesisStateCPV0,
-    },
-    P4 {
-        core:          CoreGenesisParameters,
-        initial_state: GenesisStateCPV1,
-    },
-}
-
-fn make_genesis_data_cpv0(
-    pv: ProtocolVersion,
-    core: CoreGenesisParameters,
-    initial_state: GenesisStateCPV0,
-) -> Option<GenesisData> {
-    match pv {
-        ProtocolVersion::P1 => Some(GenesisData::P1 {
-            core,
-            initial_state,
-        }),
-        ProtocolVersion::P2 => Some(GenesisData::P2 {
-            core,
-            initial_state,
-        }),
-        ProtocolVersion::P3 => Some(GenesisData::P3 {
-            core,
-            initial_state,
-        }),
-        ProtocolVersion::P4 => None,
-    }
-}
-
-impl Serial for GenesisData {
-    fn serial<B: Buffer>(&self, out: &mut B) {
-        match self {
-            GenesisData::P1 {
-                core,
-                initial_state,
-            } => {
-                // version of the genesis
-                3u8.serial(out);
-                // tag of initial genesis
-                0u8.serial(out);
-                core.serial(out);
-                initial_state.serial(out)
-            }
-            GenesisData::P2 {
-                core,
-                initial_state,
-            } => {
-                4u8.serial(out);
-                // tag of initial genesis
-                0u8.serial(out);
-                core.serial(out);
-                initial_state.serial(out)
-            }
-            GenesisData::P3 {
-                core,
-                initial_state,
-            } => {
-                5u8.serial(out);
-                // tag of initial genesis
-                0u8.serial(out);
-                core.serial(out);
-                initial_state.serial(out)
-            }
-            GenesisData::P4 {
-                core,
-                initial_state,
-            } => {
-                6u8.serial(out);
-                // tag of initial genesis
-                0u8.serial(out);
-                core.serial(out);
-                initial_state.serial(out)
-            }
-        }
-    }
-}
-
-/// Check whether the directory exists, and either fail or delete it depending
-/// on the value of the `delete_existing` flag.
-fn check_and_create_dir(delete_existing: bool, path: &Path) -> anyhow::Result<()> {
-    if path.exists() {
-        if delete_existing {
-            std::fs::remove_dir_all(path).context("Failed to remove the existing directory.")?;
-        } else {
-            bail!("Supplied output path {} already exists.", path.display());
-        }
-    }
-    std::fs::create_dir_all(path)?;
-    Ok(())
-}
-
-/// Configuration struct for specifying protocol version, the genesis
-/// parameters, the foundation account and where to find genesis accounts,
-/// anonymity revokers, identity providers, cryptographic parameters and where
-/// to output the genesis data file.
-#[derive(SerdeDeserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-struct AssembleGenesisConfig {
-    protocol_version:   ProtocolVersion,
-    parameters:         GenesisParameters,
-    foundation_account: AccountAddress,
-    /// A file with a list of accounts that should be assembled into
-    /// genesis.
-    accounts:           PathBuf,
-    /// A file with a list of anonymity revokers that should be assembled
-    /// into genesis.
-    ars:                PathBuf,
-    /// A file with a list of identity providers that should be assembled
-    /// into genesis.
-    idps:               PathBuf,
-    /// A file pointing to the cryptographic parameters to be put into
-    /// genesis.
-    global:             PathBuf,
-    /// A file pointing to the governance (root, level 1, and level 2) keys.
-    governance_keys:    PathBuf,
-    /// Location where to output the genesis block.
-    genesis_out:        PathBuf,
-}
-
-/// For defining the two modes, generate and assemble.
-#[derive(clap::Subcommand, Debug)]
-#[clap(author, version, about)]
-enum GenesisCreatorCommand {
-    Generate {
-        #[clap(long, short)]
-        /// The TOML configuration file describing the genesis.
-        config: PathBuf,
-    },
-    Assemble {
-        #[clap(long, short)]
-        /// The TOML configuration file describing the genesis.
-        config: PathBuf,
-    },
-}
-
-#[derive(Parser, Debug)]
-#[clap(author, version, about)]
-struct GenesisCreator {
-    #[clap(subcommand)]
-    action: GenesisCreatorCommand,
-}
-
 fn read_json<S: DeserializeOwned>(path: &Path) -> anyhow::Result<S> {
     let data_value: serde_json::Value = serde_json::from_slice(
         &std::fs::read(path).context("Could not read existing account file.")?,
@@ -1545,6 +821,20 @@ fn make_relative(f1: &Path, f2: &Path) -> anyhow::Result<PathBuf> {
     Ok(root)
 }
 
+/// Check whether the directory exists, and either fail or delete it depending
+/// on the value of the `delete_existing` flag.
+fn check_and_create_dir(delete_existing: bool, path: &Path) -> anyhow::Result<()> {
+    if path.exists() {
+        if delete_existing {
+            std::fs::remove_dir_all(path).context("Failed to remove the existing directory.")?;
+        } else {
+            bail!("Supplied output path {} already exists.", path.display());
+        }
+    }
+    std::fs::create_dir_all(path)?;
+    Ok(())
+}
+
 /// Function for assembling the genesis data file given a path to TOML file that
 /// can be parsed as a `AssembleGenesisConfig`. Upon success it writes the
 /// genesis data to the a file and returns `Ok(())`.
@@ -1553,7 +843,6 @@ fn handle_assemble(config_path: &Path) -> anyhow::Result<()> {
         std::fs::read(config_path).context("Unable to read the configuration file.")?;
     let config: AssembleGenesisConfig =
         toml::from_slice(&config_source).context("Unable to parse the configuration file.")?;
-    // TODO: Make paths relative to the config file.
     let accounts: Vec<GenesisAccountPublic> =
         read_json(&make_relative(config_path, &config.accounts)?)?;
     let global = read_json::<Versioned<_>>(&make_relative(config_path, &config.global)?)?;
@@ -1645,8 +934,10 @@ fn handle_generate(config_path: &Path) -> anyhow::Result<()> {
     }
 
     let core = config.parameters.to_core()?;
-    let cryptographic_parameters =
-        crypto_parameters(config.out.cryptographic_parameters, config.cryptographic_parameters)?;
+    let cryptographic_parameters = crypto_parameters(
+        config.out.cryptographic_parameters,
+        config.cryptographic_parameters,
+    )?;
     let identity_providers =
         identity_providers(config.out.identity_providers, config.identity_providers)?;
     let anonymity_revokers = anonymity_revokers(
@@ -1692,7 +983,9 @@ fn handle_generate(config_path: &Path) -> anyhow::Result<()> {
             let params = match config.parameters.chain {
                 GenesisChainParameters::V1(params) => params,
                 GenesisChainParameters::V0(_) => {
-                    bail!(format!("Protocol version P4 supports only chain parameters version 1."))
+                    bail!(format!(
+                        "Protocol version P4 supports only chain parameters version 1."
+                    ))
                 }
             };
             let update_keys = updates_v1(config.out.update_keys, config.updates)?;
@@ -1722,19 +1015,37 @@ genesis.",
     Ok(())
 }
 
+/// Subcommands supported by the tool.
+#[derive(clap::Subcommand, Debug)]
+#[clap(author, version, about)]
+enum GenesisCreatorCommand {
+    Generate {
+        #[clap(long, short)]
+        /// The TOML configuration file describing the genesis.
+        config: PathBuf,
+    },
+    Assemble {
+        #[clap(long, short)]
+        /// The TOML configuration file describing the genesis.
+        config: PathBuf,
+    },
+}
+
+#[derive(Parser, Debug)]
+#[clap(author, version, about)]
+struct GenesisCreator {
+    #[clap(subcommand)]
+    action: GenesisCreatorCommand,
+}
+
 fn main() -> anyhow::Result<()> {
     let args = GenesisCreator::parse();
 
-    println!("{:#?}", args);
-
     match &args.action {
-        GenesisCreatorCommand::Generate {
-            config,
-        } => handle_generate(config),
-        GenesisCreatorCommand::Assemble {
-            config,
-        } => handle_assemble(config),
+        GenesisCreatorCommand::Generate { config } => handle_generate(config),
+        GenesisCreatorCommand::Assemble { config } => handle_assemble(config),
     }
 }
 
 // TODO: Deny unused fields.
+// TODO: Output genesis_hash
