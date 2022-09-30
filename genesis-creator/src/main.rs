@@ -1,10 +1,11 @@
 /// A command line tool for generating genesis files.
 ///
-/// The tool has two modes: `generate` that can generate a new genesis, and
-/// `assemble` that can produce a genesis from existing files (for example to
-/// regenereate the Mainnet `genesis.dat`).
+/// The tool has two modes: `generate` that can generate a new genesis,
+/// potentially reusing some files/keys from the previously generated genesis,
+/// and `assemble` that can produce a genesis from existing files (for example
+/// to regenereate the Mainnet `genesis.dat`).
 ///
-/// In both modes the tool takes a TOML configuration file that specify the
+/// In both modes the tool takes a TOML configuration file that specifies the
 /// genesis. For details, see the README.
 use anyhow::{anyhow, bail, ensure, Context};
 use clap::Parser;
@@ -102,8 +103,15 @@ enum IdentityProviderConfig {
     },
 }
 
+/// A type alias for credentials in a format suitable for genesis. Genesis
+/// credentials do not have any associated proofs.
+type GenesisCredentials = BTreeMap<
+    CredentialIndex,
+    AccountCredentialWithoutProofs<id::constants::ArCurve, id::constants::AttributeKind>,
+>;
+
 /// Private genesis account data. When generating fresh accounts, these are
-/// output as JSON files. When using existing accounts, these are instrad input
+/// output as JSON files. When using existing accounts, these are instead input
 /// as JSON files. The format is the same as what is expected when importing
 /// genesis accounts with concordium-client.
 #[derive(SerdeDeserialize, SerdeSerialize, Debug)]
@@ -112,36 +120,30 @@ struct GenesisAccount {
     account_keys:          AccountKeys,
     aci:                   AccCredentialInfo<id::constants::ArCurve>,
     address:               AccountAddress,
-    credentials: Versioned<
-        BTreeMap<
-            CredentialIndex,
-            AccountCredentialWithoutProofs<id::constants::ArCurve, id::constants::AttributeKind>,
-        >,
-    >,
+    credentials:           Versioned<GenesisCredentials>,
     encryption_public_key: id::elgamal::PublicKey<id::constants::ArCurve>,
     encryption_secret_key: id::elgamal::SecretKey<id::constants::ArCurve>,
 }
 
 /// Struct corresponding to the Haskell type `GenesisBaker` in
-/// haskell-src/Concordium/Genesis/Account.hs in concordium-base.
+/// `haskell-src/Concordium/Genesis/Account.hs` in `concordium-base`.
 #[derive(Serialize, SerdeSerialize, SerdeDeserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct GenesisBakerPublic {
+    /// Initial stake of the baker.
     stake:                  Amount,
+    /// Whether earnings should be automatically restaked or not.
     restake_earnings:       bool,
+    /// The ID of the baker. This must correspond to the account index, which is the
+    /// place in the list of genesis accounts.
     baker_id:               BakerId,
     election_verify_key:    BakerElectionVerifyKey,
     signature_verify_key:   BakerSignatureVerifyKey,
     aggregation_verify_key: BakerAggregationVerifyKey,
 }
 
-type GenesisCredentials = BTreeMap<
-    CredentialIndex,
-    AccountCredentialWithoutProofs<id::constants::ArCurve, id::constants::AttributeKind>,
->;
-
 /// Struct corresponding to the Haskell type `GenesisAccount` in
-/// haskell-src/Concordium/Genesis/Account.hs in concordium-base.
+/// `haskell-src/Concordium/Genesis/Account.hs` in `concordium-base`.
 #[derive(Serialize, SerdeSerialize, SerdeDeserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct GenesisAccountPublic {
