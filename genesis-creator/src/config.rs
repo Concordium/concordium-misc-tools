@@ -114,9 +114,9 @@ impl Level2UpdateConfig {
         );
         for key_idx in authorized_keys.iter() {
             ensure!(
-                usize::from(u16::from(*key_idx)) < ctx.len(),
+                usize::from(key_idx.index) < ctx.len(),
                 "Key index {} does not specify a known update key.",
-                key_idx
+                key_idx.index
             );
         }
         ensure!(

@@ -986,7 +986,7 @@ fn handle_generate(config_path: &Path) -> anyhow::Result<()> {
                 .context("Chain parameters version 0 should not be used in P4")?
             // Should go well since we know we are not in P4.
         }
-        ProtocolVersion::P4 => {
+        ProtocolVersion::P4 | ProtocolVersion::P5 => {
             let core = config.parameters.to_core()?;
             let params = match config.parameters.chain {
                 GenesisChainParameters::V1(params) => params,
@@ -1006,9 +1006,18 @@ fn handle_generate(config_path: &Path) -> anyhow::Result<()> {
                 leadership_election_nonce: config.parameters.leadership_election_nonce,
                 accounts,
             };
-            GenesisData::P4 {
-                core,
-                initial_state,
+            match config.protocol_version {
+                ProtocolVersion::P1 | ProtocolVersion::P2 | ProtocolVersion::P3 => {
+                    unreachable!("Already checked.")
+                }
+                ProtocolVersion::P4 => GenesisData::P4 {
+                    core,
+                    initial_state,
+                },
+                ProtocolVersion::P5 => GenesisData::P5 {
+                    core,
+                    initial_state,
+                },
             }
         }
     };

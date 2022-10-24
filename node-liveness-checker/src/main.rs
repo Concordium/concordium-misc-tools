@@ -82,14 +82,9 @@ async fn worker() -> Result<(), ReturnStatus> {
             concordium_rust_sdk::types::queries::PeerDetails::Bootstrapper => {
                 return Err(ReturnStatus::NotABaker);
             }
-            concordium_rust_sdk::types::queries::PeerDetails::Node {
-                consensus_state,
-            } => {
+            concordium_rust_sdk::types::queries::PeerDetails::Node { consensus_state } => {
                 if let ConsensusState::Active {
-                    active_state:
-                        ActiveConsensusState::Active {
-                            ..
-                        },
+                    active_state: ActiveConsensusState::Active { .. },
                 } = consensus_state
                 {
                 } else {
@@ -106,7 +101,9 @@ async fn worker() -> Result<(), ReturnStatus> {
 
     let lfb = consensus.last_finalized_block;
     let lfb_info = client.get_block_info(&lfb).await?;
-    if chrono::Utc::now().signed_duration_since(lfb_info.block_slot_time).num_seconds()
+    if chrono::Utc::now()
+        .signed_duration_since(lfb_info.block_slot_time)
+        .num_seconds()
         > app.max_behind
     {
         return Err(ReturnStatus::FinalizationTooFarBehind);
