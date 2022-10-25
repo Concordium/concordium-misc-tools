@@ -9,6 +9,7 @@ anonymityRevokers = "./ars-out"
 genesis = "./genesis.dat"
 cryptographicParameters = "./global"
 deleteExisting = true
+genesisHash = "./genesis_hash"
 
 [cryptographicParameters]
 kind = "generate"

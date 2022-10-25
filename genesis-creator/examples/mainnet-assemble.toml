@@ -7,6 +7,7 @@ ars = "./mainnet-files/anonymity-revokers.json"
 governanceKeys = "./mainnet-files/governance-keys.json"
 global = "./mainnet-files/cryptographic-parameters.json"
 genesisOut = "./mainnet-files/genesis.dat"
+genesisHash = "./genesis_hash"
 
 [parameters]
 genesisTime = "2021-06-09T06:00:00Z"
