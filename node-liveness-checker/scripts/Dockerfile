@@ -9,4 +9,4 @@ RUN apt-get update && apt-get install -y libssl-dev pkg-config cmake g++ && rm -
 # Install protobuf
 RUN wget https://github.com/protocolbuffers/protobuf/releases/download/v3.15.3/protoc-3.15.3-linux-x86_64.zip \
     && unzip protoc-3.15.3-linux-x86_64.zip \
-    && sudo mv ./bin/protoc /usr/bin/protoc
+    && mv ./bin/protoc /usr/bin/protoc
