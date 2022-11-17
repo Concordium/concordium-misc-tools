@@ -13,6 +13,8 @@ The tools are
 - [wallet-proxy-load-simulator](./wallet-proxy-load-simulator)
   A tool to simulate the load on the wallet-proxy similar to what mobile wallets
   are expected to do.
+- [state-compare](./state-compare) A tool to compare the state (via the node's
+  API) of two blocks, either by the same node, or different nodes.
 
 # Contributing
 
