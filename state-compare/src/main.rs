@@ -85,12 +85,22 @@ async fn get_protocol_versions(
     let t1 = client1.get_tokenomics_info(&block1).await?;
     let t2 = client2.get_tokenomics_info(&block2).await?;
     let p1 = match t1.response {
-        concordium_rust_sdk::types::RewardsOverview::V0 { data } => data.protocol_version,
-        concordium_rust_sdk::types::RewardsOverview::V1 { common, .. } => common.protocol_version,
+        concordium_rust_sdk::types::RewardsOverview::V0 {
+            data,
+        } => data.protocol_version,
+        concordium_rust_sdk::types::RewardsOverview::V1 {
+            common,
+            ..
+        } => common.protocol_version,
     };
     let p2 = match t2.response {
-        concordium_rust_sdk::types::RewardsOverview::V0 { data } => data.protocol_version,
-        concordium_rust_sdk::types::RewardsOverview::V1 { common, .. } => common.protocol_version,
+        concordium_rust_sdk::types::RewardsOverview::V0 {
+            data,
+        } => data.protocol_version,
+        concordium_rust_sdk::types::RewardsOverview::V1 {
+            common,
+            ..
+        } => common.protocol_version,
     };
     Ok((p1, p2))
 }
@@ -107,20 +117,11 @@ async fn main() -> anyhow::Result<()> {
 
     let ci1 = client.get_consensus_info().await?;
     let ci2 = client2.get_consensus_info().await?;
-    ensure!(
-        ci1.genesis_block == ci2.genesis_block,
-        "Genesis blocks for the two nodes differ."
-    );
+    ensure!(ci1.genesis_block == ci2.genesis_block, "Genesis blocks for the two nodes differ.");
 
     let block1 = match app.block1 {
         Some(bh) => bh,
-        None => {
-            client
-                .get_block_info(ci1.current_era_genesis_block)
-                .await?
-                .response
-                .block_parent
-        }
+        None => client.get_block_info(ci1.current_era_genesis_block).await?.response.block_parent,
     };
     let block2 = match app.block2 {
         Some(bh) => bh,
@@ -148,7 +149,7 @@ async fn main() -> anyhow::Result<()> {
     found_diff |= compare_baker_pools(&mut client, &mut client2, block1, block2, pv1, pv2).await?;
 
     if found_diff {
-        diff!("States in the two blocks {} and {} differ.", block1, block2);
+        anyhow::bail!(format!("States in the two blocks {} and {} differ.", block1, block2).red());
     } else {
         println!("{}", "No changes in the state detected.".green());
     }
@@ -161,27 +162,13 @@ async fn compare_account_lists(
     block1: BlockHash,
     block2: BlockHash,
 ) -> anyhow::Result<(bool, Vec<AccountAddress>)> {
-    let mut accounts1 = client1
-        .get_account_list(block1)
-        .await?
-        .response
-        .try_collect::<Vec<_>>()
-        .await?;
+    let mut accounts1 =
+        client1.get_account_list(block1).await?.response.try_collect::<Vec<_>>().await?;
     accounts1.sort_unstable();
-    let mut accounts2 = client2
-        .get_account_list(block2)
-        .await?
-        .response
-        .try_collect::<Vec<_>>()
-        .await?;
+    let mut accounts2 =
+        client2.get_account_list(block2).await?.response.try_collect::<Vec<_>>().await?;
     accounts2.sort_unstable();
-    let found_diff = compare_iters(
-        "Account",
-        block1,
-        block2,
-        accounts1.iter(),
-        accounts2.iter(),
-    );
+    let found_diff = compare_iters("Account", block1, block2, accounts1.iter(), accounts2.iter());
     Ok((found_diff, accounts1))
 }
 
@@ -191,19 +178,9 @@ async fn compare_instance_lists(
     block1: BlockHash,
     block2: BlockHash,
 ) -> anyhow::Result<(bool, Vec<ContractAddress>)> {
-    let mut cs1 = client1
-        .get_instance_list(block1)
-        .await?
-        .response
-        .try_collect::<Vec<_>>()
-        .await?;
+    let mut cs1 = client1.get_instance_list(block1).await?.response.try_collect::<Vec<_>>().await?;
     cs1.sort_unstable();
-    let mut cs2 = client2
-        .get_instance_list(block2)
-        .await?
-        .response
-        .try_collect::<Vec<_>>()
-        .await?;
+    let mut cs2 = client2.get_instance_list(block2).await?.response.try_collect::<Vec<_>>().await?;
     cs2.sort_unstable();
     let found_diff = compare_iters("Instance", block1, block2, cs1.iter(), cs2.iter());
     Ok((found_diff, cs1))
@@ -215,19 +192,9 @@ async fn compare_module_lists(
     block1: BlockHash,
     block2: BlockHash,
 ) -> anyhow::Result<(bool, Vec<ModuleRef>)> {
-    let mut ms1 = client1
-        .get_module_list(block1)
-        .await?
-        .response
-        .try_collect::<Vec<_>>()
-        .await?;
+    let mut ms1 = client1.get_module_list(block1).await?.response.try_collect::<Vec<_>>().await?;
     ms1.sort_unstable();
-    let mut ms2 = client2
-        .get_module_list(block2)
-        .await?
-        .response
-        .try_collect::<Vec<_>>()
-        .await?;
+    let mut ms2 = client2.get_module_list(block2).await?.response.try_collect::<Vec<_>>().await?;
     ms2.sort_unstable();
     let found_diff = compare_iters("Module", block1, block2, ms1.iter(), ms2.iter());
     Ok((found_diff, ms1))
@@ -248,23 +215,11 @@ fn compare_iters<A: Display + PartialOrd>(
     while let Some(a1) = i1.peek() {
         if let Some(a2) = i2.peek() {
             if a1 < a2 {
-                diff!(
-                    "    {} {} appears in {} but not in {}.",
-                    msg,
-                    a1,
-                    block1,
-                    block2
-                );
+                diff!("    {} {} appears in {} but not in {}.", msg, a1, block1, block2);
                 found_diff = true;
                 let _ = i1.next();
             } else if a2 < a1 {
-                diff!(
-                    "    {} {} appears in {} but not in {}.",
-                    msg,
-                    a2,
-                    block2,
-                    block1
-                );
+                diff!("    {} {} appears in {} but not in {}.", msg, a2, block2, block1);
                 found_diff = true;
                 let _ = i2.next();
             } else {
@@ -273,13 +228,7 @@ fn compare_iters<A: Display + PartialOrd>(
             }
         } else {
             found_diff = true;
-            diff!(
-                "    {} {} appears in {} but not in {}.",
-                msg,
-                a1,
-                block1,
-                block2
-            )
+            diff!("    {} {} appears in {} but not in {}.", msg, a1, block1, block2)
         }
     }
     found_diff
@@ -500,22 +449,12 @@ async fn compare_passive_delegators(
 ) -> anyhow::Result<bool> {
     println!("Checking passive delegators.");
     let mut passive1 = if pv1 >= ProtocolVersion::P4 {
-        client1
-            .get_passive_delegators(block1)
-            .await?
-            .response
-            .try_collect::<Vec<_>>()
-            .await?
+        client1.get_passive_delegators(block1).await?.response.try_collect::<Vec<_>>().await?
     } else {
         Vec::new()
     };
     let mut passive2 = if pv2 >= ProtocolVersion::P4 {
-        client2
-            .get_passive_delegators(block2)
-            .await?
-            .response
-            .try_collect::<Vec<_>>()
-            .await?
+        client2.get_passive_delegators(block2).await?.response.try_collect::<Vec<_>>().await?
     } else {
         Vec::new()
     };
@@ -537,10 +476,8 @@ async fn compare_active_bakers(
 ) -> anyhow::Result<bool> {
     println!("Checking active bakers.");
     let mut found_diff = false;
-    let (ei1, ei2) = futures::try_join!(
-        client1.get_election_info(block1),
-        client2.get_election_info(block2)
-    )?;
+    let (ei1, ei2) =
+        futures::try_join!(client1.get_election_info(block1), client2.get_election_info(block2))?;
     if ei1.response.election_difficulty != ei2.response.election_difficulty {
         diff!("Election difficulty differs.");
         found_diff = true;
@@ -561,18 +498,8 @@ async fn compare_baker_pools(
     pv2: ProtocolVersion,
 ) -> anyhow::Result<bool> {
     println!("Checking baker pools.");
-    let mut pools1 = client1
-        .get_baker_list(block1)
-        .await?
-        .response
-        .try_collect::<Vec<_>>()
-        .await?;
-    let mut pools2 = client2
-        .get_baker_list(block2)
-        .await?
-        .response
-        .try_collect::<Vec<_>>()
-        .await?;
+    let mut pools1 = client1.get_baker_list(block1).await?.response.try_collect::<Vec<_>>().await?;
+    let mut pools2 = client2.get_baker_list(block2).await?.response.try_collect::<Vec<_>>().await?;
     pools1.sort_unstable();
     pools2.sort_unstable();
     let mut found_diff = compare_iters("Pool", block1, block2, pools1.iter(), pools2.iter());

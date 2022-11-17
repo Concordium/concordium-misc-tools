@@ -1,6 +1,8 @@
 # State compare
 
-Check the state of two blocks.
+Check the state of two blocks. The main purpose of this tool is to check the
+state just before and after the protocol update, but in principle any two blocks
+can be supplied to print differences.
 
 # Supported configuration options
 
@@ -48,7 +50,8 @@ The following checks are performed.
 
 On mainnet running the tool when protocol version 4 is in effect leads to
 
-<pre>$ concordium-state-compare --node1 http://localhost:20000
+```
+$ concordium-state-compare --node1 http://localhost:20000
 Comparings state in blocks 5af81a1cc51141617f13c37e1cdea7ebdd76fce7e6377c0e7576b7450724472a (protocol version P3) and ea4a52a04ba905c2692b4598aa344707327781d588573d374125b449a1ce0bcc (protocol version P4).
 Comparing account lists.
 Querying all accounts.
@@ -57,26 +60,31 @@ Querying all contracts.
 Checking passive delegators.
 Checking active bakers.
 Checking baker pools.
-<font color="#A2734C">Not comparing baker pools since one of the protocol versions is before P4.</font>
-<font color="#26A269">No changes in the state detected.</font>
+Not comparing baker pools since one of the protocol versions is before P4.
+No changes in the state detected.
 </pre>
+```
 
 If two other blocks are chosen an example output shows what differs. For example
 on mainnet
 
-<pre>$ concordium-state-compare --node1 http://localhost:20000 --block1 c58f6582361589dec16d07631081be5446e58b8e3c4f13b82b86d30f2f523706 --block2 abdebbfe582744e6e55ca43dfd4aa81f74d00e3e9010af5d9717203b26fddf39
+```
+$ concordium-state-compare --node1 http://localhost:20000 --block1 c58f6582361589dec16d07631081be5446e58b8e3c4f13b82b86d30f2f523706 --block2 abdebbfe582744e6e55ca43dfd4aa81f74d00e3e9010af5d9717203b26fddf39
 Comparings state in blocks c58f6582361589dec16d07631081be5446e58b8e3c4f13b82b86d30f2f523706 (protocol version P4) and abdebbfe582744e6e55ca43dfd4aa81f74d00e3e9010af5d9717203b26fddf39 (protocol version P4).
 Comparing account lists.
 Querying all accounts.
-<font color="#C01C28">Account 35CJPZohio6Ztii2zy1AYzJKvuxbGG44wrBn7hLHiYLoF2nxnh differs. It does not have stake either in c58f6582361589dec16d07631081be5446e58b8e3c4f13b82b86d30f2f523706 or abdebbfe582744e6e55ca43dfd4aa81f74d00e3e9010af5d9717203b26fddf39.</font>
+Account 35CJPZohio6Ztii2zy1AYzJKvuxbGG44wrBn7hLHiYLoF2nxnh differs. It does not have stake either in c58f6582361589dec16d07631081be5446e58b8e3c4f13b82b86d30f2f523706 or abdebbfe582744e6e55ca43dfd4aa81f74d00e3e9010af5d9717203b26fddf39.
 Comparing all modules.
 Querying all contracts.
 Checking passive delegators.
 Checking active bakers.
 Checking baker pools.
-<font color="#C01C28">Pool 3 differs.</font>
-<font color="#C01C28">States in the two blocks c58f6582361589dec16d07631081be5446e58b8e3c4f13b82b86d30f2f523706 and abdebbfe582744e6e55ca43dfd4aa81f74d00e3e9010af5d9717203b26fddf39 differ.</font>
-</pre>
+Pool 3 differs.
+Error: States in the two blocks c58f6582361589dec16d07631081be5446e58b8e3c4f13b82b86d30f2f523706 and abdebbfe582744e6e55ca43dfd4aa81f74d00e3e9010af5d9717203b26fddf39 differ.
+```
+
+The tool will exit with a non-zero status code if it fails to query some data,
+or there is a difference in state.
 
 ## Caveats
 
