@@ -62,7 +62,6 @@ Checking active bakers.
 Checking baker pools.
 Not comparing baker pools since one of the protocol versions is before P4.
 No changes in the state detected.
-</pre>
 ```
 
 If two other blocks are chosen an example output shows what differs. For example

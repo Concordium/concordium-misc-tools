@@ -104,7 +104,7 @@ async fn main() -> anyhow::Result<()> {
                 start = chrono::Utc::now();
             }
             count += 1;
-            println!("{count}, {i}, {url}, {diff}ms, {code}, {success}",);
+            println!("{count:8}, {i}, {url}, {diff:8}ms, {code}, {success}",);
         }
     }
     futures::future::join_all(handles).await.clear();
