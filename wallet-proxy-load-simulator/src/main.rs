@@ -1,5 +1,6 @@
 use anyhow::Context;
 use clap::Parser;
+use colored::Colorize;
 
 #[derive(clap::Parser, Debug)]
 #[clap(arg_required_else_help(true))]
@@ -11,25 +12,31 @@ struct App {
         default_value = "http://wallet-proxy.stagenet.concordium.com",
         env = "WP_LOAD_SIMULATOR_URL"
     )]
-    url:      reqwest::Url,
+    url:           reqwest::Url,
     #[clap(
         long = "accounts",
         help = "List of accounts to query.",
         env = "WP_LOAD_SIMULATOR_ACCOUNTS"
     )]
-    accounts: std::path::PathBuf,
+    accounts:      std::path::PathBuf,
     #[clap(
         long = "delay",
-        help = "Delay between requests between requests by parallel workers.",
+        help = "Delay between requests by each parallel workers, in milliseconds.",
         env = "WP_LOAD_SIMULATOR_DELAY"
     )]
-    delay:    u64,
+    delay:         u64,
     #[clap(
         long = "max-parallel",
         help = "Number of parallel queries to make at the same time.",
         env = "WP_MAX_PARALLEL"
     )]
-    num:      usize,
+    num:           usize,
+    #[clap(
+        long = "only-failures",
+        help = "Output only responses that are not in 2xx range.",
+        env = "WP_ONLY_FAILURES"
+    )]
+    only_failures: bool,
 }
 
 #[tokio::main(flavor = "multi_thread")]
@@ -63,8 +70,11 @@ async fn main() -> anyhow::Result<()> {
         Ok::<(), anyhow::Error>(())
     });
 
+    let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+
     for (i, mut receiver) in receivers.into_iter().enumerate() {
         let client = reqwest::Client::new();
+        let sender = sender.clone();
         let handle = tokio::spawn(async move {
             let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(delay));
             interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -78,16 +88,41 @@ async fn main() -> anyhow::Result<()> {
                 match response {
                     Ok(response) => {
                         let code = response.status().as_u16();
-                        let body = response.json::<serde_json::Value>().await;
-                        println!("{i}, {url}, {diff}ms, {}, {}", code, body.is_ok());
+                        let _body = response.json::<serde_json::Value>().await;
+                        sender.send((true, i, url, diff, code)).unwrap();
                     }
                     Err(_) => {
-                        println!("{i}, {url}, {diff}ms, 0, false");
+                        sender.send((false, i, url, diff, 0)).unwrap();
                     }
                 }
             }
         });
         handles.push(handle);
+    }
+    {
+        let mut start = chrono::Utc::now();
+        let mut count = 0;
+        while let Some((success, i, url, diff, code)) = receiver.recv().await {
+            if chrono::Utc::now().signed_duration_since(start).num_milliseconds() > 1000 {
+                count = 0;
+                start = chrono::Utc::now();
+            }
+            count += 1;
+            if app.only_failures && (200..300).contains(&code) {
+                continue;
+            }
+            if (200..300).contains(&code) {
+                println!(
+                    "{}",
+                    format!("{count:8}, {i}, {url}, {diff:8}ms, {code}, {success}",).green()
+                );
+            } else {
+                println!(
+                    "{}",
+                    format!("{count:8}, {i}, {url}, {diff:8}ms, {code}, {success}",).red()
+                );
+            }
+        }
     }
     futures::future::join_all(handles).await.clear();
     sender_task.abort();

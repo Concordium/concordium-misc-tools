@@ -26,6 +26,7 @@ jobs:
         crates:
           - node-liveness-checker/Cargo.toml
           - wallet-proxy-load-simulator/Cargo.toml
+          - state-compare/Cargo.toml
           - genesis-creator/Cargo.toml
     steps:
       - name: Checkout
@@ -55,10 +56,11 @@ jobs:
           - node-liveness-checker/Cargo.toml
           - wallet-proxy-load-simulator/Cargo.toml
     steps:
-      - name: Install system packages
+      - name: Install protobuf
         run: |
-          sudo apt-get update
-          sudo apt-get -y install protobuf-compiler
+          wget https://github.com/protocolbuffers/protobuf/releases/download/v3.15.3/protoc-3.15.3-linux-x86_64.zip
+          unzip protoc-3.15.3-linux-x86_64.zip
+          sudo mv ./bin/protoc /usr/bin/protoc
       - name: Checkout
         uses: actions/checkout@v2
         with:
