@@ -101,4 +101,6 @@ The project is a pure Rust project, and can be built by running
 cargo build --release
 ```
 
+The tool should build with at least rust 1.62 or later.
+
 This produces a single binary `target/release/concordium-state-compare`.

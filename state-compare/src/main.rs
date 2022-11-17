@@ -263,7 +263,7 @@ async fn compare_accounts(
 
     let flag = Arc::new(AtomicBool::new(found_diff));
 
-    let () = acc_comp
+    acc_comp
         .try_for_each_concurrent(Some(10), |(a1, a2)| {
             let flag = flag.clone();
             async move {
