@@ -259,17 +259,17 @@ pub enum GenesisChainParameters {
 #[derive(SerdeDeserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct GenesisParameters {
-    // Time at which the genesis will occur.
+    /// Time at which the genesis will occur.
     pub genesis_time:              chrono::DateTime<chrono::Utc>,
-    // Duration of a slot in milliseconds
+    /// Duration of a slot in milliseconds
     pub slot_duration:             SlotDuration,
-    // Leadership election nonce.
+    /// Leadership election nonce.
     pub leadership_election_nonce: LeadershipElectionNonce,
-    // Number of slots that go into an epoch.
+    /// Number of slots that go into an epoch.
     pub epoch_length:              u64,
-    // Finalization parameters.
+    /// Finalization parameters.
     pub finalization:              FinalizationParameters,
-    // Max energy that is allowed for a block.
+    /// Max energy that is allowed for a block.
     pub max_block_energy:          Energy,
     pub chain:                     GenesisChainParameters,
 }
