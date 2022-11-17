@@ -1,5 +1,6 @@
 use anyhow::Context;
 use clap::Parser;
+use colored::Colorize;
 
 #[derive(clap::Parser, Debug)]
 #[clap(arg_required_else_help(true))]
@@ -11,25 +12,31 @@ struct App {
         default_value = "http://wallet-proxy.stagenet.concordium.com",
         env = "WP_LOAD_SIMULATOR_URL"
     )]
-    url:      reqwest::Url,
+    url:           reqwest::Url,
     #[clap(
         long = "accounts",
         help = "List of accounts to query.",
         env = "WP_LOAD_SIMULATOR_ACCOUNTS"
     )]
-    accounts: std::path::PathBuf,
+    accounts:      std::path::PathBuf,
     #[clap(
         long = "delay",
         help = "Delay between requests by each parallel workers, in milliseconds.",
         env = "WP_LOAD_SIMULATOR_DELAY"
     )]
-    delay:    u64,
+    delay:         u64,
     #[clap(
         long = "max-parallel",
         help = "Number of parallel queries to make at the same time.",
         env = "WP_MAX_PARALLEL"
     )]
-    num:      usize,
+    num:           usize,
+    #[clap(
+        long = "only-failures",
+        help = "Output only responses that are not in 2xx range.",
+        env = "WP_ONLY_FAILURES"
+    )]
+    only_failures: bool,
 }
 
 #[tokio::main(flavor = "multi_thread")]
@@ -83,12 +90,9 @@ async fn main() -> anyhow::Result<()> {
                         let code = response.status().as_u16();
                         let _body = response.json::<serde_json::Value>().await;
                         sender.send((true, i, url, diff, code)).unwrap();
-                        //println!("{i}, {url}, {diff}ms, {}, {}", code,
-                        // body.is_ok());
                     }
                     Err(_) => {
                         sender.send((false, i, url, diff, 0)).unwrap();
-                        // println!("{i}, {url}, {diff}ms, 0, false");
                     }
                 }
             }
@@ -104,7 +108,20 @@ async fn main() -> anyhow::Result<()> {
                 start = chrono::Utc::now();
             }
             count += 1;
-            println!("{count:8}, {i}, {url}, {diff:8}ms, {code}, {success}",);
+            if app.only_failures && (200..300).contains(&code) {
+                continue;
+            }
+            if (200..300).contains(&code) {
+                println!(
+                    "{}",
+                    format!("{count:8}, {i}, {url}, {diff:8}ms, {code}, {success}",).green()
+                );
+            } else {
+                println!(
+                    "{}",
+                    format!("{count:8}, {i}, {url}, {diff:8}ms, {code}, {success}",).red()
+                );
+            }
         }
     }
     futures::future::join_all(handles).await.clear();
