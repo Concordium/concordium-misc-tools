@@ -63,7 +63,10 @@ async fn main() -> anyhow::Result<()> {
         for account in accounts.iter().cycle() {
             let mut url = url.clone();
             url.set_path(&format!("v0/accBalance/{}", account));
-            senders[i].send(url).await.context(format!("Receiver {i} died."))?;
+            senders[i]
+                .send(url)
+                .await
+                .context(format!("Receiver {i} died."))?;
             i += 1;
             i %= senders.len();
         }
@@ -103,7 +106,11 @@ async fn main() -> anyhow::Result<()> {
         let mut start = chrono::Utc::now();
         let mut count = 0;
         while let Some((success, i, url, diff, code)) = receiver.recv().await {
-            if chrono::Utc::now().signed_duration_since(start).num_milliseconds() > 1000 {
+            if chrono::Utc::now()
+                .signed_duration_since(start)
+                .num_milliseconds()
+                > 1000
+            {
                 count = 0;
                 start = chrono::Utc::now();
             }
