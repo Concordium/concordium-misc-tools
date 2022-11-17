@@ -93,6 +93,11 @@ comprehensive check. However it provides a basic check that the state has been
 migrated correctly. The output is meant to indicate if there are issues, the
 tool does not print the exact difference between the states.
 
+The tool at present requires a decent amount of memory since it loads the list
+of all accounts in memory, and also queries accounts and contract state in
+parallel. When this becomes an issue we can limit the amount of concurrency and
+do things in a more streaming fashion to reduce resource usage.
+
 ## Building
 
 The project is a pure Rust project, and can be built by running
