@@ -92,10 +92,10 @@ async fn main() -> anyhow::Result<()> {
                     Ok(response) => {
                         let code = response.status().as_u16();
                         let _body = response.json::<serde_json::Value>().await;
-                        sender.send((true, i, url, diff, code)).unwrap();
+                        sender.send((true, i, url, diff, code, None)).unwrap();
                     }
-                    Err(_) => {
-                        sender.send((false, i, url, diff, 0)).unwrap();
+                    Err(e) => {
+                        sender.send((false, i, url, diff, 0, Some(e))).unwrap();
                     }
                 }
             }
@@ -105,7 +105,7 @@ async fn main() -> anyhow::Result<()> {
     {
         let mut start = chrono::Utc::now();
         let mut count = 0;
-        while let Some((success, i, url, diff, code)) = receiver.recv().await {
+        while let Some((success, i, url, diff, code, err)) = receiver.recv().await {
             if chrono::Utc::now()
                 .signed_duration_since(start)
                 .num_milliseconds()
@@ -124,9 +124,14 @@ async fn main() -> anyhow::Result<()> {
                     format!("{count:8}, {i}, {url}, {diff:8}ms, {code}, {success}",).green()
                 );
             } else {
+                let err_str = match err {
+                    Some(e) => e.to_string(),
+                    None => "".into(),
+                };
                 println!(
                     "{}",
-                    format!("{count:8}, {i}, {url}, {diff:8}ms, {code}, {success}",).red()
+                    format!("{count:8}, {i}, {url}, {diff:8}ms, {code}, {success}, {err_str}",)
+                        .red()
                 );
             }
         }
