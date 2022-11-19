@@ -28,15 +28,22 @@ struct App {
     #[clap(
         long = "max-parallel",
         help = "Number of parallel queries to make at the same time.",
-        env = "WP_MAX_PARALLEL"
+        env = "WP_LOAD_SIMULATOR_PARALLEL"
     )]
     num:           usize,
     #[clap(
         long = "only-failures",
         help = "Output only responses that are not in 2xx range.",
-        env = "WP_ONLY_FAILURES"
+        env = "WP_LOAD_SIMULATOR_ONLY_FAILURES"
     )]
     only_failures: bool,
+    #[clap(
+        long = "timeout",
+        help = "Timeout to apply to requests, in milliseconds.",
+        default_value = "10000",
+        env = "WP_LOAD_SIMULATOR_REQUEST_TIMEOUT"
+    )]
+    timeout:       u64,
 }
 
 #[tokio::main(flavor = "multi_thread")]
@@ -76,7 +83,9 @@ async fn main() -> anyhow::Result<()> {
     let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
 
     for (i, mut receiver) in receivers.into_iter().enumerate() {
-        let client = reqwest::Client::new();
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_millis(app.timeout))
+            .build()?;
         let sender = sender.clone();
         let handle = tokio::spawn(async move {
             let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(delay));
