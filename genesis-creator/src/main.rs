@@ -36,6 +36,7 @@ use concordium_rust_sdk::{
 };
 use genesis_creator::{assemble::AssembleGenesisConfig, config::*, genesis::*};
 use rayon::prelude::*;
+use rust_decimal::prelude::FromPrimitive;
 use serde::de::DeserializeOwned;
 use std::{
     collections::BTreeMap,
@@ -44,12 +45,11 @@ use std::{
 
 /// Function for creating the cryptographic parameters (also called global
 /// context). The arguments are
-/// - global_out - if some, where to write the cryptographic parameters
-/// - cfg - The configuration deciding whether to use existing cryptographic
-///   parameters or
-/// to generate the freshly.
+/// - `global_out` - if some, where to write the cryptographic parameters
+/// - `cfg` - The configuration deciding whether to use existing cryptographic
+///   parameters or to generate fresh ones.
 ///
-/// The function returns `anyhow::Result`, which upon success will contain the
+/// The function returns [`anyhow::Result`], which upon success will contain the
 /// cryptographic parameters.
 fn crypto_parameters(
     global_out: Option<PathBuf>,
@@ -823,9 +823,12 @@ fn make_relative(f1: &Path, f2: &Path) -> anyhow::Result<PathBuf> {
 
 /// Check whether the directory exists, and either fail or delete it depending
 /// on the value of the `delete_existing` flag.
-fn check_and_create_dir(delete_existing: bool, path: &Path) -> anyhow::Result<()> {
+fn check_and_create_dir(delete_existing: bool, path: &Path, verbose: bool) -> anyhow::Result<()> {
     if path.exists() {
         if delete_existing {
+            if verbose {
+                println!("Removing existing directory {}", path.display());
+            }
             std::fs::remove_dir_all(path).context("Failed to remove the existing directory.")?;
         } else {
             bail!("Supplied output path {} already exists.", path.display());
@@ -838,7 +841,7 @@ fn check_and_create_dir(delete_existing: bool, path: &Path) -> anyhow::Result<()
 /// Function for assembling the genesis data file given a path to TOML file that
 /// can be parsed as a `AssembleGenesisConfig`. Upon success it writes the
 /// genesis data to the a file and returns `Ok(())`.
-fn handle_assemble(config_path: &Path) -> anyhow::Result<()> {
+fn handle_assemble(config_path: &Path, verbose: bool) -> anyhow::Result<()> {
     let config_source =
         std::fs::read(config_path).context("Unable to read the configuration file.")?;
     let config: AssembleGenesisConfig =
@@ -848,6 +851,11 @@ fn handle_assemble(config_path: &Path) -> anyhow::Result<()> {
     let global = read_json::<Versioned<_>>(&make_relative(config_path, &config.global)?)?;
     let idps = read_json::<Versioned<_>>(&make_relative(config_path, &config.idps)?)?;
     let ars = read_json::<Versioned<_>>(&make_relative(config_path, &config.ars)?)?;
+
+    if verbose {
+        println!("Using the following configuration structure for generating genesis.");
+        println!("{:#?}", config);
+    }
 
     let idx = accounts
         .iter()
@@ -860,6 +868,15 @@ fn handle_assemble(config_path: &Path) -> anyhow::Result<()> {
             }
         })
         .context("Cannot find foundation account.")?;
+
+    println!(
+        "The genesis data will be stored in {}",
+        config.genesis_out.display()
+    );
+    println!(
+        "The genesis hash will be written to {}",
+        config.genesis_hash_out.display()
+    );
 
     let core = config.parameters.to_core()?;
     match config.parameters.chain {
@@ -914,6 +931,7 @@ fn handle_assemble(config_path: &Path) -> anyhow::Result<()> {
             .context("Unable to write the genesis hash.")?;
         }
     }
+    println!("DONE");
     Ok(())
 }
 
@@ -921,27 +939,90 @@ fn handle_assemble(config_path: &Path) -> anyhow::Result<()> {
 /// that can be parsed as a `Config`. Upon success it writes the genesis data to
 /// the a file and writes all relevant private data to their desired locations
 /// and returns `Ok(())`.
-fn handle_generate(config_path: &Path) -> anyhow::Result<()> {
-    let config_source = std::fs::read(config_path).context(
-        "Unable to read the configuration
-    file.",
-    )?;
-    let config: Config = toml::from_slice(&config_source).context(
-        "Unable to parse the
-    configuration file.",
-    )?;
-    println!("{:#?}", config);
-
-    check_and_create_dir(config.out.delete_existing, &config.out.account_keys)?;
-    check_and_create_dir(config.out.delete_existing, &config.out.update_keys)?;
-    check_and_create_dir(config.out.delete_existing, &config.out.identity_providers)?;
-    check_and_create_dir(config.out.delete_existing, &config.out.anonymity_revokers)?;
-    check_and_create_dir(config.out.delete_existing, &config.out.baker_keys)?;
-    if let Some(global) = &config.out.cryptographic_parameters {
-        check_and_create_dir(config.out.delete_existing, global)?;
+fn handle_generate(config_path: &Path, verbose: bool) -> anyhow::Result<()> {
+    let config_source =
+        std::fs::read(config_path).context("Unable to read the configuration file.")?;
+    let config: Config =
+        toml::from_slice(&config_source).context("Unable to parse the configuration file.")?;
+    if verbose {
+        println!("Using the following configuration structure for generating genesis.");
+        println!("{:#?}", config);
     }
 
+    if config.out.delete_existing {
+        println!("Deleting any existing directories.")
+    }
+
+    check_and_create_dir(
+        config.out.delete_existing,
+        &config.out.account_keys,
+        verbose,
+    )?;
+    check_and_create_dir(config.out.delete_existing, &config.out.update_keys, verbose)?;
+    check_and_create_dir(
+        config.out.delete_existing,
+        &config.out.identity_providers,
+        verbose,
+    )?;
+    check_and_create_dir(
+        config.out.delete_existing,
+        &config.out.anonymity_revokers,
+        verbose,
+    )?;
+    check_and_create_dir(config.out.delete_existing, &config.out.baker_keys, verbose)?;
+    if let Some(global) = &config.out.cryptographic_parameters {
+        check_and_create_dir(config.out.delete_existing, global, verbose)?;
+    }
+
+    println!(
+        "Account keys will be generated in {}",
+        config.out.account_keys.display()
+    );
+    println!(
+        "Chain update keys will be generated in {}",
+        config.out.update_keys.display()
+    );
+    println!(
+        "Identity providers will be generated in {}",
+        config.out.identity_providers.display()
+    );
+    println!(
+        "Anonymity revokers will be generated in {}",
+        config.out.anonymity_revokers.display()
+    );
+    println!(
+        "Baker keys will be generated in {}",
+        config.out.baker_keys.display()
+    );
+    if let Some(global) = &config.out.cryptographic_parameters {
+        println!(
+            "Cryptographic parameter will be generated in {}",
+            global.display()
+        );
+    }
+
+    println!(
+        "The genesis data will be stored in {}",
+        config.out.genesis.display()
+    );
+    println!(
+        "The genesis hash will be written to {}",
+        config.out.genesis_hash.display()
+    );
+
     let core = config.parameters.to_core()?;
+
+    let genesis_time = chrono::DateTime::<chrono::Utc>::from(std::time::UNIX_EPOCH)
+        + chrono::Duration::milliseconds(core.time.millis as i64);
+
+    println!("Genesis time is set to {}.", genesis_time);
+    let slot_duration = rust_decimal::Decimal::from_u64(config.parameters.slot_duration.millis)
+        .context("Too large slot duration.")?;
+    let elect_diff = config.parameters.chain.election_difficulty();
+    let average_block_time: rust_decimal::Decimal =
+        slot_duration / rust_decimal::Decimal::from(elect_diff);
+    println!("Average block time is set to {}ms.", average_block_time);
+
     let cryptographic_parameters = crypto_parameters(
         config.out.cryptographic_parameters,
         config.cryptographic_parameters,
@@ -1024,10 +1105,7 @@ fn handle_generate(config_path: &Path) -> anyhow::Result<()> {
     {
         let mut out = Vec::new();
         genesis.serial(&mut out);
-        std::fs::write(config.out.genesis, out).context(
-            "Unable to write
-genesis.",
-        )?;
+        std::fs::write(config.out.genesis, out).context("Unable to write genesis.")?;
 
         let genesis_hash = genesis.hash();
         std::fs::write(
@@ -1037,6 +1115,7 @@ genesis.",
         )
         .context("Unable to write the genesis hash.")?;
     }
+    println!("DONE");
     Ok(())
 }
 
@@ -1047,12 +1126,18 @@ enum GenesisCreatorCommand {
     Assemble {
         #[clap(long, short)]
         /// The TOML configuration file describing the genesis.
-        config: PathBuf,
+        config:  PathBuf,
+        #[clap(long, short)]
+        /// Whether to output additional data during genesis generation.
+        verbose: bool,
     },
     Generate {
         #[clap(long, short)]
         /// The TOML configuration file describing the genesis.
-        config: PathBuf,
+        config:  PathBuf,
+        #[clap(long, short)]
+        /// Whether to output additional data during genesis generation.
+        verbose: bool,
     },
 }
 
@@ -1067,8 +1152,8 @@ fn main() -> anyhow::Result<()> {
     let args = GenesisCreator::parse();
 
     match &args.action {
-        GenesisCreatorCommand::Assemble { config } => handle_assemble(config),
-        GenesisCreatorCommand::Generate { config } => handle_generate(config),
+        GenesisCreatorCommand::Assemble { config, verbose } => handle_assemble(config, *verbose),
+        GenesisCreatorCommand::Generate { config, verbose } => handle_generate(config, *verbose),
     }
 }
 

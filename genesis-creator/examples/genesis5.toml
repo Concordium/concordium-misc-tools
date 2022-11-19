@@ -1,4 +1,9 @@
 # An example genesis configuration file to construct a protocol 5 genesis.
+# This creates a genesis with
+# - 5 bakers
+# - one additional foundation account
+# - genesis time set to the time when the tool runs
+# - average block time set to 5s
 
 protocolVersion = 5
 
@@ -40,8 +45,7 @@ repeat = 5
 [[accounts]]
 kind = "fresh"
 balance = "1000000000000000"
-stake = "500000000000000"
-template = "baker"
+template = "foundation"
 identityProvider = 0
 numKeys = 1
 threshold = 1
@@ -70,10 +74,10 @@ cooldownParameters = {authorizedKeys = [0,1,2,3,4,5,6], threshold = 7}
 timeParameters = {authorizedKeys = [0,1,2,3,4,5,6], threshold = 7}
 
 [parameters]
-genesisTime = "2022-06-24T11:12:43Z"
+# genesisTime = "2022-06-24T11:12:43Z" # use current time for genesis time.
 slotDuration = 250 # in ms
 leadershipElectionNonce = "d1bc8d3ba4afc7e109612cb73acbdddac052c93025aa1f82942edabb7deb82a1"
-epochLength = 400 # in slots
+epochLength = 400 # in slots, so 100s
 maxBlockEnergy = 3_000_000
 
 [parameters.finalization]
@@ -88,12 +92,12 @@ allowZeroDelay = true
 
 [parameters.chain]
 version = "v1"
-electionDifficulty = 0.025
+electionDifficulty = 0.05
 euroPerEnergy = 0.00002
 microCCDPerEuro = 500_000
 accountCreationLimit = 10
 [parameters.chain.timeParameters]
-rewardPeriodLength = 24
+rewardPeriodLength = 4 # 4 epochs
 mintPerPayday = 2.61157877e-4
 [parameters.chain.poolParameters]
 passiveFinalizationCommission = 1.0
@@ -104,10 +108,10 @@ bakingCommissionRange = {max = 0.1,min = 0.1}
 transactionCommissionRange = {max = 0.1,min = 0.1}
 minimumEquityCapital = "1000"
 capitalBound = 0.1
-leverageBound = {"denominator" = 1, "numerator" = 3}
+leverageBound = {denominator = 1, numerator = 3}
 [parameters.chain.cooldownParameters]
-poolOwnerCooldown = 1814400
-delegatorCooldown = 1209600
+poolOwnerCooldown = 800 # in seconds
+delegatorCooldown = 1000 # in seconds
 [parameters.chain.rewardParameters]
 mintDistribution = { mintPerSlot = 0.0000000007555665, bakingReward = 0.85, finalizationReward = 0.05 }
 transactionFeeDistribution = { baker = 0.45, gasAccount = 0.45 }

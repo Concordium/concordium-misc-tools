@@ -2466,6 +2466,7 @@ dependencies = [
  "futures",
  "libc",
  "num_enum",
+ "rand 0.8.5",
  "secp256k1",
  "serde",
  "sha2 0.10.6",

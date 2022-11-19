@@ -25,7 +25,7 @@ use concordium_rust_sdk::{
     },
 };
 use gcd::Gcd;
-use serde::de::{self};
+use serde::de;
 use sha2::Digest;
 use std::collections::BTreeMap;
 
@@ -254,13 +254,23 @@ pub enum GenesisChainParameters {
     V1(GenesisChainParametersV1),
 }
 
+impl GenesisChainParameters {
+    pub fn election_difficulty(&self) -> ElectionDifficulty {
+        match self {
+            GenesisChainParameters::V0(cp) => cp.election_difficulty,
+            GenesisChainParameters::V1(cp) => cp.election_difficulty,
+        }
+    }
+}
+
 /// The core genesis parameters, the leadership election nonce and the chain
 /// parameters (except the foundation index).
 #[derive(SerdeDeserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct GenesisParameters {
-    /// Time at which the genesis will occur.
-    pub genesis_time:              chrono::DateTime<chrono::Utc>,
+    /// Time at which the genesis will occur. If `None` then the tool will use
+    /// "current" time as genesis time.
+    pub genesis_time:              Option<chrono::DateTime<chrono::Utc>>,
     /// Duration of a slot in milliseconds
     pub slot_duration:             SlotDuration,
     /// Leadership election nonce.
@@ -278,16 +288,22 @@ pub struct GenesisParameters {
 /// haskell-src/Concordium/Genesis/Data/Base.hs in concordium-base.
 #[derive(Debug, Serialize)]
 pub struct CoreGenesisParameters {
-    time:                    Timestamp,
-    slot_duration:           SlotDuration,
-    epoch_length:            u64,
-    max_block_energy:        Energy,
-    finalization_parameters: FinalizationParameters,
+    pub time:                    Timestamp,
+    pub slot_duration:           SlotDuration,
+    pub epoch_length:            u64,
+    pub max_block_energy:        Energy,
+    pub finalization_parameters: FinalizationParameters,
 }
 
 impl GenesisParameters {
+    /// Convert genesis parameters to [`CoreGenesisParameters`]. Note that this
+    /// function is effectful in that, if the genesis time is not provided it
+    /// will use the current time as genesis time.
     pub fn to_core(&self) -> anyhow::Result<CoreGenesisParameters> {
-        let time = self.genesis_time.timestamp_millis();
+        let time = self.genesis_time.map_or_else(
+            || chrono::Utc::now().timestamp_millis(),
+            |x| x.timestamp_millis(),
+        );
         ensure!(
             time >= 0,
             "Genesis time before unix epoch is not supported."

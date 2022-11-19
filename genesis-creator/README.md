@@ -1,6 +1,8 @@
 # Concordium Genesis Creator
 
-This page describes how to create the `genesis.dat` file needed for starting up a node. The tool has two modes: `generate` that can generate a new genesis, and `assemble` that can produce a genesis from existing files (for example to regenereate the Mainnet `genesis.dat`).
+This page describes how to create the `genesis.dat` file needed for starting up
+a node.
+The tool has two modes: `generate` that can generate a new genesis, and `assemble` that can produce a genesis from existing files (for example to regenerate the Mainnet `genesis.dat`).
 
 ## The `generate` mode
 To generate a new genesis, run the command
@@ -41,9 +43,12 @@ bakerKeys = "some/path/bakers-out"
 identityProviders = "some/path/idps-out"
 anonymityRevokers = "some/path/ars-out"
 genesis = "some/path/genesis.dat"
+genesisHash = "some/path/genesis_hash"
 cryptographicParameters = "some/path/global"
 ```
-If the line `deleteExisting = true` is added, then all the folders will be deleted (if they exist) before creating them.
+If the line `deleteExisting = true` is added, then all the files and folders
+will be deleted (if they exist) before creating them. This will happen even if
+the tool happens to fail in some later stage.
 
 ### Specifying the cryptographic parameters
 The cryptographic parameters can either be generated or contructed from a file with existing cryptographic parameters.
@@ -406,6 +411,7 @@ ars = "path/anonymity-revokers.json"
 governanceKeys = "path/governance-keys.json"
 global = "path/cryptographic-parameters.json"
 genesisOut = "path/genesis.dat"
+genesisHash = ".path/genesis_hash"
 ```
 
 The genesis parameters are specified in the same format as when generating a new genesis, see the section above.

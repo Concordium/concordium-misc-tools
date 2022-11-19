@@ -203,12 +203,21 @@ pub struct OutputConfig {
 #[derive(SerdeDeserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Config {
+    /// Configuration of the output files.
     pub out: OutputConfig,
+    /// Which protocol version to generate genesis for.
     pub protocol_version: ProtocolVersion,
+    /// The genesis parameters that determine, e.g., genesis time.
     pub parameters: GenesisParameters,
+    /// Configuration of the keys for chain updates. This includes parameter
+    /// updates, and authorization updates.
     pub updates: UpdateKeysConfig,
+    /// Configuration for generating cryptographic parameters for the chain.
     pub cryptographic_parameters: CryptoParamsConfig,
+    /// Configuration for generating anonymity revokers.
     pub anonymity_revokers: Vec<AnonymityRevokerConfig>,
+    /// Configuration for generating identity providers.
     pub identity_providers: Vec<IdentityProviderConfig>,
+    /// Configuration for generating accounts.
     pub accounts: Vec<AccountConfig>,
 }
