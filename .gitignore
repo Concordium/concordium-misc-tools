@@ -1,2 +1,4 @@
 **/target
 *.json
+/genesis-creator/genesis.dat
+/genesis-creator/genesis_hash
