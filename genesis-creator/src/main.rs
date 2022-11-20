@@ -41,6 +41,7 @@ use serde::de::DeserializeOwned;
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
+    sync::atomic::AtomicU64,
 };
 
 /// Function for creating the cryptographic parameters (also called global
@@ -515,19 +516,25 @@ fn updates_v1(
 /// to a file. The function returns a `anyhow::Result`, which upon success will
 /// contain the foundation account index together with a vector with the public
 /// account parts.
+///
+/// The return value is a triple of the index of the foundation account, the
+/// number of bakers, and the list of public account data that goes into
+/// genesis.
 fn accounts(
     baker_keys_out: PathBuf,
     account_keys_out: PathBuf,
     params: &GlobalContext<ArCurve>,
     ars: &BTreeMap<ArIdentity, ArInfo<ArCurve>>,
     cfgs: Vec<AccountConfig>,
-) -> anyhow::Result<(AccountIndex, Vec<GenesisAccountPublic>)> {
+) -> anyhow::Result<(AccountIndex, u64, Vec<GenesisAccountPublic>)> {
     let mut foundation_index = None;
     let mut idx: u64 = 0;
 
     let mut gas = Vec::new();
 
     let mut csprng = rand::thread_rng();
+
+    let num_bakers = AtomicU64::new(0);
 
     for cfg in cfgs {
         match cfg {
@@ -554,6 +561,7 @@ fn accounts(
                 .context("Could not parse existing account file.")?;
 
                 let baker = if let Some(stake) = stake {
+                    num_bakers.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
                     let baker_id = BakerId::from(AccountIndex::from(idx));
                     let creds = {
                         if let Some(baker_keys) = baker_keys {
@@ -756,6 +764,7 @@ fn accounts(
                                 stake <= balance,
                                 "Initial stake must not be above the initial balance."
                             );
+                            num_bakers.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
                             let keys = BakerKeyPairs::generate(&mut csprng);
                             let baker_id = BakerId::from(AccountIndex::from(n));
                             let creds = BakerCredentials::new(baker_id, keys);
@@ -799,7 +808,11 @@ fn accounts(
             .context("Unable to output accounts.")?;
     }
     if let Some(foundation_index) = foundation_index {
-        Ok((foundation_index, gas))
+        Ok((
+            foundation_index,
+            num_bakers.load(std::sync::atomic::Ordering::Acquire),
+            gas,
+        ))
     } else {
         bail!("Exactly one account must be designated as a foundation account.")
     }
@@ -1034,13 +1047,20 @@ fn handle_generate(config_path: &Path, verbose: bool) -> anyhow::Result<()> {
         &cryptographic_parameters,
         config.anonymity_revokers,
     )?;
-    let (foundation_idx, accounts) = accounts(
+    let (foundation_idx, num_bakers, accounts) = accounts(
         config.out.baker_keys,
         config.out.account_keys,
         &cryptographic_parameters,
         &anonymity_revokers,
         config.accounts,
     )?;
+
+    println!(
+        "There are {} accounts in genesis, {} of which are bakers.",
+        accounts.len(),
+        num_bakers
+    );
+
     let genesis = match config.protocol_version {
         ProtocolVersion::P1 | ProtocolVersion::P2 | ProtocolVersion::P3 => {
             let params = match config.parameters.chain {

@@ -113,6 +113,6 @@ leverageBound = {denominator = 1, numerator = 3}
 poolOwnerCooldown = 800 # in seconds
 delegatorCooldown = 1000 # in seconds
 [parameters.chain.rewardParameters]
-mintDistribution = { mintPerSlot = 0.0000000007555665, bakingReward = 0.85, finalizationReward = 0.05 }
+mintDistribution = { bakingReward = 0.85, finalizationReward = 0.05 }
 transactionFeeDistribution = { baker = 0.45, gasAccount = 0.45 }
 gASRewards = { baker = 0.25, finalizationProof = 0.005, accountCreation = 0.02, chainUpdate = 0.005 }
