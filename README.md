@@ -15,6 +15,8 @@ The tools are
   are expected to do.
 - [state-compare](./state-compare) A tool to compare the state (via the node's
   API) of two blocks, either by the same node, or different nodes.
+- [genesis-creator](./genesis-creator) A tool to create genesis files to start
+  custom chains.
 
 # Contributing
 
@@ -25,7 +27,7 @@ Changes to any of the packages must be such that
 - ```cargo clippy --all``` produces no warnings
 - ```rust fmt``` makes no changes.
 
-Everything in this repository should build with stable rust at the moment (at least version 1.53 and up), however the fmt tool must be from a nightly release since some of the configuration options are not stable. One way to run the `fmt` tool is
+Everything in this repository should build with stable rust at the moment (at least version 1.57 and up), however the fmt tool must be from a nightly release since some of the configuration options are not stable. One way to run the `fmt` tool is
 
 ```shell
  cargo +nightly-2022-06-09 fmt

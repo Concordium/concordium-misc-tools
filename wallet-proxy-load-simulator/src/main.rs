@@ -28,15 +28,22 @@ struct App {
     #[clap(
         long = "max-parallel",
         help = "Number of parallel queries to make at the same time.",
-        env = "WP_MAX_PARALLEL"
+        env = "WP_LOAD_SIMULATOR_PARALLEL"
     )]
     num:           usize,
     #[clap(
         long = "only-failures",
         help = "Output only responses that are not in 2xx range.",
-        env = "WP_ONLY_FAILURES"
+        env = "WP_LOAD_SIMULATOR_ONLY_FAILURES"
     )]
     only_failures: bool,
+    #[clap(
+        long = "timeout",
+        help = "Timeout to apply to requests, in milliseconds.",
+        default_value = "10000",
+        env = "WP_LOAD_SIMULATOR_REQUEST_TIMEOUT"
+    )]
+    timeout:       u64,
 }
 
 #[tokio::main(flavor = "multi_thread")]
@@ -63,7 +70,10 @@ async fn main() -> anyhow::Result<()> {
         for account in accounts.iter().cycle() {
             let mut url = url.clone();
             url.set_path(&format!("v0/accBalance/{}", account));
-            senders[i].send(url).await.context(format!("Receiver {i} died."))?;
+            senders[i]
+                .send(url)
+                .await
+                .context(format!("Receiver {i} died."))?;
             i += 1;
             i %= senders.len();
         }
@@ -73,7 +83,9 @@ async fn main() -> anyhow::Result<()> {
     let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
 
     for (i, mut receiver) in receivers.into_iter().enumerate() {
-        let client = reqwest::Client::new();
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_millis(app.timeout))
+            .build()?;
         let sender = sender.clone();
         let handle = tokio::spawn(async move {
             let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(delay));
@@ -89,10 +101,10 @@ async fn main() -> anyhow::Result<()> {
                     Ok(response) => {
                         let code = response.status().as_u16();
                         let _body = response.json::<serde_json::Value>().await;
-                        sender.send((true, i, url, diff, code)).unwrap();
+                        sender.send((true, i, url, diff, code, None)).unwrap();
                     }
-                    Err(_) => {
-                        sender.send((false, i, url, diff, 0)).unwrap();
+                    Err(e) => {
+                        sender.send((false, i, url, diff, 0, Some(e))).unwrap();
                     }
                 }
             }
@@ -102,8 +114,12 @@ async fn main() -> anyhow::Result<()> {
     {
         let mut start = chrono::Utc::now();
         let mut count = 0;
-        while let Some((success, i, url, diff, code)) = receiver.recv().await {
-            if chrono::Utc::now().signed_duration_since(start).num_milliseconds() > 1000 {
+        while let Some((success, i, url, diff, code, err)) = receiver.recv().await {
+            if chrono::Utc::now()
+                .signed_duration_since(start)
+                .num_milliseconds()
+                > 1000
+            {
                 count = 0;
                 start = chrono::Utc::now();
             }
@@ -117,9 +133,14 @@ async fn main() -> anyhow::Result<()> {
                     format!("{count:8}, {i}, {url}, {diff:8}ms, {code}, {success}",).green()
                 );
             } else {
+                let err_str = match err {
+                    Some(e) => e.to_string(),
+                    None => "".into(),
+                };
                 println!(
                     "{}",
-                    format!("{count:8}, {i}, {url}, {diff:8}ms, {code}, {success}",).red()
+                    format!("{count:8}, {i}, {url}, {diff:8}ms, {code}, {success}, {err_str}",)
+                        .red()
                 );
             }
         }

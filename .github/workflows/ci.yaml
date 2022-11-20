@@ -27,6 +27,7 @@ jobs:
           - node-liveness-checker/Cargo.toml
           - wallet-proxy-load-simulator/Cargo.toml
           - state-compare/Cargo.toml
+          - genesis-creator/Cargo.toml
     steps:
       - name: Checkout
         uses: actions/checkout@v2

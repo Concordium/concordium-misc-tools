@@ -16,6 +16,8 @@ The tool supports the following configuration options
   in parallel. This is in general limited by the amount of open connections the
   operating system allows.
 - `WP_LOAD_SIMULATOR_DELAY` (option `--delay`) The delay in milliseconds between issuing requests per worker.
+- `WP_LOAD_SIMULATOR_TIMEOUT` (option `--timeout`) The timeout per request in
+  milliseconds. Requests are cancelled after timeout and deemed to be failed.
 
 All of the above is available by using `--help` to get usage information. An
 example invocation will thus look like

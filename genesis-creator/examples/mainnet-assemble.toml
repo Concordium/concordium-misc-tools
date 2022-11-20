@@ -1,0 +1,40 @@
+
+protocolVersion = 1
+foundationAccount = "4LH62AZmugKXFA2xXZhpoNbt2fFhAn8182kdHgxCu8cyiZGo2c"
+accounts = "./mainnet-files/accounts.json"
+idps = "./mainnet-files/identity-providers.json"
+ars = "./mainnet-files/anonymity-revokers.json"
+governanceKeys = "./mainnet-files/governance-keys.json"
+global = "./mainnet-files/cryptographic-parameters.json"
+genesisOut = "./mainnet-files/genesis.dat"
+genesisHash = "./genesis_hash"
+
+[parameters]
+genesisTime = "2021-06-09T06:00:00Z"
+slotDuration = 250
+leadershipElectionNonce = "60ab0feb036f5e3646f957085238f02fea83df5993db8e784e11500969af9420"
+epochLength = 14400
+maxBlockEnergy = 3_000_000
+
+[parameters.finalization]
+minimumSkip = 0
+committeeMaxSize = 1000
+waitingTime = 100
+skipShrinkFactor = 0.5
+skipGrowFactor = 2
+delayShrinkFactor = 0.5
+delayGrowFactor = 2
+allowZeroDelay = true
+
+[parameters.chain]
+version = "v0"
+electionDifficulty = 0.025
+euroPerEnergy = 0.00002
+microCCDPerEuro = 500_000
+accountCreationLimit = 10
+bakerCooldownEpochs = 166
+minimumThresholdForBaking = "2500000000"
+[parameters.chain.rewardParameters]
+mintDistribution = { mintPerSlot = 0.0000000007555665, bakingReward = 0.85, finalizationReward = 0.05 }
+transactionFeeDistribution = { baker = 0.45, gasAccount = 0.45 }
+gASRewards = { baker = 0.25, finalizationProof = 0.005, accountCreation = 0.02, chainUpdate = 0.005 }

@@ -1,0 +1,41 @@
+{
+  "v": 0,
+  "value": {
+    "1": {
+      "arIdentity": 1,
+      "arDescription": {
+        "name": "Anonymity Revoker 1",
+        "url": "https://ar.concordium.com/1",
+        "description": "Genesis AR."
+      },
+      "arPublicKey": "b63b8a94edfde605c57624126c079c5762a5b642e09b4ddeef4de6b0232dd371bb036215c94823cdf6ad4e02d33038a2aba483744a3d1c31f663cea02023dfd712a17832d135a6b56e27548bc68d6cdd113ddcebb080e9a812769e3fbc160ce7"
+    },
+    "2": {
+      "arIdentity": 2,
+      "arDescription": {
+        "name": "Anonymity Revoker 2",
+        "url": "https://ar.concordium.com/2",
+        "description": "See URL"
+      },
+      "arPublicKey": "b14cbfe44a02c6b1f78711176d5f437295367aa4f2a8c2551ee10d25a03adc69d61a332a058971919dad7312e1fc94c5a0d4484a34910fcaed2931100066d76ee4be13aca093166378c437d71c8ed6a853f360fa5ad016f57573f2c12792732d"
+    },
+    "3": {
+      "arIdentity": 3,
+      "arDescription": {
+        "name": "Anonymity Revoker 3",
+        "url": "https://ar.concordium.com/3",
+        "description": "See URL"
+      },
+      "arPublicKey": "b14cbfe44a02c6b1f78711176d5f437295367aa4f2a8c2551ee10d25a03adc69d61a332a058971919dad7312e1fc94c599ddd66d63a4763cc03a3155d59079b754beaea594d816de97bf5e021c973b804d20209d6830d04f1e73eb00741836fb"
+    },
+    "4": {
+      "arIdentity": 4,
+      "arDescription": {
+        "name": "Anonymity Revoker 4",
+        "url": "https://ar.concordium.com/4",
+        "description": "See URL."
+      },
+      "arPublicKey": "b14cbfe44a02c6b1f78711176d5f437295367aa4f2a8c2551ee10d25a03adc69d61a332a058971919dad7312e1fc94c58cfc099ff2023ce1e9f7b781b3912ca33830ea2c7a44c8fc553128023080bd28886b37a5a3a357dac52e2d49f1fdf4e0"
+    }
+  }
+}
