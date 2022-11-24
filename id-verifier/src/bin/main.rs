@@ -244,7 +244,7 @@ async fn inject_statement_worker(
     })
 }
 
-#[derive(serde::Deserialize, serde::Serialize, Debug)]
+#[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
 struct ChallengedProof {
     challenge: Challenge,
     proof: Proof<ArCurve, AttributeKind>,
@@ -256,13 +256,15 @@ async fn check_proof_worker(
     state: Arc<Mutex<Server>>,
     request: ChallengedProof,
 ) -> Result<bool, InjectStatementError> {
+    let (statement, global) = {
+        let server = state.lock().expect("Failed to lock.");
+        (server.statement_map.get(&request.challenge).unwrap().clone(), server.global_context.clone())
+    };
+    let cred_id = CredentialRegistrationID::new(statement.credential);
     let consensus_info = client.get_consensus_status().await?;
-    let server = state.lock().expect("Failed to lock");
-    let statement = server.statement_map.get(&request.challenge).unwrap();
-    let cred_id = CredentialRegistrationID(statement.credential);
     let acc_info = client
-        .get_account_info_by_cred_id(&cred_id, &consensus_info.last_finalized_block)
-        .await?;
+    .get_account_info_by_cred_id(&cred_id, &consensus_info.last_finalized_block)
+    .await?;
     let credential = acc_info
         .account_credentials
         .get(&0.into())
@@ -277,7 +279,7 @@ async fn check_proof_worker(
         } => commitments,
     };
 
-    if statement.verify(&request.challenge, &server.global_context, commitments, &request.proof) {
+    if statement.verify(&request.challenge, &global, commitments, &request.proof) {
         Err(InjectStatementError::InvalidProofs)
     } else {
         Ok(true)
