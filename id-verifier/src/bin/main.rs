@@ -27,7 +27,7 @@ use warp::{http::StatusCode, Filter, Rejection, Reply};
 struct IdVerifierConfig {
     #[clap(
         long = "node",
-        help = "GRPC interface of the node.",
+        help = "GRPC V2 interface of the node.",
         default_value = "http://localhost:20000"
     )]
     endpoint:  concordium_rust_sdk::v2::Endpoint,
@@ -161,6 +161,10 @@ enum InjectStatementError {
     InvalidProofs,
     #[error("Node access error: {0}")]
     NodeAccess(#[from] QueryError),
+    #[error("Error acquiring internal lock.")]
+    LockingError,
+    #[error("Proof provided for an unknown session.")]
+    UnknownSession,
 }
 
 impl From<RPCError> for InjectStatementError {
@@ -203,6 +207,14 @@ async fn handle_rejection(err: Rejection) -> Result<impl warp::Reply, Infallible
         let code = StatusCode::INTERNAL_SERVER_ERROR;
         let message = format!("Cannot access the node: {}", e);
         Ok(mk_reply(message, code))
+    } else if let Some(InjectStatementError::LockingError) = err.find() {
+        let code = StatusCode::INTERNAL_SERVER_ERROR;
+        let message = format!("Could not acquire lock.");
+        Ok(mk_reply(message, code))
+    } else if let Some(InjectStatementError::UnknownSession) = err.find() {
+        let code = StatusCode::NOT_FOUND;
+        let message = format!("Session not found.");
+        Ok(mk_reply(message, code))
     } else if err
         .find::<warp::filters::body::BodyDeserializeError>()
         .is_some()
@@ -231,7 +243,10 @@ async fn inject_statement_worker(
 ) -> Result<ChallengeResponse, InjectStatementError> {
     let mut challenge = [0u8; 32];
     rand::thread_rng().fill(&mut challenge[..]);
-    let mut sm = state.statement_map.lock().expect("Failed to lock");
+    let mut sm = state
+        .statement_map
+        .lock()
+        .map_err(|_| InjectStatementError::LockingError)?;
     sm.insert(challenge, request.clone());
 
     Ok(ChallengeResponse {
@@ -255,9 +270,9 @@ async fn check_proof_worker(
     let statement = state
         .statement_map
         .lock()
-        .unwrap()
+        .map_err(|_| InjectStatementError::LockingError)?
         .get(&request.challenge)
-        .unwrap()
+        .ok_or(InjectStatementError::UnknownSession)?
         .clone();
     let cred_id = CredentialRegistrationID::new(statement.credential);
     let acc_info = client
@@ -267,7 +282,7 @@ async fn check_proof_worker(
         .response
         .account_credentials
         .get(&0.into())
-        .expect("No credential on account with given index"); // Read the relevant credential from chain that the claim is about.
+        .ok_or(InjectStatementError::InvalidProofs)?;
     let commitments = match &credential.value {
         AccountCredentialWithoutProofs::Initial { icdv: _, .. } => {
             return Err(InjectStatementError::NotAllowed);
