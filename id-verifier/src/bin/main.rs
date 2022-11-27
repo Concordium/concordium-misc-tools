@@ -1,88 +1,88 @@
+use clap::Parser;
 use concordium_rust_sdk::{
     endpoints::{QueryError, RPCError},
     id::{
         constants::{ArCurve, AttributeKind},
-        id_verifier::verify_attribute_range,
+        id_proof_types::{Proof, StatementWithContext},
         range_proof::RangeProof,
-        types::{AccountAddress, AccountCredentialWithoutProofs, AttributeTag, GlobalContext}, id_proof_types::{StatementWithContext, Proof},
+        types::{AccountAddress, AccountCredentialWithoutProofs, GlobalContext},
     },
-    types::hashes::TransactionHash,
+    types::CredentialRegistrationID,
+    v2::BlockIdentifier,
 };
-
-use concordium_base::base::CredentialRegistrationID;
-
 use log::{error, info, warn};
 use std::{
-    collections::{BTreeSet, HashMap},
+    collections::HashMap,
     convert::Infallible,
     sync::{Arc, Mutex},
 };
-use structopt::StructOpt;
 
-use warp::{http::StatusCode, Filter, Rejection, Reply};
 use rand::Rng;
+use warp::{http::StatusCode, Filter, Rejection, Reply};
 
 /// Structure used to receive the correct command line arguments.
-#[derive(Debug, StructOpt)]
+#[derive(clap::Parser, Debug)]
+#[clap(arg_required_else_help(true))]
+#[clap(version, author)]
 struct IdVerifierConfig {
-    #[structopt(
+    #[clap(
         long = "node",
         help = "GRPC interface of the node.",
-        default_value = "http://localhost:10000"
+        default_value = "http://localhost:20000"
     )]
-    endpoint: concordium_rust_sdk::endpoints::Endpoint,
-    #[structopt(
+    endpoint:  concordium_rust_sdk::v2::Endpoint,
+    #[clap(
         long = "port",
         default_value = "8100",
         help = "Port on which the server will listen on."
     )]
-    port: u16,
+    port:      u16,
+    #[structopt(
+        long = "log-level",
+        default_value = "debug",
+        help = "Maximum log level."
+    )]
+    log_level: log::LevelFilter,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 struct AgeProofOutput {
     account: AccountAddress,
-    lower: AttributeKind,
-    upper: AttributeKind,
-    proof: RangeProof<ArCurve>,
+    lower:   AttributeKind,
+    upper:   AttributeKind,
+    proof:   RangeProof<ArCurve>,
 }
-
-// #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-// #[serde(transparent)]
-// struct Basket {
-//     basket: Vec<Item>,
-// }
 
 type Challenge = [u8; 32];
 
+#[derive(Clone)]
 struct Server {
-    statement_map: HashMap<Challenge, StatementWithContext<ArCurve, AttributeKind>>,
-    global_context: GlobalContext<ArCurve>,
-    // accounts:       BTreeSet<AccountAddress>,
+    statement_map:  Arc<Mutex<HashMap<Challenge, StatementWithContext<ArCurve, AttributeKind>>>>,
+    global_context: Arc<GlobalContext<ArCurve>>,
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    env_logger::init();
-    let app = IdVerifierConfig::clap()
-        .setting(clap::AppSettings::ArgRequiredElseHelp)
-        .global_setting(clap::AppSettings::ColoredHelp);
-    let matches = app.get_matches();
-    let app: IdVerifierConfig = IdVerifierConfig::from_clap(&matches);
-    let mut client =
-        concordium_rust_sdk::endpoints::Client::connect(app.endpoint, "rpcadmin").await?;
-    let consensus_info = client.get_consensus_status().await?;
+    let app = IdVerifierConfig::parse();
+    let mut log_builder = env_logger::Builder::new();
+    // only log the current module (main).
+    log_builder.filter_level(app.log_level); // filter filter_module(module_path!(), app.log_level);
+    log_builder.init();
+
+    let mut client = concordium_rust_sdk::v2::Client::new(app.endpoint).await?;
     let global_context = client
-        .get_cryptographic_parameters(&consensus_info.last_finalized_block)
-        .await?;
-    let state = Arc::new(Mutex::new(Server {
-        statement_map: HashMap::new(),
-        global_context,
-        // accounts: BTreeSet::new(),
-    }));
+        .get_cryptographic_parameters(BlockIdentifier::LastFinal)
+        .await?
+        .response;
+
+    log::debug!("Acquired data from the node.");
+
+    let state = Server {
+        statement_map:  Arc::new(Mutex::new(HashMap::new())),
+        global_context: Arc::new(global_context),
+    };
     let add_state = state.clone();
     let prove_state = state.clone();
-    let proof_client = client.clone();
 
     // 1. Inject statement
     let inject_statement = warp::post()
@@ -96,49 +96,51 @@ async fn main() -> anyhow::Result<()> {
         .and(warp::path!("prove"))
         .and(handle_provide_proof(client, prove_state));
 
-    info!("Booting up HTTP server. Listening on port {}.", app.port);
+    info!("Starting up HTTP server. Listening on port {}.", app.port);
     let cors = warp::cors()
         .allow_any_origin()
         .allow_header("Content-Type")
         .allow_method("POST");
+
     let server = inject_statement
         .or(provide_proof)
         .recover(handle_rejection)
-        .with(cors);
+        .with(cors)
+        .with(warp::trace::request());
     warp::serve(server).run(([0, 0, 0, 0], app.port)).await;
     Ok(())
 }
 
 fn handle_inject_statement(
-    // client: concordium_rust_sdk::endpoints::Client,
-    state: Arc<Mutex<Server>>,
+    state: Server,
 ) -> impl Filter<Extract = (impl Reply,), Error = Rejection> + Clone {
-    warp::body::json().and_then(move |request: StatementWithContext<ArCurve, AttributeKind>| {
-        // let client = client.clone();
-        let state = Arc::clone(&state);
-        async move {
-            info!("Queried for injecting statement");
-            match inject_statement_worker(state, request).await {
-                Ok(r) => Ok(warp::reply::json(&r)),
-                Err(e) => {
-                    warn!("Request is invalid {:#?}.", e);
-                    Err(warp::reject::custom(e))
+    warp::body::json().and_then(
+        move |request: StatementWithContext<ArCurve, AttributeKind>| {
+            let state = state.clone();
+            async move {
+                log::debug!("Parsed statement. Generating challenge");
+                match inject_statement_worker(state, request).await {
+                    Ok(r) => Ok(warp::reply::json(&r)),
+                    Err(e) => {
+                        warn!("Request is invalid {:#?}.", e);
+                        Err(warp::reject::custom(e))
+                    }
                 }
             }
-        }
-    })
+        },
+    )
 }
 
 fn handle_provide_proof(
-    client: concordium_rust_sdk::endpoints::Client,
-    state: Arc<Mutex<Server>>,
+    client: concordium_rust_sdk::v2::Client,
+    state: Server,
 ) -> impl Filter<Extract = (impl Reply,), Error = Rejection> + Clone {
     warp::body::json().and_then(move |request: ChallengedProof| {
         let client = client.clone();
-        let state = Arc::clone(&state);
+        let state = state.clone();
         async move {
             info!("Queried for injecting statement");
-            match check_proof_worker(client,state, request).await {
+            match check_proof_worker(client, state, request).await {
                 Ok(r) => Ok(warp::reply::json(&r)),
                 Err(e) => {
                     warn!("Request is invalid {:#?}.", e);
@@ -161,28 +163,24 @@ enum InjectStatementError {
     NodeAccess(#[from] QueryError),
 }
 
-
 impl From<RPCError> for InjectStatementError {
-    fn from(err: RPCError) -> Self {
-        Self::NodeAccess(err.into())
-    }
+    fn from(err: RPCError) -> Self { Self::NodeAccess(err.into()) }
 }
 
 impl warp::reject::Reject for InjectStatementError {}
-
 
 #[derive(serde::Serialize)]
 /// Response in case of an error. This is going to be encoded as a JSON body
 /// with fields 'code' and 'message'.
 struct ErrorResponse {
-    code: u16,
+    code:    u16,
     message: String,
 }
 
 /// Helper function to make the reply.
 fn mk_reply(message: String, code: StatusCode) -> impl warp::Reply {
     let msg = ErrorResponse {
-        message: message.into(),
+        message,
         code: code.as_u16(),
     };
     warp::reply::with_status(warp::reply::json(&msg), code)
@@ -225,47 +223,48 @@ struct ChallengeResponse {
     statement: StatementWithContext<ArCurve, AttributeKind>,
 }
 
-
-
 /// A common function that produces a challange and adds the statement to
 /// the state.
 async fn inject_statement_worker(
-    state: Arc<Mutex<Server>>,
+    state: Server,
     request: StatementWithContext<ArCurve, AttributeKind>,
 ) -> Result<ChallengeResponse, InjectStatementError> {
     let mut challenge = [0u8; 32];
     rand::thread_rng().fill(&mut challenge[..]);
-    let mut server = state.lock().expect("Failed to lock");
-    server.statement_map.insert(challenge, request.clone());
+    let mut sm = state.statement_map.lock().expect("Failed to lock");
+    sm.insert(challenge, request.clone());
 
-    Ok(ChallengeResponse{
+    Ok(ChallengeResponse {
         challenge,
-        statement: request
+        statement: request,
     })
 }
 
 #[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
 struct ChallengedProof {
     challenge: Challenge,
-    proof: Proof<ArCurve, AttributeKind>,
+    proof:     Proof<ArCurve, AttributeKind>,
 }
 
 /// A common function that validates the cryptographic proofs in the request.
 async fn check_proof_worker(
-    mut client: concordium_rust_sdk::endpoints::Client,
-    state: Arc<Mutex<Server>>,
+    mut client: concordium_rust_sdk::v2::Client,
+    state: Server,
     request: ChallengedProof,
 ) -> Result<bool, InjectStatementError> {
-    let (statement, global) = {
-        let server = state.lock().expect("Failed to lock.");
-        (server.statement_map.get(&request.challenge).unwrap().clone(), server.global_context.clone())
-    };
+    let statement = state
+        .statement_map
+        .lock()
+        .unwrap()
+        .get(&request.challenge)
+        .unwrap()
+        .clone();
     let cred_id = CredentialRegistrationID::new(statement.credential);
-    let consensus_info = client.get_consensus_status().await?;
     let acc_info = client
-    .get_account_info_by_cred_id(&cred_id, &consensus_info.last_finalized_block)
-    .await?;
+        .get_account_info(&cred_id.into(), BlockIdentifier::LastFinal)
+        .await?;
     let credential = acc_info
+        .response
         .account_credentials
         .get(&0.into())
         .expect("No credential on account with given index"); // Read the relevant credential from chain that the claim is about.
@@ -279,7 +278,12 @@ async fn check_proof_worker(
         } => commitments,
     };
 
-    if statement.verify(&request.challenge, &global, commitments, &request.proof) {
+    if statement.verify(
+        &request.challenge,
+        &state.global_context,
+        commitments,
+        &request.proof,
+    ) {
         Err(InjectStatementError::InvalidProofs)
     } else {
         Ok(true)
