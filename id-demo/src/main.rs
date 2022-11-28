@@ -19,7 +19,7 @@ use components::header::Header;
 
 use crate::components::{
     reveal_attribute::RevealAttribute,
-    statement::{Statement, StatementProp},
+    statement::{Statement, StatementProp}, younger_than::YoungerThan,
 };
 #[wasm_bindgen(module = "/detector.js")]
 extern "C" {
@@ -138,23 +138,6 @@ fn app() -> Html {
     //     },
     // };
 
-    let reveal_state = use_state_eq(|| AttributeTag(0));
-
-    let on_cautious_change = |s: UseStateHandle<String>| {
-        Callback::from(move |e: Event| {
-            // When events are created the target is undefined, it's only
-            // when dispatched does the target get added.
-            let target: Option<EventTarget> = e.target();
-            // Events can bubble so this listener might catch events from child
-            // elements which are not of type HtmlInputElement
-            let input = target.and_then(|t| t.dyn_into::<HtmlInputElement>().ok());
-
-            if let Some(input) = input {
-                s.set(input.value());
-            }
-        })
-    };
-
     let connect_wallet = {
         let wallet_conn = wallet_conn.clone();
         move |_| {
@@ -176,10 +159,9 @@ fn app() -> Html {
         move |_| {
             let inject_statements = inject_statements.clone();
             wasm_bindgen_futures::spawn_local(async move {
-                let r = Request::post("http://localhost:8100/inject").json(&StatementWithContext {
-                    credential: base16_decode_string("892725bb21560afa8b2ed42b213b21794b3029b3a58d2345d8de658a9701626f6e045b726c146c31c634aca2debb1357").unwrap(), // TODO
-                    statement:  inject_statements.statement.clone(),
-                }).unwrap(); // TODO
+                let r = Request::post("http://localhost:8100/inject").json(&
+                    inject_statements.statement.clone(),
+                ).unwrap(); // TODO
                 let res = r.send().await.unwrap(); // TODO
                 if res.ok() {
                     let data = res.json::<serde_json::Value>().await.unwrap(); // TODO: Handle error
@@ -191,47 +173,32 @@ fn app() -> Html {
         }
     };
 
-    let on_change = {
-        let reveal_state = reveal_state.clone();
-        move |e: Event| {
-            let target = e.target();
-            let elem = target.and_then(|t| t.dyn_into::<HtmlSelectElement>().ok());
-            match elem {
-                None => (),
-                Some(elem) => {
-                    let tag = elem.value().parse();
-                    match tag {
-                        Ok(v) => reveal_state.set(v),
-                        Err(e) => web_sys::window()
-                            .unwrap()
-                            .alert_with_message(&e.to_string())
-                            .unwrap(),
-                    }
-                }
-            }
-        }
-    };
-
     html! {
       <>
         <Header />
-        <div class="row">
-          <div class="col-sm mx-auto">
-            <button onclick={inject_statement} type="button" class="btn btn-primary btn-lg">{"Inject statement"}</button>
-            <button onclick={connect_wallet} type="button" class="btn btn-primary btn-lg">{"Connect"}</button>
-          </div>
-        </div>
-
         <div class="container">
           <div class="row">
             <div class="col-sm">
+              <div class="btn-group-vertical">
+                <button onclick={connect_wallet} type="button" class="btn btn-primary btn-lg mb-1">{"Connect"}</button>
+                <button onclick={inject_statement} type="button" class="btn btn-primary btn-lg mt-1">{"Inject statement"}</button>
+              </div>
+            </div>
+
+            <div class="col-sm">
             {html!{
-                  <Statement statement={statements.statement.clone()} />
+                  <RevealAttribute statement={statements.clone()} />
+            }}
+            {html!{
+                  <YoungerThan statement={statements.clone()} younger=true />
+            }}
+            {html!{
+                  <YoungerThan statement={statements.clone()} younger=false />
             }}
             </div>
             <div class="col-sm">
             {html!{
-                  <RevealAttribute statement={statements} />
+                  <Statement statement={statements.statement.clone()} />
             }}
             </div>
          </div>

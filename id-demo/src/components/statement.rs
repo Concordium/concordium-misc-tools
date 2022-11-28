@@ -7,19 +7,6 @@ pub struct StatementProp {
         id::id_proof_types::Statement<id::constants::ArCurve, id::constants::AttributeKind>,
 }
 
-impl StatementProp {
-    pub fn push(
-        &self,
-        s: AtomicStatement<id::constants::ArCurve, id::constants::AttributeKind>,
-    ) -> Self {
-        let mut inner = self.statement.statements.clone();
-        inner.push(s);
-        Self {
-            statement: id::id_proof_types::Statement { statements: inner },
-        }
-    }
-}
-
 #[function_component(Statement)]
 pub fn statement(s: &StatementProp) -> Html {
     s.statement
@@ -37,7 +24,19 @@ pub fn statement(s: &StatementProp) -> Html {
                     </div>
                 }
             }
-            AtomicStatement::AttributeInRange { statement } => todo!(),
+            AtomicStatement::AttributeInRange { statement } => {
+                html! {
+                    <div class="m-3 p-4 border rounded d-flex align-items-center">
+                      <img src="https://robohash.org/hicveldicta.png?size=50x50&set=set1" class="mr-2" alt="img" />
+                      <div class="">
+                          <p class="fw-bold mb-1">{"Attribute in range"}</p>
+                          <p class="fw-normal mb-1">{statement.attribute_tag}</p>
+                          <p class="fw-normal mb-1"> {"Lower: "} {&statement.lower}</p>
+                          <p class="fw-normal mb-1"> {"Upper: "} {&statement.upper}</p>
+                      </div>
+                    </div>
+                }
+            }
             AtomicStatement::AttributeInSet { statement } => todo!(),
             AtomicStatement::AttributeNotInSet { statement } => todo!() })
         .collect::<Html>()

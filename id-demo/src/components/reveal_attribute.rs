@@ -1,8 +1,4 @@
-use concordium_base::id::{
-    self,
-    id_proof_types::RevealAttributeStatement,
-    types::{AttributeStringTag, AttributeTag},
-};
+use concordium_base::id::types::{AttributeStringTag, AttributeTag};
 use gloo_console::log;
 use wasm_bindgen::JsCast;
 use web_sys::HtmlSelectElement;
@@ -23,14 +19,9 @@ pub fn statement(s: &RevealAttributeProp) -> Html {
         || {
             let statements = s.statement.clone();
             move |_: MouseEvent| {
-                let reveal = RevealAttributeStatement {
-                    attribute_tag: *selected,
-                };
-                let new = statements.push(id::id_proof_types::AtomicStatement::RevealAttribute {
-                    statement: reveal,
-                });
-                log!(serde_json::to_string_pretty(&new.statement).unwrap()); // TODO: Remove logging
-                statements.set(new);
+                let new = statements.statement.clone().reveal_attribute(*selected);
+                log!(serde_json::to_string_pretty(&new).unwrap()); // TODO: Remove logging
+                statements.set(StatementProp { statement: new });
             }
         }
     };
@@ -58,9 +49,9 @@ pub fn statement(s: &RevealAttributeProp) -> Html {
 
     html! {
         <form>
-            <div class="form-group">
+            <div class="form-group border rounded border-primary">
             <label>{"Reveal attribute."} </label>
-            <select onchange={on_change}>
+            <select class="rounded my-1" onchange={on_change}>
         {(0u8..=253).into_iter().map(|tag| {
                 html!{
                     <option selected={tag==0} value={AttributeStringTag::from(AttributeTag(tag)).to_string()}>{AttributeStringTag::from(AttributeTag(tag))} </option>
@@ -68,8 +59,8 @@ pub fn statement(s: &RevealAttributeProp) -> Html {
         }
         ).collect::<Html>()}
         </select>
+            <div> <button onclick={on_click_reveal()}type="button" class="btn btn-primary">{"Add"}</button> </div>
             </div>
-            <button onclick={on_click_reveal()}type="button" class="btn btn-primary">{"Add"}</button>
             </form>
     }
 }
