@@ -3,7 +3,7 @@ use concordium_rust_sdk::{
     endpoints::{QueryError, RPCError},
     id::{
         constants::{ArCurve, AttributeKind},
-        id_proof_types::{Proof, StatementWithContext},
+        id_proof_types::{Proof, Statement},
         range_proof::RangeProof,
         types::{AccountAddress, AccountCredentialWithoutProofs, GlobalContext},
     },
@@ -57,7 +57,7 @@ type Challenge = [u8; 32];
 
 #[derive(Clone)]
 struct Server {
-    statement_map:  Arc<Mutex<HashMap<Challenge, StatementWithContext<ArCurve, AttributeKind>>>>,
+    statement_map:  Arc<Mutex<HashMap<Challenge, Statement<ArCurve, AttributeKind>>>>,
     global_context: Arc<GlobalContext<ArCurve>>,
 }
 
@@ -114,21 +114,19 @@ async fn main() -> anyhow::Result<()> {
 fn handle_inject_statement(
     state: Server,
 ) -> impl Filter<Extract = (impl Reply,), Error = Rejection> + Clone {
-    warp::body::json().and_then(
-        move |request: StatementWithContext<ArCurve, AttributeKind>| {
-            let state = state.clone();
-            async move {
-                log::debug!("Parsed statement. Generating challenge");
-                match inject_statement_worker(state, request).await {
-                    Ok(r) => Ok(warp::reply::json(&r)),
-                    Err(e) => {
-                        warn!("Request is invalid {:#?}.", e);
-                        Err(warp::reject::custom(e))
-                    }
+    warp::body::json().and_then(move |request: Statement<ArCurve, AttributeKind>| {
+        let state = state.clone();
+        async move {
+            log::debug!("Parsed statement. Generating challenge");
+            match inject_statement_worker(state, request).await {
+                Ok(r) => Ok(warp::reply::json(&r)),
+                Err(e) => {
+                    warn!("Request is invalid {:#?}.", e);
+                    Err(warp::reject::custom(e))
                 }
             }
-        },
-    )
+        }
+    })
 }
 
 fn handle_provide_proof(
@@ -232,14 +230,14 @@ async fn handle_rejection(err: Rejection) -> Result<impl warp::Reply, Infallible
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
 struct ChallengeResponse {
     challenge: Challenge,
-    statement: StatementWithContext<ArCurve, AttributeKind>,
+    statement: Statement<ArCurve, AttributeKind>,
 }
 
 /// A common function that produces a challange and adds the statement to
 /// the state.
 async fn inject_statement_worker(
     state: Server,
-    request: StatementWithContext<ArCurve, AttributeKind>,
+    request: Statement<ArCurve, AttributeKind>,
 ) -> Result<ChallengeResponse, InjectStatementError> {
     let mut challenge = [0u8; 32];
     rand::thread_rng().fill(&mut challenge[..]);
@@ -257,8 +255,9 @@ async fn inject_statement_worker(
 
 #[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
 struct ChallengedProof {
-    challenge: Challenge,
-    proof:     Proof<ArCurve, AttributeKind>,
+    pub challenge:  Challenge,
+    pub credential: CredentialRegistrationID,
+    pub proof:      Proof<ArCurve, AttributeKind>,
 }
 
 /// A common function that validates the cryptographic proofs in the request.
@@ -274,7 +273,7 @@ async fn check_proof_worker(
         .get(&request.challenge)
         .ok_or(InjectStatementError::UnknownSession)?
         .clone();
-    let cred_id = CredentialRegistrationID::new(statement.credential);
+    let cred_id = request.credential;
     let acc_info = client
         .get_account_info(&cred_id.into(), BlockIdentifier::LastFinal)
         .await?;
@@ -287,15 +286,13 @@ async fn check_proof_worker(
         AccountCredentialWithoutProofs::Initial { icdv: _, .. } => {
             return Err(InjectStatementError::NotAllowed);
         }
-        AccountCredentialWithoutProofs::Normal {
-            commitments,
-            cdv: _,
-        } => commitments,
+        AccountCredentialWithoutProofs::Normal { commitments, .. } => commitments,
     };
 
     if statement.verify(
         &request.challenge,
         &state.global_context,
+        cred_id.as_ref(),
         commitments,
         &request.proof,
     ) {
