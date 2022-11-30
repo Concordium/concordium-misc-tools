@@ -1,5 +1,10 @@
 use clap::Parser;
 use concordium_rust_sdk::{
+    common::{
+        self as crypto_common,
+        derive::{SerdeBase16Serialize, Serialize},
+        Buffer, Deserial, ParseResult, ReadBytesExt, SerdeDeserialize, SerdeSerialize, Serial, Versioned,
+    },
     endpoints::{QueryError, RPCError},
     id::{
         constants::{ArCurve, AttributeKind},
@@ -53,7 +58,8 @@ struct AgeProofOutput {
     proof:   RangeProof<ArCurve>,
 }
 
-type Challenge = [u8; 32];
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, SerdeBase16Serialize, Serialize)]
+struct Challenge([u8; 32]);
 
 #[derive(Clone)]
 struct Server {
@@ -245,6 +251,7 @@ async fn inject_statement_worker(
         .statement_map
         .lock()
         .map_err(|_| InjectStatementError::LockingError)?;
+    let challenge = Challenge(challenge);
     sm.insert(challenge, request.clone());
 
     Ok(ChallengeResponse {
@@ -256,8 +263,13 @@ async fn inject_statement_worker(
 #[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
 struct ChallengedProof {
     pub challenge:  Challenge,
+    pub proof: ProofWithContext,
+}
+
+#[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
+pub struct ProofWithContext{
     pub credential: CredentialRegistrationID,
-    pub proof:      Proof<ArCurve, AttributeKind>,
+    pub proof:      Versioned<Proof<ArCurve, AttributeKind>>,
 }
 
 /// A common function that validates the cryptographic proofs in the request.
@@ -273,7 +285,7 @@ async fn check_proof_worker(
         .get(&request.challenge)
         .ok_or(InjectStatementError::UnknownSession)?
         .clone();
-    let cred_id = request.credential;
+    let cred_id = request.proof.credential;
     let acc_info = client
         .get_account_info(&cred_id.into(), BlockIdentifier::LastFinal)
         .await?;
@@ -290,11 +302,11 @@ async fn check_proof_worker(
     };
 
     if statement.verify(
-        &request.challenge,
+        &request.challenge.0,
         &state.global_context,
         cred_id.as_ref(),
         commitments,
-        &request.proof,
+        &request.proof.proof.value, // TODO: Check version.
     ) {
         Err(InjectStatementError::InvalidProofs)
     } else {
