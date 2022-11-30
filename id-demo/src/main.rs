@@ -28,6 +28,8 @@ use crate::components::{
     reveal_attribute::RevealAttribute,
     statement::{Statement, StatementProp},
     younger_than::YoungerThan,
+    in_range::InRange,
+    member_of::MemberOf
 };
 #[wasm_bindgen(module = "/detector.js")]
 extern "C" {
@@ -262,6 +264,33 @@ fn app() -> Html {
             {html!{
                   <YoungerThan statement={statements.clone()} younger=false />
             }}
+            // {html!{
+            //       <AgeInRange statement={statements.clone()} younger=false />
+            // }}
+            // {html!{
+            //       <DocExpNoEarlierThan statement={statements.clone()} younger=false />
+            // }}
+            {html!{
+                  <InRange statement={statements.clone()} />
+            }}
+            {html!{
+                  <MemberOf statement={statements.clone()} />
+            }}
+            // {html!{
+            //       <NotMemberOf statement={statements.clone()} younger=false />
+            // }}
+            // {html!{
+            //       <ResidenceIn statement={statements.clone()} younger=false />
+            // }}
+            // {html!{
+            //       <ResidenceNotIn statement={statements.clone()} younger=false />
+            // }}
+            // {html!{
+            //       <DocumentIssuerIn statement={statements.clone()} younger=false />
+            // }}
+            // {html!{
+            //       <DocumentIssuerNotIn statement={statements.clone()} younger=false />
+            // }}
             </div>
             <div class="col-sm">
             {html!{
