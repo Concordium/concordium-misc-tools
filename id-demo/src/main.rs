@@ -53,7 +53,7 @@ extern "C" {
         this: &WalletApi,
         accountAddress: JsValue,
         statement: JsValue,
-        challenge: Vec<u8>,
+        challenge: String,
     ) -> Result<JsValue, JsValue>;
 }
 
@@ -122,7 +122,7 @@ impl Wallet {
             .requestIdProof(
                 serde_wasm_bindgen::to_value(addr).unwrap(),
                 statement,
-                challenge.to_vec(),
+                hex::encode(challenge),
             )
             .await?;
         let r = serde_wasm_bindgen::from_value(response)?;
