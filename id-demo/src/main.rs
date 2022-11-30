@@ -1,10 +1,17 @@
 use concordium_base::{
-    common::base16_decode_string,
+    base::CredentialRegistrationID,
+    common::{base16_decode_string, Versioned},
     contracts_common::AccountAddress,
-    id::{id_proof_types::StatementWithContext, types::AttributeTag},
+    id::{
+        self,
+        constants::{ArCurve, AttributeKind},
+        id_proof_types::{Proof, StatementWithContext},
+        types::AttributeTag,
+    },
 };
 use gloo_console::{console, console_dbg, error, log};
 use gloo_net::http::Request;
+use serde::Serialize;
 use wasm_bindgen::{
     prelude::{wasm_bindgen, Closure},
     JsCast, JsError, JsValue,
@@ -19,7 +26,8 @@ use components::header::Header;
 
 use crate::components::{
     reveal_attribute::RevealAttribute,
-    statement::{Statement, StatementProp}, younger_than::YoungerThan,
+    statement::{Statement, StatementProp},
+    younger_than::YoungerThan,
 };
 #[wasm_bindgen(module = "/detector.js")]
 extern "C" {
@@ -39,6 +47,14 @@ extern "C" {
         event: &str,
         callback: &Closure<dyn FnMut(JsValue)>,
     ) -> Result<JsValue, JsValue>;
+
+    #[wasm_bindgen(method, catch)]
+    async fn requestIdProof(
+        this: &WalletApi,
+        accountAddress: JsValue,
+        statement: JsValue,
+        challenge: Vec<u8>,
+    ) -> Result<JsValue, JsValue>;
 }
 
 struct Wallet {
@@ -47,6 +63,18 @@ struct Wallet {
 
 struct WalletConnection {
     _closure: Closure<dyn FnMut(JsValue)>,
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+struct StatementWithChallenge {
+    challenge: String, // TODO: Should be Vec<u8>
+    statement: id::id_proof_types::Statement<ArCurve, AttributeKind>,
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+struct ProofWithContext {
+    credential: CredentialRegistrationID,
+    proof:      Versioned<Proof<ArCurve, AttributeKind>>,
 }
 
 impl Wallet {
@@ -79,64 +107,33 @@ impl Wallet {
             Err(e) => Err(JsValue::from_str(&e.to_string())),
         }
     }
+
+    pub async fn request_id_proof(
+        &self,
+        addr: &AccountAddress,
+        statement: &id::id_proof_types::Statement<ArCurve, AttributeKind>,
+        challenge: &[u8],
+    ) -> Result<ProofWithContext, JsValue> {
+        let statement = statement
+            .serialize(&serde_wasm_bindgen::Serializer::json_compatible())
+            .unwrap();
+        let response = self
+            .inner
+            .requestIdProof(
+                serde_wasm_bindgen::to_value(addr).unwrap(),
+                statement,
+                challenge.to_vec(),
+            )
+            .await?;
+        let r = serde_wasm_bindgen::from_value(response)?;
+        Ok(r)
+    }
 }
 
 #[function_component(App)]
 fn app() -> Html {
     let statements: UseStateHandle<StatementProp> = use_state(Default::default);
     let wallet_conn: UseStateHandle<Option<WalletConnection>> = use_state(Default::default);
-
-    // {
-    //     // create copies of states
-    //     let users = statements.clone();
-    //     let error = error.clone();
-
-    //     use_effect_with_deps(
-    //         move |_| {
-    //             wasm_bindgen_futures::spawn_local(async move {
-    //                 let fetched_users = Request::get("https://dummyjson.com/users").send().await;
-    //                 match fetched_users {
-    //                     Ok(response) => {
-    //                         let json = response.json::<Users>().await;
-    //                         match json {
-    //                             Ok(json_resp) => {
-    //                                 users.set(Some(json_resp));
-    //                             }
-    //                             Err(e) => error.set(Some(e)),
-    //                         }
-    //                     }
-    //                     Err(e) => error.set(Some(e)),
-    //                 }
-    //             });
-    //             || ()
-    //         },
-    //         (),
-    //     );
-    // }
-
-    // let user_list_logic = match statements.as_ref() {
-    //     Some(users) => users
-    //         .users
-    //         .iter()
-    //         .map(|user| {
-    //             html! {
-    //               <Card user={user.clone() }/>
-    //             }
-    //         })
-    //         .collect(),
-    //     None => match error.as_ref() {
-    //         Some(_) => {
-    //             html! {
-    //                 <Message text={"Error getting list of users"}
-    // css_class={"text-danger"}/>             }
-    //         }
-    //         None => {
-    //             html! {
-    //               <Loader />
-    //             }
-    //         }
-    //     },
-    // };
 
     let connect_wallet = {
         let wallet_conn = wallet_conn.clone();
@@ -159,13 +156,82 @@ fn app() -> Html {
         move |_| {
             let inject_statements = inject_statements.clone();
             wasm_bindgen_futures::spawn_local(async move {
-                let r = Request::post("http://localhost:8100/inject").json(&
-                    inject_statements.statement.clone(),
-                ).unwrap(); // TODO
+                let r = Request::post("http://localhost:8100/inject")
+                    .json(&inject_statements.statement.clone())
+                    .unwrap(); // TODO
                 let res = r.send().await.unwrap(); // TODO
                 if res.ok() {
-                    let data = res.json::<serde_json::Value>().await.unwrap(); // TODO: Handle error
+                    let data = res.json::<StatementWithChallenge>().await.unwrap(); // TODO: Handle error
                     log!(serde_json::to_string_pretty(&data).unwrap())
+                } else {
+                    error!(format!("Could not inject statement {:#?}", res));
+                }
+            })
+        }
+    };
+
+    let get_proof = {
+        let inject_statements = statements.clone();
+        move |_: MouseEvent| {
+            let inject_statements = inject_statements.clone();
+            wasm_bindgen_futures::spawn_local(async move {
+                let r = Request::post("http://localhost:8100/inject")
+                    .json(&inject_statements.statement.clone())
+                    .unwrap(); // TODO
+                let res = r.send().await.unwrap(); // TODO
+                if res.ok() {
+                    log!("Got result");
+                    let data = res.json::<StatementWithChallenge>().await.unwrap(); // TODO: Handle error
+                    log!(serde_json::to_string_pretty(&data).unwrap());
+                    let mut wallet = Wallet::new().await.unwrap(); // TODO
+                    let (addr, _) = wallet.connect().await.unwrap(); // TODO
+                    log!("Requesting proof.");
+                    let proof = wallet
+                        .request_id_proof(
+                            &addr,
+                            &data.statement,
+                            &hex::decode(&data.challenge).unwrap(),
+                        )
+                        .await; // TODO: Don't unwrap.
+                    match proof {
+                        Ok(proof) => {
+                            log!("Got proof.");
+                            log!(serde_json::to_string_pretty(&proof).unwrap());
+                            let verify_request = Request::post("http://localhost:8100/prove")
+                                .json(&serde_json::json!({
+                                    "challenge": data.challenge,
+                                    "proof": proof,
+                                }))
+                                .unwrap();
+                            let verify = verify_request.send().await;
+                            match verify {
+                                Ok(verify) => {
+                                    let b = verify.json().await;
+                                    match b {
+                                        Ok(b) => {
+                                            if b {
+                                                log!("Proof OK.");
+                                            } else {
+                                                log!("Proof invalid.")
+                                            }
+                                        }
+                                        Err(e) => {
+                                            error!(
+                                                "Unexpected response from server: ",
+                                                e.to_string()
+                                            )
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    error!("Could not verify: ", e.to_string());
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            error!("Failed to get proof.", e);
+                        }
+                    }
                 } else {
                     error!(format!("Could not inject statement {:#?}", res));
                 }
@@ -182,6 +248,7 @@ fn app() -> Html {
               <div class="btn-group-vertical">
                 <button onclick={connect_wallet} type="button" class="btn btn-primary btn-lg mb-1">{"Connect"}</button>
                 <button onclick={inject_statement} type="button" class="btn btn-primary btn-lg mt-1">{"Inject statement"}</button>
+                <button onclick={get_proof} type="button" class="btn btn-primary btn-lg mt-1">{"Get proof"}</button>
               </div>
             </div>
 

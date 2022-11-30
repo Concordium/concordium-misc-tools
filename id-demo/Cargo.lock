@@ -1131,6 +1131,7 @@ dependencies = [
  "concordium_base",
  "gloo-console",
  "gloo-net",
+ "hex",
  "js-sys",
  "serde",
  "serde-wasm-bindgen 0.4.5",
