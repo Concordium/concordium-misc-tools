@@ -3,7 +3,8 @@ use concordium_rust_sdk::{
     common::{
         self as crypto_common,
         derive::{SerdeBase16Serialize, Serialize},
-        Buffer, Deserial, ParseResult, ReadBytesExt, SerdeDeserialize, SerdeSerialize, Serial, Versioned,
+        Buffer, Deserial, ParseResult, ReadBytesExt, SerdeDeserialize, SerdeSerialize, Serial,
+        Versioned,
     },
     endpoints::{QueryError, RPCError},
     id::{
@@ -58,7 +59,9 @@ struct AgeProofOutput {
     proof:   RangeProof<ArCurve>,
 }
 
-#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, SerdeBase16Serialize, Serialize)]
+#[derive(
+    Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, SerdeBase16Serialize, Serialize,
+)]
 struct Challenge([u8; 32]);
 
 #[derive(Clone)]
@@ -262,12 +265,12 @@ async fn inject_statement_worker(
 
 #[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
 struct ChallengedProof {
-    pub challenge:  Challenge,
-    pub proof: ProofWithContext,
+    pub challenge: Challenge,
+    pub proof:     ProofWithContext,
 }
 
 #[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
-pub struct ProofWithContext{
+pub struct ProofWithContext {
     pub credential: CredentialRegistrationID,
     pub proof:      Versioned<Proof<ArCurve, AttributeKind>>,
 }
@@ -308,8 +311,8 @@ async fn check_proof_worker(
         commitments,
         &request.proof.proof.value, // TODO: Check version.
     ) {
-        Err(InjectStatementError::InvalidProofs)
-    } else {
         Ok(true)
+    } else {
+        Err(InjectStatementError::InvalidProofs)
     }
 }
