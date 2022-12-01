@@ -5,3 +5,7 @@ pub(crate) mod reveal_attribute;
 pub(crate) mod younger_than;
 pub(crate) mod in_range;
 pub(crate) mod member_of;
+pub(crate) mod age_in_range;
+pub(crate) mod doc_exp_no_earlier_than;
+pub(crate) mod residence_in;
+pub(crate) mod document_issuer_in;

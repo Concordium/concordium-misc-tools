@@ -29,7 +29,11 @@ use crate::components::{
     statement::{Statement, StatementProp},
     younger_than::YoungerThan,
     in_range::InRange,
-    member_of::MemberOf
+    member_of::MemberOf,
+    age_in_range::AgeInRange,
+    doc_exp_no_earlier_than::DocExpNoEarlierThan,
+    residence_in::ResidenceIn,
+    document_issuer_in::DocumentIssuerIn
 };
 #[wasm_bindgen(module = "/detector.js")]
 extern "C" {
@@ -264,33 +268,33 @@ fn app() -> Html {
             {html!{
                   <YoungerThan statement={statements.clone()} younger=false />
             }}
-            // {html!{
-            //       <AgeInRange statement={statements.clone()} younger=false />
-            // }}
-            // {html!{
-            //       <DocExpNoEarlierThan statement={statements.clone()} younger=false />
-            // }}
+            {html!{
+                  <AgeInRange statement={statements.clone()} />
+            }}
+            {html!{
+                  <DocExpNoEarlierThan statement={statements.clone()} />
+            }}
             {html!{
                   <InRange statement={statements.clone()} />
             }}
             {html!{
-                  <MemberOf statement={statements.clone()} />
+                  <MemberOf statement={statements.clone()} in_set=true />
             }}
-            // {html!{
-            //       <NotMemberOf statement={statements.clone()} younger=false />
-            // }}
-            // {html!{
-            //       <ResidenceIn statement={statements.clone()} younger=false />
-            // }}
-            // {html!{
-            //       <ResidenceNotIn statement={statements.clone()} younger=false />
-            // }}
-            // {html!{
-            //       <DocumentIssuerIn statement={statements.clone()} younger=false />
-            // }}
-            // {html!{
-            //       <DocumentIssuerNotIn statement={statements.clone()} younger=false />
-            // }}
+            {html!{
+                  <MemberOf statement={statements.clone()} in_set=false />
+            }}
+            {html!{
+                  <ResidenceIn statement={statements.clone()} in_set=true/>
+            }}
+            {html!{
+                  <ResidenceIn statement={statements.clone()} in_set=false/>
+            }}
+            {html!{
+                  <DocumentIssuerIn statement={statements.clone()} in_set=true />
+            }}
+            {html!{
+                  <DocumentIssuerIn statement={statements.clone()} in_set=false />
+            }}
             </div>
             <div class="col-sm">
             {html!{

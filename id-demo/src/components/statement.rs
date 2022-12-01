@@ -42,14 +42,26 @@ pub fn statement(s: &StatementProp) -> Html {
                     <div class="m-3 p-4 border rounded d-flex align-items-center">
                       <img src="https://robohash.org/hicveldicta.png?size=50x50&set=set1" class="mr-2" alt="img" />
                       <div class="">
-                          <p class="fw-bold mb-1">{"Attribute in range"}</p>
+                          <p class="fw-bold mb-1">{"Attribute in set"}</p>
                           <p class="fw-normal mb-1">{statement.attribute_tag}</p>
                           <p class="fw-normal mb-1"> {"Set: "} {format!("{{{}}}", &statement.set.iter().map(|x|x.0.clone()).collect::<Vec<String>>().join(","))}</p>
                       </div>
                     </div>
                 }
             },
-            AtomicStatement::AttributeNotInSet { statement } => todo!() })
+            AtomicStatement::AttributeNotInSet { statement } => {
+                html! {
+                    <div class="m-3 p-4 border rounded d-flex align-items-center">
+                      <img src="https://robohash.org/hicveldicta.png?size=50x50&set=set1" class="mr-2" alt="img" />
+                      <div class="">
+                          <p class="fw-bold mb-1">{"Attribute not in set"}</p>
+                          <p class="fw-normal mb-1">{statement.attribute_tag}</p>
+                          <p class="fw-normal mb-1"> {"Set: "} {format!("{{{}}}", &statement.set.iter().map(|x|x.0.clone()).collect::<Vec<String>>().join(","))}</p>
+                      </div>
+                    </div>
+                }
+            }
+        })
         .collect::<Html>()
     // html! {
     // <div class="m-3 p-4 border rounded d-flex align-items-center">

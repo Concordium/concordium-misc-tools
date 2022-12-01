@@ -10,13 +10,12 @@ use super::statement::StatementProp;
 use std::ops::Deref;
 
 #[derive(Properties, PartialEq, Clone, Debug)]
-pub struct SetProp {
+pub struct NotSetProp {
     pub statement: UseStateHandle<StatementProp>,
-    pub in_set: bool,
 }
 
-#[function_component(MemberOf)]
-pub fn statement(s: &SetProp) -> Html {
+#[function_component(NotMemberOf)]
+pub fn statement(s: &NotSetProp) -> Html {
     let set_state = use_state_eq(|| BTreeSet::<AttributeKind>::new());
     let selected = use_state_eq(|| AttributeTag(0));
 
@@ -48,13 +47,8 @@ pub fn statement(s: &SetProp) -> Html {
         let selected = selected.clone();
         // || {
             let statements = s.statement.clone();
-            let in_set = s.in_set.clone();
             move |_: MouseEvent| {
-                let new = if in_set {
-                        statements.statement.clone().member_of(*selected, set.deref().clone())
-                    } else {
-                        statements.statement.clone().not_member_of(*selected, set.deref().clone())
-                    };
+                let new = statements.statement.clone().not_member_of(*selected, set.deref().clone());
                 log!(serde_json::to_string_pretty(&new).unwrap()); // TODO: Remove logging
                 statements.set(StatementProp { statement: new });
             }
@@ -87,7 +81,7 @@ pub fn statement(s: &SetProp) -> Html {
     html! {
         <form>
             <div class="form-group border rounded border-primary my-2">
-            <label>{"Prove attribute"}{if !s.in_set {{" not"}} else {""}}{" in set"}</label>
+            <label>{"Prove attribute not in set"}</label>
             <select class="rounded my-1" onchange={on_change}>
         {(0u8..=253).into_iter().map(|tag| {
                 html!{
