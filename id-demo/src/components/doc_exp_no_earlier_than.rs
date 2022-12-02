@@ -44,7 +44,7 @@ pub fn statement(s: &DocExpProp) -> Html {
                     log!(serde_json::to_string_pretty(&new).unwrap()); // TODO: Remove logging
                     statements.set(StatementProp { statement: new });
                 } else {
-                    error!("Cannot construct younger than statement.")
+                    error!("Cannot construct document expiry statement.")
                 }
             }
         // }

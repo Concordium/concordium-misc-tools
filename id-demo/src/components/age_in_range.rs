@@ -63,7 +63,7 @@ pub fn statement(s: &AgeInRangeProp) -> Html {
                 log!(serde_json::to_string_pretty(&new).unwrap()); // TODO: Remove logging
                 statements.set(StatementProp { statement: new });
             } else {
-                error!("Cannot construct younger than statement.")
+                error!("Cannot construct age statement.")
             }
         }
     };

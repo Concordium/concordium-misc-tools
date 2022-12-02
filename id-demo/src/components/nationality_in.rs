@@ -10,13 +10,13 @@ use super::statement::StatementProp;
 use std::ops::Deref;
 
 #[derive(Properties, PartialEq, Clone, Debug)]
-pub struct DocumentInProp {
+pub struct NationalityInProp {
     pub statement: UseStateHandle<StatementProp>,
     pub in_set: bool,
 }
 
-#[function_component(DocumentIssuerIn)]
-pub fn statement(s: &DocumentInProp) -> Html {
+#[function_component(NationalityIn)]
+pub fn statement(s: &NationalityInProp) -> Html {
     let set_state = use_state_eq(|| BTreeSet::<AttributeKind>::new());
 
     let on_cautious_change = {
@@ -49,15 +49,15 @@ pub fn statement(s: &DocumentInProp) -> Html {
             let in_set = s.in_set.clone();
             move |_: MouseEvent| {
                 let new = if in_set {
-                        statements.statement.clone().document_issuer_in(set.deref().clone())
+                        statements.statement.clone().nationality_in(set.deref().clone())
                     } else {
-                        statements.statement.clone().document_issuer_not_in(set.deref().clone())
+                        statements.statement.clone().nationality_not_in(set.deref().clone())
                     };
                 if let Some(new) = new {
                     log!(serde_json::to_string_pretty(&new).unwrap()); // TODO: Remove logging
                     statements.set(StatementProp { statement: new });
                 } else {
-                    error!("Cannot construct document issuer statement.")
+                    error!("Cannot construct nationality statement.")
                 }
             }
         // }
@@ -68,7 +68,7 @@ pub fn statement(s: &DocumentInProp) -> Html {
     html! {
         <form>
             <div class="form-group border rounded border-primary my-2">
-            <label>{"Prove document issuer"}{if !s.in_set {{" not"}} else {""}}{" in set"}</label>
+            <label>{"Prove nationality"}{if !s.in_set {{" not"}} else {""}}{" in set"}</label>
               <input class="my-1" onchange={on_cautious_change} value={current_set.to_string()}/>
             <button onclick={on_click_add} type="button" class="btn btn-primary">{"Add"}</button>
             </div>

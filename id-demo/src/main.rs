@@ -33,7 +33,8 @@ use crate::components::{
     age_in_range::AgeInRange,
     doc_exp_no_earlier_than::DocExpNoEarlierThan,
     residence_in::ResidenceIn,
-    document_issuer_in::DocumentIssuerIn
+    document_issuer_in::DocumentIssuerIn,
+    nationality_in::NationalityIn,
 };
 #[wasm_bindgen(module = "/detector.js")]
 extern "C" {
@@ -282,6 +283,12 @@ fn app() -> Html {
             }}
             {html!{
                   <MemberOf statement={statements.clone()} in_set=false />
+            }}
+            {html!{
+                  <NationalityIn statement={statements.clone()} in_set=true/>
+            }}
+            {html!{
+                  <NationalityIn statement={statements.clone()} in_set=false/>
             }}
             {html!{
                   <ResidenceIn statement={statements.clone()} in_set=true/>

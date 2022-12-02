@@ -9,3 +9,4 @@ pub(crate) mod age_in_range;
 pub(crate) mod doc_exp_no_earlier_than;
 pub(crate) mod residence_in;
 pub(crate) mod document_issuer_in;
+pub(crate) mod nationality_in;
