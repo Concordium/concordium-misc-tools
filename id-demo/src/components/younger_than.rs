@@ -8,7 +8,7 @@ use super::statement::StatementProp;
 #[derive(Properties, PartialEq, Clone, Debug)]
 pub struct AgeProp {
     pub statement: UseStateHandle<StatementProp>,
-    pub younger: bool,
+    pub younger:   bool,
 }
 
 #[function_component(YoungerThan)]

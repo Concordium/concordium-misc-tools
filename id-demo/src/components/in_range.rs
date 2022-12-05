@@ -1,8 +1,11 @@
-use gloo_console::{error, log};
+use concordium_base::id::{
+    constants::AttributeKind,
+    types::{AttributeStringTag, AttributeTag},
+};
+use gloo_console::{log};
 use wasm_bindgen::JsCast;
 use web_sys::{EventTarget, HtmlInputElement, HtmlSelectElement};
 use yew::prelude::*;
-use concordium_base::id::{types::{AttributeStringTag, AttributeTag}, constants::AttributeKind};
 
 use super::statement::StatementProp;
 
@@ -60,12 +63,16 @@ pub fn statement(s: &RangeProp) -> Html {
         let upper = upper_state.clone();
         let selected = selected.clone();
         // || {
-            let statements = s.statement.clone();
-            move |_: MouseEvent| {
-                let new = statements.statement.clone().in_range(*selected, AttributeKind(lower.to_string()), AttributeKind(upper.to_string()));
-                log!(serde_json::to_string_pretty(&new).unwrap()); // TODO: Remove logging
-                statements.set(StatementProp { statement: new });
-            }
+        let statements = s.statement.clone();
+        move |_: MouseEvent| {
+            let new = statements.statement.clone().in_range(
+                *selected,
+                AttributeKind(lower.to_string()),
+                AttributeKind(upper.to_string()),
+            );
+            log!(serde_json::to_string_pretty(&new).unwrap()); // TODO: Remove logging
+            statements.set(StatementProp { statement: new });
+        }
         // }
     };
 

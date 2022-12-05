@@ -1,10 +1,12 @@
 use std::collections::BTreeSet;
 
+use concordium_base::id::{
+    constants::AttributeKind,
+};
 use gloo_console::{error, log};
 use wasm_bindgen::JsCast;
-use web_sys::{EventTarget, HtmlInputElement, HtmlSelectElement};
+use web_sys::{EventTarget, HtmlInputElement};
 use yew::prelude::*;
-use concordium_base::id::{types::{AttributeStringTag, AttributeTag}, constants::AttributeKind};
 
 use super::statement::StatementProp;
 use std::ops::Deref;
@@ -12,7 +14,7 @@ use std::ops::Deref;
 #[derive(Properties, PartialEq, Clone, Debug)]
 pub struct NationalityInProp {
     pub statement: UseStateHandle<StatementProp>,
-    pub in_set: bool,
+    pub in_set:    bool,
 }
 
 #[function_component(NationalityIn)]
@@ -32,10 +34,10 @@ pub fn statement(s: &NationalityInProp) -> Html {
             if let Some(input) = input {
                 match input.value().parse::<String>() {
                     Ok(v) => {
-                        let iter = v.split(',').map(|x| AttributeKind(String::from(x)));
+                        let iter = v.split(',').map(|x| AttributeKind(String::from(x.trim())));
                         let bset: BTreeSet<AttributeKind> = BTreeSet::from_iter(iter);
                         s.set(bset)
-                    },
+                    }
                     Err(_) => (), // do nothing
                 }
             }
@@ -44,26 +46,36 @@ pub fn statement(s: &NationalityInProp) -> Html {
 
     let on_click_add = {
         let set = set_state.clone();
-        // || {
-            let statements = s.statement.clone();
-            let in_set = s.in_set.clone();
-            move |_: MouseEvent| {
-                let new = if in_set {
-                        statements.statement.clone().nationality_in(set.deref().clone())
-                    } else {
-                        statements.statement.clone().nationality_not_in(set.deref().clone())
-                    };
-                if let Some(new) = new {
-                    log!(serde_json::to_string_pretty(&new).unwrap()); // TODO: Remove logging
-                    statements.set(StatementProp { statement: new });
-                } else {
-                    error!("Cannot construct nationality statement.")
-                }
+        let statements = s.statement.clone();
+        let in_set = s.in_set.clone();
+        move |_: MouseEvent| {
+            let new = if in_set {
+                statements
+                    .statement
+                    .clone()
+                    .nationality_in(set.deref().clone())
+            } else {
+                statements
+                    .statement
+                    .clone()
+                    .nationality_not_in(set.deref().clone())
+            };
+            if let Some(new) = new {
+                log!(serde_json::to_string_pretty(&new).unwrap()); // TODO: Remove logging
+                statements.set(StatementProp { statement: new });
+            } else {
+                error!("Cannot construct nationality statement.")
             }
-        // }
+        }
     };
 
-    let current_set = set_state.clone().deref().iter().map(|x|x.0.clone()).collect::<Vec<String>>().join(",");
+    let current_set = set_state
+        .clone()
+        .deref()
+        .iter()
+        .map(|x| x.0.clone())
+        .collect::<Vec<String>>()
+        .join(",");
 
     html! {
         <form>

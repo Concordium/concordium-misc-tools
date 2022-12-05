@@ -1,8 +1,10 @@
+use concordium_base::id::{
+    constants::AttributeKind,
+};
 use gloo_console::{error, log};
 use wasm_bindgen::JsCast;
-use web_sys::{EventTarget, HtmlInputElement, HtmlSelectElement};
+use web_sys::{EventTarget, HtmlInputElement};
 use yew::prelude::*;
-use concordium_base::id::{types::{AttributeStringTag, AttributeTag}, constants::AttributeKind};
 
 use super::statement::StatementProp;
 
@@ -37,16 +39,19 @@ pub fn statement(s: &DocExpProp) -> Html {
     let on_click_add = {
         let state = state.clone();
         // || {
-            let statements = s.statement.clone();
-            move |_: MouseEvent| {
-                let new = statements.statement.clone().doc_expiry_no_earlier_than(AttributeKind(state.to_string()));
-                if let Some(new) = new {
-                    log!(serde_json::to_string_pretty(&new).unwrap()); // TODO: Remove logging
-                    statements.set(StatementProp { statement: new });
-                } else {
-                    error!("Cannot construct document expiry statement.")
-                }
+        let statements = s.statement.clone();
+        move |_: MouseEvent| {
+            let new = statements
+                .statement
+                .clone()
+                .doc_expiry_no_earlier_than(AttributeKind(state.to_string()));
+            if let Some(new) = new {
+                log!(serde_json::to_string_pretty(&new).unwrap()); // TODO: Remove logging
+                statements.set(StatementProp { statement: new });
+            } else {
+                error!("Cannot construct document expiry statement.")
             }
+        }
         // }
     };
 

@@ -1,22 +1,20 @@
 use concordium_base::{
     base::CredentialRegistrationID,
-    common::{base16_decode_string, Versioned},
+    common::Versioned,
     contracts_common::AccountAddress,
     id::{
         self,
         constants::{ArCurve, AttributeKind},
-        id_proof_types::{Proof, StatementWithContext},
-        types::AttributeTag,
+        id_proof_types::Proof,
     },
 };
-use gloo_console::{console, console_dbg, error, log};
+use gloo_console::{console_dbg, log};
 use gloo_net::http::Request;
 use serde::Serialize;
 use wasm_bindgen::{
-    prelude::{wasm_bindgen, Closure},
-    JsCast, JsError, JsValue,
+    prelude::{wasm_bindgen, Closure}, JsValue,
 };
-use web_sys::{EventTarget, HtmlInputElement, HtmlSelectElement};
+
 use yew::prelude::*;
 
 mod components;
@@ -25,16 +23,16 @@ mod models;
 use components::header::Header;
 
 use crate::components::{
+    age_in_range::AgeInRange,
+    doc_exp_no_earlier_than::DocExpNoEarlierThan,
+    document_issuer_in::DocumentIssuerIn,
+    in_range::InRange,
+    member_of::MemberOf,
+    nationality_in::NationalityIn,
+    residence_in::ResidenceIn,
     reveal_attribute::RevealAttribute,
     statement::{Statement, StatementProp},
     younger_than::YoungerThan,
-    in_range::InRange,
-    member_of::MemberOf,
-    age_in_range::AgeInRange,
-    doc_exp_no_earlier_than::DocExpNoEarlierThan,
-    residence_in::ResidenceIn,
-    document_issuer_in::DocumentIssuerIn,
-    nationality_in::NationalityIn,
 };
 #[wasm_bindgen(module = "/detector.js")]
 extern "C" {
@@ -142,13 +140,34 @@ fn app() -> Html {
     let statements: UseStateHandle<StatementProp> = use_state(Default::default);
     let wallet_conn: UseStateHandle<Option<WalletConnection>> = use_state(Default::default);
 
+    let errors: UseStateHandle<Vec<String>> = use_state(Default::default);
+    let messages: UseStateHandle<Vec<String>> = use_state(Default::default);
+
     let connect_wallet = {
         let wallet_conn = wallet_conn.clone();
+        let errors = errors.clone();
         move |_| {
             let wallet_conn = wallet_conn.clone();
+            let errors = errors.clone();
             wasm_bindgen_futures::spawn_local(async move {
-                let mut wallet = Wallet::new().await.unwrap(); // TODO
-                let (addr, conn) = wallet.connect().await.unwrap(); // TODO
+                let mut wallet = match Wallet::new().await {
+                    Ok(w) => w,
+                    Err(e) => {
+                        let mut errs = (&*errors).clone();
+                        errs.push(format!("Error getting the wallet: {:?}", e));
+                        errors.set(errs);
+                        return;
+                    }
+                };
+                let (addr, conn) = match wallet.connect().await {
+                    Ok(x) => x,
+                    Err(e) => {
+                        let mut errs = (&*errors).clone();
+                        errs.push(format!("Error connecting to the wallet: {:?}", e));
+                        errors.set(errs);
+                        return;
+                    }
+                };
                 wallet_conn.set(Some(conn));
                 web_sys::window()
                     .unwrap()
@@ -160,18 +179,42 @@ fn app() -> Html {
 
     let inject_statement = {
         let inject_statements = statements.clone();
+        let errors = errors.clone();
         move |_| {
+            let errors = errors.clone();
             let inject_statements = inject_statements.clone();
             wasm_bindgen_futures::spawn_local(async move {
-                let r = Request::post("http://localhost:8100/inject")
+                let r = match Request::post("http://localhost:8100/inject")
                     .json(&inject_statements.statement.clone())
-                    .unwrap(); // TODO
-                let res = r.send().await.unwrap(); // TODO
+                {
+                    Ok(r) => r,
+                    Err(e) => {
+                        let mut errs = (&*errors).clone();
+                        errs.push(format!(
+                            "Error constructing the statement to inject: {:?}",
+                            e
+                        ));
+                        errors.set(errs);
+                        return;
+                    }
+                };
+                let res = match r.send().await {
+                    Ok(r) => r,
+                    Err(e) => {
+                        let mut errs = (&*errors).clone();
+                        errs.push(format!("Error injecting the statement: {:?}", e));
+                        errors.set(errs);
+                        return;
+                    }
+                };
                 if res.ok() {
                     let data = res.json::<StatementWithChallenge>().await.unwrap(); // TODO: Handle error
                     log!(serde_json::to_string_pretty(&data).unwrap())
                 } else {
-                    error!(format!("Could not inject statement {:#?}", res));
+                    let mut errs = (&*errors).clone();
+                    errs.push(format!("Could not inject the statement: {:?}", res));
+                    errors.set(errs);
+                    return;
                 }
             })
         }
@@ -179,7 +222,11 @@ fn app() -> Html {
 
     let get_proof = {
         let inject_statements = statements.clone();
+        let errors = errors.clone();
+        let messages = messages.clone();
         move |_: MouseEvent| {
+            let errors = errors.clone();
+            let messages = messages.clone();
             let inject_statements = inject_statements.clone();
             wasm_bindgen_futures::spawn_local(async move {
                 let r = Request::post("http://localhost:8100/inject")
@@ -190,8 +237,24 @@ fn app() -> Html {
                     log!("Got result");
                     let data = res.json::<StatementWithChallenge>().await.unwrap(); // TODO: Handle error
                     log!(serde_json::to_string_pretty(&data).unwrap());
-                    let mut wallet = Wallet::new().await.unwrap(); // TODO
-                    let (addr, _) = wallet.connect().await.unwrap(); // TODO
+                    let mut wallet = match Wallet::new().await {
+                        Ok(w) => w,
+                        Err(e) => {
+                            let mut errs = (&*errors).clone();
+                            errs.push(format!("Error getting the wallet: {:?}", e));
+                            errors.set(errs);
+                            return;
+                        }
+                    };
+                    let (addr, _) = match wallet.connect().await {
+                        Ok(x) => x,
+                        Err(e) => {
+                            let mut errs = (&*errors).clone();
+                            errs.push(format!("Error connecting to the wallet: {:?}", e));
+                            errors.set(errs);
+                            return;
+                        }
+                    };
                     log!("Requesting proof.");
                     let proof = wallet
                         .request_id_proof(
@@ -204,43 +267,74 @@ fn app() -> Html {
                         Ok(proof) => {
                             log!("Got proof.");
                             log!(serde_json::to_string_pretty(&proof).unwrap());
-                            let verify_request = Request::post("http://localhost:8100/prove")
+                            let verify_request = match Request::post("http://localhost:8100/prove")
                                 .json(&serde_json::json!({
                                     "challenge": data.challenge,
                                     "proof": proof,
-                                }))
-                                .unwrap();
+                                })) {
+                                Ok(vr) => vr,
+                                Err(e) => {
+                                    let mut errs = (&*errors).clone();
+                                    errs.push(format!(
+                                        "Failed to construct request to verify proof: {:?}",
+                                        e
+                                    ));
+                                    errors.set(errs);
+                                    return;
+                                }
+                            };
                             let verify = verify_request.send().await;
                             match verify {
                                 Ok(verify) => {
-                                    let b = verify.json().await;
-                                    match b {
-                                        Ok(b) => {
-                                            if b {
-                                                log!("Proof OK.");
-                                            } else {
-                                                log!("Proof invalid.")
+                                    if verify.ok() {
+                                        let mut msgs = (&*messages).clone();
+                                        msgs.push("Proof OK.".into());
+                                        messages.set(msgs);
+                                        return;
+                                    } else {
+                                        let r = verify.json::<serde_json::Value>().await;
+                                        match r {
+                                            Ok(err) => {
+                                                let mut errs = (&*errors).clone();
+                                                errs.push(format!(
+                                                    "Proof invalid: {}",
+                                                    serde_json::to_string_pretty(&err).unwrap()
+                                                ));
+                                                errors.set(errs);
+                                                return;
                                             }
-                                        }
-                                        Err(e) => {
-                                            error!(
-                                                "Unexpected response from server: ",
-                                                e.to_string()
-                                            )
+                                            Err(e) => {
+                                                let mut errs = (&*errors).clone();
+                                                errs.push(format!(
+                                                    "Unexpected response from server: {:#?}",
+                                                    e
+                                                ));
+                                                errors.set(errs);
+                                                return;
+                                            }
                                         }
                                     }
                                 }
                                 Err(e) => {
-                                    error!("Could not verify: ", e.to_string());
+                                    let mut errs = (&*errors).clone();
+                                    errs.push(format!("The proof could not be verified: {:#?}", e));
+                                    errors.set(errs);
+                                    return;
                                 }
                             }
                         }
                         Err(e) => {
-                            error!("Failed to get proof.", e);
+                            let mut errs = (&*errors).clone();
+                            errs.push(format!("Did not get proof from the wallet: {:#?}", e));
+                            errors.set(errs);
+                            return;
                         }
                     }
                 } else {
-                    error!(format!("Could not inject statement {:#?}", res));
+                    let mut errs = (&*errors).clone();
+                    errs.push(format!("Could not inject statement: {:#?}", res));
+                    errors.set(errs);
+                    return;
                 }
             })
         }
@@ -257,8 +351,19 @@ fn app() -> Html {
                 <button onclick={inject_statement} type="button" class="btn btn-primary btn-lg mt-1">{"Inject statement"}</button>
                 <button onclick={get_proof} type="button" class="btn btn-primary btn-lg mt-1">{"Get proof"}</button>
               </div>
+              <ul class="item-list">
+                {errors.iter().map(|s|
+                  html! {<div class="alert alert-warning" role="alert">
+                  {s}
+                  </div>}).collect::<Html>()}
+                </ul>
+              <ul class="item-list">
+                {messages.iter().map(|s|
+                  html! {<div class="alert alert-success" role="alert">
+                  {s}
+                  </div>}).collect::<Html>()}
+                </ul>
             </div>
-
             <div class="col-sm">
             {html!{
                   <RevealAttribute statement={statements.clone()} />

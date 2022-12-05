@@ -1,10 +1,13 @@
 use std::collections::BTreeSet;
 
-use gloo_console::{error, log};
+use concordium_base::id::{
+    constants::AttributeKind,
+    types::{AttributeStringTag, AttributeTag},
+};
+use gloo_console::{log};
 use wasm_bindgen::JsCast;
 use web_sys::{EventTarget, HtmlInputElement, HtmlSelectElement};
 use yew::prelude::*;
-use concordium_base::id::{types::{AttributeStringTag, AttributeTag}, constants::AttributeKind};
 
 use super::statement::StatementProp;
 use std::ops::Deref;
@@ -12,7 +15,7 @@ use std::ops::Deref;
 #[derive(Properties, PartialEq, Clone, Debug)]
 pub struct SetProp {
     pub statement: UseStateHandle<StatementProp>,
-    pub in_set: bool,
+    pub in_set:    bool,
 }
 
 #[function_component(MemberOf)]
@@ -36,7 +39,7 @@ pub fn statement(s: &SetProp) -> Html {
                         let iter = v.split(',').map(|x| AttributeKind(String::from(x)));
                         let bset: BTreeSet<AttributeKind> = BTreeSet::from_iter(iter);
                         s.set(bset)
-                    },
+                    }
                     Err(_) => (), // do nothing
                 }
             }
@@ -47,17 +50,23 @@ pub fn statement(s: &SetProp) -> Html {
         let set = set_state.clone();
         let selected = selected.clone();
         // || {
-            let statements = s.statement.clone();
-            let in_set = s.in_set.clone();
-            move |_: MouseEvent| {
-                let new = if in_set {
-                        statements.statement.clone().member_of(*selected, set.deref().clone())
-                    } else {
-                        statements.statement.clone().not_member_of(*selected, set.deref().clone())
-                    };
-                log!(serde_json::to_string_pretty(&new).unwrap()); // TODO: Remove logging
-                statements.set(StatementProp { statement: new });
-            }
+        let statements = s.statement.clone();
+        let in_set = s.in_set.clone();
+        move |_: MouseEvent| {
+            let new = if in_set {
+                statements
+                    .statement
+                    .clone()
+                    .member_of(*selected, set.deref().clone())
+            } else {
+                statements
+                    .statement
+                    .clone()
+                    .not_member_of(*selected, set.deref().clone())
+            };
+            log!(serde_json::to_string_pretty(&new).unwrap()); // TODO: Remove logging
+            statements.set(StatementProp { statement: new });
+        }
         // }
     };
 
@@ -82,7 +91,13 @@ pub fn statement(s: &SetProp) -> Html {
         }
     };
 
-    let current_set = set_state.clone().deref().iter().map(|x|x.0.clone()).collect::<Vec<String>>().join(",");
+    let current_set = set_state
+        .clone()
+        .deref()
+        .iter()
+        .map(|x| x.0.clone())
+        .collect::<Vec<String>>()
+        .join(",");
 
     html! {
         <form>
