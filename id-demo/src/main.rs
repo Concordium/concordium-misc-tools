@@ -12,7 +12,8 @@ use gloo_console::{console_dbg, log};
 use gloo_net::http::Request;
 use serde::Serialize;
 use wasm_bindgen::{
-    prelude::{wasm_bindgen, Closure}, JsValue,
+    prelude::{wasm_bindgen, Closure},
+    JsValue,
 };
 
 use yew::prelude::*;
@@ -24,6 +25,7 @@ use components::header::Header;
 
 use crate::components::{
     age_in_range::AgeInRange,
+    append_message,
     doc_exp_no_earlier_than::DocExpNoEarlierThan,
     document_issuer_in::DocumentIssuerIn,
     in_range::InRange,
@@ -144,7 +146,7 @@ fn app() -> Html {
     let messages: UseStateHandle<Vec<String>> = use_state(Default::default);
 
     let connect_wallet = {
-        let wallet_conn = wallet_conn.clone();
+        let wallet_conn = wallet_conn;
         let errors = errors.clone();
         move |_| {
             let wallet_conn = wallet_conn.clone();
@@ -214,7 +216,6 @@ fn app() -> Html {
                     let mut errs = (&*errors).clone();
                     errs.push(format!("Could not inject the statement: {:?}", res));
                     errors.set(errs);
-                    return;
                 }
             })
         }
@@ -265,7 +266,7 @@ fn app() -> Html {
                         .await; // TODO: Don't unwrap.
                     match proof {
                         Ok(proof) => {
-                            log!("Got proof.");
+                            append_message(&messages, "Got proof from the wallet.");
                             log!(serde_json::to_string_pretty(&proof).unwrap());
                             let verify_request = match Request::post("http://localhost:8100/prove")
                                 .json(&serde_json::json!({
@@ -274,12 +275,13 @@ fn app() -> Html {
                                 })) {
                                 Ok(vr) => vr,
                                 Err(e) => {
-                                    let mut errs = (&*errors).clone();
-                                    errs.push(format!(
-                                        "Failed to construct request to verify proof: {:?}",
-                                        e
-                                    ));
-                                    errors.set(errs);
+                                    append_message(
+                                        &errors,
+                                        format!(
+                                            "Failed to construct request to verify proof: {:?}",
+                                            e
+                                        ),
+                                    );
                                     return;
                                 }
                             };
@@ -287,10 +289,7 @@ fn app() -> Html {
                             match verify {
                                 Ok(verify) => {
                                     if verify.ok() {
-                                        let mut msgs = (&*messages).clone();
-                                        msgs.push("Proof OK.".into());
-                                        messages.set(msgs);
-                                        return;
+                                        append_message(&messages, "Proof OK");
                                     } else {
                                         let r = verify.json::<serde_json::Value>().await;
                                         match r {
@@ -301,7 +300,6 @@ fn app() -> Html {
                                                     serde_json::to_string_pretty(&err).unwrap()
                                                 ));
                                                 errors.set(errs);
-                                                return;
                                             }
                                             Err(e) => {
                                                 let mut errs = (&*errors).clone();
@@ -310,7 +308,6 @@ fn app() -> Html {
                                                     e
                                                 ));
                                                 errors.set(errs);
-                                                return;
                                             }
                                         }
                                     }
@@ -319,7 +316,6 @@ fn app() -> Html {
                                     let mut errs = (&*errors).clone();
                                     errs.push(format!("The proof could not be verified: {:#?}", e));
                                     errors.set(errs);
-                                    return;
                                 }
                             }
                         }
@@ -327,14 +323,12 @@ fn app() -> Html {
                             let mut errs = (&*errors).clone();
                             errs.push(format!("Did not get proof from the wallet: {:#?}", e));
                             errors.set(errs);
-                            return;
                         }
                     }
                 } else {
                     let mut errs = (&*errors).clone();
                     errs.push(format!("Could not inject statement: {:#?}", res));
                     errors.set(errs);
-                    return;
                 }
             })
         }
@@ -369,16 +363,16 @@ fn app() -> Html {
                   <RevealAttribute statement={statements.clone()} />
             }}
             {html!{
-                  <YoungerThan statement={statements.clone()} younger=true />
+                <YoungerThan statement={statements.clone()} errors={errors.clone()} younger=true />
             }}
             {html!{
-                  <YoungerThan statement={statements.clone()} younger=false />
+                <YoungerThan statement={statements.clone()} errors={errors.clone()} younger=false />
             }}
             {html!{
-                  <AgeInRange statement={statements.clone()} />
+                  <AgeInRange statement={statements.clone()} errors={errors.clone()} />
             }}
             {html!{
-                  <DocExpNoEarlierThan statement={statements.clone()} />
+                  <DocExpNoEarlierThan statement={statements.clone()} errors={errors.clone()} />
             }}
             {html!{
                   <InRange statement={statements.clone()} />
@@ -390,22 +384,22 @@ fn app() -> Html {
                   <MemberOf statement={statements.clone()} in_set=false />
             }}
             {html!{
-                  <NationalityIn statement={statements.clone()} in_set=true/>
+                  <NationalityIn statement={statements.clone()} in_set=true errors={errors.clone()}/>
             }}
             {html!{
-                  <NationalityIn statement={statements.clone()} in_set=false/>
+                  <NationalityIn statement={statements.clone()} in_set=false errors={errors.clone()}/>
             }}
             {html!{
-                  <ResidenceIn statement={statements.clone()} in_set=true/>
+                  <ResidenceIn statement={statements.clone()} in_set=true errors={errors.clone()}/>
             }}
             {html!{
-                  <ResidenceIn statement={statements.clone()} in_set=false/>
+                  <ResidenceIn statement={statements.clone()} in_set=false errors={errors.clone()}/>
             }}
             {html!{
-                  <DocumentIssuerIn statement={statements.clone()} in_set=true />
+                  <DocumentIssuerIn statement={statements.clone()} in_set=true errors={errors.clone()} />
             }}
             {html!{
-                  <DocumentIssuerIn statement={statements.clone()} in_set=false />
+                  <DocumentIssuerIn statement={statements.clone()} in_set=false errors={errors.clone()} />
             }}
             </div>
             <div class="col-sm">

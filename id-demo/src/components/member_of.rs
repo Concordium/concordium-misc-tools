@@ -1,10 +1,8 @@
-use std::collections::BTreeSet;
-
 use concordium_base::id::{
     constants::AttributeKind,
     types::{AttributeStringTag, AttributeTag},
 };
-use gloo_console::{log};
+use std::collections::BTreeSet;
 use wasm_bindgen::JsCast;
 use web_sys::{EventTarget, HtmlInputElement, HtmlSelectElement};
 use yew::prelude::*;
@@ -20,7 +18,7 @@ pub struct SetProp {
 
 #[function_component(MemberOf)]
 pub fn statement(s: &SetProp) -> Html {
-    let set_state = use_state_eq(|| BTreeSet::<AttributeKind>::new());
+    let set_state = use_state_eq(BTreeSet::<AttributeKind>::new);
     let selected = use_state_eq(|| AttributeTag(0));
 
     let on_cautious_change = {
@@ -34,13 +32,12 @@ pub fn statement(s: &SetProp) -> Html {
             let input = target.and_then(|t| t.dyn_into::<HtmlInputElement>().ok());
 
             if let Some(input) = input {
-                match input.value().parse::<String>() {
-                    Ok(v) => {
-                        let iter = v.split(',').map(|x| AttributeKind(String::from(x)));
-                        let bset: BTreeSet<AttributeKind> = BTreeSet::from_iter(iter);
-                        s.set(bset)
-                    }
-                    Err(_) => (), // do nothing
+                if let Ok(v) = input.value().parse::<String>() {
+                    let iter = v.split(',').map(|x| AttributeKind(String::from(x)));
+                    let bset: BTreeSet<AttributeKind> = BTreeSet::from_iter(iter);
+                    s.set(bset)
+                } else {
+                    // do nothing
                 }
             }
         })
@@ -49,9 +46,8 @@ pub fn statement(s: &SetProp) -> Html {
     let on_click_add = {
         let set = set_state.clone();
         let selected = selected.clone();
-        // || {
         let statements = s.statement.clone();
-        let in_set = s.in_set.clone();
+        let in_set = s.in_set;
         move |_: MouseEvent| {
             let new = if in_set {
                 statements
@@ -64,10 +60,8 @@ pub fn statement(s: &SetProp) -> Html {
                     .clone()
                     .not_member_of(*selected, set.deref().clone())
             };
-            log!(serde_json::to_string_pretty(&new).unwrap()); // TODO: Remove logging
             statements.set(StatementProp { statement: new });
         }
-        // }
     };
 
     let on_change = {
@@ -92,7 +86,6 @@ pub fn statement(s: &SetProp) -> Html {
     };
 
     let current_set = set_state
-        .clone()
         .deref()
         .iter()
         .map(|x| x.0.clone())

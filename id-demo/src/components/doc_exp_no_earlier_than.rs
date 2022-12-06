@@ -1,9 +1,4 @@
-use concordium_base::id::{
-    constants::AttributeKind,
-};
-use gloo_console::{error, log};
-use wasm_bindgen::JsCast;
-use web_sys::{EventTarget, HtmlInputElement};
+use concordium_base::id::constants::AttributeKind;
 use yew::prelude::*;
 
 use super::statement::StatementProp;
@@ -11,48 +6,30 @@ use super::statement::StatementProp;
 #[derive(Properties, PartialEq, Clone, Debug)]
 pub struct DocExpProp {
     pub statement: UseStateHandle<StatementProp>,
+    pub errors:    UseStateHandle<Vec<String>>,
 }
 
 #[function_component(DocExpNoEarlierThan)]
 pub fn statement(s: &DocExpProp) -> Html {
     let state = use_state_eq(|| String::from("20250505"));
 
-    let on_cautious_change = {
-        let s = state.clone();
-        Callback::from(move |e: Event| {
-            // When events are created the target is undefined, it's only
-            // when dispatched does the target get added.
-            let target: Option<EventTarget> = e.target();
-            // Events can bubble so this listener might catch events from child
-            // elements which are not of type HtmlInputElement
-            let input = target.and_then(|t| t.dyn_into::<HtmlInputElement>().ok());
-
-            if let Some(input) = input {
-                match input.value().parse::<String>() {
-                    Ok(v) => s.set(v),
-                    Err(_) => (), // do nothing
-                }
-            }
-        })
-    };
+    let on_cautious_change = super::on_change_handler(&state);
 
     let on_click_add = {
         let state = state.clone();
-        // || {
         let statements = s.statement.clone();
+        let errors = s.errors.clone();
         move |_: MouseEvent| {
             let new = statements
                 .statement
                 .clone()
                 .doc_expiry_no_earlier_than(AttributeKind(state.to_string()));
             if let Some(new) = new {
-                log!(serde_json::to_string_pretty(&new).unwrap()); // TODO: Remove logging
                 statements.set(StatementProp { statement: new });
             } else {
-                error!("Cannot construct document expiry statement.")
+                super::append_message(&errors, "Cannot construct document expiry statement.");
             }
         }
-        // }
     };
 
     let current_lower = state.to_string();

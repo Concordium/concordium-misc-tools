@@ -63,15 +63,4 @@ pub fn statement(s: &StatementProp) -> Html {
             }
         })
         .collect::<Html>()
-    // html! {
-    // <div class="m-3 p-4 border rounded d-flex align-items-center">
-    //     <img src="https://robohash.org/hicveldicta.png?size=50x50&set=set1" class="mr-2" alt="img" />
-    //     <div class="">
-    //         <p class="fw-bold mb-1">{s.statement.clone()}</p>
-    //         <p class="fw-normal mb-1">{s.statement.clone()}</p>
-    //         <p class="fw-normal mb-1">{s.statement.clone()}</p>
-    //         <p class="fw-normal mb-1">{s.statement.clone()}</p>
-    //     </div>
-    // </div>
-    // }
 }

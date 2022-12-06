@@ -1,13 +1,12 @@
-use std::collections::BTreeSet;
-
-use gloo_console::{error, log};
+use super::statement::StatementProp;
+use concordium_base::id::{
+    constants::AttributeKind,
+    types::{AttributeStringTag, AttributeTag},
+};
+use std::{collections::BTreeSet, ops::Deref};
 use wasm_bindgen::JsCast;
 use web_sys::{EventTarget, HtmlInputElement, HtmlSelectElement};
 use yew::prelude::*;
-use concordium_base::id::{types::{AttributeStringTag, AttributeTag}, constants::AttributeKind};
-
-use super::statement::StatementProp;
-use std::ops::Deref;
 
 #[derive(Properties, PartialEq, Clone, Debug)]
 pub struct NotSetProp {
@@ -35,7 +34,7 @@ pub fn statement(s: &NotSetProp) -> Html {
                         let iter = v.split(',').map(|x| AttributeKind(String::from(x)));
                         let bset: BTreeSet<AttributeKind> = BTreeSet::from_iter(iter);
                         s.set(bset)
-                    },
+                    }
                     Err(_) => (), // do nothing
                 }
             }
@@ -45,14 +44,14 @@ pub fn statement(s: &NotSetProp) -> Html {
     let on_click_add = {
         let set = set_state.clone();
         let selected = selected.clone();
-        // || {
-            let statements = s.statement.clone();
-            move |_: MouseEvent| {
-                let new = statements.statement.clone().not_member_of(*selected, set.deref().clone());
-                log!(serde_json::to_string_pretty(&new).unwrap()); // TODO: Remove logging
-                statements.set(StatementProp { statement: new });
-            }
-        // }
+        let statements = s.statement.clone();
+        move |_: MouseEvent| {
+            let new = statements
+                .statement
+                .clone()
+                .not_member_of(*selected, set.deref().clone());
+            statements.set(StatementProp { statement: new });
+        }
     };
 
     let on_change = {
@@ -76,7 +75,13 @@ pub fn statement(s: &NotSetProp) -> Html {
         }
     };
 
-    let current_set = set_state.clone().deref().iter().map(|x|x.0.clone()).collect::<Vec<String>>().join(",");
+    let current_set = set_state
+        .clone()
+        .deref()
+        .iter()
+        .map(|x| x.0.clone())
+        .collect::<Vec<String>>()
+        .join(",");
 
     html! {
         <form>

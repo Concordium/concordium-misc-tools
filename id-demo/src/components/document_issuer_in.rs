@@ -1,25 +1,20 @@
-use std::collections::BTreeSet;
-
-use concordium_base::id::{
-    constants::AttributeKind,
-};
-use gloo_console::{error, log};
+use super::statement::StatementProp;
+use concordium_base::id::constants::AttributeKind;
+use std::{collections::BTreeSet, ops::Deref};
 use wasm_bindgen::JsCast;
 use web_sys::{EventTarget, HtmlInputElement};
 use yew::prelude::*;
-
-use super::statement::StatementProp;
-use std::ops::Deref;
 
 #[derive(Properties, PartialEq, Clone, Debug)]
 pub struct DocumentInProp {
     pub statement: UseStateHandle<StatementProp>,
     pub in_set:    bool,
+    pub errors:    UseStateHandle<Vec<String>>,
 }
 
 #[function_component(DocumentIssuerIn)]
 pub fn statement(s: &DocumentInProp) -> Html {
-    let set_state = use_state_eq(|| BTreeSet::<AttributeKind>::new());
+    let set_state = use_state_eq(BTreeSet::<AttributeKind>::new);
 
     let on_cautious_change = {
         let s = set_state.clone();
@@ -32,13 +27,12 @@ pub fn statement(s: &DocumentInProp) -> Html {
             let input = target.and_then(|t| t.dyn_into::<HtmlInputElement>().ok());
 
             if let Some(input) = input {
-                match input.value().parse::<String>() {
-                    Ok(v) => {
-                        let iter = v.split(',').map(|x| AttributeKind(String::from(x)));
-                        let bset: BTreeSet<AttributeKind> = BTreeSet::from_iter(iter);
-                        s.set(bset)
-                    }
-                    Err(_) => (), // do nothing
+                if let Ok(v) = input.value().parse::<String>() {
+                    let iter = v.split(',').map(|x| AttributeKind(String::from(x)));
+                    let bset: BTreeSet<AttributeKind> = BTreeSet::from_iter(iter);
+                    s.set(bset)
+                } else {
+                    // do nothing
                 }
             }
         })
@@ -46,9 +40,9 @@ pub fn statement(s: &DocumentInProp) -> Html {
 
     let on_click_add = {
         let set = set_state.clone();
-        // || {
         let statements = s.statement.clone();
-        let in_set = s.in_set.clone();
+        let in_set = s.in_set;
+        let errors = s.errors.clone();
         move |_: MouseEvent| {
             let new = if in_set {
                 statements
@@ -62,17 +56,14 @@ pub fn statement(s: &DocumentInProp) -> Html {
                     .document_issuer_not_in(set.deref().clone())
             };
             if let Some(new) = new {
-                log!(serde_json::to_string_pretty(&new).unwrap()); // TODO: Remove logging
                 statements.set(StatementProp { statement: new });
             } else {
-                error!("Cannot construct document issuer statement.")
+                super::append_message(&errors, "Cannot construct document issuer statement.");
             }
         }
-        // }
     };
 
     let current_set = set_state
-        .clone()
         .deref()
         .iter()
         .map(|x| x.0.clone())
