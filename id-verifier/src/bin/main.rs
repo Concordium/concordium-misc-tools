@@ -148,7 +148,7 @@ fn handle_provide_proof(
         async move {
             info!("Queried for injecting statement");
             match check_proof_worker(client, state, request).await {
-                Ok(r) => Ok(warp::reply::json(&r)),
+                Ok(()) => Ok(warp::reply::reply()),
                 Err(e) => {
                     warn!("Request is invalid {:#?}.", e);
                     Err(warp::reject::custom(e))
@@ -280,7 +280,7 @@ async fn check_proof_worker(
     mut client: concordium_rust_sdk::v2::Client,
     state: Server,
     request: ChallengedProof,
-) -> Result<bool, InjectStatementError> {
+) -> Result<(), InjectStatementError> {
     let statement = state
         .statement_map
         .lock()
@@ -311,7 +311,7 @@ async fn check_proof_worker(
         commitments,
         &request.proof.proof.value, // TODO: Check version.
     ) {
-        Ok(true)
+        Ok(())
     } else {
         Err(InjectStatementError::InvalidProofs)
     }
