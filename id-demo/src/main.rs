@@ -36,6 +36,8 @@ use crate::components::{
     younger_than::YoungerThan,
 };
 use components::header::Header;
+
+// Import the javascript libraries to connect with the wallet.
 #[wasm_bindgen(module = "/detector.js")]
 extern "C" {
     type WalletApi;
@@ -43,18 +45,21 @@ extern "C" {
     async fn detectConcordiumProvider() -> Result<JsValue, JsValue>;
 }
 
+// Import the wallet API that is needed by this app.
 #[wasm_bindgen]
 extern "C" {
+    // Connect to the wallet.
     #[wasm_bindgen(method, catch)]
     async fn connect(this: &WalletApi) -> Result<JsValue, JsValue>;
     #[wasm_bindgen(method, catch)]
-    // the closure argument is the account address representation.
+    // Handle events sent by the wallet. The closure argument is the account address representation.
     fn on(
         this: &WalletApi,
         event: &str,
         callback: &Closure<dyn FnMut(JsValue)>,
     ) -> Result<JsValue, JsValue>;
 
+    // Request a proof from the wallet.
     #[wasm_bindgen(method, catch)]
     async fn requestIdProof(
         this: &WalletApi,
@@ -64,33 +69,43 @@ extern "C" {
     ) -> Result<JsValue, JsValue>;
 }
 
+/// A helper struct that represents the wallet.
 struct Wallet {
     inner: WalletApi,
 }
 
+/// A helper struct that maintains a wallet connection.
 struct WalletConnection {
     _closure: Closure<dyn FnMut(JsValue)>,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
+/// A statement in the shape expected by the id-verifier backend.
 struct StatementWithChallenge {
     challenge: String, // TODO: Should be Vec<u8>
     statement: id::id_proof_types::Statement<ArCurve, AttributeKind>,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
+/// A proof in the shape expected by the id-verifier backend.
 struct ProofWithContext {
+    /// Proof is for the given credential.
     credential: CredentialRegistrationID,
+    /// The versioned proof.
     proof:      Versioned<Proof<ArCurve, AttributeKind>>,
 }
 
 impl Wallet {
+    /// Create a new wallet.
     pub async fn new() -> Result<Self, JsValue> {
         Ok(Self {
             inner: detectConcordiumProvider().await?.into(),
         })
     }
 
+    /// Connect to the wallet. Return the address that we are connected to and
+    /// the connection. The connection should not be dropped until after it
+    /// is no longer needed.
     pub async fn connect(&mut self) -> Result<(AccountAddress, WalletConnection), JsValue> {
         let addr_json = self.inner.connect().await?;
         let cl = Closure::new(
@@ -115,6 +130,7 @@ impl Wallet {
         }
     }
 
+    /// Request a proof from the wallet for the given statement.
     pub async fn request_id_proof(
         &self,
         addr: &AccountAddress,
@@ -138,6 +154,7 @@ impl Wallet {
 }
 
 #[function_component(App)]
+/// The main page.
 fn app() -> Html {
     let statements: UseStateHandle<StatementProp> = use_state(Default::default);
     let wallet_conn: UseStateHandle<Option<WalletConnection>> = use_state(Default::default);
