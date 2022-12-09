@@ -18,7 +18,6 @@ use wasm_bindgen::{
 use yew::prelude::*;
 
 mod components;
-mod models;
 
 static BASE_URL: Option<&str> = option_env!("ID_TESTER_BASE_URL");
 
