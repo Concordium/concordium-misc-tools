@@ -28,7 +28,7 @@ pub fn statement(s: &DocumentInProp) -> Html {
 
             if let Some(input) = input {
                 if let Ok(v) = input.value().parse::<String>() {
-                    let iter = v.split(',').map(|x| AttributeKind(String::from(x)));
+                    let iter = v.split(',').map(|x| AttributeKind(String::from(x.trim())));
                     let bset: BTreeSet<AttributeKind> = BTreeSet::from_iter(iter);
                     s.set(bset)
                 } else {

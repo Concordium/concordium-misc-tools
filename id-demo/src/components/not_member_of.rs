@@ -31,7 +31,7 @@ pub fn statement(s: &NotSetProp) -> Html {
             if let Some(input) = input {
                 match input.value().parse::<String>() {
                     Ok(v) => {
-                        let iter = v.split(',').map(|x| AttributeKind(String::from(x)));
+                        let iter = v.split(',').map(|x| AttributeKind(String::from(x.trim())));
                         let bset: BTreeSet<AttributeKind> = BTreeSet::from_iter(iter);
                         s.set(bset)
                     }

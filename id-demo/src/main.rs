@@ -15,13 +15,12 @@ use wasm_bindgen::{
     prelude::{wasm_bindgen, Closure},
     JsValue,
 };
-
 use yew::prelude::*;
 
 mod components;
 mod models;
 
-use components::header::Header;
+static BASE_URL: Option<&str> = option_env!("ID_TESTER_BASE_URL");
 
 use crate::components::{
     age_in_range::AgeInRange,
@@ -36,6 +35,7 @@ use crate::components::{
     statement::{Statement, StatementProp},
     younger_than::YoungerThan,
 };
+use components::header::Header;
 #[wasm_bindgen(module = "/detector.js")]
 extern "C" {
     type WalletApi;
@@ -179,48 +179,6 @@ fn app() -> Html {
         }
     };
 
-    let inject_statement = {
-        let inject_statements = statements.clone();
-        let errors = errors.clone();
-        move |_| {
-            let errors = errors.clone();
-            let inject_statements = inject_statements.clone();
-            wasm_bindgen_futures::spawn_local(async move {
-                let r = match Request::post("http://localhost:8100/inject")
-                    .json(&inject_statements.statement.clone())
-                {
-                    Ok(r) => r,
-                    Err(e) => {
-                        let mut errs = (&*errors).clone();
-                        errs.push(format!(
-                            "Error constructing the statement to inject: {:?}",
-                            e
-                        ));
-                        errors.set(errs);
-                        return;
-                    }
-                };
-                let res = match r.send().await {
-                    Ok(r) => r,
-                    Err(e) => {
-                        let mut errs = (&*errors).clone();
-                        errs.push(format!("Error injecting the statement: {:?}", e));
-                        errors.set(errs);
-                        return;
-                    }
-                };
-                if res.ok() {
-                    let data = res.json::<StatementWithChallenge>().await.unwrap(); // TODO: Handle error
-                    log!(serde_json::to_string_pretty(&data).unwrap())
-                } else {
-                    let mut errs = (&*errors).clone();
-                    errs.push(format!("Could not inject the statement: {:?}", res));
-                    errors.set(errs);
-                }
-            })
-        }
-    };
-
     let get_proof = {
         let inject_statements = statements.clone();
         let errors = errors.clone();
@@ -230,9 +188,12 @@ fn app() -> Html {
             let messages = messages.clone();
             let inject_statements = inject_statements.clone();
             wasm_bindgen_futures::spawn_local(async move {
-                let r = Request::post("http://localhost:8100/inject")
-                    .json(&inject_statements.statement.clone())
-                    .unwrap(); // TODO
+                let r = Request::post(&format!(
+                    "{}/inject",
+                    BASE_URL.unwrap_or("http://localhost:8100")
+                ))
+                .json(&inject_statements.statement.clone())
+                .unwrap(); // TODO
                 let res = r.send().await.unwrap(); // TODO
                 if res.ok() {
                     log!("Got result");
@@ -257,6 +218,7 @@ fn app() -> Html {
                         }
                     };
                     log!("Requesting proof.");
+                    web_sys::console::time_with_label("Proving time");
                     let proof = wallet
                         .request_id_proof(
                             &addr,
@@ -266,13 +228,17 @@ fn app() -> Html {
                         .await; // TODO: Don't unwrap.
                     match proof {
                         Ok(proof) => {
+                            web_sys::console::time_end_with_label("Proving time");
                             append_message(&messages, "Got proof from the wallet.");
                             log!(serde_json::to_string_pretty(&proof).unwrap());
-                            let verify_request = match Request::post("http://localhost:8100/prove")
-                                .json(&serde_json::json!({
-                                    "challenge": data.challenge,
-                                    "proof": proof,
-                                })) {
+                            let verify_request = match Request::post(&format!(
+                                "{}/prove",
+                                BASE_URL.unwrap_or("http://localhost:8100")
+                            ))
+                            .json(&serde_json::json!({
+                                "challenge": data.challenge,
+                                "proof": proof,
+                            })) {
                                 Ok(vr) => vr,
                                 Err(e) => {
                                     append_message(
@@ -342,7 +308,6 @@ fn app() -> Html {
             <div class="col-sm">
               <div class="btn-group-vertical">
                 <button onclick={connect_wallet} type="button" class="btn btn-primary btn-lg mb-1">{"Connect"}</button>
-                <button onclick={inject_statement} type="button" class="btn btn-primary btn-lg mt-1">{"Inject statement"}</button>
                 <button onclick={get_proof} type="button" class="btn btn-primary btn-lg mt-1">{"Get proof"}</button>
               </div>
               <ul class="item-list">
