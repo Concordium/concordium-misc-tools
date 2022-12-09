@@ -10,8 +10,7 @@ use concordium_rust_sdk::{
     id::{
         constants::{ArCurve, AttributeKind},
         id_proof_types::{Proof, Statement},
-        range_proof::RangeProof,
-        types::{AccountAddress, AccountCredentialWithoutProofs, GlobalContext},
+        types::{AccountCredentialWithoutProofs, GlobalContext},
     },
     types::CredentialRegistrationID,
     v2::BlockIdentifier,
@@ -51,14 +50,6 @@ struct IdVerifierConfig {
     log_level: log::LevelFilter,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug)]
-struct AgeProofOutput {
-    account: AccountAddress,
-    lower:   AttributeKind,
-    upper:   AttributeKind,
-    proof:   RangeProof<ArCurve>,
-}
-
 #[derive(
     Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, SerdeBase16Serialize, Serialize,
 )]
@@ -74,7 +65,6 @@ struct Server {
 async fn main() -> anyhow::Result<()> {
     let app = IdVerifierConfig::parse();
     let mut log_builder = env_logger::Builder::new();
-    // only log the current module (main).
     log_builder.filter_level(app.log_level); // filter filter_module(module_path!(), app.log_level);
     log_builder.init();
 
@@ -216,11 +206,11 @@ async fn handle_rejection(err: Rejection) -> Result<impl warp::Reply, Infallible
         Ok(mk_reply(message, code))
     } else if let Some(InjectStatementError::LockingError) = err.find() {
         let code = StatusCode::INTERNAL_SERVER_ERROR;
-        let message = format!("Could not acquire lock.");
+        let message = "Could not acquire lock.".into();
         Ok(mk_reply(message, code))
     } else if let Some(InjectStatementError::UnknownSession) = err.find() {
         let code = StatusCode::NOT_FOUND;
-        let message = format!("Session not found.");
+        let message = "Session not found.".into();
         Ok(mk_reply(message, code))
     } else if err
         .find::<warp::filters::body::BodyDeserializeError>()
