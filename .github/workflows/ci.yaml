@@ -28,6 +28,8 @@ jobs:
           - wallet-proxy-load-simulator/Cargo.toml
           - state-compare/Cargo.toml
           - genesis-creator/Cargo.toml
+          - id-verifier/Cargo.toml
+          - id-demo/Cargo.toml
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -55,6 +57,10 @@ jobs:
         crates:
           - node-liveness-checker/Cargo.toml
           - wallet-proxy-load-simulator/Cargo.toml
+          - state-compare/Cargo.toml
+          - genesis-creator/Cargo.toml
+          - id-verifier/Cargo.toml
+          - id-demo/Cargo.toml
     steps:
       - name: Install protobuf
         run: |
