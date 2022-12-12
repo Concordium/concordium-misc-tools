@@ -2,6 +2,27 @@
 
 This page describes how to create the `genesis.dat` file needed for starting up
 a node.
+
+## Building the tool
+
+The tool for creating the genesis is a pure Rust project, but it does depend on the [protobuf compiler](https://github.com/protocolbuffers/protobuf#protocol-compiler-installation) version at least 3.15. The minimum supported
+Rust version is 1.62. You need the Rust toolchain installed for your platform.
+The easiest way to do that is to install [rustup](https://rustup.rs/).
+
+To build it
+- make sure to check out git submodules
+  ```console
+  git submodule update --init --recursive
+  ```
+- Run the build
+  ```console
+  cargo build --release
+  ```
+
+This will produce a single binary `./target/release/genesis-creator`.
+
+## Using the tool
+
 The tool has two modes: `generate` that can generate a new genesis, and `assemble` that can produce a genesis from existing files (for example to regenerate the Mainnet `genesis.dat`).
 
 ## The `generate` mode
