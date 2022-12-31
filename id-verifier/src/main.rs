@@ -33,20 +33,27 @@ struct IdVerifierConfig {
     #[clap(
         long = "node",
         help = "GRPC V2 interface of the node.",
+        env = "ENDPOINT",
         default_value = "http://localhost:20000"
     )]
     endpoint:  concordium_rust_sdk::v2::Endpoint,
     #[clap(
         long = "port",
         default_value = "8100",
+        env = "PORT",
         help = "Port on which the server will listen on."
     )]
     port:      u16,
-    #[clap(long = "dir", help = "Serve static files from the given directory.")]
+    #[clap(
+        long = "dir",
+        env = "STATIC_DIR",
+        help = "Serve static files from the given directory."
+    )]
     dir:       Option<PathBuf>,
     #[structopt(
         long = "log-level",
         default_value = "debug",
+        env = "LOG_LEVEL",
         help = "Maximum log level."
     )]
     log_level: log::LevelFilter,
