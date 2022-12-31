@@ -16,13 +16,13 @@ use concordium_rust_sdk::{
     v2::BlockIdentifier,
 };
 use log::{error, info, warn};
+use rand::Rng;
 use std::{
     collections::HashMap,
     convert::Infallible,
+    path::PathBuf,
     sync::{Arc, Mutex},
 };
-
-use rand::Rng;
 use warp::{http::StatusCode, Filter, Rejection, Reply};
 
 /// Structure used to receive the correct command line arguments.
@@ -33,18 +33,27 @@ struct IdVerifierConfig {
     #[clap(
         long = "node",
         help = "GRPC V2 interface of the node.",
+        env = "ENDPOINT",
         default_value = "http://localhost:20000"
     )]
     endpoint:  concordium_rust_sdk::v2::Endpoint,
     #[clap(
         long = "port",
         default_value = "8100",
+        env = "PORT",
         help = "Port on which the server will listen on."
     )]
     port:      u16,
+    #[clap(
+        long = "dir",
+        env = "STATIC_DIR",
+        help = "Serve static files from the given directory."
+    )]
+    dir:       Option<PathBuf>,
     #[structopt(
         long = "log-level",
         default_value = "debug",
+        env = "LOG_LEVEL",
         help = "Maximum log level."
     )]
     log_level: log::LevelFilter,
@@ -65,7 +74,7 @@ struct Server {
 async fn main() -> anyhow::Result<()> {
     let app = IdVerifierConfig::parse();
     let mut log_builder = env_logger::Builder::new();
-    log_builder.filter_level(app.log_level); // filter filter_module(module_path!(), app.log_level);
+    log_builder.filter_level(app.log_level);
     log_builder.init();
 
     let mut client = concordium_rust_sdk::v2::Client::new(app.endpoint).await?;
@@ -101,12 +110,22 @@ async fn main() -> anyhow::Result<()> {
         .allow_header("Content-Type")
         .allow_method("POST");
 
-    let server = inject_statement
-        .or(provide_proof)
-        .recover(handle_rejection)
-        .with(cors)
-        .with(warp::trace::request());
-    warp::serve(server).run(([0, 0, 0, 0], app.port)).await;
+    if let Some(dir) = app.dir {
+        let server = inject_statement
+            .or(provide_proof)
+            .or(warp::fs::dir(dir))
+            .recover(handle_rejection)
+            .with(cors)
+            .with(warp::trace::request());
+        warp::serve(server).run(([0, 0, 0, 0], app.port)).await;
+    } else {
+        let server = inject_statement
+            .or(provide_proof)
+            .recover(handle_rejection)
+            .with(cors)
+            .with(warp::trace::request());
+        warp::serve(server).run(([0, 0, 0, 0], app.port)).await;
+    }
     Ok(())
 }
 
@@ -191,6 +210,10 @@ async fn handle_rejection(err: Rejection) -> Result<impl warp::Reply, Infallible
     if err.is_not_found() {
         let code = StatusCode::NOT_FOUND;
         let message = "Not found.";
+        Ok(mk_reply(message.into(), code))
+    } else if let Some(warp::reject::MethodNotAllowed { .. }) = err.find() {
+        let code = StatusCode::METHOD_NOT_ALLOWED;
+        let message = "Malformed body.";
         Ok(mk_reply(message.into(), code))
     } else if let Some(InjectStatementError::NotAllowed) = err.find() {
         let code = StatusCode::BAD_REQUEST;
