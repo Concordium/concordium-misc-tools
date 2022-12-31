@@ -1,5 +1,5 @@
 {
-    "name": "gallery",
+    "name": "proof-explorer",
     "license": "Apache-2.0",
     "version": "0.1.",
     "packageManager": "yarn@3.2.0",
