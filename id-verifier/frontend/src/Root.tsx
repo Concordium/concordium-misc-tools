@@ -16,6 +16,10 @@ import {
     RangeStatement,
 } from '@concordium/web-sdk';
 
+function getVerifierURL(): string {
+    return window.location.origin
+}
+
 interface StatementProps {
     statement: IdStatement;
 }
@@ -112,7 +116,7 @@ interface RevealAttributeProps {
 }
 
 async function submitProof(statement: IdStatement, setMessages: (cbk: (oldMessages: string[]) => string[]) => void) {
-    const response = await fetch(`${window.location.origin}/inject`, {
+    const response = await fetch(`${getVerifierURL()}/inject`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -138,7 +142,7 @@ async function submitProof(statement: IdStatement, setMessages: (cbk: (oldMessag
                 }
                 return;
             }
-            const resp = await fetch(`${window.location.origin}/prove`, {
+            const resp = await fetch(`${getVerifierURL()}/prove`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
