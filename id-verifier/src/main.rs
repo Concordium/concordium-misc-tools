@@ -113,7 +113,7 @@ async fn main() -> anyhow::Result<()> {
     if let Some(dir) = app.dir {
         let server = inject_statement
             .or(provide_proof)
-            .or(warp::path("static").and(warp::fs::dir(dir)))
+            .or(warp::fs::dir(dir))
             .recover(handle_rejection)
             .with(cors)
             .with(warp::trace::request());

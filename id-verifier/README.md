@@ -10,12 +10,12 @@ The following environment variables (command line options) are supported
 - `ENDPOINT` (`--node`) the URL of the node's GRPC V2 interface, e.g., http://localhost:20000
 - `PORT` (`--port`) the port on which the server will listen for incoming requests.
 - `LOG_LEVEL` (`--log-level`) maximum log level (defaults to `debug` if not given)
-- `STATIC_DIR` (`--dir`) if set, serve files from the given directory under the `/static` path.
+- `STATIC_DIR` (`--dir`) if set, serve files from the given directory under the `/` path.
 
 All of the above is available by using `--help` to get usage information.
 
 The verifier is a simple server that exposes two endpoints `POST /inject` and
-`POST /prove`, and optionally serves files under `GET /static`. 
+`POST /prove`, and optionally serves files under `GET /`. 
 The latter is intended for hosting the frontend for simplicity.
 
 The overall flow is that a statement is **injected** into the server, which
@@ -82,4 +82,4 @@ A full deployment of the verifier with the frontend can be done as follows.
 ./target/release/id-verifier --node http://node-url:20000 --log-level=debug --dir ./frontend/dist --port 8100
 ```
 
-This will start the server listening on `0.0.0.0:8100`. The frontend can be accessed by going to `http://localhost:8100/static/` or `http://localhost:8100/static/index.html`.
+This will start the server listening on `0.0.0.0:8100`. The frontend can be accessed by going to `http://localhost:8100/` or `http://localhost:8100/index.html`.
