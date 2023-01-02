@@ -6,6 +6,9 @@
     "dependencies": {
         "@concordium/browser-wallet-api-helpers": "^2.0.0",
         "@concordium/web-sdk": "^3.1.0",
+        "@walletconnect/qrcode-modal": "^1.8.0",
+        "@walletconnect/sign-client": "^2.1.5",
+        "@walletconnect/types": "^2.1.5",
         "react": "^18.1.0",
         "react-dom": "^18.1.0",
         "react-select": "^5.7.0"
@@ -22,8 +25,6 @@
         "esbuild-plugin-svgr": "^1.0.1",
         "eslint": "7",
         "eslint-config-prettier": "^8.5.0",
-        "eslint-plugin-import": "^2.26.0",
-        "eslint-plugin-jsx-a11y": "^6.5.1",
         "eslint-plugin-prettier": "^4.0.0",
         "eslint-plugin-react": "^7.29.4",
         "eslint-plugin-react-hooks": "^4.4.0",

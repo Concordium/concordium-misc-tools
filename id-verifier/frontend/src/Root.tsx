@@ -17,7 +17,7 @@ import {
 } from '@concordium/web-sdk';
 
 function getVerifierURL(): string {
-    return window.location.origin
+    return window.location.origin;
 }
 
 interface StatementProps {
@@ -134,7 +134,7 @@ async function submitProof(statement: IdStatement, setMessages: (cbk: (oldMessag
             let proof: IdProofOutput;
             try {
                 proof = await provider.requestIdProof(account as string, body.statement, body.challenge);
-            } catch (err: unknown) {
+            } catch (err: any) {
                 if (err instanceof Error) {
                     setMessages((oldMessages) => [...oldMessages, `Could not get proof: ${err.message}`]);
                 } else {
