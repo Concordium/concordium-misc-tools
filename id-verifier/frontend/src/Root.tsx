@@ -15,6 +15,7 @@ import {
     AttributesKeys,
     RangeStatement,
 } from '@concordium/web-sdk';
+import { BrowserWalletProvider, WalletConnectProvider, WalletProvider } from './wallet-connection';
 
 function getVerifierURL(): string {
     return window.location.origin;
@@ -134,6 +135,7 @@ async function submitProof(statement: IdStatement, setMessages: (cbk: (oldMessag
             let proof: IdProofOutput;
             try {
                 proof = await provider.requestIdProof(account as string, body.statement, body.challenge);
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
             } catch (err: any) {
                 if (err instanceof Error) {
                     setMessages((oldMessages) => [...oldMessages, `Could not get proof: ${err.message}`]);
@@ -543,6 +545,7 @@ function EUAttributeIn({ nationality, setStatement }: SpecialSetProps) {
  */
 export default function ProofExplorer() {
     const [account, setAccount] = useState<string>();
+    const [provider, setProvider] = useState<WalletProvider>();
 
     useEffect(() => {
         detectConcordiumProvider()
@@ -556,6 +559,12 @@ export default function ProofExplorer() {
             .catch(() => setAccount(undefined));
     }, []);
 
+    useEffect(() => {
+        if (provider !== undefined) {
+            provider.connect().then(setAccount);
+        }
+    }, [provider]);
+
     const [statement, setStatement] = useState<IdStatement>([]);
 
     const addStatement = (a: AtomicStatement) => {
@@ -564,7 +573,7 @@ export default function ProofExplorer() {
 
     return (
         <main className="container">
-            <nav className="navbar bg-black">
+            <nav className="navbar bg-black mb-3">
                 <div className="container-fluid">
                     <a className="navbar-brand text-white" href="#">
                         {'Proof explorer'}
@@ -573,6 +582,20 @@ export default function ProofExplorer() {
             </nav>
             <div className="row">
                 <div className="col-sm">
+                    <div>
+                        <button
+                            className="btn btn-primary me-1"
+                            onClick={() => setProvider(new BrowserWalletProvider())}
+                        >
+                            Connect browser
+                        </button>
+                        <button
+                            className="btn btn-primary"
+                            onClick={async () => setProvider(await WalletConnectProvider.create())}
+                        >
+                            Connect mobile
+                        </button>
+                    </div>
                     <p> Connected account: {account} </p>
                     <SubmitProof statement={statement} />
                 </div>
