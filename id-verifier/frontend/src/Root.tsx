@@ -548,20 +548,13 @@ export default function ProofExplorer() {
     const [provider, setProvider] = useState<WalletProvider>();
 
     useEffect(() => {
-        detectConcordiumProvider()
-            .then((provider) => {
-                // Listen for relevant events from the wallet.
-                provider.on('accountChanged', setAccount);
-                provider.on('accountDisconnected', () => provider.getMostRecentlySelectedAccount().then(setAccount));
-                // Check if you are already connected
-                provider.getMostRecentlySelectedAccount().then(setAccount);
-            })
-            .catch(() => setAccount(undefined));
-    }, []);
-
-    useEffect(() => {
         if (provider !== undefined) {
             provider.connect().then(setAccount);
+            provider.on('accountChanged', setAccount);
+
+            return () => {
+                provider?.disconnect?.();
+            };
         }
     }, [provider]);
 
