@@ -100,7 +100,7 @@ export class WalletConnectProvider extends WalletProvider {
             if (uri) {
                 QRCodeModal.open(uri, undefined);
             }
-            // Await session en approval from the wallet.
+            // Await session approval from the wallet.
             const session = await approval();
 
             this.account = this.getAccount(session.namespaces);
