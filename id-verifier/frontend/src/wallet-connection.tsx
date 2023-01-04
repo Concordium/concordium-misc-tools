@@ -1,4 +1,4 @@
-import { detectConcordiumProvider } from '@concordium/browser-wallet-api-helpers';
+import { detectConcordiumProvider, WalletApi } from '@concordium/browser-wallet-api-helpers';
 import { IdProofOutput, IdStatement } from '@concordium/web-sdk';
 import { SessionTypes, SignClientTypes } from '@walletconnect/types';
 import SignClient from '@walletconnect/sign-client';
@@ -32,33 +32,49 @@ export abstract class WalletProvider extends EventEmitter {
     }
 }
 
+let browserWalletInstance: BrowserWalletProvider | undefined;
+
 export class BrowserWalletProvider extends WalletProvider {
-    async connect(): Promise<string | undefined> {
-        const provider = await detectConcordiumProvider();
+    constructor(private provider: WalletApi) {
+        super();
 
         provider.on('accountChanged', (account) => super.onAccountChanged(account));
         provider.on('accountDisconnected', async () =>
             super.onAccountChanged((await provider.getMostRecentlySelectedAccount()) ?? undefined)
         );
+    }
+    /**
+     * @description gets a singleton instance, allowing existing session to be restored.
+     */
+    static async getInstance() {
+        if (browserWalletInstance === undefined) {
+            const provider = await detectConcordiumProvider();
+            browserWalletInstance = new BrowserWalletProvider(provider);
+        }
 
+        return browserWalletInstance;
+    }
+
+    async connect(): Promise<string | undefined> {
         // Check if you are already connected
-        const selectedAccount = await provider.getMostRecentlySelectedAccount();
-        return selectedAccount ?? provider.connect();
+        const selectedAccount = await this.provider.getMostRecentlySelectedAccount();
+        return selectedAccount ?? this.provider.connect();
     }
 
     async requestIdProof(statement: IdStatement, challenge: string): Promise<IdProofOutput> {
-        const provider = await detectConcordiumProvider();
-        const account = await provider.connect();
+        const account = await this.provider.connect();
 
         if (!account) {
             throw new Error('No account available');
         }
 
-        return provider.requestIdProof(account, statement, challenge);
+        return this.provider.requestIdProof(account, statement, challenge);
     }
 }
 
 const ID_METHOD = 'proof_of_identity';
+
+let walletConnectInstance: WalletConnectProvider | undefined;
 
 export class WalletConnectProvider extends WalletProvider {
     private account: string | undefined;
@@ -80,37 +96,47 @@ export class WalletConnectProvider extends WalletProvider {
         });
     }
 
-    static async create() {
-        const client = await SignClient.init(walletConnectOpts);
-        return new WalletConnectProvider(client);
+    /**
+     * @description gets a singleton instance, allowing existing session to be restored.
+     */
+    static async getInstance() {
+        if (walletConnectInstance === undefined) {
+            const client = await SignClient.init(walletConnectOpts);
+            walletConnectInstance = new WalletConnectProvider(client);
+        }
+
+        return walletConnectInstance;
     }
 
     async connect(): Promise<string | undefined> {
-        try {
-            const { uri, approval } = await this.client.connect({
-                requiredNamespaces: {
-                    [WALLET_CONNECT_SESSION_NAMESPACE]: {
-                        methods: [ID_METHOD],
-                        chains: [CHAIN_ID],
-                        events: ['accounts_changed'],
-                    },
+        const { uri, approval } = await this.client.connect({
+            requiredNamespaces: {
+                [WALLET_CONNECT_SESSION_NAMESPACE]: {
+                    methods: [ID_METHOD],
+                    chains: [CHAIN_ID],
+                    events: ['accounts_changed'],
                 },
-            });
-            // Open QRCode modal if a URI was returned (i.e. we're not connecting an existing pairing).
-            if (uri) {
-                QRCodeModal.open(uri, undefined);
-            }
-            // Await session approval from the wallet.
-            const session = await approval();
+            },
+        });
 
-            this.account = this.getAccount(session.namespaces);
-            this.topic = session.topic;
-
+        // Connecting to an existing pairing; it can be assumed that the account is already available.
+        if (!uri) {
             return this.account;
-        } finally {
-            // Close the QRCode modal in case it was open.
-            QRCodeModal.close();
         }
+
+        // Open QRCode modal if a URI was returned (i.e. we're not connecting an existing pairing).
+        QRCodeModal.open(uri, undefined);
+
+        // Await session approval from the wallet.
+        const session = await approval();
+
+        this.account = this.getAccount(session.namespaces);
+        this.topic = session.topic;
+
+        // Close the QRCode modal in case it was open.
+        QRCodeModal.close();
+
+        return this.account;
     }
 
     async requestIdProof(statement: IdStatement, challenge: string): Promise<IdProofOutput> {

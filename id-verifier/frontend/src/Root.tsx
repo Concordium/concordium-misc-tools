@@ -549,14 +549,19 @@ export default function ProofExplorer() {
 
     useEffect(() => {
         if (provider !== undefined) {
-            provider.connect().then(setAccount);
             provider.on('accountChanged', setAccount);
 
             return () => {
+                provider.removeAllListeners();
                 provider?.disconnect?.();
             };
         }
     }, [provider]);
+
+    const connectProvider = async (provider: WalletProvider) => {
+        setProvider(provider);
+        setAccount(await provider.connect());
+    };
 
     const [statement, setStatement] = useState<IdStatement>([]);
 
@@ -578,13 +583,13 @@ export default function ProofExplorer() {
                     <div>
                         <button
                             className="btn btn-primary me-1"
-                            onClick={() => setProvider(new BrowserWalletProvider())}
+                            onClick={async () => connectProvider(await BrowserWalletProvider.getInstance())}
                         >
                             Connect browser
                         </button>
                         <button
                             className="btn btn-primary"
-                            onClick={async () => setProvider(await WalletConnectProvider.create())}
+                            onClick={async () => connectProvider(await WalletConnectProvider.getInstance())}
                         >
                             Connect mobile
                         </button>
