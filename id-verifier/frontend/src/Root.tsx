@@ -552,8 +552,7 @@ export default function ProofExplorer() {
             provider.on('accountChanged', setAccount);
 
             return () => {
-                provider.removeAllListeners();
-                provider?.disconnect?.();
+                provider?.disconnect?.().then(() => provider.removeAllListeners());
             };
         }
     }, [provider]);
