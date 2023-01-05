@@ -15,9 +15,10 @@ import {
     AttributesKeys,
     RangeStatement,
 } from '@concordium/web-sdk';
+import { BrowserWalletProvider, WalletConnectProvider, WalletProvider } from './wallet-connection';
 
 function getVerifierURL(): string {
-    return window.location.origin
+    return window.location.origin;
 }
 
 interface StatementProps {
@@ -134,7 +135,8 @@ async function submitProof(statement: IdStatement, setMessages: (cbk: (oldMessag
             let proof: IdProofOutput;
             try {
                 proof = await provider.requestIdProof(account as string, body.statement, body.challenge);
-            } catch (err: unknown) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            } catch (err: any) {
                 if (err instanceof Error) {
                     setMessages((oldMessages) => [...oldMessages, `Could not get proof: ${err.message}`]);
                 } else {
@@ -543,18 +545,22 @@ function EUAttributeIn({ nationality, setStatement }: SpecialSetProps) {
  */
 export default function ProofExplorer() {
     const [account, setAccount] = useState<string>();
+    const [provider, setProvider] = useState<WalletProvider>();
 
     useEffect(() => {
-        detectConcordiumProvider()
-            .then((provider) => {
-                // Listen for relevant events from the wallet.
-                provider.on('accountChanged', setAccount);
-                provider.on('accountDisconnected', () => provider.getMostRecentlySelectedAccount().then(setAccount));
-                // Check if you are already connected
-                provider.getMostRecentlySelectedAccount().then(setAccount);
-            })
-            .catch(() => setAccount(undefined));
-    }, []);
+        if (provider !== undefined) {
+            provider.on('accountChanged', setAccount);
+
+            return () => {
+                provider?.disconnect?.().then(() => provider.removeAllListeners());
+            };
+        }
+    }, [provider]);
+
+    const connectProvider = async (provider: WalletProvider) => {
+        setProvider(provider);
+        setAccount(await provider.connect());
+    };
 
     const [statement, setStatement] = useState<IdStatement>([]);
 
@@ -564,7 +570,7 @@ export default function ProofExplorer() {
 
     return (
         <main className="container">
-            <nav className="navbar bg-black">
+            <nav className="navbar bg-black mb-3">
                 <div className="container-fluid">
                     <a className="navbar-brand text-white" href="#">
                         {'Proof explorer'}
@@ -573,6 +579,20 @@ export default function ProofExplorer() {
             </nav>
             <div className="row">
                 <div className="col-sm">
+                    <div>
+                        <button
+                            className="btn btn-primary me-1"
+                            onClick={async () => connectProvider(await BrowserWalletProvider.getInstance())}
+                        >
+                            Connect browser
+                        </button>
+                        <button
+                            className="btn btn-primary"
+                            onClick={async () => connectProvider(await WalletConnectProvider.getInstance())}
+                        >
+                            Connect mobile
+                        </button>
+                    </div>
                     <p> Connected account: {account} </p>
                     <SubmitProof statement={statement} />
                 </div>

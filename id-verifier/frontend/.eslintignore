@@ -1,0 +1,10 @@
+.eslintcache
+node_modules
+
+# OSX
+.DS_Store
+
+package.json
+
+id-verifier/frontent/dist
+
