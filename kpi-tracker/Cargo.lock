@@ -429,6 +429,9 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "concordium-rust-sdk",
+ "thiserror",
+ "tokio",
+ "tonic",
 ]
 
 [[package]]
@@ -2435,6 +2438,7 @@ dependencies = [
  "libc",
  "memchr",
  "mio",
+ "num_cpus",
  "pin-project-lite",
  "socket2",
  "tokio-macros",
