@@ -427,11 +427,11 @@ dependencies = [
 name = "concordium-kpi-tracker"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "clap",
  "concordium-rust-sdk",
- "thiserror",
+ "futures",
  "tokio",
- "tonic",
 ]
 
 [[package]]
