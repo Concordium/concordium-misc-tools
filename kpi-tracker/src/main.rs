@@ -1,8 +1,9 @@
 use anyhow::Context;
 use clap::Parser;
 use concordium_rust_sdk::{
+    id::types::AccountCredentialWithoutProofs,
     types::AbsoluteBlockHeight,
-    v2::{self, FinalizedBlockInfo},
+    v2::{self, AccountIdentifier, FinalizedBlockInfo},
 };
 use futures::{self, future, StreamExt};
 
@@ -34,12 +35,33 @@ async fn handle_block(node: &mut v2::Client, block: FinalizedBlockInfo) -> anyho
         .response;
 
     accounts
-        .for_each(|a| {
-            if let Ok(account) = a {
+        .then(|a| {
+            let mut cloned_node: v2::Client = node.clone();
+
+            async move {
+                let account = a.context("...")?;
+                let ainfo = cloned_node
+                    .get_account_info(&AccountIdentifier::Address(account), block.block_hash)
+                    .await?
+                    .response;
+
+                Ok::<_, anyhow::Error>(ainfo)
+            }
+        })
+        .for_each(|res| {
+            if let Ok(ai) = res {
+                let is_initial =
+                    ai.account_credentials
+                        .get(&0.into())
+                        .map_or(false, |cdi| match &cdi.value {
+                            AccountCredentialWithoutProofs::Initial { .. } => true,
+                            AccountCredentialWithoutProofs::Normal { .. } => false,
+                        });
+
                 println!(
-                    "Account {} present in block {} at time {}",
-                    account, block.block_hash, block_info.block_slot_time
-                )
+                    "account {}, block_hash {}, block_time {}, initial {}",
+                    ai.account_address, block.block_hash, block_info.block_slot_time, is_initial
+                );
             }
 
             future::ready(())
