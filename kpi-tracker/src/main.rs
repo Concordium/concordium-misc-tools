@@ -4,6 +4,7 @@ use concordium_rust_sdk::{
     types::AbsoluteBlockHeight,
     v2::{self, FinalizedBlockInfo},
 };
+use futures::{self, future, StreamExt};
 
 #[derive(Debug, Parser)]
 struct Args {
@@ -11,12 +12,45 @@ struct Args {
     node: v2::Endpoint,
 }
 
-fn handle_block(block: FinalizedBlockInfo) {
-    println!("Block: {:?}", block);
+async fn handle_block(node: &mut v2::Client, block: FinalizedBlockInfo) -> anyhow::Result<()> {
+    println!("\n\nBlock: {:?}\n", block);
+
+    let block_info = node
+        .get_block_info(block.block_hash)
+        .await
+        .context(format!(
+            "Could not get block info for block: {}",
+            block.block_hash
+        ))?
+        .response;
+
+    let accounts = node
+        .get_account_list(block.block_hash)
+        .await
+        .context(format!(
+            "Could not get accounts for block: {}",
+            block.block_hash
+        ))?
+        .response;
+
+    accounts
+        .for_each(|a| {
+            if let Ok(account) = a {
+                println!(
+                    "Account {} present in block {} at time {}",
+                    account, block.block_hash, block_info.block_slot_time
+                )
+            }
+
+            future::ready(())
+        })
+        .await;
+
+    Ok(())
 }
 
 async fn use_node(endpoint: v2::Endpoint, height: u64) -> anyhow::Result<()> {
-    println!("Using node {}\n", endpoint.uri());
+    println!("Using node {}", endpoint.uri());
 
     let mut node = v2::Client::new(endpoint)
         .await
@@ -29,11 +63,9 @@ async fn use_node(endpoint: v2::Endpoint, height: u64) -> anyhow::Result<()> {
         .await
         .context("What happened here??")?;
 
-    for _ in 0..11 {
+    for _ in 0..3 {
         if let Some(block) = blocks_stream.next().await {
-            handle_block(block);
-        } else {
-            println!("None");
+            handle_block(&mut node, block).await?;
         }
     }
 
