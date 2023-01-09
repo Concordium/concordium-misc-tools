@@ -1,14 +1,17 @@
 use std::collections::{BTreeMap, HashMap};
+use std::hash::Hash;
 
 use anyhow::Context;
+use chrono::{DateTime, Utc};
 use clap::Parser;
 use concordium_rust_sdk::{
     id::types::AccountCredentialWithoutProofs,
+    smart_contracts::common::AccountAddress,
     types::{
         hashes::{BlockMarker, HashBytes},
         AbsoluteBlockHeight,
     },
-    v2::{self, AccountIdentifier, FinalizedBlockInfo},
+    v2::{self, AccountIdentifier, Client, Endpoint, FinalizedBlockInfo},
 };
 use futures::{self, StreamExt};
 
@@ -16,7 +19,7 @@ use futures::{self, StreamExt};
 struct Args {
     /// The node used for querying
     #[arg(long, default_value = "http://localhost:20001")]
-    node: v2::Endpoint,
+    node: Endpoint,
     /// How many blocks to process.
     // Only here for testing purposes...
     #[arg(long, default_value_t = 10000)]
@@ -32,10 +35,10 @@ struct AccountDetails {
 // Blocks are stored, so other tables can reference information about the block they were created in.
 #[derive(Debug)]
 struct BlockDetails {
-    block_time: i64,
+    block_time: DateTime<Utc>,
 }
 
-type AccountsTable = HashMap<String, AccountDetails>;
+type AccountsTable = HashMap<CanonicalAccountAddress, AccountDetails>;
 type BlocksTable = HashMap<String, BlockDetails>;
 
 struct DB {
@@ -43,12 +46,42 @@ struct DB {
     accounts: AccountsTable,
 }
 
+#[derive(Eq, Debug, Clone, Copy, Ord, PartialOrd)]
+struct CanonicalAccountAddress(AccountAddress);
+
+impl From<CanonicalAccountAddress> for AccountAddress {
+    fn from(aae: CanonicalAccountAddress) -> Self {
+        aae.0
+    }
+}
+
+impl PartialEq for CanonicalAccountAddress {
+    fn eq(&self, other: &Self) -> bool {
+        let bytes_1: &[u8; 32] = self.0.as_ref();
+        let bytes_2: &[u8; 32] = other.0.as_ref();
+        bytes_1[0..29] == bytes_2[0..29]
+    }
+}
+
+impl Hash for CanonicalAccountAddress {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        let bytes: &[u8; 32] = self.0.as_ref();
+        bytes[0..29].hash(state);
+    }
+}
+
+impl AsRef<CanonicalAccountAddress> for AccountAddress {
+    fn as_ref(&self) -> &CanonicalAccountAddress {
+        unsafe { std::mem::transmute(self) }
+    }
+}
+
 /// Returns a Map of AccountAddress, AccountDetails pairs not already included in `accounts_table`
 async fn new_accounts_in_block(
-    node: &mut v2::Client,
+    node: &mut Client,
     block_hash: &HashBytes<BlockMarker>,
     accounts_table: &AccountsTable,
-) -> anyhow::Result<BTreeMap<String, AccountDetails>> {
+) -> anyhow::Result<BTreeMap<CanonicalAccountAddress, AccountDetails>> {
     let mut accounts = node
         .get_account_list(block_hash)
         .await
@@ -59,7 +92,7 @@ async fn new_accounts_in_block(
 
     while let Some(res) = accounts.next().await {
         let account = res.context("What exactly is this status error?")?; // TODO
-        let key = account.to_string();
+        let key = CanonicalAccountAddress(account);
 
         if !accounts_table.contains_key(&key) {
             // Client needs to be cloned for it to not be consumed on the first run.
@@ -83,12 +116,12 @@ async fn new_accounts_in_block(
                 block_hash: block_hash.to_string(),
             };
 
-            new_accounts.insert(account.to_string(), account_details);
+            new_accounts.insert(key, account_details);
 
             println!(
                 "NEW ACCOUNT:\naccount: {}\ndetails: {:?}",
-                &key,
-                new_accounts.get(&account.to_string())
+                &key.0,
+                new_accounts.get(&key)
             );
         }
     }
@@ -101,7 +134,7 @@ async fn new_accounts_in_block(
 fn update_db(
     db: &mut DB,
     (block_hash, block_details): (&HashBytes<BlockMarker>, BlockDetails),
-    accounts: BTreeMap<String, AccountDetails>,
+    accounts: BTreeMap<CanonicalAccountAddress, AccountDetails>,
 ) {
     db.blocks.insert(block_hash.to_string(), block_details);
     db.accounts.extend(accounts.into_iter());
@@ -122,7 +155,7 @@ async fn handle_block(
         .response;
 
     let block_details = BlockDetails {
-        block_time: block_info.block_slot_time.timestamp(),
+        block_time: block_info.block_slot_time,
     };
     let new_accounts = new_accounts_in_block(node, &block_info.block_hash, &db.accounts).await?;
 
@@ -141,7 +174,7 @@ async fn use_node(endpoint: v2::Endpoint, height: u64) -> anyhow::Result<()> {
         accounts: HashMap::new(),
     };
 
-    let mut node = v2::Client::new(endpoint)
+    let mut node = Client::new(endpoint)
         .await
         .context("Could not connect to node.")?;
 
@@ -159,12 +192,28 @@ async fn use_node(endpoint: v2::Endpoint, height: u64) -> anyhow::Result<()> {
     println!("\n");
     println!("Blocks stored: {}\n", &db.blocks.len());
 
-    let accounts: Vec<String> = db
+    let mut accounts: Vec<(AccountAddress, DateTime<Utc>, AccountDetails)> = db
         .accounts
         .into_iter()
-        .map(|r| format!("{}, {:?}", r.0, r.1))
+        .map(|(address_eq, details)| {
+            let block_time = db
+                .blocks
+                .get(&details.block_hash)
+                .expect("Found account with wrong reference to block?")
+                .block_time;
+
+            (address_eq.0, block_time, details)
+        })
         .collect();
-    println!("Accounts stored:\n {}", accounts.join("\n"));
+
+    accounts.sort_by_cached_key(|v| v.1);
+
+    let account_strings: Vec<String> = accounts
+        .into_iter()
+        .map(|(address, block_time, details)| format!("{}, {}, {:?}", address, block_time, details))
+        .collect();
+
+    println!("Accounts stored:\n{}", account_strings.join("\n"));
 
     Ok(())
 }
