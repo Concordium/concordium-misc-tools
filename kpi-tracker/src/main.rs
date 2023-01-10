@@ -4,12 +4,13 @@ use std::hash::Hash;
 use anyhow::Context;
 use chrono::{DateTime, Utc};
 use clap::Parser;
+use concordium_rust_sdk::types::TransactionType;
 use concordium_rust_sdk::{
     id::types::AccountCredentialWithoutProofs,
     smart_contracts::common::AccountAddress,
     types::{
         hashes::{BlockMarker, HashBytes},
-        AbsoluteBlockHeight,
+        AbsoluteBlockHeight, BlockItemSummaryDetails,
     },
     v2::{self, AccountIdentifier, Client, Endpoint, FinalizedBlockInfo},
 };
@@ -39,12 +40,20 @@ struct BlockDetails {
     height: u64, // Used as a reference from where to restart on service restart.
 }
 
-type AccountsTable = HashMap<CanonicalAccountAddress, AccountDetails>;
+#[derive(Debug)]
+struct TransactionDetails {
+    transaction_type: TransactionType,
+    block_hash: String,
+}
+
 type BlocksTable = HashMap<String, BlockDetails>;
+type AccountsTable = HashMap<CanonicalAccountAddress, AccountDetails>;
+type TransactionsTable = HashMap<String, TransactionDetails>;
 
 struct DB {
     blocks: BlocksTable,
     accounts: AccountsTable,
+    transactions: TransactionsTable,
 }
 
 #[derive(Eq, Debug, Clone, Copy, Ord, PartialOrd)]
@@ -86,7 +95,7 @@ async fn new_accounts_in_block(
     let mut accounts = node
         .get_account_list(block_hash)
         .await
-        .context(format!("Could not get accounts for block: {}", block_hash))?
+        .context(format!("Block not found: {}", block_hash))?
         .response;
 
     let mut new_accounts = BTreeMap::new();
@@ -99,6 +108,7 @@ async fn new_accounts_in_block(
             // Client needs to be cloned for it to not be consumed on the first run.
             let mut c_node = node.clone();
 
+            // TODO: Would be nice if the following could be concurrent.
             let account_info = c_node
                 .get_account_info(&AccountIdentifier::Address(account), block_hash)
                 .await?
@@ -117,17 +127,49 @@ async fn new_accounts_in_block(
                 block_hash: block_hash.to_string(),
             };
 
-            new_accounts.insert(key, account_details);
-
             println!(
                 "NEW ACCOUNT:\naccount: {}\ndetails: {:?}",
-                &key.0,
-                new_accounts.get(&key)
+                &key.0, &account_details,
             );
+
+            new_accounts.insert(key, account_details);
         }
     }
 
     Ok(new_accounts)
+}
+
+async fn transactions_in_block(
+    node: &mut Client,
+    block_hash: &HashBytes<BlockMarker>,
+) -> anyhow::Result<BTreeMap<String, TransactionDetails>> {
+    let mut transactions = node
+        .get_block_transaction_events(block_hash)
+        .await
+        .context(format!("Block not found: {}", block_hash))?
+        .response;
+
+    let mut transactions_map: BTreeMap<String, TransactionDetails> = BTreeMap::new();
+
+    while let Some(res) = transactions.next().await {
+        let transaction = res.context("??")?;
+
+        if let BlockItemSummaryDetails::AccountTransaction(at) = transaction.details {
+            if let Some(transaction_type) = at.transaction_type() {
+                let hash = transaction.hash.to_string();
+                let details = TransactionDetails {
+                    block_hash: block_hash.to_string(),
+                    transaction_type,
+                };
+
+                println!("TRANSACTION:\nhash: {}\ndetails: {:?}", &hash, &details);
+
+                transactions_map.insert(hash, details);
+            }
+        }
+    }
+
+    Ok(transactions_map)
 }
 
 /// Insert as a single DB transaction to facilitate easy recovery, as the service can restart from
@@ -136,9 +178,11 @@ fn update_db(
     db: &mut DB,
     (block_hash, block_details): (&HashBytes<BlockMarker>, BlockDetails),
     accounts: BTreeMap<CanonicalAccountAddress, AccountDetails>,
+    transactions: BTreeMap<String, TransactionDetails>,
 ) {
     db.blocks.insert(block_hash.to_string(), block_details);
     db.accounts.extend(accounts.into_iter());
+    db.transactions.extend(transactions.into_iter());
 }
 
 async fn handle_block(
@@ -149,10 +193,7 @@ async fn handle_block(
     let block_info = node
         .get_block_info(block.block_hash)
         .await
-        .context(format!(
-            "Could not get block info for block: {}",
-            block.block_hash
-        ))?
+        .context(format!("Block not found: {}", block.block_hash))?
         .response;
 
     let block_details = BlockDetails {
@@ -160,8 +201,14 @@ async fn handle_block(
         height: block_info.block_height.height,
     };
     let new_accounts = new_accounts_in_block(node, &block_info.block_hash, &db.accounts).await?;
+    let transactions = transactions_in_block(node, &block_info.block_hash).await?;
 
-    update_db(db, (&block_info.block_hash, block_details), new_accounts);
+    update_db(
+        db,
+        (&block_info.block_hash, block_details),
+        new_accounts,
+        transactions,
+    );
 
     Ok(())
 }
@@ -174,6 +221,7 @@ async fn use_node(endpoint: v2::Endpoint, height: u64) -> anyhow::Result<()> {
     let mut db = DB {
         blocks: HashMap::new(),
         accounts: HashMap::new(),
+        transactions: HashMap::new(),
     };
 
     let mut node = Client::new(endpoint)
@@ -212,10 +260,36 @@ async fn use_node(endpoint: v2::Endpoint, height: u64) -> anyhow::Result<()> {
 
     let account_strings: Vec<String> = accounts
         .into_iter()
-        .map(|(address, block_time, details)| format!("{}, {}, {:?}", address, block_time, details))
+        .map(|(address, block_time, details)| {
+            format!("Account: {}, {}, {:?}", address, block_time, details)
+        })
         .collect();
 
     println!("Accounts stored:\n{}", account_strings.join("\n"));
+
+    let mut transactions: Vec<(String, DateTime<Utc>, TransactionDetails)> = db
+        .transactions
+        .into_iter()
+        .map(|(hash, details)| {
+            let block_time = db
+                .blocks
+                .get(&details.block_hash)
+                .expect("Found account with wrong reference to block?")
+                .block_time;
+
+            (hash, block_time, details)
+        })
+        .collect();
+
+    transactions.sort_by_cached_key(|v| v.1);
+
+    let transaction_strings: Vec<String> = transactions
+        .into_iter()
+        .map(|(hash, block_time, details)| {
+            format!("Transaction: {}, {}, {:?}", hash, block_time, details)
+        })
+        .collect();
+    println!("Transactions stored:{}", transaction_strings.join("\n"));
 
     Ok(())
 }
