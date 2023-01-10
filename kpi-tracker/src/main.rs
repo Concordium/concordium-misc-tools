@@ -36,6 +36,7 @@ struct AccountDetails {
 #[derive(Debug)]
 struct BlockDetails {
     block_time: DateTime<Utc>,
+    height: u64, // Used as a reference from where to restart on service restart.
 }
 
 type AccountsTable = HashMap<CanonicalAccountAddress, AccountDetails>;
@@ -50,8 +51,8 @@ struct DB {
 struct CanonicalAccountAddress(AccountAddress);
 
 impl From<CanonicalAccountAddress> for AccountAddress {
-    fn from(aae: CanonicalAccountAddress) -> Self {
-        aae.0
+    fn from(caa: CanonicalAccountAddress) -> Self {
+        caa.0
     }
 }
 
@@ -156,6 +157,7 @@ async fn handle_block(
 
     let block_details = BlockDetails {
         block_time: block_info.block_slot_time,
+        height: block_info.block_height.height,
     };
     let new_accounts = new_accounts_in_block(node, &block_info.block_hash, &db.accounts).await?;
 
