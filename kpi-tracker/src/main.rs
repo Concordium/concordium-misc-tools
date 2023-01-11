@@ -14,7 +14,7 @@ use concordium_rust_sdk::{
     },
     v2::{self, AccountIdentifier, Client, Endpoint, FinalizedBlockInfo},
 };
-use futures::{self, StreamExt};
+use futures::{self, StreamExt, TryStreamExt};
 
 #[derive(Debug, Parser)]
 struct Args {
@@ -108,7 +108,6 @@ async fn new_accounts_in_block(
             // Client needs to be cloned for it to not be consumed on the first run.
             let mut c_node = node.clone();
 
-            // TODO: Would be nice if the following could be concurrent.
             let account_info = c_node
                 .get_account_info(&AccountIdentifier::Address(account), block_hash)
                 .await?
@@ -143,20 +142,25 @@ async fn transactions_in_block(
     node: &mut Client,
     block_hash: &HashBytes<BlockMarker>,
 ) -> anyhow::Result<BTreeMap<String, TransactionDetails>> {
-    let mut transactions = node
+    let transactions = node
         .get_block_transaction_events(block_hash)
         .await
         .context(format!("Block not found: {}", block_hash))?
         .response;
 
-    let mut transactions_map: BTreeMap<String, TransactionDetails> = BTreeMap::new();
+    let transactions_map: BTreeMap<String, TransactionDetails> = transactions
+        .try_filter_map(|t| async move {
+            let res = if let BlockItemSummaryDetails::AccountTransaction(atd) = t.details {
+                Some((t.hash, atd))
+            } else {
+                None
+            };
 
-    while let Some(res) = transactions.next().await {
-        let transaction = res.context("??")?;
-
-        if let BlockItemSummaryDetails::AccountTransaction(at) = transaction.details {
-            if let Some(transaction_type) = at.transaction_type() {
-                let hash = transaction.hash.to_string();
+            Ok(res)
+        })
+        .try_fold(BTreeMap::new(), |mut acc, (hash, details)| async move {
+            if let Some(transaction_type) = details.transaction_type() {
+                let hash = hash.to_string();
                 let details = TransactionDetails {
                     block_hash: block_hash.to_string(),
                     transaction_type,
@@ -164,10 +168,12 @@ async fn transactions_in_block(
 
                 println!("TRANSACTION:\nhash: {}\ndetails: {:?}", &hash, &details);
 
-                transactions_map.insert(hash, details);
+                acc.insert(hash, details);
             }
-        }
-    }
+
+            Ok(acc)
+        })
+        .await?;
 
     Ok(transactions_map)
 }
@@ -213,33 +219,7 @@ async fn handle_block(
     Ok(())
 }
 
-async fn use_node(endpoint: v2::Endpoint, height: u64) -> anyhow::Result<()> {
-    let args = Args::parse();
-
-    println!("Using node {}\n", endpoint.uri());
-
-    let mut db = DB {
-        blocks: HashMap::new(),
-        accounts: HashMap::new(),
-        transactions: HashMap::new(),
-    };
-
-    let mut node = Client::new(endpoint)
-        .await
-        .context("Could not connect to node.")?;
-
-    let mut blocks_stream = node
-        .get_finalized_blocks_from(AbsoluteBlockHeight { height })
-        .await
-        .context("Error querying blocks")?;
-
-    for _ in 0..args.num_blocks {
-        if let Some(block) = blocks_stream.next().await {
-            handle_block(&mut node, block, &mut db).await?;
-        }
-    }
-
-    println!("\n");
+fn print_db(db: DB) {
     println!("Blocks stored: {}\n", &db.blocks.len());
 
     let mut accounts: Vec<(AccountAddress, DateTime<Utc>, AccountDetails)> = db
@@ -290,14 +270,47 @@ async fn use_node(endpoint: v2::Endpoint, height: u64) -> anyhow::Result<()> {
         })
         .collect();
     println!("Transactions stored:{}", transaction_strings.join("\n"));
+}
+
+async fn use_node(db: &mut DB) -> anyhow::Result<()> {
+    let args = Args::parse();
+    let endpoint = args.node;
+    let current_height = 0; // TOOD: get this from actual DB
+
+    println!("Using node {}\n", endpoint.uri());
+
+    let mut node = Client::new(endpoint)
+        .await
+        .context("Could not connect to node.")?;
+
+    let mut blocks_stream = node
+        .get_finalized_blocks_from(AbsoluteBlockHeight {
+            height: current_height,
+        })
+        .await
+        .context("Error querying blocks")?;
+
+    for _ in 0..args.num_blocks {
+        // TODO: Make concurrent
+        if let Some(block) = blocks_stream.next().await {
+            handle_block(&mut node, block, db).await?;
+        }
+    }
 
     Ok(())
 }
 
 #[tokio::main]
 async fn main() {
-    let args = Args::parse();
-    if let Err(error) = use_node(args.node, 0).await {
+    let mut db = DB {
+        blocks: HashMap::new(),
+        accounts: HashMap::new(),
+        transactions: HashMap::new(),
+    };
+
+    if let Err(error) = use_node(&mut db).await {
         println!("Error happened: {}", error)
     }
+
+    print_db(db);
 }
