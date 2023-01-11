@@ -1,8 +1,6 @@
 /* eslint-disable no-alert */
 import React, { useEffect, useState, MouseEventHandler, ChangeEventHandler } from 'react';
 import Select from 'react-select';
-
-import { detectConcordiumProvider } from '@concordium/browser-wallet-api-helpers';
 import {
     AtomicStatement,
     AttributeKey,
@@ -116,7 +114,11 @@ interface RevealAttributeProps {
     setStatement: (ns: AtomicStatement) => void;
 }
 
-async function submitProof(statement: IdStatement, setMessages: (cbk: (oldMessages: string[]) => string[]) => void) {
+async function submitProof(
+    statement: IdStatement,
+    provider: WalletProvider,
+    setMessages: (cbk: (oldMessages: string[]) => string[]) => void
+) {
     const response = await fetch(`${getVerifierURL()}/inject`, {
         method: 'POST',
         headers: {
@@ -126,47 +128,40 @@ async function submitProof(statement: IdStatement, setMessages: (cbk: (oldMessag
     });
     if (response.ok) {
         const body: { statement: IdStatement; challenge: string } = await response.json();
-        const provider = await detectConcordiumProvider();
-        const account = await provider.connect();
-        if (account === null) {
-            alert('Cannot prove, user has rejected.');
-            return;
-        } else {
-            let proof: IdProofOutput;
-            try {
-                proof = await provider.requestIdProof(account as string, body.statement, body.challenge);
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            } catch (err: any) {
-                if (err instanceof Error) {
-                    setMessages((oldMessages) => [...oldMessages, `Could not get proof: ${err.message}`]);
-                } else {
-                    console.log(err);
-                }
-                return;
-            }
-            const resp = await fetch(`${getVerifierURL()}/prove`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ challenge: body.challenge, proof }),
-            });
-            if (resp.ok) {
-                setMessages((oldMessages) => [...oldMessages, 'Proof OK']);
+        let proof: IdProofOutput;
+        try {
+            proof = await provider.requestIdProof(body.statement, body.challenge);
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } catch (err: any) {
+            if (err instanceof Error) {
+                setMessages((oldMessages) => [...oldMessages, `Could not get proof: ${err.message}`]);
             } else {
-                const body = await resp.json();
-                setMessages((oldMessages) => [...oldMessages, `Proof not OK: (${resp.status}) ${body}`]);
+                console.log(err);
             }
+            return;
+        }
+        const resp = await fetch(`${getVerifierURL()}/prove`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ challenge: body.challenge, proof }),
+        });
+        if (resp.ok) {
+            setMessages((oldMessages) => [...oldMessages, 'Proof OK']);
+        } else {
+            const body = await resp.json();
+            setMessages((oldMessages) => [...oldMessages, `Proof not OK: (${resp.status}) ${body}`]);
         }
     } else {
         setMessages((oldMessages: string[]) => [...oldMessages, `Could not inject statement: ${response.statusText}`]);
     }
 }
 
-function SubmitProof(statement: { statement: IdStatement }) {
+function SubmitProof({ statement, provider }: { statement: IdStatement; provider: WalletProvider }) {
     const [messages, setMessages] = useState<string[]>([]);
 
-    const handleProve: MouseEventHandler<HTMLButtonElement> = () => submitProof(statement.statement, setMessages);
+    const handleProve: MouseEventHandler<HTMLButtonElement> = () => submitProof(statement, provider, setMessages);
 
     return (
         <div>
@@ -594,7 +589,7 @@ export default function ProofExplorer() {
                         </button>
                     </div>
                     <p> Connected account: {account} </p>
-                    <SubmitProof statement={statement} />
+                    {provider !== undefined && <SubmitProof statement={statement} provider={provider} />}
                 </div>
                 <div className="col-sm">
                     <div>
