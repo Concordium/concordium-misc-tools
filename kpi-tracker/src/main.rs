@@ -388,7 +388,7 @@ fn print_db(db: DB) {
         })
         .collect();
 
-    println!("Accounts stored:\n{}", account_strings.join("\n"));
+    println!("Accounts stored:\n{}\n", account_strings.join("\n"));
 
     let mut transactions: Vec<(String, DateTime<Utc>, TransactionDetails)> = db
         .account_transactions
@@ -412,7 +412,58 @@ fn print_db(db: DB) {
             format!("Transaction: {}, {}, {:?}", hash, block_time, details)
         })
         .collect();
-    println!("Transactions stored:{}\n", transaction_strings.join("\n"));
+    println!("Transactions stored:\n{}\n", transaction_strings.join("\n"));
+
+    let mut contract_modules: Vec<(String, DateTime<Utc>, ContractModuleDetails)> = db
+        .contract_modules
+        .into_iter()
+        .map(|(m_ref, details)| {
+            let block_time = db
+                .blocks
+                .get(&details.block_hash)
+                .expect("Found account with wrong reference to block?")
+                .block_time;
+
+            (m_ref, block_time, details)
+        })
+        .collect();
+
+    contract_modules.sort_by_cached_key(|v| v.1);
+
+    let module_strings: Vec<String> = contract_modules
+        .into_iter()
+        .map(|(m_ref, block_time, details)| {
+            format!("Transaction: {}, {}, {:?}", m_ref, block_time, details)
+        })
+        .collect();
+    println!("Contract modules stored:\n{}\n", module_strings.join("\n"));
+
+    let mut contract_instances: Vec<(ContractAddress, DateTime<Utc>, ContractInstanceDetails)> = db
+        .contract_instances
+        .into_iter()
+        .map(|(address, details)| {
+            let block_time = db
+                .blocks
+                .get(&details.block_hash)
+                .expect("Found account with wrong reference to block?")
+                .block_time;
+
+            (address, block_time, details)
+        })
+        .collect();
+
+    contract_instances.sort_by_cached_key(|v| v.1);
+
+    let instance_strings: Vec<String> = contract_instances
+        .into_iter()
+        .map(|(address, block_time, details)| {
+            format!("Transaction: {}, {}, {:?}", address, block_time, details)
+        })
+        .collect();
+    println!(
+        "Contract instances stored:\n{}\n",
+        instance_strings.join("\n")
+    );
 }
 
 async fn use_node(db: &mut DB) -> anyhow::Result<()> {
