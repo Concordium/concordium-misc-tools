@@ -1,20 +1,25 @@
 use std::collections::{BTreeMap, HashMap};
 use std::hash::Hash;
 
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use chrono::{DateTime, Utc};
 use clap::Parser;
-use concordium_rust_sdk::types::TransactionType;
+use concordium_rust_sdk::types::hashes::TransactionMarker;
+use concordium_rust_sdk::types::{
+    AccountTransactionDetails, AccountTransactionEffects, BlockItemSummary, ContractAddress,
+    TransactionType,
+};
 use concordium_rust_sdk::{
     id::types::AccountCredentialWithoutProofs,
     smart_contracts::common::AccountAddress,
     types::{
         hashes::{BlockMarker, HashBytes},
-        AbsoluteBlockHeight, BlockItemSummaryDetails,
+        AbsoluteBlockHeight,
+        BlockItemSummaryDetails::{AccountCreation, AccountTransaction},
     },
-    v2::{self, AccountIdentifier, Client, Endpoint, FinalizedBlockInfo},
+    v2::{AccountIdentifier, Client, Endpoint, FinalizedBlockInfo},
 };
-use futures::{self, StreamExt, TryStreamExt};
+use futures::{self, future, Stream, StreamExt, TryStreamExt};
 
 #[derive(Debug, Parser)]
 struct Args {
@@ -27,12 +32,6 @@ struct Args {
     num_blocks: u64,
 }
 
-#[derive(Debug)]
-struct AccountDetails {
-    is_initial: bool,
-    block_hash: String, // FK to blocks
-}
-
 // Blocks are stored, so other tables can reference information about the block they were created in.
 #[derive(Debug)]
 struct BlockDetails {
@@ -43,17 +42,46 @@ struct BlockDetails {
 #[derive(Debug)]
 struct TransactionDetails {
     transaction_type: TransactionType,
-    block_hash: String,
+    block_hash: String, // FK to blocks
+    cost: u64,
+}
+
+#[derive(Debug)]
+struct AccountDetails {
+    is_initial: bool,
+    block_hash: String, // FK to transactions
+}
+
+#[derive(Debug)]
+struct ContractModuleDetails {
+    block_hash: String, // FK to transactions
+}
+
+#[derive(Debug)]
+struct ContractInstanceDetails {
+    module_ref: String, // FK to modules
+    block_hash: String, // FK to transactions
 }
 
 type BlocksTable = HashMap<String, BlockDetails>;
 type AccountsTable = HashMap<CanonicalAccountAddress, AccountDetails>;
-type TransactionsTable = HashMap<String, TransactionDetails>;
+type AccountTransactionsTable = HashMap<String, TransactionDetails>;
+type ContractModulesTable = HashMap<String, ContractModuleDetails>;
+type ContractInstancesTable = HashMap<ContractAddress, ContractInstanceDetails>;
 
 struct DB {
     blocks: BlocksTable,
     accounts: AccountsTable,
-    transactions: TransactionsTable,
+    account_transactions: AccountTransactionsTable,
+    contract_modules: ContractModulesTable,
+    contract_instances: ContractInstancesTable,
+}
+
+enum BlockEvent {
+    AccountCreation(CanonicalAccountAddress, AccountDetails),
+    AccountTransaction(String, TransactionDetails),
+    ContractModuleDeployment(String, ContractModuleDetails),
+    ContractInstantiation(ContractAddress, ContractInstanceDetails),
 }
 
 #[derive(Eq, Debug, Clone, Copy, Ord, PartialOrd)]
@@ -86,11 +114,39 @@ impl AsRef<CanonicalAccountAddress> for AccountAddress {
     }
 }
 
-/// Returns a Map of AccountAddress, AccountDetails pairs not already included in `accounts_table`
-async fn new_accounts_in_block(
+async fn get_account_details(
+    address: AccountAddress,
+    block_hash: &HashBytes<BlockMarker>,
+    node: &mut Client,
+) -> anyhow::Result<AccountDetails> {
+    let account_info = node
+        .get_account_info(&AccountIdentifier::Address(address), block_hash)
+        .await
+        .context("Could not get account info")?
+        .response;
+
+    let is_initial =
+        account_info
+            .account_credentials
+            .get(&0.into())
+            .map_or(false, |cdi| match &cdi.value {
+                AccountCredentialWithoutProofs::Initial { .. } => true,
+                AccountCredentialWithoutProofs::Normal { .. } => false,
+            });
+
+    let account_details = AccountDetails {
+        is_initial,
+        block_hash: block_hash.to_string(),
+    };
+
+    Ok(account_details)
+}
+
+/// Returns a Map of AccountAddress, AccountDetails pairs included in block identified by
+/// `block_hash`
+async fn accounts_in_block(
     node: &mut Client,
     block_hash: &HashBytes<BlockMarker>,
-    accounts_table: &AccountsTable,
 ) -> anyhow::Result<BTreeMap<CanonicalAccountAddress, AccountDetails>> {
     let mut accounts = node
         .get_account_list(block_hash)
@@ -103,79 +159,122 @@ async fn new_accounts_in_block(
     while let Some(res) = accounts.next().await {
         let account = res.context("What exactly is this status error?")?; // TODO
         let key = CanonicalAccountAddress(account);
+        let account_details = get_account_details(account, block_hash, node).await?;
 
-        if !accounts_table.contains_key(&key) {
-            // Client needs to be cloned for it to not be consumed on the first run.
-            let mut c_node = node.clone();
+        println!(
+            "ACCOUNT:\naccount: {}\ndetails: {:?}",
+            &key.0, &account_details,
+        );
 
-            let account_info = c_node
-                .get_account_info(&AccountIdentifier::Address(account), block_hash)
-                .await?
-                .response;
-
-            let is_initial = account_info
-                .account_credentials
-                .get(&0.into())
-                .map_or(false, |cdi| match &cdi.value {
-                    AccountCredentialWithoutProofs::Initial { .. } => true,
-                    AccountCredentialWithoutProofs::Normal { .. } => false,
-                });
-
-            let account_details = AccountDetails {
-                is_initial,
-                block_hash: block_hash.to_string(),
-            };
-
-            println!(
-                "NEW ACCOUNT:\naccount: {}\ndetails: {:?}",
-                &key.0, &account_details,
-            );
-
-            new_accounts.insert(key, account_details);
-        }
+        new_accounts.insert(key, account_details);
     }
 
     Ok(new_accounts)
 }
 
-async fn transactions_in_block(
+fn get_account_transaction_details(
+    details: &AccountTransactionDetails,
+    block_hash: &HashBytes<BlockMarker>,
+) -> Option<TransactionDetails> {
+    details
+        .transaction_type()
+        .map(|transaction_type| TransactionDetails {
+            block_hash: block_hash.to_string(),
+            transaction_type,
+            cost: details.cost.micro_ccd,
+        })
+}
+
+/// Maps `BlockItemSummary` to `BlockEvent`, which represent entities stored in the database.
+async fn to_block_events(
     node: &mut Client,
     block_hash: &HashBytes<BlockMarker>,
-) -> anyhow::Result<BTreeMap<String, TransactionDetails>> {
-    let transactions = node
-        .get_block_transaction_events(block_hash)
-        .await
-        .context(format!("Block not found: {}", block_hash))?
-        .response;
+    block_item: BlockItemSummary,
+) -> Vec<anyhow::Result<BlockEvent>> {
+    let mut events: Vec<anyhow::Result<BlockEvent>> = Vec::new();
 
-    let transactions_map: BTreeMap<String, TransactionDetails> = transactions
-        .try_filter_map(|t| async move {
-            let res = if let BlockItemSummaryDetails::AccountTransaction(atd) = t.details {
-                Some((t.hash, atd))
-            } else {
-                None
-            };
-
-            Ok(res)
-        })
-        .try_fold(BTreeMap::new(), |mut acc, (hash, details)| async move {
-            if let Some(transaction_type) = details.transaction_type() {
-                let hash = hash.to_string();
-                let details = TransactionDetails {
-                    block_hash: block_hash.to_string(),
-                    transaction_type,
-                };
-
-                println!("TRANSACTION:\nhash: {}\ndetails: {:?}", &hash, &details);
-
-                acc.insert(hash, details);
+    match block_item.details {
+        AccountTransaction(atd) => {
+            // TODO: do we want to store failed transactions?
+            if let Some(details) = get_account_transaction_details(&atd, block_hash) {
+                println!(
+                    "TRANSACTION:\nhash: {}\ndetails: {:?}",
+                    &block_item.hash, &details
+                );
+                let event = BlockEvent::AccountTransaction(block_item.hash.to_string(), details);
+                events.push(Ok(event));
             }
 
-            Ok(acc)
-        })
-        .await?;
+            match atd.effects {
+                AccountTransactionEffects::ModuleDeployed { module_ref } => {
+                    let details = ContractModuleDetails {
+                        block_hash: block_hash.to_string(),
+                    };
+                    println!(
+                        "CONTRACT MODULE:\nref: {}\ndetails: {:?}",
+                        &module_ref, &details
+                    );
+                    let event =
+                        BlockEvent::ContractModuleDeployment(module_ref.to_string(), details);
+                    events.push(Ok(event));
+                }
+                AccountTransactionEffects::ContractInitialized { data } => {
+                    let details = ContractInstanceDetails {
+                        block_hash: block_hash.to_string(),
+                        module_ref: data.origin_ref.to_string(),
+                    };
+                    println!(
+                        "CONTRACT INSTANCE:\naddress: {}\ndetails: {:?}",
+                        &data.address, &details
+                    );
+                    let event = BlockEvent::ContractInstantiation(data.address, details);
+                    events.push(Ok(event));
+                }
+                _ => {}
+            };
+        }
+        AccountCreation(act) => {
+            let cad = CanonicalAccountAddress(act.address);
+            let result = get_account_details(act.address, block_hash, node)
+                .await
+                .map(|details| {
+                    // `.inspect` is marked as unstable
+                    println!("ACCOUNT:\naddress: {}\ndetails: {:?}", &cad.0, &details);
+                    details
+                })
+                .map(|details| BlockEvent::AccountCreation(cad, details));
 
-    Ok(transactions_map)
+            events.push(result);
+        }
+        _ => {}
+    };
+
+    events
+}
+
+// Don't know why I need explicit lifetime anotations here?
+fn process_transactions<'a>(
+    node: &'a mut Client,
+    block_hash: &'a HashBytes<BlockMarker>,
+    transactions_stream: impl Stream<Item = Result<BlockItemSummary, tonic::Status>> + 'a,
+) -> impl Stream<Item = anyhow::Result<BlockEvent>> + 'a {
+    let block_events_stream = transactions_stream
+        .then(|res| {
+            let mut node = node.clone();
+            let c_block_hash = block_hash.clone();
+
+            async move {
+                let block_events = match res {
+                    Ok(bi) => to_block_events(&mut node, &c_block_hash, bi).await,
+                    Err(err) => vec![Err(anyhow!("Error while streaming block items: {}", err))],
+                };
+
+                futures::stream::iter(block_events)
+            }
+        })
+        .flatten();
+
+    block_events_stream
 }
 
 /// Insert as a single DB transaction to facilitate easy recovery, as the service can restart from
@@ -185,14 +284,18 @@ fn update_db(
     (block_hash, block_details): (&HashBytes<BlockMarker>, BlockDetails),
     accounts: BTreeMap<CanonicalAccountAddress, AccountDetails>,
     transactions: BTreeMap<String, TransactionDetails>,
+    contract_modules: BTreeMap<String, ContractModuleDetails>,
+    contract_instances: BTreeMap<ContractAddress, ContractInstanceDetails>,
 ) {
     db.blocks.insert(block_hash.to_string(), block_details);
     db.accounts.extend(accounts.into_iter());
-    db.transactions.extend(transactions.into_iter());
+    db.account_transactions.extend(transactions.into_iter());
+    db.contract_modules.extend(contract_modules.into_iter());
+    db.contract_instances.extend(contract_instances.into_iter());
 }
 
 async fn handle_block(
-    node: &mut v2::Client,
+    node: &mut Client,
     block: FinalizedBlockInfo,
     db: &mut DB,
 ) -> anyhow::Result<()> {
@@ -206,14 +309,54 @@ async fn handle_block(
         block_time: block_info.block_slot_time,
         height: block_info.block_height.height,
     };
-    let new_accounts = new_accounts_in_block(node, &block_info.block_hash, &db.accounts).await?;
-    let transactions = transactions_in_block(node, &block_info.block_hash).await?;
+
+    let transactions_stream = node
+        .get_block_transaction_events(block_info.block_hash)
+        .await
+        .context(format!("Block not found: {}", block_info.block_hash))?
+        .response;
+
+    let mut accounts: BTreeMap<CanonicalAccountAddress, AccountDetails> = BTreeMap::new();
+    let mut account_transactions: BTreeMap<String, TransactionDetails> = BTreeMap::new();
+    let mut contract_modules: BTreeMap<String, ContractModuleDetails> = BTreeMap::new();
+    let mut contract_instances: BTreeMap<ContractAddress, ContractInstanceDetails> =
+        BTreeMap::new();
+
+    if block.height.height == 0 {
+        let mut genesis_accounts = accounts_in_block(node, &block.block_hash).await?;
+        accounts.append(&mut genesis_accounts);
+    }
+
+    let block_events = process_transactions(node, &block_info.block_hash, transactions_stream);
+
+    block_events
+        .try_for_each(|be| {
+            match be {
+                BlockEvent::AccountCreation(address, details) => {
+                    accounts.insert(address, details);
+                }
+                BlockEvent::AccountTransaction(hash, details) => {
+                    account_transactions.insert(hash, details);
+                }
+                BlockEvent::ContractModuleDeployment(module_ref, details) => {
+                    contract_modules.insert(module_ref, details);
+                }
+                BlockEvent::ContractInstantiation(address, details) => {
+                    contract_instances.insert(address, details);
+                }
+            };
+
+            future::ok(())
+        })
+        .await?;
 
     update_db(
         db,
         (&block_info.block_hash, block_details),
-        new_accounts,
-        transactions,
+        accounts,
+        account_transactions,
+        contract_modules,
+        contract_instances,
     );
 
     Ok(())
@@ -248,7 +391,7 @@ fn print_db(db: DB) {
     println!("Accounts stored:\n{}", account_strings.join("\n"));
 
     let mut transactions: Vec<(String, DateTime<Utc>, TransactionDetails)> = db
-        .transactions
+        .account_transactions
         .into_iter()
         .map(|(hash, details)| {
             let block_time = db
@@ -269,7 +412,7 @@ fn print_db(db: DB) {
             format!("Transaction: {}, {}, {:?}", hash, block_time, details)
         })
         .collect();
-    println!("Transactions stored:{}", transaction_strings.join("\n"));
+    println!("Transactions stored:{}\n", transaction_strings.join("\n"));
 }
 
 async fn use_node(db: &mut DB) -> anyhow::Result<()> {
@@ -305,7 +448,9 @@ async fn main() {
     let mut db = DB {
         blocks: HashMap::new(),
         accounts: HashMap::new(),
-        transactions: HashMap::new(),
+        account_transactions: HashMap::new(),
+        contract_modules: HashMap::new(),
+        contract_instances: HashMap::new(),
     };
 
     if let Err(error) = use_node(&mut db).await {
