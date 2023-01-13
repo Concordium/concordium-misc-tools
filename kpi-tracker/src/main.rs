@@ -7,12 +7,13 @@ use concordium_rust_sdk::{
     id::types::AccountCredentialWithoutProofs,
     smart_contracts::common::AccountAddress,
     types::{
-        hashes::{BlockMarker, HashBytes},
+        hashes::{BlockHash, BlockMarker, HashBytes},
         AbsoluteBlockHeight,
+        BlockItemSummaryDetails::AccountCreation,
     },
     v2::{self, AccountIdentifier, Client, Endpoint, FinalizedBlockInfo},
 };
-use futures::{self, StreamExt};
+use futures::{self, StreamExt, TryStreamExt};
 
 #[derive(Debug, Parser)]
 struct Args {
@@ -51,52 +52,95 @@ struct DB {
     accounts: AccountsTable,
 }
 
-/// Returns a Map of AccountAddress, AccountDetails pairs not already included in `accounts_table`
-async fn new_accounts_in_block(
+async fn account_details(
     node: &mut Client,
-    block_hash: &HashBytes<BlockMarker>,
-    accounts_table: &AccountsTable,
+    block_hash: &BlockHash,
+    account: &AccountAddress,
+) -> anyhow::Result<AccountDetails> {
+    let account_info = node
+        .get_account_info(&AccountIdentifier::Address(*account), block_hash)
+        .await?
+        .response;
+
+    let is_initial =
+        account_info
+            .account_credentials
+            .get(&0.into())
+            .map_or(false, |cdi| match &cdi.value {
+                AccountCredentialWithoutProofs::Initial { .. } => true,
+                AccountCredentialWithoutProofs::Normal { .. } => false,
+            });
+
+    let account_details = AccountDetails {
+        is_initial,
+        block_hash: block_hash.to_string(),
+    };
+
+    Ok(account_details)
+}
+async fn accounts_in_block(
+    node: &mut Client,
+    block_hash: &BlockHash,
 ) -> anyhow::Result<BTreeMap<AccountAddress, AccountDetails>> {
-    let mut accounts = node
+    let accounts = node
         .get_account_list(block_hash)
         .await
         .context(format!("Could not get accounts for block: {}", block_hash))?
         .response;
 
+    let accounts_details_map = accounts
+        .then(|res| {
+            let mut node = node.clone();
+
+            async move {
+                let account = res?;
+                let details = account_details(&mut node, block_hash, &account).await?;
+
+                Ok((account, details))
+            }
+        })
+        .try_fold(BTreeMap::new(), |mut map, (account, details)| async move {
+            map.insert(account, details);
+            Ok(map)
+        })
+        .await;
+
+    accounts_details_map
+}
+
+/// Returns a Map of AccountAddress, AccountDetails pairs not already included in `accounts_table`
+async fn new_accounts_in_block(
+    node: &mut Client,
+    block_hash: &BlockHash,
+    accounts_table: &AccountsTable,
+) -> anyhow::Result<BTreeMap<AccountAddress, AccountDetails>> {
+    let mut transactions = node
+        .get_block_transaction_events(block_hash)
+        .await
+        .context(format!(
+            "Could not get transactions for block: {}",
+            block_hash
+        ))?
+        .response;
+
     let mut new_accounts = BTreeMap::new();
 
-    while let Some(res) = accounts.next().await {
-        let address = res.context("What exactly is this status error?")?; // TODO
+    while let Some(res) = transactions.next().await {
+        let transaction = res.context("Stream stopped prematurely")?;
 
-        if !accounts_table
-            .keys()
-            .into_iter()
-            .any(|stored_address| address.is_alias(stored_address))
-        {
-            let account_info = node
-                .get_account_info(&AccountIdentifier::Address(address), block_hash)
-                .await?
-                .response;
+        match transaction.details {
+            AccountCreation(act)
+                if !accounts_table
+                    .keys()
+                    .into_iter()
+                    .any(|stored_address| act.address.is_alias(stored_address)) =>
+            {
+                let address = act.address;
+                let account_details = account_details(node, block_hash, &address).await?;
 
-            let is_initial = account_info
-                .account_credentials
-                .get(&0.into())
-                .map_or(false, |cdi| match &cdi.value {
-                    AccountCredentialWithoutProofs::Initial { .. } => true,
-                    AccountCredentialWithoutProofs::Normal { .. } => false,
-                });
-
-            let account_details = AccountDetails {
-                is_initial,
-                block_hash: block_hash.to_string(),
-            };
-
-            println!(
-                "NEW ACCOUNT:\naccount: {}\ndetails: {:?}",
-                &address, &account_details
-            );
-
-            new_accounts.insert(address, account_details);
+                new_accounts.insert(address, account_details);
+            }
+            _ => {}
         }
     }
 
@@ -132,7 +176,12 @@ async fn handle_block(
         block_time: block_info.block_slot_time,
         height: block_info.block_height,
     };
-    let new_accounts = new_accounts_in_block(node, &block_info.block_hash, &db.accounts).await?;
+
+    let new_accounts = if block.height.height == 0 {
+        accounts_in_block(node, &block.block_hash).await?
+    } else {
+        new_accounts_in_block(node, &block_info.block_hash, &db.accounts).await?
+    };
 
     update_db(db, (&block_info.block_hash, block_details), new_accounts);
 
