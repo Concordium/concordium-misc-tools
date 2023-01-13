@@ -32,6 +32,16 @@ export abstract class WalletProvider extends EventEmitter {
     }
 }
 
+interface WalletConnectError {
+    code: number;
+    message: string;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function isWalletConnectError(obj: any): obj is WalletConnectError {
+    return 'code' in obj && 'message' in obj;
+}
+
 let browserWalletInstance: BrowserWalletProvider | undefined;
 
 export class BrowserWalletProvider extends WalletProvider {
@@ -150,16 +160,24 @@ export class WalletConnectProvider extends WalletProvider {
             challenge,
         };
 
-        const { idProof } = (await this.client.request({
-            topic: this.topic,
-            request: {
-                method: ID_METHOD,
-                params,
-            },
-            chainId: CHAIN_ID,
-        })) as { idProof: IdProofOutput };
+        try {
+            const { idProof } = (await this.client.request({
+                topic: this.topic,
+                request: {
+                    method: ID_METHOD,
+                    params,
+                },
+                chainId: CHAIN_ID,
+            })) as { idProof: IdProofOutput };
 
-        return idProof;
+            return idProof;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } catch (e: any) {
+            if (isWalletConnectError(e)) {
+                throw new Error('Proof request rejected in wallet');
+            }
+            throw e;
+        }
     }
 
     async disconnect(): Promise<void> {
