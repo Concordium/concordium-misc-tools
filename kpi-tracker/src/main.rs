@@ -6,11 +6,7 @@ use clap::Parser;
 use concordium_rust_sdk::{
     id::types::AccountCredentialWithoutProofs,
     smart_contracts::common::AccountAddress,
-    types::{
-        hashes::{BlockHash, BlockMarker, HashBytes},
-        AbsoluteBlockHeight,
-        BlockItemSummaryDetails::AccountCreation,
-    },
+    types::{hashes::BlockHash, AbsoluteBlockHeight, BlockItemSummaryDetails::AccountCreation},
     v2::{self, AccountIdentifier, Client, Endpoint, FinalizedBlockInfo},
 };
 use futures::{self, StreamExt, TryStreamExt};
@@ -33,7 +29,7 @@ struct Args {
 #[derive(Debug)]
 struct AccountDetails {
     is_initial: bool,
-    block_hash: String, // FK to blocks
+    block_hash: BlockHash, // FK to blocks
 }
 
 // Blocks are stored, so other tables can reference information about the block they were created in.
@@ -44,7 +40,7 @@ struct BlockDetails {
 }
 
 type AccountsTable = HashMap<AccountAddress, AccountDetails>;
-type BlocksTable = HashMap<String, BlockDetails>;
+type BlocksTable = HashMap<BlockHash, BlockDetails>;
 
 /// This is intended as a in-memory DB, which follows the same schema as the final DB will follow.
 struct DB {
@@ -73,7 +69,7 @@ async fn account_details(
 
     let account_details = AccountDetails {
         is_initial,
-        block_hash: block_hash.to_string(),
+        block_hash: *block_hash,
     };
 
     Ok(account_details)
@@ -151,10 +147,10 @@ async fn new_accounts_in_block(
 /// current height stored in DB.
 fn update_db(
     db: &mut DB,
-    (block_hash, block_details): (&HashBytes<BlockMarker>, BlockDetails),
+    (block_hash, block_details): (BlockHash, BlockDetails),
     accounts: BTreeMap<AccountAddress, AccountDetails>,
 ) {
-    db.blocks.insert(block_hash.to_string(), block_details);
+    db.blocks.insert(block_hash, block_details);
     db.accounts.extend(accounts.into_iter());
 }
 
@@ -183,7 +179,7 @@ async fn handle_block(
         new_accounts_in_block(node, &block_info.block_hash, &db.accounts).await?
     };
 
-    update_db(db, (&block_info.block_hash, block_details), new_accounts);
+    update_db(db, (block_info.block_hash, block_details), new_accounts);
 
     Ok(())
 }
