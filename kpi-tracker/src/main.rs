@@ -163,11 +163,7 @@ fn get_account_transaction_details(
 }
 
 /// Maps `BlockItemSummary` to `BlockEvent`, which represent entities stored in the database.
-fn to_block_events(
-    node: &mut Client,
-    block_hash: BlockHash,
-    block_item: BlockItemSummary,
-) -> Vec<BlockEvent> {
+fn to_block_events(block_hash: BlockHash, block_item: BlockItemSummary) -> Vec<BlockEvent> {
     let mut events: Vec<BlockEvent> = Vec::new();
 
     match block_item.details {
@@ -225,15 +221,12 @@ fn to_block_events(
 
 // Don't know why I need explicit lifetime anotations here?
 fn process_transactions<'a>(
-    node: &'a mut Client,
     block_hash: &'a BlockHash,
     transactions_stream: impl Stream<Item = Result<BlockItemSummary, tonic::Status>> + 'a,
 ) -> impl Stream<Item = anyhow::Result<BlockEvent>> + 'a {
     let block_events_stream = transactions_stream.flat_map(|res| {
-        let mut node = node.clone();
-
         let block_events: Vec<Result<BlockEvent, anyhow::Error>> = match res {
-            Ok(bi) => to_block_events(&mut node, *block_hash, bi)
+            Ok(bi) => to_block_events(*block_hash, bi)
                 .into_iter()
                 .map(Ok)
                 .collect(),
@@ -335,7 +328,7 @@ async fn process_block(
     let mut contract_instances: BTreeMap<ContractAddress, ContractInstanceDetails> =
         BTreeMap::new();
 
-    let block_events = process_transactions(node, &block_info.block_hash, transactions_stream);
+    let block_events = process_transactions(&block_info.block_hash, transactions_stream);
 
     block_events
         .try_for_each(|be| {
@@ -395,7 +388,6 @@ fn print_db(db: DB) {
             format!("Account: {}, {}, {:?}", address, block_time, details)
         })
         .collect();
-
     println!("Accounts stored:\n{}\n", account_strings.join("\n"));
 
     let mut transactions: Vec<(TransactionHash, DateTime<Utc>, TransactionDetails)> = db
