@@ -3,7 +3,9 @@ use std::collections::{BTreeMap, HashMap};
 use anyhow::{anyhow, Context};
 use chrono::{DateTime, Utc};
 use clap::Parser;
+use concordium_rust_sdk::smart_contracts::common::Amount;
 use concordium_rust_sdk::types::hashes::TransactionHash;
+use concordium_rust_sdk::types::smart_contracts::ModuleRef;
 use concordium_rust_sdk::types::{
     AccountTransactionDetails, AccountTransactionEffects, BlockItemSummary, ContractAddress,
     TransactionType,
@@ -47,40 +49,46 @@ struct BlockDetails {
     height: AbsoluteBlockHeight,
 }
 
-/// Holds information about accounts created on chain.
+/// Holds selected attributes about accounts created on chain.
 #[derive(Debug)]
 struct AccountDetails {
     /// Whether an account was created as an initial account or not.
     is_initial: bool,
-    /// Link to the block in which the account was created.
+    /// FK to the block in which the account was created.
     block_hash: BlockHash,
 }
 
-// TODO: doc
+/// Holds selected attributes of an account transaction.
 #[derive(Debug)]
 struct TransactionDetails {
+    /// The transaction type of the account transaction
     transaction_type: TransactionType,
-    block_hash: BlockHash, // FK to blocks
-    cost: u64,
+    /// FK to the block in which the transaction was finalized.
+    block_hash: BlockHash,
+    /// The cost of the transaction.
+    cost: Amount,
 }
 
-// TODO: doc
+/// Holds selected attributes of a contract module deployed on chain.
 #[derive(Debug)]
 struct ContractModuleDetails {
-    block_hash: BlockHash, // FK to transactions
+    /// FK to the block in which the module was deployed.
+    block_hash: BlockHash,
 }
 
-// TODO: doc
+/// Holds selected attributes of a contract instance created on chain.
 #[derive(Debug)]
 struct ContractInstanceDetails {
-    module_ref: String,    // FK to modules
-    block_hash: BlockHash, // FK to transactions
+    /// FK to the module used to instantiate the contract
+    module_ref: ModuleRef,
+    /// FK to the block in which the contract was instantiated.
+    block_hash: BlockHash,
 }
 
 type BlocksTable = HashMap<BlockHash, BlockDetails>;
 type AccountsTable = HashMap<AccountAddress, AccountDetails>;
 type AccountTransactionsTable = HashMap<TransactionHash, TransactionDetails>;
-type ContractModulesTable = HashMap<String, ContractModuleDetails>;
+type ContractModulesTable = HashMap<ModuleRef, ContractModuleDetails>;
 type ContractInstancesTable = HashMap<ContractAddress, ContractInstanceDetails>;
 
 /// This is intended as a in-memory DB, which follows the same schema as the final DB will follow.
@@ -90,19 +98,19 @@ struct DB {
     /// Table containing all accounts created on chain, along with accounts present in genesis
     /// block
     accounts: AccountsTable,
-    // TODO: doc
+    /// Table containing all account transactions finalized on chain.
     account_transactions: AccountTransactionsTable,
-    // TODO: doc
+    /// Table containing all smart contract modules deployed on chain.
     contract_modules: ContractModulesTable,
-    // TODO: doc
+    /// Table containing all smart contract instances created on chain.
     contract_instances: ContractInstancesTable,
 }
 
-// TODO: doc
+/// Events from individual transactions to store in the database.
 enum BlockEvent {
     AccountCreation(AccountAddress, AccountDetails),
     AccountTransaction(TransactionHash, TransactionDetails),
-    ContractModuleDeployment(String, ContractModuleDetails),
+    ContractModuleDeployment(ModuleRef, ContractModuleDetails),
     ContractInstantiation(ContractAddress, ContractInstanceDetails),
 }
 
@@ -135,20 +143,18 @@ async fn accounts_in_block(
         .response;
 
     let accounts_details_map = accounts
-        .map_ok(|account| {
+        .try_fold(BTreeMap::new(), |mut map, account| async move {
             let details = account_details(block_hash, None);
-            (account, details)
-        })
-        .try_fold(BTreeMap::new(), |mut map, (account, details)| async move {
             map.insert(account, details);
             Ok(map)
         })
         .await
-        .context("Stream stopped prematurely")?;
+        .context("Error while streaming accounts for")?;
 
     Ok(accounts_details_map)
 }
 
+/// Maps `AccountTransactionDetails` to `TransactionDetails`.
 fn get_account_transaction_details(
     details: &AccountTransactionDetails,
     block_hash: BlockHash,
@@ -158,7 +164,7 @@ fn get_account_transaction_details(
         .map(|transaction_type| TransactionDetails {
             block_hash,
             transaction_type,
-            cost: details.cost.micro_ccd,
+            cost: details.cost,
         })
 }
 
@@ -173,7 +179,7 @@ fn to_block_events(block_hash: BlockHash, block_item: BlockItemSummary) -> Vec<B
                 println!(
                     "TRANSACTION:\nhash: {}\ndetails: {:?}",
                     &block_item.hash, &details
-                );
+                ); // Logger debug
                 let event = BlockEvent::AccountTransaction(block_item.hash, details);
                 events.push(event);
             }
@@ -184,20 +190,19 @@ fn to_block_events(block_hash: BlockHash, block_item: BlockItemSummary) -> Vec<B
                     println!(
                         "CONTRACT MODULE:\nref: {}\ndetails: {:?}",
                         &module_ref, &details
-                    );
-                    let event =
-                        BlockEvent::ContractModuleDeployment(module_ref.to_string(), details);
+                    ); // Logger debug
+                    let event = BlockEvent::ContractModuleDeployment(module_ref, details);
                     events.push(event);
                 }
                 AccountTransactionEffects::ContractInitialized { data } => {
                     let details = ContractInstanceDetails {
                         block_hash,
-                        module_ref: data.origin_ref.to_string(),
+                        module_ref: data.origin_ref,
                     };
                     println!(
                         "CONTRACT INSTANCE:\naddress: {}\ndetails: {:?}",
                         &data.address, &details
-                    );
+                    ); // Logger debug
                     let event = BlockEvent::ContractInstantiation(data.address, details);
                     events.push(event);
                 }
@@ -208,7 +213,7 @@ fn to_block_events(block_hash: BlockHash, block_item: BlockItemSummary) -> Vec<B
             let address = act.address;
             let details = account_details(block_hash, Some(act));
 
-            println!("ACCOUNT:\naddress: {}\ndetails: {:?}", &address, &details);
+            println!("ACCOUNT:\naddress: {}\ndetails: {:?}", &address, &details); // Logger debug
 
             let block_event = BlockEvent::AccountCreation(address, details);
             events.push(block_event);
@@ -219,24 +224,27 @@ fn to_block_events(block_hash: BlockHash, block_item: BlockItemSummary) -> Vec<B
     events
 }
 
+/// Maps a stream of transactions to a stream of `BlockEvent`s
 // Don't know why I need explicit lifetime anotations here?
-fn process_transactions<'a>(
+fn transactions_to_block_events<'a>(
     block_hash: &'a BlockHash,
     transactions_stream: impl Stream<Item = Result<BlockItemSummary, tonic::Status>> + 'a,
 ) -> impl Stream<Item = anyhow::Result<BlockEvent>> + 'a {
-    let block_events_stream = transactions_stream.flat_map(|res| {
+    transactions_stream.flat_map(move |res| {
         let block_events: Vec<Result<BlockEvent, anyhow::Error>> = match res {
             Ok(bi) => to_block_events(*block_hash, bi)
                 .into_iter()
                 .map(Ok)
                 .collect(),
-            Err(err) => vec![Err(anyhow!("Error: {}", err))],
+            Err(err) => vec![Err(anyhow!(
+                "Error while streaming transactions for block  {}: {}",
+                block_hash,
+                err
+            ))],
         };
 
         futures::stream::iter(block_events)
-    });
-
-    block_events_stream
+    })
 }
 
 /// Insert as a single DB transaction to facilitate easy recovery, as the service can restart from
@@ -246,7 +254,7 @@ fn update_db(
     (block_hash, block_details): (BlockHash, &BlockDetails),
     accounts: BTreeMap<AccountAddress, AccountDetails>,
     transactions: Option<BTreeMap<TransactionHash, TransactionDetails>>,
-    contract_modules: Option<BTreeMap<String, ContractModuleDetails>>,
+    contract_modules: Option<BTreeMap<ModuleRef, ContractModuleDetails>>,
     contract_instances: Option<BTreeMap<ContractAddress, ContractInstanceDetails>>,
 ) {
     db.blocks.insert(block_hash, *block_details);
@@ -262,7 +270,7 @@ fn update_db(
     }
 }
 
-/// Processes a block, represented by `block_hash` by querying the node for entities present in the block state. Should only be
+/// Processes a block, represented by `block_hash` by querying the node for entities present in the block state, updating the `db`. Should only be
 /// used to process the genesis block.
 async fn process_genesis_block(
     node: &mut Client,
@@ -324,11 +332,11 @@ async fn process_block(
 
     let mut accounts: BTreeMap<AccountAddress, AccountDetails> = BTreeMap::new();
     let mut account_transactions: BTreeMap<TransactionHash, TransactionDetails> = BTreeMap::new();
-    let mut contract_modules: BTreeMap<String, ContractModuleDetails> = BTreeMap::new();
+    let mut contract_modules: BTreeMap<ModuleRef, ContractModuleDetails> = BTreeMap::new();
     let mut contract_instances: BTreeMap<ContractAddress, ContractInstanceDetails> =
         BTreeMap::new();
 
-    let block_events = process_transactions(&block_info.block_hash, transactions_stream);
+    let block_events = transactions_to_block_events(&block_info.block_hash, transactions_stream);
 
     block_events
         .try_for_each(|be| {
@@ -363,6 +371,7 @@ async fn process_block(
     Ok(())
 }
 
+/// Prints the state of the `db` given.
 fn print_db(db: DB) {
     println!("Blocks stored: {}\n", &db.blocks.len());
 
@@ -414,7 +423,7 @@ fn print_db(db: DB) {
         .collect();
     println!("Transactions stored:\n{}\n", transaction_strings.join("\n"));
 
-    let mut contract_modules: Vec<(String, DateTime<Utc>, ContractModuleDetails)> = db
+    let mut contract_modules: Vec<(ModuleRef, DateTime<Utc>, ContractModuleDetails)> = db
         .contract_modules
         .into_iter()
         .map(|(m_ref, details)| {
