@@ -9,6 +9,6 @@ edition = "2021"
 anyhow = "1.0"
 chrono = "0.4"
 clap = { version = "4.0", features = ["derive"] }
-concordium-rust-sdk = { version = "*", path = "../deps/concordium-rust-sdk", features = ["postgres"] }
+concordium-rust-sdk = { version = "*", path = "../deps/concordium-rust-sdk" }
 futures = "0.3"
 tokio = { version = "1.23", features = ["rt-multi-thread"] }

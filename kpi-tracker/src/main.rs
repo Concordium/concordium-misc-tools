@@ -26,17 +26,25 @@ struct Args {
     num_blocks: u64,
 }
 
+/// Holds information about accounts created on chain.
 #[derive(Debug)]
 struct AccountDetails {
+    /// Whether an account was created as an initial account or not.
     is_initial: bool,
-    block_hash: BlockHash, // FK to blocks
+    /// Link to the block in which the account was created.
+    block_hash: BlockHash,
 }
 
-// Blocks are stored, so other tables can reference information about the block they were created in.
+/// Information about individual blocks. Useful for linking entities to a block and it's
+/// corresponding attributes.
 #[derive(Debug)]
 struct BlockDetails {
+    /// Finalization time of the block. Used to show how metrics evolve over time by linking entities, such as accounts and transactions, to
+    /// the block in which they are created.
     block_time: DateTime<Utc>,
-    height: AbsoluteBlockHeight, // Used as a reference from where to restart on service restart.
+    /// Height of block from genesis. Used to restart the process of collecting metrics from the
+    /// latest block recorded.
+    height: AbsoluteBlockHeight,
 }
 
 type AccountsTable = HashMap<AccountAddress, AccountDetails>;
@@ -44,13 +52,18 @@ type BlocksTable = HashMap<BlockHash, BlockDetails>;
 
 /// This is intended as a in-memory DB, which follows the same schema as the final DB will follow.
 struct DB {
+    /// Table containing all blocks queried from node.
     blocks: BlocksTable,
+    /// Table containing all accounts created on chain, along with accounts present in genesis
+    /// block
     accounts: AccountsTable,
 }
 
+/// Queries node for account info for the `account` given at the block represented by the
+/// `block_hash`
 async fn account_details(
     node: &mut Client,
-    block_hash: &BlockHash,
+    block_hash: BlockHash,
     account: &AccountAddress,
 ) -> anyhow::Result<AccountDetails> {
     let account_info = node
@@ -69,14 +82,16 @@ async fn account_details(
 
     let account_details = AccountDetails {
         is_initial,
-        block_hash: *block_hash,
+        block_hash,
     };
 
     Ok(account_details)
 }
+
+/// Returns accounts on chain at the give `block_hash`
 async fn accounts_in_block(
     node: &mut Client,
-    block_hash: &BlockHash,
+    block_hash: BlockHash,
 ) -> anyhow::Result<BTreeMap<AccountAddress, AccountDetails>> {
     let accounts = node
         .get_account_list(block_hash)
@@ -104,11 +119,10 @@ async fn accounts_in_block(
     accounts_details_map
 }
 
-/// Returns a Map of AccountAddress, AccountDetails pairs not already included in `accounts_table`
+/// Returns a Map of AccountAddress, AccountDetails created in the block represented by `block_hash`
 async fn new_accounts_in_block(
     node: &mut Client,
-    block_hash: &BlockHash,
-    accounts_table: &AccountsTable,
+    block_hash: BlockHash,
 ) -> anyhow::Result<BTreeMap<AccountAddress, AccountDetails>> {
     let mut transactions = node
         .get_block_transaction_events(block_hash)
@@ -125,12 +139,7 @@ async fn new_accounts_in_block(
         let transaction = res.context("Stream stopped prematurely")?;
 
         match transaction.details {
-            AccountCreation(act)
-                if !accounts_table
-                    .keys()
-                    .into_iter()
-                    .any(|stored_address| act.address.is_alias(stored_address)) =>
-            {
+            AccountCreation(act) => {
                 let address = act.address;
                 let account_details = account_details(node, block_hash, &address).await?;
 
@@ -154,7 +163,8 @@ fn update_db(
     db.accounts.extend(accounts.into_iter());
 }
 
-async fn handle_block(
+/// Process the a block, updating the `db` corresponding to events captured by the block.
+async fn process_block(
     node: &mut v2::Client,
     block: FinalizedBlockInfo,
     db: &mut DB,
@@ -174,9 +184,9 @@ async fn handle_block(
     };
 
     let new_accounts = if block.height.height == 0 {
-        accounts_in_block(node, &block.block_hash).await?
+        accounts_in_block(node, block.block_hash).await?
     } else {
-        new_accounts_in_block(node, &block_info.block_hash, &db.accounts).await?
+        new_accounts_in_block(node, block_info.block_hash).await?
     };
 
     update_db(db, (block_info.block_hash, block_details), new_accounts);
@@ -184,6 +194,8 @@ async fn handle_block(
     Ok(())
 }
 
+/// Queries the node available at `endpoint` from `height` for `Args.num_blocks` blocks. Inserts
+/// results captured into a `DB` and prints the result.
 async fn use_node(endpoint: v2::Endpoint, height: AbsoluteBlockHeight) -> anyhow::Result<()> {
     let args = Args::parse();
 
@@ -205,7 +217,7 @@ async fn use_node(endpoint: v2::Endpoint, height: AbsoluteBlockHeight) -> anyhow
 
     for _ in 0..args.num_blocks {
         if let Some(block) = blocks_stream.next().await {
-            handle_block(&mut node, block, &mut db).await?;
+            process_block(&mut node, block, &mut db).await?;
         }
     }
 
@@ -226,7 +238,7 @@ async fn use_node(endpoint: v2::Endpoint, height: AbsoluteBlockHeight) -> anyhow
         })
         .collect();
 
-    accounts.sort_by_cached_key(|v| v.1);
+    accounts.sort_by_key(|v| v.1);
 
     let account_strings: Vec<String> = accounts
         .into_iter()
@@ -239,10 +251,13 @@ async fn use_node(endpoint: v2::Endpoint, height: AbsoluteBlockHeight) -> anyhow
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     let height = AbsoluteBlockHeight { height: 0 };
-    if let Err(error) = use_node(args.node, height).await {
-        println!("Error happened: {}", error)
-    }
+
+    use_node(args.node, height)
+        .await
+        .context("Error happened while querying node.")?;
+
+    Ok(())
 }
