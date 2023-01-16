@@ -1,197 +1,174 @@
 use std::collections::{BTreeMap, HashMap};
-use std::hash::Hash;
 
 use anyhow::{anyhow, Context};
 use chrono::{DateTime, Utc};
 use clap::Parser;
-use concordium_rust_sdk::types::hashes::TransactionMarker;
+use concordium_rust_sdk::types::hashes::TransactionHash;
 use concordium_rust_sdk::types::{
     AccountTransactionDetails, AccountTransactionEffects, BlockItemSummary, ContractAddress,
     TransactionType,
 };
 use concordium_rust_sdk::{
-    id::types::AccountCredentialWithoutProofs,
     smart_contracts::common::AccountAddress,
     types::{
-        hashes::{BlockMarker, HashBytes},
-        AbsoluteBlockHeight,
+        hashes::BlockHash,
+        AbsoluteBlockHeight, AccountCreationDetails,
         BlockItemSummaryDetails::{AccountCreation, AccountTransaction},
+        CredentialType,
     },
-    v2::{AccountIdentifier, Client, Endpoint, FinalizedBlockInfo},
+    v2::{Client, Endpoint},
 };
 use futures::{self, future, Stream, StreamExt, TryStreamExt};
 
 #[derive(Debug, Parser)]
 struct Args {
     /// The node used for querying
-    #[arg(long, default_value = "http://localhost:20001")]
+    #[arg(
+        long = "node",
+        help = "The endpoint is expected to point to a concordium node grpc v2 API.",
+        default_value = "http://localhost:20001"
+    )]
     node: Endpoint,
     /// How many blocks to process.
     // Only here for testing purposes...
-    #[arg(long, default_value_t = 10000)]
+    #[arg(long = "num-blocks", default_value_t = 10000)]
     num_blocks: u64,
 }
 
-// Blocks are stored, so other tables can reference information about the block they were created in.
-#[derive(Debug)]
+/// Information about individual blocks. Useful for linking entities to a block and it's
+/// corresponding attributes.
+#[derive(Debug, Clone, Copy)]
 struct BlockDetails {
+    /// Finalization time of the block. Used to show how metrics evolve over time by linking entities, such as accounts and transactions, to
+    /// the block in which they are created.
     block_time: DateTime<Utc>,
-    height: u64, // Used as a reference from where to restart on service restart.
+    /// Height of block from genesis. Used to restart the process of collecting metrics from the
+    /// latest block recorded.
+    height: AbsoluteBlockHeight,
 }
 
+/// Holds information about accounts created on chain.
+#[derive(Debug)]
+struct AccountDetails {
+    /// Whether an account was created as an initial account or not.
+    is_initial: bool,
+    /// Link to the block in which the account was created.
+    block_hash: BlockHash,
+}
+
+// TODO: doc
 #[derive(Debug)]
 struct TransactionDetails {
     transaction_type: TransactionType,
-    block_hash: String, // FK to blocks
+    block_hash: BlockHash, // FK to blocks
     cost: u64,
 }
 
-#[derive(Debug)]
-struct AccountDetails {
-    is_initial: bool,
-    block_hash: String, // FK to transactions
-}
-
+// TODO: doc
 #[derive(Debug)]
 struct ContractModuleDetails {
-    block_hash: String, // FK to transactions
+    block_hash: BlockHash, // FK to transactions
 }
 
+// TODO: doc
 #[derive(Debug)]
 struct ContractInstanceDetails {
-    module_ref: String, // FK to modules
-    block_hash: String, // FK to transactions
+    module_ref: String,    // FK to modules
+    block_hash: BlockHash, // FK to transactions
 }
 
-type BlocksTable = HashMap<String, BlockDetails>;
-type AccountsTable = HashMap<CanonicalAccountAddress, AccountDetails>;
-type AccountTransactionsTable = HashMap<String, TransactionDetails>;
+type BlocksTable = HashMap<BlockHash, BlockDetails>;
+type AccountsTable = HashMap<AccountAddress, AccountDetails>;
+type AccountTransactionsTable = HashMap<TransactionHash, TransactionDetails>;
 type ContractModulesTable = HashMap<String, ContractModuleDetails>;
 type ContractInstancesTable = HashMap<ContractAddress, ContractInstanceDetails>;
 
+/// This is intended as a in-memory DB, which follows the same schema as the final DB will follow.
 struct DB {
+    /// Table containing all blocks queried from node.
     blocks: BlocksTable,
+    /// Table containing all accounts created on chain, along with accounts present in genesis
+    /// block
     accounts: AccountsTable,
+    // TODO: doc
     account_transactions: AccountTransactionsTable,
+    // TODO: doc
     contract_modules: ContractModulesTable,
+    // TODO: doc
     contract_instances: ContractInstancesTable,
 }
 
+// TODO: doc
 enum BlockEvent {
-    AccountCreation(CanonicalAccountAddress, AccountDetails),
-    AccountTransaction(String, TransactionDetails),
+    AccountCreation(AccountAddress, AccountDetails),
+    AccountTransaction(TransactionHash, TransactionDetails),
     ContractModuleDeployment(String, ContractModuleDetails),
     ContractInstantiation(ContractAddress, ContractInstanceDetails),
 }
 
-#[derive(Eq, Debug, Clone, Copy, Ord, PartialOrd)]
-struct CanonicalAccountAddress(AccountAddress);
-
-impl From<CanonicalAccountAddress> for AccountAddress {
-    fn from(caa: CanonicalAccountAddress) -> Self {
-        caa.0
-    }
-}
-
-impl PartialEq for CanonicalAccountAddress {
-    fn eq(&self, other: &Self) -> bool {
-        let bytes_1: &[u8; 32] = self.0.as_ref();
-        let bytes_2: &[u8; 32] = other.0.as_ref();
-        bytes_1[0..29] == bytes_2[0..29]
-    }
-}
-
-impl Hash for CanonicalAccountAddress {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        let bytes: &[u8; 32] = self.0.as_ref();
-        bytes[0..29].hash(state);
-    }
-}
-
-impl AsRef<CanonicalAccountAddress> for AccountAddress {
-    fn as_ref(&self) -> &CanonicalAccountAddress {
-        unsafe { std::mem::transmute(self) }
-    }
-}
-
-async fn get_account_details(
-    address: AccountAddress,
-    block_hash: &HashBytes<BlockMarker>,
-    node: &mut Client,
-) -> anyhow::Result<AccountDetails> {
-    let account_info = node
-        .get_account_info(&AccountIdentifier::Address(address), block_hash)
-        .await
-        .context("Could not get account info")?
-        .response;
-
-    let is_initial =
-        account_info
-            .account_credentials
-            .get(&0.into())
-            .map_or(false, |cdi| match &cdi.value {
-                AccountCredentialWithoutProofs::Initial { .. } => true,
-                AccountCredentialWithoutProofs::Normal { .. } => false,
-            });
-
-    let account_details = AccountDetails {
-        is_initial,
-        block_hash: block_hash.to_string(),
-    };
-
-    Ok(account_details)
-}
-
-/// Returns a Map of AccountAddress, AccountDetails pairs included in block identified by
+/// Queries node for account info for the `account` given at the block represented by the
 /// `block_hash`
+fn account_details(
+    block_hash: BlockHash,
+    account_creation_details: Option<AccountCreationDetails>,
+) -> AccountDetails {
+    let is_initial = account_creation_details.map_or(false, |act| match act.credential_type {
+        CredentialType::Initial { .. } => true,
+        CredentialType::Normal { .. } => false,
+    });
+
+    AccountDetails {
+        is_initial,
+        block_hash,
+    }
+}
+
+/// Returns accounts on chain at the give `block_hash`
 async fn accounts_in_block(
     node: &mut Client,
-    block_hash: &HashBytes<BlockMarker>,
-) -> anyhow::Result<BTreeMap<CanonicalAccountAddress, AccountDetails>> {
-    let mut accounts = node
+    block_hash: BlockHash,
+) -> anyhow::Result<BTreeMap<AccountAddress, AccountDetails>> {
+    let accounts = node
         .get_account_list(block_hash)
         .await
         .context(format!("Block not found: {}", block_hash))?
         .response;
 
-    let mut new_accounts = BTreeMap::new();
+    let accounts_details_map = accounts
+        .map_ok(|account| {
+            let details = account_details(block_hash, None);
+            (account, details)
+        })
+        .try_fold(BTreeMap::new(), |mut map, (account, details)| async move {
+            map.insert(account, details);
+            Ok(map)
+        })
+        .await
+        .context("Stream stopped prematurely")?;
 
-    while let Some(res) = accounts.next().await {
-        let account = res.context("What exactly is this status error?")?; // TODO
-        let key = CanonicalAccountAddress(account);
-        let account_details = get_account_details(account, block_hash, node).await?;
-
-        println!(
-            "ACCOUNT:\naccount: {}\ndetails: {:?}",
-            &key.0, &account_details,
-        );
-
-        new_accounts.insert(key, account_details);
-    }
-
-    Ok(new_accounts)
+    Ok(accounts_details_map)
 }
 
 fn get_account_transaction_details(
     details: &AccountTransactionDetails,
-    block_hash: &HashBytes<BlockMarker>,
+    block_hash: BlockHash,
 ) -> Option<TransactionDetails> {
     details
         .transaction_type()
         .map(|transaction_type| TransactionDetails {
-            block_hash: block_hash.to_string(),
+            block_hash,
             transaction_type,
             cost: details.cost.micro_ccd,
         })
 }
 
 /// Maps `BlockItemSummary` to `BlockEvent`, which represent entities stored in the database.
-async fn to_block_events(
+fn to_block_events(
     node: &mut Client,
-    block_hash: &HashBytes<BlockMarker>,
+    block_hash: BlockHash,
     block_item: BlockItemSummary,
-) -> Vec<anyhow::Result<BlockEvent>> {
-    let mut events: Vec<anyhow::Result<BlockEvent>> = Vec::new();
+) -> Vec<BlockEvent> {
+    let mut events: Vec<BlockEvent> = Vec::new();
 
     match block_item.details {
         AccountTransaction(atd) => {
@@ -201,26 +178,24 @@ async fn to_block_events(
                     "TRANSACTION:\nhash: {}\ndetails: {:?}",
                     &block_item.hash, &details
                 );
-                let event = BlockEvent::AccountTransaction(block_item.hash.to_string(), details);
-                events.push(Ok(event));
+                let event = BlockEvent::AccountTransaction(block_item.hash, details);
+                events.push(event);
             }
 
             match atd.effects {
                 AccountTransactionEffects::ModuleDeployed { module_ref } => {
-                    let details = ContractModuleDetails {
-                        block_hash: block_hash.to_string(),
-                    };
+                    let details = ContractModuleDetails { block_hash };
                     println!(
                         "CONTRACT MODULE:\nref: {}\ndetails: {:?}",
                         &module_ref, &details
                     );
                     let event =
                         BlockEvent::ContractModuleDeployment(module_ref.to_string(), details);
-                    events.push(Ok(event));
+                    events.push(event);
                 }
                 AccountTransactionEffects::ContractInitialized { data } => {
                     let details = ContractInstanceDetails {
-                        block_hash: block_hash.to_string(),
+                        block_hash,
                         module_ref: data.origin_ref.to_string(),
                     };
                     println!(
@@ -228,23 +203,19 @@ async fn to_block_events(
                         &data.address, &details
                     );
                     let event = BlockEvent::ContractInstantiation(data.address, details);
-                    events.push(Ok(event));
+                    events.push(event);
                 }
                 _ => {}
             };
         }
         AccountCreation(act) => {
-            let cad = CanonicalAccountAddress(act.address);
-            let result = get_account_details(act.address, block_hash, node)
-                .await
-                .map(|details| {
-                    // `.inspect` is marked as unstable
-                    println!("ACCOUNT:\naddress: {}\ndetails: {:?}", &cad.0, &details);
-                    details
-                })
-                .map(|details| BlockEvent::AccountCreation(cad, details));
+            let address = act.address;
+            let details = account_details(block_hash, Some(act));
 
-            events.push(result);
+            println!("ACCOUNT:\naddress: {}\ndetails: {:?}", &address, &details);
+
+            let block_event = BlockEvent::AccountCreation(address, details);
+            events.push(block_event);
         }
         _ => {}
     };
@@ -255,24 +226,22 @@ async fn to_block_events(
 // Don't know why I need explicit lifetime anotations here?
 fn process_transactions<'a>(
     node: &'a mut Client,
-    block_hash: &'a HashBytes<BlockMarker>,
+    block_hash: &'a BlockHash,
     transactions_stream: impl Stream<Item = Result<BlockItemSummary, tonic::Status>> + 'a,
 ) -> impl Stream<Item = anyhow::Result<BlockEvent>> + 'a {
-    let block_events_stream = transactions_stream
-        .then(|res| {
-            let mut node = node.clone();
-            let c_block_hash = block_hash.clone();
+    let block_events_stream = transactions_stream.flat_map(|res| {
+        let mut node = node.clone();
 
-            async move {
-                let block_events = match res {
-                    Ok(bi) => to_block_events(&mut node, &c_block_hash, bi).await,
-                    Err(err) => vec![Err(anyhow!("Error while streaming block items: {}", err))],
-                };
+        let block_events: Vec<Result<BlockEvent, anyhow::Error>> = match res {
+            Ok(bi) => to_block_events(&mut node, *block_hash, bi)
+                .into_iter()
+                .map(Ok)
+                .collect(),
+            Err(err) => vec![Err(anyhow!("Error: {}", err))],
+        };
 
-                futures::stream::iter(block_events)
-            }
-        })
-        .flatten();
+        futures::stream::iter(block_events)
+    });
 
     block_events_stream
 }
@@ -281,33 +250,77 @@ fn process_transactions<'a>(
 /// current height stored in DB.
 fn update_db(
     db: &mut DB,
-    (block_hash, block_details): (&HashBytes<BlockMarker>, BlockDetails),
-    accounts: BTreeMap<CanonicalAccountAddress, AccountDetails>,
-    transactions: BTreeMap<String, TransactionDetails>,
-    contract_modules: BTreeMap<String, ContractModuleDetails>,
-    contract_instances: BTreeMap<ContractAddress, ContractInstanceDetails>,
+    (block_hash, block_details): (BlockHash, &BlockDetails),
+    accounts: BTreeMap<AccountAddress, AccountDetails>,
+    transactions: Option<BTreeMap<TransactionHash, TransactionDetails>>,
+    contract_modules: Option<BTreeMap<String, ContractModuleDetails>>,
+    contract_instances: Option<BTreeMap<ContractAddress, ContractInstanceDetails>>,
 ) {
-    db.blocks.insert(block_hash.to_string(), block_details);
+    db.blocks.insert(block_hash, *block_details);
     db.accounts.extend(accounts.into_iter());
-    db.account_transactions.extend(transactions.into_iter());
-    db.contract_modules.extend(contract_modules.into_iter());
-    db.contract_instances.extend(contract_instances.into_iter());
+    if let Some(ts) = transactions {
+        db.account_transactions.extend(ts.into_iter());
+    }
+    if let Some(ms) = contract_modules {
+        db.contract_modules.extend(ms.into_iter());
+    }
+    if let Some(is) = contract_instances {
+        db.contract_instances.extend(is.into_iter());
+    }
 }
 
-async fn handle_block(
+/// Processes a block, represented by `block_hash` by querying the node for entities present in the block state. Should only be
+/// used to process the genesis block.
+async fn process_genesis_block(
     node: &mut Client,
-    block: FinalizedBlockInfo,
+    block_hash: BlockHash,
     db: &mut DB,
 ) -> anyhow::Result<()> {
     let block_info = node
-        .get_block_info(block.block_hash)
+        .get_block_info(block_hash)
         .await
-        .context(format!("Block not found: {}", block.block_hash))?
+        .context(format!(
+            "Could not get block info for genesis block: {}",
+            block_hash
+        ))?
         .response;
 
     let block_details = BlockDetails {
         block_time: block_info.block_slot_time,
-        height: block_info.block_height.height,
+        height: block_info.block_height,
+    };
+
+    let genesis_accounts = accounts_in_block(node, block_hash).await?;
+    update_db(
+        db,
+        (block_hash, &block_details),
+        genesis_accounts,
+        None,
+        None,
+        None,
+    );
+
+    Ok(())
+}
+
+/// Process a block, represented by `block_hash`, updating the `db` corresponding to events captured by the block.
+async fn process_block(
+    node: &mut Client,
+    block_hash: BlockHash,
+    db: &mut DB,
+) -> anyhow::Result<()> {
+    let block_info = node
+        .get_block_info(block_hash)
+        .await
+        .context(format!(
+            "Could not get block info for block: {}",
+            block_hash
+        ))?
+        .response;
+
+    let block_details = BlockDetails {
+        block_time: block_info.block_slot_time,
+        height: block_info.block_height,
     };
 
     let transactions_stream = node
@@ -316,16 +329,11 @@ async fn handle_block(
         .context(format!("Block not found: {}", block_info.block_hash))?
         .response;
 
-    let mut accounts: BTreeMap<CanonicalAccountAddress, AccountDetails> = BTreeMap::new();
-    let mut account_transactions: BTreeMap<String, TransactionDetails> = BTreeMap::new();
+    let mut accounts: BTreeMap<AccountAddress, AccountDetails> = BTreeMap::new();
+    let mut account_transactions: BTreeMap<TransactionHash, TransactionDetails> = BTreeMap::new();
     let mut contract_modules: BTreeMap<String, ContractModuleDetails> = BTreeMap::new();
     let mut contract_instances: BTreeMap<ContractAddress, ContractInstanceDetails> =
         BTreeMap::new();
-
-    if block.height.height == 0 {
-        let mut genesis_accounts = accounts_in_block(node, &block.block_hash).await?;
-        accounts.append(&mut genesis_accounts);
-    }
 
     let block_events = process_transactions(node, &block_info.block_hash, transactions_stream);
 
@@ -352,11 +360,11 @@ async fn handle_block(
 
     update_db(
         db,
-        (&block_info.block_hash, block_details),
+        (block_hash, &block_details),
         accounts,
-        account_transactions,
-        contract_modules,
-        contract_instances,
+        Some(account_transactions),
+        Some(contract_modules),
+        Some(contract_instances),
     );
 
     Ok(())
@@ -368,18 +376,18 @@ fn print_db(db: DB) {
     let mut accounts: Vec<(AccountAddress, DateTime<Utc>, AccountDetails)> = db
         .accounts
         .into_iter()
-        .map(|(address_eq, details)| {
+        .map(|(address, details)| {
             let block_time = db
                 .blocks
                 .get(&details.block_hash)
                 .expect("Found account with wrong reference to block?")
                 .block_time;
 
-            (address_eq.0, block_time, details)
+            (address, block_time, details)
         })
         .collect();
 
-    accounts.sort_by_cached_key(|v| v.1);
+    accounts.sort_by_key(|v| v.1);
 
     let account_strings: Vec<String> = accounts
         .into_iter()
@@ -390,7 +398,7 @@ fn print_db(db: DB) {
 
     println!("Accounts stored:\n{}\n", account_strings.join("\n"));
 
-    let mut transactions: Vec<(String, DateTime<Utc>, TransactionDetails)> = db
+    let mut transactions: Vec<(TransactionHash, DateTime<Utc>, TransactionDetails)> = db
         .account_transactions
         .into_iter()
         .map(|(hash, details)| {
@@ -404,7 +412,7 @@ fn print_db(db: DB) {
         })
         .collect();
 
-    transactions.sort_by_cached_key(|v| v.1);
+    transactions.sort_by_key(|v| v.1);
 
     let transaction_strings: Vec<String> = transactions
         .into_iter()
@@ -428,7 +436,7 @@ fn print_db(db: DB) {
         })
         .collect();
 
-    contract_modules.sort_by_cached_key(|v| v.1);
+    contract_modules.sort_by_key(|v| v.1);
 
     let module_strings: Vec<String> = contract_modules
         .into_iter()
@@ -452,7 +460,7 @@ fn print_db(db: DB) {
         })
         .collect();
 
-    contract_instances.sort_by_cached_key(|v| v.1);
+    contract_instances.sort_by_key(|v| v.1);
 
     let instance_strings: Vec<String> = contract_instances
         .into_iter()
@@ -466,10 +474,13 @@ fn print_db(db: DB) {
     );
 }
 
+/// Queries the node available at `endpoint` from `height` for `Args.num_blocks` blocks. Inserts
+/// results captured into a `DB` and prints the result.
 async fn use_node(db: &mut DB) -> anyhow::Result<()> {
     let args = Args::parse();
     let endpoint = args.node;
-    let current_height = 0; // TOOD: get this from actual DB
+    let current_height = AbsoluteBlockHeight { height: 0 }; // TOOD: get this from actual DB
+    let blocks_to_process = current_height.height + args.num_blocks;
 
     println!("Using node {}\n", endpoint.uri());
 
@@ -478,16 +489,19 @@ async fn use_node(db: &mut DB) -> anyhow::Result<()> {
         .context("Could not connect to node.")?;
 
     let mut blocks_stream = node
-        .get_finalized_blocks_from(AbsoluteBlockHeight {
-            height: current_height,
-        })
+        .get_finalized_blocks_from(current_height)
         .await
         .context("Error querying blocks")?;
 
-    for _ in 0..args.num_blocks {
-        // TODO: Make concurrent
+    if current_height.height == 0 {
+        if let Some(genesis_block) = blocks_stream.next().await {
+            process_genesis_block(&mut node, genesis_block.block_hash, db).await?;
+        }
+    }
+
+    for _ in current_height.height + 1..blocks_to_process {
         if let Some(block) = blocks_stream.next().await {
-            handle_block(&mut node, block, db).await?;
+            process_block(&mut node, block.block_hash, db).await?;
         }
     }
 
@@ -495,7 +509,7 @@ async fn use_node(db: &mut DB) -> anyhow::Result<()> {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> anyhow::Result<()> {
     let mut db = DB {
         blocks: HashMap::new(),
         accounts: HashMap::new(),
@@ -504,9 +518,11 @@ async fn main() {
         contract_instances: HashMap::new(),
     };
 
-    if let Err(error) = use_node(&mut db).await {
-        println!("Error happened: {}", error)
-    }
+    use_node(&mut db)
+        .await
+        .context("Error happened while querying node.")?;
 
     print_db(db);
+
+    Ok(())
 }
