@@ -37,7 +37,7 @@ struct AccountDetails {
 
 /// Information about individual blocks. Useful for linking entities to a block and it's
 /// corresponding attributes.
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 struct BlockDetails {
     /// Finalization time of the block. Used to show how metrics evolve over time by linking entities, such as accounts and transactions, to
     /// the block in which they are created.
@@ -156,25 +156,26 @@ async fn new_accounts_in_block(
 /// current height stored in DB.
 fn update_db(
     db: &mut DB,
-    (block_hash, block_details): (BlockHash, BlockDetails),
+    (block_hash, block_details): (BlockHash, &BlockDetails),
     accounts: BTreeMap<AccountAddress, AccountDetails>,
 ) {
-    db.blocks.insert(block_hash, block_details);
+    db.blocks.insert(block_hash, *block_details);
     db.accounts.extend(accounts.into_iter());
 }
 
-/// Process the a block, updating the `db` corresponding to events captured by the block.
-async fn process_block(
+/// Processes a block, represented by `block_hash` by querying the node for entities present in the block state. Should only be
+/// used to process the genesis block.
+async fn process_genesis_block(
     node: &mut v2::Client,
-    block: FinalizedBlockInfo,
+    block_hash: BlockHash,
     db: &mut DB,
 ) -> anyhow::Result<()> {
     let block_info = node
-        .get_block_info(block.block_hash)
+        .get_block_info(block_hash)
         .await
         .context(format!(
-            "Could not get block info for block: {}",
-            block.block_hash
+            "Could not get block info for genesis block: {}",
+            block_hash
         ))?
         .response;
 
@@ -183,13 +184,34 @@ async fn process_block(
         height: block_info.block_height,
     };
 
-    let new_accounts = if block.height.height == 0 {
-        accounts_in_block(node, block.block_hash).await?
-    } else {
-        new_accounts_in_block(node, block_info.block_hash).await?
+    let genesis_accounts = accounts_in_block(node, block_hash).await?;
+    update_db(db, (block_hash, &block_details), genesis_accounts);
+
+    Ok(())
+}
+
+/// Process a block, represented by `block_hash`, updating the `db` corresponding to events captured by the block.
+async fn process_block(
+    node: &mut v2::Client,
+    block_hash: BlockHash,
+    db: &mut DB,
+) -> anyhow::Result<()> {
+    let block_info = node
+        .get_block_info(block_hash)
+        .await
+        .context(format!(
+            "Could not get block info for block: {}",
+            block_hash
+        ))?
+        .response;
+
+    let block_details = BlockDetails {
+        block_time: block_info.block_slot_time,
+        height: block_info.block_height,
     };
 
-    update_db(db, (block_info.block_hash, block_details), new_accounts);
+    let new_accounts = new_accounts_in_block(node, block_hash).await?;
+    update_db(db, (block_hash, &block_details), new_accounts);
 
     Ok(())
 }
@@ -198,6 +220,7 @@ async fn process_block(
 /// results captured into a `DB` and prints the result.
 async fn use_node(endpoint: v2::Endpoint, height: AbsoluteBlockHeight) -> anyhow::Result<()> {
     let args = Args::parse();
+    let blocks_to_process = height.height + args.num_blocks;
 
     println!("Using node {}\n", endpoint.uri());
 
@@ -215,9 +238,15 @@ async fn use_node(endpoint: v2::Endpoint, height: AbsoluteBlockHeight) -> anyhow
         .await
         .context("Error querying blocks")?;
 
-    for _ in 0..args.num_blocks {
+    if height.height == 0 {
+        if let Some(genesis_block) = blocks_stream.next().await {
+            process_genesis_block(&mut node, genesis_block.block_hash, &mut db).await?;
+        }
+    }
+
+    for _ in height.height + 1..blocks_to_process {
         if let Some(block) = blocks_stream.next().await {
-            process_block(&mut node, block, &mut db).await?;
+            process_block(&mut node, block.block_hash, &mut db).await?;
         }
     }
 
