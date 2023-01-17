@@ -131,29 +131,6 @@ fn account_details(
     }
 }
 
-/// Returns accounts on chain at the give `block_hash`
-async fn accounts_in_block(
-    node: &mut Client,
-    block_hash: BlockHash,
-) -> anyhow::Result<BTreeMap<AccountAddress, AccountDetails>> {
-    let accounts = node
-        .get_account_list(block_hash)
-        .await
-        .context(format!("Block not found: {}", block_hash))?
-        .response;
-
-    let accounts_details_map = accounts
-        .try_fold(BTreeMap::new(), |mut map, account| async move {
-            let details = account_details(block_hash, None);
-            map.insert(account, details);
-            Ok(map)
-        })
-        .await
-        .context("Error while streaming accounts for")?;
-
-    Ok(accounts_details_map)
-}
-
 /// Maps `AccountTransactionDetails` to `TransactionDetails`.
 fn get_account_transaction_details(
     details: &AccountTransactionDetails,
@@ -291,7 +268,24 @@ async fn process_genesis_block(
         height: block_info.block_height,
     };
 
-    let genesis_accounts = accounts_in_block(node, block_hash).await?;
+    let accounts_in_block = node
+        .get_account_list(block_hash)
+        .await
+        .context(format!("Could not get accounts for block: {}", block_hash))?
+        .response;
+
+    let genesis_accounts = accounts_in_block
+        .try_fold(BTreeMap::new(), |mut map, account| async move {
+            let details = account_details(block_hash, None);
+            map.insert(account, details);
+            Ok(map)
+        })
+        .await
+        .context(format!(
+            "Error while streaming accounts in block: {}",
+            block_hash
+        ))?;
+
     update_db(
         db,
         (block_hash, &block_details),
@@ -373,20 +367,21 @@ async fn process_block(
 
 /// Prints the state of the `db` given.
 fn print_db(db: DB) {
+    // Print blocks
     println!("Blocks stored: {}\n", &db.blocks.len());
 
+    let get_block_time = |block_hash: BlockHash| {
+        db.blocks
+            .get(&block_hash)
+            .expect("Entity with wrong reference to block")
+            .block_time
+    };
+
+    // Print accounts
     let mut accounts: Vec<(AccountAddress, DateTime<Utc>, AccountDetails)> = db
         .accounts
         .into_iter()
-        .map(|(address, details)| {
-            let block_time = db
-                .blocks
-                .get(&details.block_hash)
-                .expect("Found account with wrong reference to block?")
-                .block_time;
-
-            (address, block_time, details)
-        })
+        .map(|(address, details)| (address, get_block_time(details.block_hash), details))
         .collect();
 
     accounts.sort_by_key(|v| v.1);
@@ -399,18 +394,11 @@ fn print_db(db: DB) {
         .collect();
     println!("Accounts stored:\n{}\n", account_strings.join("\n"));
 
+    // Print transactions
     let mut transactions: Vec<(TransactionHash, DateTime<Utc>, TransactionDetails)> = db
         .account_transactions
         .into_iter()
-        .map(|(hash, details)| {
-            let block_time = db
-                .blocks
-                .get(&details.block_hash)
-                .expect("Found account with wrong reference to block?")
-                .block_time;
-
-            (hash, block_time, details)
-        })
+        .map(|(hash, details)| (hash, get_block_time(details.block_hash), details))
         .collect();
 
     transactions.sort_by_key(|v| v.1);
@@ -423,18 +411,11 @@ fn print_db(db: DB) {
         .collect();
     println!("Transactions stored:\n{}\n", transaction_strings.join("\n"));
 
+    // Print contract modules
     let mut contract_modules: Vec<(ModuleRef, DateTime<Utc>, ContractModuleDetails)> = db
         .contract_modules
         .into_iter()
-        .map(|(m_ref, details)| {
-            let block_time = db
-                .blocks
-                .get(&details.block_hash)
-                .expect("Found account with wrong reference to block?")
-                .block_time;
-
-            (m_ref, block_time, details)
-        })
+        .map(|(m_ref, details)| (m_ref, get_block_time(details.block_hash), details))
         .collect();
 
     contract_modules.sort_by_key(|v| v.1);
@@ -447,18 +428,11 @@ fn print_db(db: DB) {
         .collect();
     println!("Contract modules stored:\n{}\n", module_strings.join("\n"));
 
+    // Print contract instances
     let mut contract_instances: Vec<(ContractAddress, DateTime<Utc>, ContractInstanceDetails)> = db
         .contract_instances
         .into_iter()
-        .map(|(address, details)| {
-            let block_time = db
-                .blocks
-                .get(&details.block_hash)
-                .expect("Found account with wrong reference to block?")
-                .block_time;
-
-            (address, block_time, details)
-        })
+        .map(|(address, details)| (address, get_block_time(details.block_hash), details))
         .collect();
 
     contract_instances.sort_by_key(|v| v.1);
