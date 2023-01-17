@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use anyhow::{anyhow, Context};
 use chrono::{DateTime, Utc};
@@ -85,11 +85,19 @@ struct ContractInstanceDetails {
     block_hash: BlockHash,
 }
 
+#[derive(Debug, Hash)]
+struct TransactionAccountRelation(AccountAddress, TransactionHash);
+
+#[derive(Debug, Hash)]
+struct TransactionContractRelation(ContractAddress, TransactionHash);
+
 type BlocksTable = HashMap<BlockHash, BlockDetails>;
 type AccountsTable = HashMap<AccountAddress, AccountDetails>;
 type AccountTransactionsTable = HashMap<TransactionHash, TransactionDetails>;
 type ContractModulesTable = HashMap<ModuleRef, ContractModuleDetails>;
 type ContractInstancesTable = HashMap<ContractAddress, ContractInstanceDetails>;
+type TransactionsAccountsTable = HashSet<TransactionAccountRelation>;
+type TransactionsContractsTable = HashSet<TransactionContractRelation>;
 
 /// This is intended as a in-memory DB, which follows the same schema as the final DB will follow.
 struct DB {
@@ -104,6 +112,10 @@ struct DB {
     contract_modules: ContractModulesTable,
     /// Table containing all smart contract instances created on chain.
     contract_instances: ContractInstancesTable,
+    /// Table containing relations between accounts and transactions.
+    transaction_account_relations: TransactionsAccountsTable,
+    /// Table containing relations between contract instances and transactions.
+    transaction_contract_relations: TransactionsContractsTable,
 }
 
 /// Events from individual transactions to store in the database.
@@ -490,6 +502,8 @@ async fn main() -> anyhow::Result<()> {
         account_transactions: HashMap::new(),
         contract_modules: HashMap::new(),
         contract_instances: HashMap::new(),
+        transaction_account_relations: HashSet::new(),
+        transaction_contract_relations: HashSet::new(),
     };
 
     let current_height = AbsoluteBlockHeight { height: 0 }; // TOOD: get this from actual DB
