@@ -4,12 +4,13 @@ use anyhow::Context;
 use chrono::{DateTime, Utc};
 use clap::Parser;
 use concordium_rust_sdk::{
+    id::types::AccountCredentialWithoutProofs,
     smart_contracts::common::AccountAddress,
     types::{
         hashes::BlockHash, AbsoluteBlockHeight, AccountCreationDetails,
         BlockItemSummaryDetails::AccountCreation, CredentialType,
     },
-    v2::{self, Client, Endpoint},
+    v2::{self, AccountIdentifier, Client, Endpoint},
 };
 use futures::{self, StreamExt, TryStreamExt};
 
@@ -86,20 +87,49 @@ async fn accounts_in_block(
     let accounts = node
         .get_account_list(block_hash)
         .await
-        .context(format!("Could not get accounts for block: {}", block_hash))?
+        .with_context(|| format!("Could not get accounts for block: {}", block_hash))?
         .response;
 
     let accounts_details_map = accounts
-        .map_ok(|account| {
-            let details = account_details(block_hash, None);
-            (account, details)
+        .then(|res| {
+            let mut node = node.clone();
+
+            async move {
+                let account = res.with_context(|| {
+                    format!("Error while streaming accounts in block {}", block_hash)
+                })?;
+                let account_info = node
+                    .get_account_info(&AccountIdentifier::Address(account), block_hash)
+                    .await
+                    .with_context(|| {
+                        format!(
+                            "Error while getting account info for account {} at block {}",
+                            account, block_hash
+                        )
+                    })?
+                    .response;
+
+                anyhow::Ok((account, account_info))
+            }
         })
-        .try_fold(BTreeMap::new(), |mut map, (account, details)| async move {
+        .try_fold(BTreeMap::new(), |mut map, (account, info)| async move {
+            let is_initial = info
+                .account_credentials
+                .get(&0.into())
+                .map_or(false, |cdi| match cdi.value {
+                    AccountCredentialWithoutProofs::Initial { .. } => true,
+                    AccountCredentialWithoutProofs::Normal { .. } => false,
+                });
+
+            let details = AccountDetails {
+                is_initial,
+                block_hash,
+            };
             map.insert(account, details);
+
             Ok(map)
         })
-        .await
-        .context("Stream stopped prematurely")?;
+        .await?;
 
     Ok(accounts_details_map)
 }
@@ -121,7 +151,12 @@ async fn new_accounts_in_block(
     let mut new_accounts = BTreeMap::new();
 
     while let Some(res) = transactions.next().await {
-        let transaction = res.context("Stream stopped prematurely")?;
+        let transaction = res.with_context(|| {
+            format!(
+                "Error while streaming transactions for block {}",
+                block_hash
+            )
+        })?;
 
         match transaction.details {
             AccountCreation(act) => {
