@@ -131,7 +131,8 @@ fn account_details(
     }
 }
 
-/// Maps `AccountTransactionDetails` to `TransactionDetails`.
+/// Maps `AccountTransactionDetails` to `TransactionDetails`, where rejected transactions without a
+/// transaction type are represented by `None`.
 fn get_account_transaction_details(
     details: &AccountTransactionDetails,
     block_hash: BlockHash,
@@ -202,7 +203,6 @@ fn to_block_events(block_hash: BlockHash, block_item: BlockItemSummary) -> Vec<B
 }
 
 /// Maps a stream of transactions to a stream of `BlockEvent`s
-// Don't know why I need explicit lifetime anotations here?
 fn transactions_to_block_events<'a>(
     block_hash: &'a BlockHash,
     transactions_stream: impl Stream<Item = Result<BlockItemSummary, tonic::Status>> + 'a,
@@ -449,13 +449,12 @@ fn print_db(db: DB) {
     );
 }
 
-/// Queries the node available at `endpoint` from `height` for `Args.num_blocks` blocks. Inserts
-/// results captured into a `DB` and prints the result.
-async fn use_node(db: &mut DB) -> anyhow::Result<()> {
+/// Queries the node available at `Args.endpoint` from `from_height` for `Args.num_blocks` blocks. Inserts
+/// results captured into the supplied `db`.
+async fn use_node(db: &mut DB, from_height: AbsoluteBlockHeight) -> anyhow::Result<()> {
     let args = Args::parse();
     let endpoint = args.node;
-    let current_height = AbsoluteBlockHeight { height: 0 }; // TOOD: get this from actual DB
-    let blocks_to_process = current_height.height + args.num_blocks;
+    let blocks_to_process = from_height.height + args.num_blocks;
 
     println!("Using node {}\n", endpoint.uri());
 
@@ -464,17 +463,17 @@ async fn use_node(db: &mut DB) -> anyhow::Result<()> {
         .context("Could not connect to node.")?;
 
     let mut blocks_stream = node
-        .get_finalized_blocks_from(current_height)
+        .get_finalized_blocks_from(from_height)
         .await
         .context("Error querying blocks")?;
 
-    if current_height.height == 0 {
+    if from_height.height == 0 {
         if let Some(genesis_block) = blocks_stream.next().await {
             process_genesis_block(&mut node, genesis_block.block_hash, db).await?;
         }
     }
 
-    for _ in current_height.height + 1..blocks_to_process {
+    for _ in from_height.height + 1..blocks_to_process {
         if let Some(block) = blocks_stream.next().await {
             process_block(&mut node, block.block_hash, db).await?;
         }
@@ -493,7 +492,8 @@ async fn main() -> anyhow::Result<()> {
         contract_instances: HashMap::new(),
     };
 
-    use_node(&mut db)
+    let current_height = AbsoluteBlockHeight { height: 0 }; // TOOD: get this from actual DB
+    use_node(&mut db, current_height)
         .await
         .context("Error happened while querying node.")?;
 
