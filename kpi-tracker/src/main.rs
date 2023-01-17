@@ -119,12 +119,12 @@ enum BlockEvent {
 /// `block_hash`
 fn account_details(
     block_hash: BlockHash,
-    account_creation_details: Option<AccountCreationDetails>,
+    account_creation_details: AccountCreationDetails,
 ) -> AccountDetails {
-    let is_initial = account_creation_details.map_or(false, |acd| match acd.credential_type {
+    let is_initial = match account_creation_details.credential_type {
         CredentialType::Initial { .. } => true,
         CredentialType::Normal { .. } => false,
-    });
+    };
 
     AccountDetails {
         is_initial,
@@ -149,7 +149,7 @@ async fn accounts_in_block(
 
             async move {
                 let account = res.with_context(|| {
-                    format!("Error while streaming accounts in block {}", block_hash)
+                    format!("Error while streaming accounts in block: {}", block_hash)
                 })?;
                 let account_info = node
                     .get_account_info(&AccountIdentifier::Address(account), block_hash)
@@ -245,7 +245,7 @@ fn to_block_events(block_hash: BlockHash, block_item: BlockItemSummary) -> Vec<B
         }
         AccountCreation(act) => {
             let address = act.address;
-            let details = account_details(block_hash, Some(act));
+            let details = account_details(block_hash, act);
 
             println!("ACCOUNT:\naddress: {}\ndetails: {:?}", &address, &details); // Logger debug
 
@@ -259,25 +259,35 @@ fn to_block_events(block_hash: BlockHash, block_item: BlockItemSummary) -> Vec<B
 }
 
 /// Maps a stream of transactions to a stream of `BlockEvent`s
-fn transactions_to_block_events<'a>(
-    block_hash: &'a BlockHash,
-    transactions_stream: impl Stream<Item = Result<BlockItemSummary, tonic::Status>> + 'a,
-) -> impl Stream<Item = anyhow::Result<BlockEvent>> + 'a {
-    transactions_stream.flat_map(move |res| {
-        let block_events: Vec<Result<BlockEvent, anyhow::Error>> = match res {
-            Ok(bi) => to_block_events(*block_hash, bi)
-                .into_iter()
-                .map(Ok)
-                .collect(),
-            Err(err) => vec![Err(anyhow!(
-                "Error while streaming transactions for block  {}: {}",
+async fn get_block_events(
+    node: &mut Client,
+    block_hash: BlockHash,
+) -> anyhow::Result<impl Stream<Item = anyhow::Result<BlockEvent>>> {
+    let transactions = node
+        .get_block_transaction_events(block_hash)
+        .await
+        .with_context(|| format!("Could not get transactions for block: {}", block_hash))?
+        .response;
+
+    let block_events = transactions
+        .map_ok(move |bi| {
+            let block_events: Vec<Result<BlockEvent, anyhow::Error>> =
+                to_block_events(block_hash, bi)
+                    .into_iter()
+                    .map(Ok)
+                    .collect();
+            futures::stream::iter(block_events)
+        })
+        .map_err(move |err| {
+            anyhow!(
+                "Error while streaming transactions for block: {} - {}",
                 block_hash,
                 err
-            ))],
-        };
+            )
+        })
+        .try_flatten();
 
-        futures::stream::iter(block_events)
-    })
+    Ok(block_events)
 }
 
 /// Insert as a single DB transaction to facilitate easy recovery, as the service can restart from
@@ -351,20 +361,13 @@ async fn process_block(
         height: block_info.block_height,
     };
 
-    let transactions_stream = node
-        .get_block_transaction_events(block_info.block_hash)
-        .await
-        .with_context(|| format!("Block not found: {}", block_info.block_hash))?
-        .response;
-
     let mut accounts: BTreeMap<AccountAddress, AccountDetails> = BTreeMap::new();
     let mut account_transactions: BTreeMap<TransactionHash, TransactionDetails> = BTreeMap::new();
     let mut contract_modules: BTreeMap<ModuleRef, ContractModuleDetails> = BTreeMap::new();
     let mut contract_instances: BTreeMap<ContractAddress, ContractInstanceDetails> =
         BTreeMap::new();
 
-    let block_events = transactions_to_block_events(&block_info.block_hash, transactions_stream);
-
+    let block_events = get_block_events(node, block_info.block_hash).await?;
     block_events
         .try_for_each(|be| {
             match be {
