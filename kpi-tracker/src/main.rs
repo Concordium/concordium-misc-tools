@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use anyhow::{anyhow, Context};
 use chrono::{DateTime, Utc};
@@ -85,10 +85,12 @@ struct ContractInstanceDetails {
     block_hash: BlockHash,
 }
 
-#[derive(Debug, Hash)]
+/// Represents a compound unique constraint for relations between accounts and transactions
+#[derive(Debug, Hash, PartialEq, PartialOrd, Ord, Eq)]
 struct TransactionAccountRelation(AccountAddress, TransactionHash);
 
-#[derive(Debug, Hash)]
+/// Represents a compound unique constraint for relations between contracts and transactions
+#[derive(Debug, Hash, PartialEq, PartialOrd, Ord, Eq)]
 struct TransactionContractRelation(ContractAddress, TransactionHash);
 
 type BlocksTable = HashMap<BlockHash, BlockDetails>;
@@ -121,7 +123,12 @@ struct DB {
 /// Events from individual transactions to store in the database.
 enum BlockEvent {
     AccountCreation(AccountAddress, AccountDetails),
-    AccountTransaction(TransactionHash, TransactionDetails),
+    AccountTransaction(
+        TransactionHash,
+        TransactionDetails,
+        Vec<TransactionAccountRelation>,
+        Vec<TransactionContractRelation>,
+    ),
     ContractModuleDeployment(ModuleRef, ContractModuleDetails),
     ContractInstantiation(ContractAddress, ContractInstanceDetails),
 }
@@ -130,7 +137,7 @@ enum BlockEvent {
 /// `block_hash`
 fn account_details(
     block_hash: BlockHash,
-    account_creation_details: Option<AccountCreationDetails>,
+    account_creation_details: Option<&AccountCreationDetails>,
 ) -> AccountDetails {
     let is_initial = account_creation_details.map_or(false, |act| match act.credential_type {
         CredentialType::Initial { .. } => true,
@@ -162,26 +169,43 @@ fn get_account_transaction_details(
 fn to_block_events(block_hash: BlockHash, block_item: BlockItemSummary) -> Vec<BlockEvent> {
     let mut events: Vec<BlockEvent> = Vec::new();
 
-    match block_item.details {
+    match &block_item.details {
         AccountTransaction(atd) => {
             // TODO: do we want to store failed transactions?
-            if let Some(details) = get_account_transaction_details(&atd, block_hash) {
+            if let Some(details) = get_account_transaction_details(atd, block_hash) {
+                let affected_accounts = block_item
+                    .affected_addresses()
+                    .into_iter()
+                    .map(|address| TransactionAccountRelation(address, block_item.hash));
+
+                let affected_contracts = block_item
+                    .affected_contracts()
+                    .into_iter()
+                    .map(|address| TransactionContractRelation(address, block_item.hash));
+
                 println!(
                     "TRANSACTION:\nhash: {}\ndetails: {:?}",
-                    &block_item.hash, &details
+                    block_item.hash, &details
                 ); // Logger debug
-                let event = BlockEvent::AccountTransaction(block_item.hash, details);
+
+                let event = BlockEvent::AccountTransaction(
+                    block_item.hash,
+                    details,
+                    affected_accounts.collect(),
+                    affected_contracts.collect(),
+                );
+
                 events.push(event);
             }
 
-            match atd.effects {
+            match &atd.effects {
                 AccountTransactionEffects::ModuleDeployed { module_ref } => {
                     let details = ContractModuleDetails { block_hash };
                     println!(
                         "CONTRACT MODULE:\nref: {}\ndetails: {:?}",
-                        &module_ref, &details
+                        module_ref, &details
                     ); // Logger debug
-                    let event = BlockEvent::ContractModuleDeployment(module_ref, details);
+                    let event = BlockEvent::ContractModuleDeployment(*module_ref, details);
                     events.push(event);
                 }
                 AccountTransactionEffects::ContractInitialized { data } => {
@@ -191,7 +215,7 @@ fn to_block_events(block_hash: BlockHash, block_item: BlockItemSummary) -> Vec<B
                     };
                     println!(
                         "CONTRACT INSTANCE:\naddress: {}\ndetails: {:?}",
-                        &data.address, &details
+                        data.address, &details
                     ); // Logger debug
                     let event = BlockEvent::ContractInstantiation(data.address, details);
                     events.push(event);
@@ -203,7 +227,7 @@ fn to_block_events(block_hash: BlockHash, block_item: BlockItemSummary) -> Vec<B
             let address = act.address;
             let details = account_details(block_hash, Some(act));
 
-            println!("ACCOUNT:\naddress: {}\ndetails: {:?}", &address, &details); // Logger debug
+            println!("ACCOUNT:\naddress: {}\ndetails: {:?}", address, &details); // Logger debug
 
             let block_event = BlockEvent::AccountCreation(address, details);
             events.push(block_event);
@@ -245,6 +269,8 @@ fn update_db(
     transactions: Option<BTreeMap<TransactionHash, TransactionDetails>>,
     contract_modules: Option<BTreeMap<ModuleRef, ContractModuleDetails>>,
     contract_instances: Option<BTreeMap<ContractAddress, ContractInstanceDetails>>,
+    transaction_account_relations: Option<BTreeSet<TransactionAccountRelation>>,
+    transaction_contract_relations: Option<BTreeSet<TransactionContractRelation>>,
 ) {
     db.blocks.insert(block_hash, *block_details);
     db.accounts.extend(accounts.into_iter());
@@ -256,6 +282,12 @@ fn update_db(
     }
     if let Some(is) = contract_instances {
         db.contract_instances.extend(is.into_iter());
+    }
+    if let Some(tars) = transaction_account_relations {
+        db.transaction_account_relations.extend(tars.into_iter());
+    }
+    if let Some(tcrs) = transaction_contract_relations {
+        db.transaction_contract_relations.extend(tcrs.into_iter());
     }
 }
 
@@ -305,6 +337,8 @@ async fn process_genesis_block(
         None,
         None,
         None,
+        None,
+        None,
     );
 
     Ok(())
@@ -341,6 +375,8 @@ async fn process_block(
     let mut contract_modules: BTreeMap<ModuleRef, ContractModuleDetails> = BTreeMap::new();
     let mut contract_instances: BTreeMap<ContractAddress, ContractInstanceDetails> =
         BTreeMap::new();
+    let mut transaction_account_relations: BTreeSet<TransactionAccountRelation> = BTreeSet::new();
+    let mut transaction_contract_relations: BTreeSet<TransactionContractRelation> = BTreeSet::new();
 
     let block_events = transactions_to_block_events(&block_info.block_hash, transactions_stream);
 
@@ -350,8 +386,23 @@ async fn process_block(
                 BlockEvent::AccountCreation(address, details) => {
                     accounts.insert(address, details);
                 }
-                BlockEvent::AccountTransaction(hash, details) => {
+                BlockEvent::AccountTransaction(
+                    hash,
+                    details,
+                    affected_accounts,
+                    affected_contracts,
+                ) => {
                     account_transactions.insert(hash, details);
+
+                    if !affected_accounts.is_empty() {
+                        transaction_account_relations
+                            .append(&mut BTreeSet::from_iter(affected_accounts.into_iter()));
+                    }
+
+                    if !affected_contracts.is_empty() {
+                        transaction_contract_relations
+                            .append(&mut BTreeSet::from_iter(affected_contracts.into_iter()));
+                    }
                 }
                 BlockEvent::ContractModuleDeployment(module_ref, details) => {
                     contract_modules.insert(module_ref, details);
@@ -372,6 +423,8 @@ async fn process_block(
         Some(account_transactions),
         Some(contract_modules),
         Some(contract_instances),
+        Some(transaction_account_relations),
+        Some(transaction_contract_relations),
     );
 
     Ok(())
@@ -458,6 +511,40 @@ fn print_db(db: DB) {
     println!(
         "Contract instances stored:\n{}\n",
         instance_strings.join("\n")
+    );
+
+    // Print transaction-account relations
+    let tar_strings: Vec<String> = db
+        .transaction_account_relations
+        .into_iter()
+        .map(|TransactionAccountRelation(account, transaction)| {
+            format!(
+                "Transaction-Account relation: {} - {}",
+                transaction, account
+            )
+        })
+        .collect();
+
+    println!(
+        "Transaction-Account relations stored:\n{}\n",
+        tar_strings.join("\n")
+    );
+
+    // Print transaction-contract relations
+    let tcr_strings: Vec<String> = db
+        .transaction_contract_relations
+        .into_iter()
+        .map(|TransactionContractRelation(contract, transaction)| {
+            format!(
+                "Transaction-Contract relation: {} - {}",
+                transaction, contract
+            )
+        })
+        .collect();
+
+    println!(
+        "Transaction-Contract relations stored:\n{}\n",
+        tcr_strings.join("\n")
     );
 }
 
