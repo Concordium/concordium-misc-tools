@@ -78,32 +78,6 @@ fn account_details(
     }
 }
 
-/// Returns accounts on chain at the give `block_hash`
-async fn accounts_in_block(
-    node: &mut Client,
-    block_hash: BlockHash,
-) -> anyhow::Result<BTreeMap<AccountAddress, AccountDetails>> {
-    let accounts = node
-        .get_account_list(block_hash)
-        .await
-        .context(format!("Could not get accounts for block: {}", block_hash))?
-        .response;
-
-    let accounts_details_map = accounts
-        .map_ok(|account| {
-            let details = account_details(block_hash, None);
-            (account, details)
-        })
-        .try_fold(BTreeMap::new(), |mut map, (account, details)| async move {
-            map.insert(account, details);
-            Ok(map)
-        })
-        .await
-        .context("Stream stopped prematurely")?;
-
-    Ok(accounts_details_map)
-}
-
 /// Returns a Map of AccountAddress, AccountDetails created in the block represented by `block_hash`
 async fn new_accounts_in_block(
     node: &mut Client,
@@ -169,7 +143,24 @@ async fn process_genesis_block(
         height: block_info.block_height,
     };
 
-    let genesis_accounts = accounts_in_block(node, block_hash).await?;
+    let accounts_in_block = node
+        .get_account_list(block_hash)
+        .await
+        .context(format!("Could not get accounts for block: {}", block_hash))?
+        .response;
+
+    let genesis_accounts = accounts_in_block
+        .try_fold(BTreeMap::new(), |mut map, account| async move {
+            let details = account_details(block_hash, None);
+            map.insert(account, details);
+            Ok(map)
+        })
+        .await
+        .context(format!(
+            "Error while streaming accounts in block: {}",
+            block_hash
+        ))?;
+
     update_db(db, (block_hash, &block_details), genesis_accounts);
 
     Ok(())
