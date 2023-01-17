@@ -433,7 +433,7 @@ async fn process_block(
 /// Prints the state of the `db` given.
 fn print_db(db: DB) {
     // Print blocks
-    println!("Blocks stored: {}\n", &db.blocks.len());
+    println!("{} blocks stored\n", &db.blocks.len());
 
     let get_block_time = |block_hash: BlockHash| {
         db.blocks
@@ -457,7 +457,11 @@ fn print_db(db: DB) {
             format!("Account: {}, {}, {:?}", address, block_time, details)
         })
         .collect();
-    println!("Accounts stored:\n{}\n", account_strings.join("\n"));
+    println!(
+        "{} accounts stored:\n{}\n",
+        account_strings.len(),
+        account_strings.join("\n")
+    );
 
     // Print transactions
     let mut transactions: Vec<(TransactionHash, DateTime<Utc>, TransactionDetails)> = db
@@ -474,7 +478,11 @@ fn print_db(db: DB) {
             format!("Transaction: {}, {}, {:?}", hash, block_time, details)
         })
         .collect();
-    println!("Transactions stored:\n{}\n", transaction_strings.join("\n"));
+    println!(
+        "{} transactions stored:\n{}\n",
+        transaction_strings.len(),
+        transaction_strings.join("\n")
+    );
 
     // Print contract modules
     let mut contract_modules: Vec<(ModuleRef, DateTime<Utc>, ContractModuleDetails)> = db
@@ -488,10 +496,14 @@ fn print_db(db: DB) {
     let module_strings: Vec<String> = contract_modules
         .into_iter()
         .map(|(m_ref, block_time, details)| {
-            format!("Transaction: {}, {}, {:?}", m_ref, block_time, details)
+            format!("Contract module: {}, {}, {:?}", m_ref, block_time, details)
         })
         .collect();
-    println!("Contract modules stored:\n{}\n", module_strings.join("\n"));
+    println!(
+        "{} contract modules stored:\n{}\n",
+        module_strings.len(),
+        module_strings.join("\n")
+    );
 
     // Print contract instances
     let mut contract_instances: Vec<(ContractAddress, DateTime<Utc>, ContractInstanceDetails)> = db
@@ -505,11 +517,15 @@ fn print_db(db: DB) {
     let instance_strings: Vec<String> = contract_instances
         .into_iter()
         .map(|(address, block_time, details)| {
-            format!("Transaction: {}, {}, {:?}", address, block_time, details)
+            format!(
+                "Contract instance: {}, {}, {:?}",
+                address, block_time, details
+            )
         })
         .collect();
     println!(
-        "Contract instances stored:\n{}\n",
+        "{} contract instances stored:\n{}\n",
+        instance_strings.len(),
         instance_strings.join("\n")
     );
 
