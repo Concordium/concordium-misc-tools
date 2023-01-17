@@ -1,9 +1,10 @@
+use core::fmt;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use anyhow::{anyhow, Context};
 use chrono::{DateTime, Utc};
 use clap::Parser;
-use concordium_rust_sdk::smart_contracts::common::Amount;
+use concordium_rust_sdk::smart_contracts::common::{Amount, ACCOUNT_ADDRESS_SIZE};
 use concordium_rust_sdk::types::hashes::TransactionHash;
 use concordium_rust_sdk::types::smart_contracts::ModuleRef;
 use concordium_rust_sdk::types::{
@@ -36,6 +37,29 @@ struct Args {
     // Only here for testing purposes...
     #[arg(long = "num-blocks", default_value_t = 10000)]
     num_blocks: u64,
+}
+
+#[derive(Eq, PartialEq, Copy, Clone, PartialOrd, Ord, Debug, Hash)]
+struct CanonicalAccountAddress([u8; ACCOUNT_ADDRESS_SIZE]);
+
+impl From<AccountAddress> for CanonicalAccountAddress {
+    fn from(aa: AccountAddress) -> Self {
+        let bytes: &[u8; ACCOUNT_ADDRESS_SIZE] = aa.as_ref();
+        let canonical_bytes: [u8; ACCOUNT_ADDRESS_SIZE] = bytes[0..29]
+            .into_iter()
+            .enumerate()
+            .fold([0; ACCOUNT_ADDRESS_SIZE], |mut acc, (i, byte)| {
+                acc[i] = *byte;
+                acc
+            });
+
+        CanonicalAccountAddress(canonical_bytes)
+    }
+}
+impl fmt::Display for CanonicalAccountAddress {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        AccountAddress(self.0).fmt(f)
+    }
 }
 
 /// Information about individual blocks. Useful for linking entities to a block and it's
@@ -95,7 +119,7 @@ struct TransactionAccountRelation(AccountAddress, TransactionHash);
 struct TransactionContractRelation(ContractAddress, TransactionHash);
 
 type BlocksTable = HashMap<BlockHash, BlockDetails>;
-type AccountsTable = HashMap<AccountAddress, AccountDetails>;
+type AccountsTable = HashMap<CanonicalAccountAddress, AccountDetails>;
 type AccountTransactionsTable = HashMap<TransactionHash, TransactionDetails>;
 type ContractModulesTable = HashMap<ModuleRef, ContractModuleDetails>;
 type ContractInstancesTable = HashMap<ContractAddress, ContractInstanceDetails>;
@@ -155,7 +179,7 @@ fn account_details(
 async fn accounts_in_block(
     node: &mut Client,
     block_hash: BlockHash,
-) -> anyhow::Result<BTreeMap<AccountAddress, AccountDetails>> {
+) -> anyhow::Result<BTreeMap<CanonicalAccountAddress, AccountDetails>> {
     let accounts = node
         .get_account_list(block_hash)
         .await
@@ -193,11 +217,12 @@ async fn accounts_in_block(
                     AccountCredentialWithoutProofs::Normal { .. } => false,
                 });
 
+            let canonical_account = CanonicalAccountAddress::from(account);
             let details = AccountDetails {
                 is_initial,
                 block_hash,
             };
-            map.insert(account, details);
+            map.insert(canonical_account, details);
 
             Ok(map)
         })
@@ -331,7 +356,7 @@ async fn get_block_events(
 fn update_db(
     db: &mut DB,
     (block_hash, block_details): (BlockHash, BlockDetails),
-    accounts: BTreeMap<AccountAddress, AccountDetails>,
+    accounts: BTreeMap<CanonicalAccountAddress, AccountDetails>,
     transactions: Option<BTreeMap<TransactionHash, TransactionDetails>>,
     contract_modules: Option<BTreeMap<ModuleRef, ContractModuleDetails>>,
     contract_instances: Option<BTreeMap<ContractAddress, ContractInstanceDetails>>,
@@ -407,7 +432,7 @@ async fn process_block(
         height: block_info.block_height,
     };
 
-    let mut accounts: BTreeMap<AccountAddress, AccountDetails> = BTreeMap::new();
+    let mut accounts: BTreeMap<CanonicalAccountAddress, AccountDetails> = BTreeMap::new();
     let mut account_transactions: BTreeMap<TransactionHash, TransactionDetails> = BTreeMap::new();
     let mut contract_modules: BTreeMap<ModuleRef, ContractModuleDetails> = BTreeMap::new();
     let mut contract_instances: BTreeMap<ContractAddress, ContractInstanceDetails> =
@@ -420,7 +445,7 @@ async fn process_block(
         .try_for_each(|be| {
             match be {
                 BlockEvent::AccountCreation(address, details) => {
-                    accounts.insert(address, details);
+                    accounts.insert(CanonicalAccountAddress::from(address), details);
                 }
                 BlockEvent::AccountTransaction(
                     hash,
@@ -479,7 +504,7 @@ fn print_db(db: DB) {
     };
 
     // Print accounts
-    let mut accounts: Vec<(AccountAddress, DateTime<Utc>, AccountDetails)> = db
+    let mut accounts: Vec<(CanonicalAccountAddress, DateTime<Utc>, AccountDetails)> = db
         .accounts
         .into_iter()
         .map(|(address, details)| (address, get_block_time(details.block_hash), details))
