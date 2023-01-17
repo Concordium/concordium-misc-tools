@@ -11,6 +11,7 @@ use concordium_rust_sdk::types::{
     TransactionType,
 };
 use concordium_rust_sdk::{
+    id::types::AccountCredentialWithoutProofs,
     smart_contracts::common::AccountAddress,
     types::{
         hashes::BlockHash,
@@ -18,7 +19,7 @@ use concordium_rust_sdk::{
         BlockItemSummaryDetails::{AccountCreation, AccountTransaction},
         CredentialType,
     },
-    v2::{Client, Endpoint},
+    v2::{AccountIdentifier, Client, Endpoint},
 };
 use futures::{self, future, Stream, StreamExt, TryStreamExt};
 
@@ -120,7 +121,7 @@ fn account_details(
     block_hash: BlockHash,
     account_creation_details: Option<AccountCreationDetails>,
 ) -> AccountDetails {
-    let is_initial = account_creation_details.map_or(false, |act| match act.credential_type {
+    let is_initial = account_creation_details.map_or(false, |acd| match acd.credential_type {
         CredentialType::Initial { .. } => true,
         CredentialType::Normal { .. } => false,
     });
@@ -129,6 +130,61 @@ fn account_details(
         is_initial,
         block_hash,
     }
+}
+
+/// Returns accounts on chain at the give `block_hash`
+async fn accounts_in_block(
+    node: &mut Client,
+    block_hash: BlockHash,
+) -> anyhow::Result<BTreeMap<AccountAddress, AccountDetails>> {
+    let accounts = node
+        .get_account_list(block_hash)
+        .await
+        .with_context(|| format!("Could not get accounts for block: {}", block_hash))?
+        .response;
+
+    let accounts_details_map = accounts
+        .then(|res| {
+            let mut node = node.clone();
+
+            async move {
+                let account = res.with_context(|| {
+                    format!("Error while streaming accounts in block {}", block_hash)
+                })?;
+                let account_info = node
+                    .get_account_info(&AccountIdentifier::Address(account), block_hash)
+                    .await
+                    .with_context(|| {
+                        format!(
+                            "Error while getting account info for account {} at block {}",
+                            account, block_hash
+                        )
+                    })?
+                    .response;
+
+                anyhow::Ok((account, account_info))
+            }
+        })
+        .try_fold(BTreeMap::new(), |mut map, (account, info)| async move {
+            let is_initial = info
+                .account_credentials
+                .get(&0.into())
+                .map_or(false, |cdi| match cdi.value {
+                    AccountCredentialWithoutProofs::Initial { .. } => true,
+                    AccountCredentialWithoutProofs::Normal { .. } => false,
+                });
+
+            let details = AccountDetails {
+                is_initial,
+                block_hash,
+            };
+            map.insert(account, details);
+
+            Ok(map)
+        })
+        .await?;
+
+    Ok(accounts_details_map)
 }
 
 /// Maps `AccountTransactionDetails` to `TransactionDetails`, where rejected transactions without a
@@ -257,10 +313,7 @@ async fn process_genesis_block(
     let block_info = node
         .get_block_info(block_hash)
         .await
-        .context(format!(
-            "Could not get block info for genesis block: {}",
-            block_hash
-        ))?
+        .with_context(|| format!("Could not get block info for genesis block: {}", block_hash))?
         .response;
 
     let block_details = BlockDetails {
@@ -268,24 +321,7 @@ async fn process_genesis_block(
         height: block_info.block_height,
     };
 
-    let accounts_in_block = node
-        .get_account_list(block_hash)
-        .await
-        .context(format!("Could not get accounts for block: {}", block_hash))?
-        .response;
-
-    let genesis_accounts = accounts_in_block
-        .try_fold(BTreeMap::new(), |mut map, account| async move {
-            let details = account_details(block_hash, None);
-            map.insert(account, details);
-            Ok(map)
-        })
-        .await
-        .context(format!(
-            "Error while streaming accounts in block: {}",
-            block_hash
-        ))?;
-
+    let genesis_accounts = accounts_in_block(node, block_hash).await?;
     update_db(
         db,
         (block_hash, &block_details),
@@ -307,10 +343,7 @@ async fn process_block(
     let block_info = node
         .get_block_info(block_hash)
         .await
-        .context(format!(
-            "Could not get block info for block: {}",
-            block_hash
-        ))?
+        .with_context(|| format!("Could not get block info for block: {}", block_hash))?
         .response;
 
     let block_details = BlockDetails {
@@ -321,7 +354,7 @@ async fn process_block(
     let transactions_stream = node
         .get_block_transaction_events(block_info.block_hash)
         .await
-        .context(format!("Block not found: {}", block_info.block_hash))?
+        .with_context(|| format!("Block not found: {}", block_info.block_hash))?
         .response;
 
     let mut accounts: BTreeMap<AccountAddress, AccountDetails> = BTreeMap::new();
