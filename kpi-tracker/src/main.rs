@@ -542,7 +542,8 @@ fn print_db(db: DB) {
         .collect();
 
     println!(
-        "Transaction-Account relations stored:\n{}\n",
+        "{} transaction-account relations stored:\n{}\n",
+        tar_strings.len(),
         tar_strings.join("\n")
     );
 
@@ -559,7 +560,8 @@ fn print_db(db: DB) {
         .collect();
 
     println!(
-        "Transaction-Contract relations stored:\n{}\n",
+        "{} transaction-contract relations stored:\n{}\n",
+        tcr_strings.len(),
         tcr_strings.join("\n")
     );
 }
