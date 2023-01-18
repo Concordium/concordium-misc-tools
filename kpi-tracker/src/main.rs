@@ -251,8 +251,8 @@ fn get_account_transaction_details(
     }
 }
 
-/// Maps `BlockItemSummary` to `BlockEvent`, which represent entities stored in
-/// the database.
+/// Maps `BlockItemSummary` to `Vec<BlockEvent>`, which represent entities
+/// stored in the database.
 fn to_block_events(block_hash: BlockHash, block_item: BlockItemSummary) -> Vec<BlockEvent> {
     let mut events: Vec<BlockEvent> = Vec::new();
 
