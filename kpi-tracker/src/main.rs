@@ -115,7 +115,7 @@ struct ContractInstanceDetails {
 /// Represents a compound unique constraint for relations between accounts and
 /// transactions
 #[derive(Debug, Hash, PartialEq, PartialOrd, Ord, Eq)]
-struct TransactionAccountRelation(AccountAddress, TransactionHash);
+struct TransactionAccountRelation(CanonicalAccountAddress, TransactionHash);
 
 /// Represents a compound unique constraint for relations between contracts and
 /// transactions
@@ -264,7 +264,12 @@ fn to_block_events(block_hash: BlockHash, block_item: BlockItemSummary) -> Vec<B
             let affected_accounts: Vec<TransactionAccountRelation> = block_item
                 .affected_addresses()
                 .into_iter()
-                .map(|address| TransactionAccountRelation(address, block_item.hash))
+                .map(|address| {
+                    TransactionAccountRelation(
+                        CanonicalAccountAddress::from(address),
+                        block_item.hash,
+                    )
+                })
                 .collect();
 
             let affected_contracts: Vec<TransactionContractRelation> = block_item
