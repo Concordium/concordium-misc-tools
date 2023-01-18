@@ -32,6 +32,9 @@ struct Args {
     // Only here for testing purposes...
     #[arg(long = "num-blocks", default_value_t = 10000)]
     num_blocks: u64,
+    /// Logging level of the application
+    #[arg(long = "log-level", default_value = "debug")]
+    log_level:  log::LevelFilter,
 }
 
 #[derive(Eq, PartialEq, Copy, Clone, PartialOrd, Ord, Debug, Hash)]
@@ -255,6 +258,8 @@ fn to_block_events(block_hash: BlockHash, block_item: BlockItemSummary) -> Vec<B
 
     match &block_item.details {
         AccountTransaction(atd) => {
+            log::debug!("TRANSACTION: {}", block_item.hash);
+
             let details = get_account_transaction_details(atd, block_hash);
             let affected_accounts = block_item
                 .affected_addresses()
@@ -265,11 +270,6 @@ fn to_block_events(block_hash: BlockHash, block_item: BlockItemSummary) -> Vec<B
                 .affected_contracts()
                 .into_iter()
                 .map(|address| TransactionContractRelation(address, block_item.hash));
-
-            println!(
-                "TRANSACTION:\nhash: {}\ndetails: {:?}",
-                block_item.hash, &details
-            ); // Logger debug
 
             let event = BlockEvent::AccountTransaction(
                 block_item.hash,
@@ -282,36 +282,33 @@ fn to_block_events(block_hash: BlockHash, block_item: BlockItemSummary) -> Vec<B
 
             match &atd.effects {
                 AccountTransactionEffects::ModuleDeployed { module_ref } => {
+                    log::debug!("CONTRACT MODULE: {}", module_ref);
+
                     let details = ContractModuleDetails { block_hash };
-                    println!(
-                        "CONTRACT MODULE:\nref: {}\ndetails: {:?}",
-                        module_ref, &details
-                    ); // Logger debug
                     let event = BlockEvent::ContractModuleDeployment(*module_ref, details);
+
                     events.push(event);
                 }
                 AccountTransactionEffects::ContractInitialized { data } => {
+                    log::debug!("CONTRACT INSTANCE: {}", data.address);
+
                     let details = ContractInstanceDetails {
                         block_hash,
                         module_ref: data.origin_ref,
                     };
-                    println!(
-                        "CONTRACT INSTANCE:\naddress: {}\ndetails: {:?}",
-                        data.address, &details
-                    ); // Logger debug
                     let event = BlockEvent::ContractInstantiation(data.address, details);
+
                     events.push(event);
                 }
                 _ => {}
             };
         }
-        AccountCreation(act) => {
-            let address = act.address;
-            let details = account_details(block_hash, act);
+        AccountCreation(acd) => {
+            log::debug!("ACCOUNT: {}", acd.address);
 
-            println!("ACCOUNT:\naddress: {}\ndetails: {:?}", address, details); // Logger debug
+            let details = account_details(block_hash, acd);
+            let block_event = BlockEvent::AccountCreation(acd.address, details);
 
-            let block_event = BlockEvent::AccountCreation(address, details);
             events.push(block_event);
         }
         _ => {}
@@ -631,7 +628,12 @@ async fn use_node(db: &mut DB, from_height: AbsoluteBlockHeight) -> anyhow::Resu
     let endpoint = args.node;
     let blocks_to_process = from_height.height + args.num_blocks;
 
-    println!("Using node {}\n", endpoint.uri());
+    log::info!(
+        "Processing {} blocks from height {} using node {}",
+        args.num_blocks,
+        from_height,
+        endpoint.uri()
+    );
 
     let mut node = Client::new(endpoint)
         .await
@@ -659,6 +661,12 @@ async fn use_node(db: &mut DB, from_height: AbsoluteBlockHeight) -> anyhow::Resu
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let args = Args::parse();
+
+    env_logger::Builder::new()
+        .filter_module(module_path!(), args.log_level) // Only log the current module (main).
+        .init();
+
     let mut db = DB {
         blocks: HashMap::new(),
         accounts: HashMap::new(),
