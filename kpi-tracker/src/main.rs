@@ -65,10 +65,12 @@ struct BlockDetails {
     /// Finalization time of the block. Used to show how metrics evolve over
     /// time by linking entities, such as accounts and transactions, to
     /// the block in which they are created.
-    block_time: DateTime<Utc>,
+    block_time:  DateTime<Utc>,
     /// Height of block from genesis. Used to restart the process of collecting
     /// metrics from the latest block recorded.
-    height:     AbsoluteBlockHeight,
+    height:      AbsoluteBlockHeight,
+    /// Total amount staked across all pools inclusive passive delegation.
+    total_stake: Amount,
 }
 
 /// Holds selected attributes about accounts created on chain.
@@ -258,57 +260,70 @@ fn to_block_events(block_hash: BlockHash, block_item: BlockItemSummary) -> Vec<B
 
     match &block_item.details {
         AccountTransaction(atd) => {
-            log::debug!("TRANSACTION: {}", block_item.hash);
-
             let details = get_account_transaction_details(atd, block_hash);
-            let affected_accounts = block_item
+            let affected_accounts: Vec<TransactionAccountRelation> = block_item
                 .affected_addresses()
                 .into_iter()
-                .map(|address| TransactionAccountRelation(address, block_item.hash));
+                .map(|address| TransactionAccountRelation(address, block_item.hash))
+                .collect();
 
-            let affected_contracts = block_item
+            let affected_contracts: Vec<TransactionContractRelation> = block_item
                 .affected_contracts()
                 .into_iter()
-                .map(|address| TransactionContractRelation(address, block_item.hash));
+                .map(|address| TransactionContractRelation(address, block_item.hash))
+                .collect();
+
+            log::debug!(
+                "TRANSACTION: {}\n{:?}\n{}\n{}",
+                block_item.hash,
+                details,
+                &affected_accounts
+                    .iter()
+                    .map(|account_relation| format!("{:?}", account_relation))
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+                &affected_contracts
+                    .iter()
+                    .map(|contract_relation| format!("{:?}", contract_relation))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            );
 
             let event = BlockEvent::AccountTransaction(
                 block_item.hash,
                 details,
-                affected_accounts.collect(),
-                affected_contracts.collect(),
+                affected_accounts,
+                affected_contracts,
             );
 
             events.push(event);
 
             match &atd.effects {
                 AccountTransactionEffects::ModuleDeployed { module_ref } => {
-                    log::debug!("CONTRACT MODULE: {}", module_ref);
-
                     let details = ContractModuleDetails { block_hash };
-                    let event = BlockEvent::ContractModuleDeployment(*module_ref, details);
+                    log::debug!("CONTRACT MODULE: {}\n{:?}", module_ref, &details);
 
+                    let event = BlockEvent::ContractModuleDeployment(*module_ref, details);
                     events.push(event);
                 }
                 AccountTransactionEffects::ContractInitialized { data } => {
-                    log::debug!("CONTRACT INSTANCE: {}", data.address);
-
                     let details = ContractInstanceDetails {
                         block_hash,
                         module_ref: data.origin_ref,
                     };
-                    let event = BlockEvent::ContractInstantiation(data.address, details);
+                    log::debug!("CONTRACT INSTANCE: {}\n{:?}", data.address, &details);
 
+                    let event = BlockEvent::ContractInstantiation(data.address, details);
                     events.push(event);
                 }
                 _ => {}
             };
         }
         AccountCreation(acd) => {
-            log::debug!("ACCOUNT: {}", acd.address);
-
             let details = account_details(block_hash, acd);
-            let block_event = BlockEvent::AccountCreation(acd.address, details);
+            log::debug!("ACCOUNT: {}\n{:?}", acd.address, &details);
 
+            let block_event = BlockEvent::AccountCreation(acd.address, details);
             events.push(block_event);
         }
         _ => {}
@@ -398,14 +413,55 @@ async fn process_genesis_block(
         .response;
 
     let block_details = BlockDetails {
-        block_time: block_info.block_slot_time,
-        height:     block_info.block_height,
+        block_time:  block_info.block_slot_time,
+        height:      block_info.block_height,
+        total_stake: Amount { micro_ccd: 0 },
     };
 
     let genesis_accounts = accounts_in_block(node, block_hash).await?;
+
+    log::debug!("GENESIS BLOCK: {}\n{:?}", block_hash, block_details);
+    log::debug!(
+        "GENESIS ACCOUNTS:\n{}",
+        &genesis_accounts
+            .keys()
+            .map(|address| address.to_string())
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+
     init_db(db, (block_hash, block_details), genesis_accounts);
 
     Ok(())
+}
+
+async fn get_block_details(
+    node: &mut Client,
+    block_hash: BlockHash,
+) -> anyhow::Result<BlockDetails> {
+    let block_info = node
+        .get_block_info(block_hash)
+        .await
+        .with_context(|| format!("Could not get block info for block: {}", block_hash))?
+        .response;
+
+    // let total_stake = node
+    //     .get_passive_delegation_info(block_hash)
+    //     .await
+    //     .with_context(|| format!("Could not get delegation info for block: {}",
+    // block_hash))?     .response
+    //     .all_pool_total_capital;
+    let total_stake = Amount { micro_ccd: 0 };
+
+    let block_details = BlockDetails {
+        block_time: block_info.block_slot_time,
+        height: block_info.block_height,
+        total_stake,
+    };
+
+    log::debug!("BLOCK: {}\n{:?}", block_hash, block_details);
+
+    Ok(block_details)
 }
 
 /// Process a block, represented by `block_hash`, updating the `db`
@@ -415,17 +471,6 @@ async fn process_block(
     block_hash: BlockHash,
     db: &mut DB,
 ) -> anyhow::Result<()> {
-    let block_info = node
-        .get_block_info(block_hash)
-        .await
-        .with_context(|| format!("Could not get block info for block: {}", block_hash))?
-        .response;
-
-    let block_details = BlockDetails {
-        block_time: block_info.block_slot_time,
-        height:     block_info.block_height,
-    };
-
     let mut accounts: BTreeMap<CanonicalAccountAddress, AccountDetails> = BTreeMap::new();
     let mut account_transactions: BTreeMap<TransactionHash, TransactionDetails> = BTreeMap::new();
     let mut contract_modules: BTreeMap<ModuleRef, ContractModuleDetails> = BTreeMap::new();
@@ -434,7 +479,9 @@ async fn process_block(
     let mut transaction_account_relations: BTreeSet<TransactionAccountRelation> = BTreeSet::new();
     let mut transaction_contract_relations: BTreeSet<TransactionContractRelation> = BTreeSet::new();
 
-    let block_events = get_block_events(node, block_info.block_hash).await?;
+    let block_details = get_block_details(node, block_hash).await?;
+    let block_events = get_block_events(node, block_hash).await?;
+
     block_events
         .try_for_each(|be| {
             match be {
