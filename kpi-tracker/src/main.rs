@@ -4,21 +4,17 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use anyhow::{anyhow, Context};
 use chrono::{DateTime, Utc};
 use clap::Parser;
-use concordium_rust_sdk::smart_contracts::common::{Amount, ACCOUNT_ADDRESS_SIZE};
-use concordium_rust_sdk::types::hashes::TransactionHash;
-use concordium_rust_sdk::types::smart_contracts::ModuleRef;
-use concordium_rust_sdk::types::{
-    AccountTransactionDetails, AccountTransactionEffects, BlockItemSummary, ContractAddress,
-    TransactionType,
-};
+use concordium_rust_sdk::smart_contracts::common::ACCOUNT_ADDRESS_SIZE;
 use concordium_rust_sdk::{
     id::types::AccountCredentialWithoutProofs,
-    smart_contracts::common::AccountAddress,
+    smart_contracts::common::{AccountAddress, Amount},
     types::{
-        hashes::BlockHash,
-        AbsoluteBlockHeight, AccountCreationDetails,
+        hashes::{BlockHash, TransactionHash},
+        smart_contracts::ModuleRef,
+        AbsoluteBlockHeight, AccountCreationDetails, AccountTransactionDetails,
+        AccountTransactionEffects, BlockItemSummary,
         BlockItemSummaryDetails::{AccountCreation, AccountTransaction},
-        CredentialType,
+        ContractAddress, CredentialType, TransactionType,
     },
     v2::{AccountIdentifier, Client, Endpoint},
 };
@@ -66,11 +62,12 @@ impl fmt::Display for CanonicalAccountAddress {
 /// corresponding attributes.
 #[derive(Debug, Clone, Copy)]
 struct BlockDetails {
-    /// Finalization time of the block. Used to show how metrics evolve over time by linking entities, such as accounts and transactions, to
+    /// Finalization time of the block. Used to show how metrics evolve over
+    /// time by linking entities, such as accounts and transactions, to
     /// the block in which they are created.
     block_time: DateTime<Utc>,
-    /// Height of block from genesis. Used to restart the process of collecting metrics from the
-    /// latest block recorded.
+    /// Height of block from genesis. Used to restart the process of collecting
+    /// metrics from the latest block recorded.
     height: AbsoluteBlockHeight,
 }
 
@@ -79,34 +76,37 @@ struct BlockDetails {
 struct AccountDetails {
     /// Whether an account was created as an initial account or not.
     is_initial: bool,
-    /// FK to the block in which the account was created.
+    /// Foreign key to the block in which the account was created.
     block_hash: BlockHash,
 }
 
 /// Holds selected attributes of an account transaction.
 #[derive(Debug)]
 struct TransactionDetails {
-    /// The transaction type of the account transaction
-    transaction_type: TransactionType,
-    /// FK to the block in which the transaction was finalized.
+    /// The transaction type of the account transaction. Can be none if
+    /// transaction was rejected due to serialization failure.
+    transaction_type: Option<TransactionType>,
+    /// Foreign key to the block in which the transaction was finalized.
     block_hash: BlockHash,
     /// The cost of the transaction.
     cost: Amount,
+    /// Whether the transaction failed or not.
+    is_failed: bool,
 }
 
 /// Holds selected attributes of a contract module deployed on chain.
 #[derive(Debug)]
 struct ContractModuleDetails {
-    /// FK to the block in which the module was deployed.
+    /// Foreign key to the block in which the module was deployed.
     block_hash: BlockHash,
 }
 
 /// Holds selected attributes of a contract instance created on chain.
 #[derive(Debug)]
 struct ContractInstanceDetails {
-    /// FK to the module used to instantiate the contract
+    /// Foreign key to the module used to instantiate the contract
     module_ref: ModuleRef,
-    /// FK to the block in which the contract was instantiated.
+    /// Foreign key to the block in which the contract was instantiated.
     block_hash: BlockHash,
 }
 
@@ -126,12 +126,13 @@ type ContractInstancesTable = HashMap<ContractAddress, ContractInstanceDetails>;
 type TransactionsAccountsTable = HashSet<TransactionAccountRelation>;
 type TransactionsContractsTable = HashSet<TransactionContractRelation>;
 
-/// This is intended as a in-memory DB, which follows the same schema as the final DB will follow.
+/// This is intended as a in-memory DB, which follows the same schema as the
+/// final DB will follow.
 struct DB {
     /// Table containing all blocks queried from node.
     blocks: BlocksTable,
-    /// Table containing all accounts created on chain, along with accounts present in genesis
-    /// block
+    /// Table containing all accounts created on chain, along with accounts
+    /// present in genesis block
     accounts: AccountsTable,
     /// Table containing all account transactions finalized on chain.
     account_transactions: AccountTransactionsTable,
@@ -158,8 +159,8 @@ enum BlockEvent {
     ContractInstantiation(ContractAddress, ContractInstanceDetails),
 }
 
-/// Queries node for account info for the `account` given at the block represented by the
-/// `block_hash`
+/// Queries node for account info for the `account` given at the block
+/// represented by the `block_hash`
 fn account_details(
     block_hash: BlockHash,
     account_creation_details: &AccountCreationDetails,
@@ -231,53 +232,54 @@ async fn accounts_in_block(
     Ok(accounts_details_map)
 }
 
-/// Maps `AccountTransactionDetails` to `TransactionDetails`, where rejected transactions without a
-/// transaction type are represented by `None`.
+/// Maps `AccountTransactionDetails` to `TransactionDetails`, where rejected
+/// transactions without a transaction type are represented by `None`.
 fn get_account_transaction_details(
     details: &AccountTransactionDetails,
     block_hash: BlockHash,
-) -> Option<TransactionDetails> {
-    details
-        .transaction_type()
-        .map(|transaction_type| TransactionDetails {
-            block_hash,
-            transaction_type,
-            cost: details.cost,
-        })
+) -> TransactionDetails {
+    let transaction_type = details.transaction_type();
+    let is_failed = details.effects.is_rejected().is_some();
+
+    TransactionDetails {
+        block_hash,
+        transaction_type,
+        is_failed,
+        cost: details.cost,
+    }
 }
 
-/// Maps `BlockItemSummary` to `BlockEvent`, which represent entities stored in the database.
+/// Maps `BlockItemSummary` to `BlockEvent`, which represent entities stored in
+/// the database.
 fn to_block_events(block_hash: BlockHash, block_item: BlockItemSummary) -> Vec<BlockEvent> {
     let mut events: Vec<BlockEvent> = Vec::new();
 
     match &block_item.details {
         AccountTransaction(atd) => {
-            // TODO: do we want to store failed transactions?
-            if let Some(details) = get_account_transaction_details(atd, block_hash) {
-                let affected_accounts = block_item
-                    .affected_addresses()
-                    .into_iter()
-                    .map(|address| TransactionAccountRelation(address, block_item.hash));
+            let details = get_account_transaction_details(atd, block_hash);
+            let affected_accounts = block_item
+                .affected_addresses()
+                .into_iter()
+                .map(|address| TransactionAccountRelation(address, block_item.hash));
 
-                let affected_contracts = block_item
-                    .affected_contracts()
-                    .into_iter()
-                    .map(|address| TransactionContractRelation(address, block_item.hash));
+            let affected_contracts = block_item
+                .affected_contracts()
+                .into_iter()
+                .map(|address| TransactionContractRelation(address, block_item.hash));
 
-                println!(
-                    "TRANSACTION:\nhash: {}\ndetails: {:?}",
-                    block_item.hash, &details
-                ); // Logger debug
+            println!(
+                "TRANSACTION:\nhash: {}\ndetails: {:?}",
+                block_item.hash, &details
+            ); // Logger debug
 
-                let event = BlockEvent::AccountTransaction(
-                    block_item.hash,
-                    details,
-                    affected_accounts.collect(),
-                    affected_contracts.collect(),
-                );
+            let event = BlockEvent::AccountTransaction(
+                block_item.hash,
+                details,
+                affected_accounts.collect(),
+                affected_contracts.collect(),
+            );
 
-                events.push(event);
-            }
+            events.push(event);
 
             match &atd.effects {
                 AccountTransactionEffects::ModuleDeployed { module_ref } => {
@@ -351,38 +353,42 @@ async fn get_block_events(
     Ok(block_events)
 }
 
-/// Insert as a single DB transaction to facilitate easy recovery, as the service can restart from
-/// current height stored in DB.
+/// Init db with a block and corresponding accounts found in block. This is a
+/// helper function to be used for genesis block only.
+fn init_db(
+    db: &mut DB,
+    (block_hash, block_details): (BlockHash, BlockDetails),
+    accounts: BTreeMap<CanonicalAccountAddress, AccountDetails>,
+) {
+    db.blocks.insert(block_hash, block_details);
+    db.accounts.extend(accounts.into_iter());
+}
+
+/// Insert as a single DB transaction to facilitate easy recovery, as the
+/// service can restart from current height stored in DB.
 fn update_db(
     db: &mut DB,
     (block_hash, block_details): (BlockHash, BlockDetails),
     accounts: BTreeMap<CanonicalAccountAddress, AccountDetails>,
-    transactions: Option<BTreeMap<TransactionHash, TransactionDetails>>,
-    contract_modules: Option<BTreeMap<ModuleRef, ContractModuleDetails>>,
-    contract_instances: Option<BTreeMap<ContractAddress, ContractInstanceDetails>>,
-    transaction_account_relations: Option<BTreeSet<TransactionAccountRelation>>,
-    transaction_contract_relations: Option<BTreeSet<TransactionContractRelation>>,
+    transactions: BTreeMap<TransactionHash, TransactionDetails>,
+    contract_modules: BTreeMap<ModuleRef, ContractModuleDetails>,
+    contract_instances: BTreeMap<ContractAddress, ContractInstanceDetails>,
+    transaction_account_relations: BTreeSet<TransactionAccountRelation>,
+    transaction_contract_relations: BTreeSet<TransactionContractRelation>,
 ) {
     db.blocks.insert(block_hash, block_details);
     db.accounts.extend(accounts.into_iter());
-    if let Some(ts) = transactions {
-        db.account_transactions.extend(ts.into_iter());
-    }
-    if let Some(ms) = contract_modules {
-        db.contract_modules.extend(ms.into_iter());
-    }
-    if let Some(is) = contract_instances {
-        db.contract_instances.extend(is.into_iter());
-    }
-    if let Some(tars) = transaction_account_relations {
-        db.transaction_account_relations.extend(tars.into_iter());
-    }
-    if let Some(tcrs) = transaction_contract_relations {
-        db.transaction_contract_relations.extend(tcrs.into_iter());
-    }
+    db.account_transactions.extend(transactions.into_iter());
+    db.contract_modules.extend(contract_modules.into_iter());
+    db.contract_instances.extend(contract_instances.into_iter());
+    db.transaction_account_relations
+        .extend(transaction_account_relations.into_iter());
+    db.transaction_contract_relations
+        .extend(transaction_contract_relations.into_iter());
 }
 
-/// Processes a block, represented by `block_hash` by querying the node for entities present in the block state, updating the `db`. Should only be
+/// Processes a block, represented by `block_hash` by querying the node for
+/// entities present in the block state, updating the `db`. Should only be
 /// used to process the genesis block.
 async fn process_genesis_block(
     node: &mut Client,
@@ -401,21 +407,13 @@ async fn process_genesis_block(
     };
 
     let genesis_accounts = accounts_in_block(node, block_hash).await?;
-    update_db(
-        db,
-        (block_hash, block_details),
-        genesis_accounts,
-        None,
-        None,
-        None,
-        None,
-        None,
-    );
+    init_db(db, (block_hash, block_details), genesis_accounts);
 
     Ok(())
 }
 
-/// Process a block, represented by `block_hash`, updating the `db` corresponding to events captured by the block.
+/// Process a block, represented by `block_hash`, updating the `db`
+/// corresponding to events captured by the block.
 async fn process_block(
     node: &mut Client,
     block_hash: BlockHash,
@@ -481,11 +479,11 @@ async fn process_block(
         db,
         (block_hash, block_details),
         accounts,
-        Some(account_transactions),
-        Some(contract_modules),
-        Some(contract_instances),
-        Some(transaction_account_relations),
-        Some(transaction_contract_relations),
+        account_transactions,
+        contract_modules,
+        contract_instances,
+        transaction_account_relations,
+        transaction_contract_relations,
     );
 
     Ok(())
@@ -627,8 +625,8 @@ fn print_db(db: DB) {
     );
 }
 
-/// Queries the node available at `Args.endpoint` from `from_height` for `Args.num_blocks` blocks. Inserts
-/// results captured into the supplied `db`.
+/// Queries the node available at `Args.endpoint` from `from_height` for
+/// `Args.num_blocks` blocks. Inserts results captured into the supplied `db`.
 async fn use_node(db: &mut DB, from_height: AbsoluteBlockHeight) -> anyhow::Result<()> {
     let args = Args::parse();
     let endpoint = args.node;
