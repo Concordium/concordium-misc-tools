@@ -27,14 +27,17 @@ struct Args {
         help = "The endpoint is expected to point to a concordium node grpc v2 API.",
         default_value = "http://localhost:20001"
     )]
-    node:       Endpoint,
+    node:        Endpoint,
     /// How many blocks to process.
     // Only here for testing purposes...
     #[arg(long = "num-blocks", default_value_t = 10000)]
-    num_blocks: u64,
+    num_blocks:  u64,
     /// Logging level of the application
     #[arg(long = "log-level", default_value = "debug")]
-    log_level:  log::LevelFilter,
+    log_level:   log::LevelFilter,
+    /// Block height to start collecting from
+    #[arg(long = "from-height", default_value_t = 0)]
+    from_height: u64,
 }
 
 #[derive(Eq, PartialEq, Copy, Clone, PartialOrd, Ord, Debug, Hash)]
@@ -440,6 +443,7 @@ async fn process_genesis_block(
     Ok(())
 }
 
+/// Get `BlockDetails` for given block represented by `block_hash`
 async fn get_block_details(
     node: &mut Client,
     block_hash: BlockHash,
@@ -450,13 +454,16 @@ async fn get_block_details(
         .with_context(|| format!("Could not get block info for block: {}", block_hash))?
         .response;
 
-    // let total_stake = node
-    //     .get_passive_delegation_info(block_hash)
-    //     .await
-    //     .with_context(|| format!("Could not get delegation info for block: {}",
-    // block_hash))?     .response
-    //     .all_pool_total_capital;
-    let total_stake = Amount { micro_ccd: 0 };
+    let total_stake =
+        // TODO: Find a good way to get total stake across bakers prior to protocol version 4. The
+        // implementation below is not a good solution, as it assumes an error is only returned if
+        // the block is prior to protocol version 4, as the block will already have been found due to
+        // the node query for block info just above. (which might not be a correct assumption)
+        if let Ok(delegation_info) = node.get_passive_delegation_info(block_hash).await {
+            delegation_info.response.all_pool_total_capital
+        } else {
+            Amount { micro_ccd: 0 }
+        };
 
     let block_details = BlockDetails {
         block_time: block_info.block_slot_time,
@@ -464,7 +471,7 @@ async fn get_block_details(
         total_stake,
     };
 
-    log::debug!("BLOCK: {}\n{:?}", block_hash, block_details);
+    log::trace!("BLOCK: {}\n{:?}", block_hash, block_details);
 
     Ok(block_details)
 }
@@ -696,13 +703,16 @@ async fn use_node(db: &mut DB, from_height: AbsoluteBlockHeight) -> anyhow::Resu
         .await
         .context("Error querying blocks")?;
 
-    if from_height.height == 0 {
+    let start_height = if from_height.height == 0 {
         if let Some(genesis_block) = blocks_stream.next().await {
             process_genesis_block(&mut node, genesis_block.block_hash, db).await?;
         }
-    }
+        from_height.height + 1
+    } else {
+        from_height.height
+    };
 
-    for _ in from_height.height + 1..blocks_to_process {
+    for _ in start_height..blocks_to_process {
         if let Some(block) = blocks_stream.next().await {
             process_block(&mut node, block.block_hash, db).await?;
         }
@@ -729,7 +739,9 @@ async fn main() -> anyhow::Result<()> {
         transaction_contract_relations: HashSet::new(),
     };
 
-    let current_height = AbsoluteBlockHeight { height: 0 }; // TOOD: get this from actual DB
+    let current_height = AbsoluteBlockHeight {
+        height: args.from_height,
+    }; // TOOD: get this from actual DB
     use_node(&mut db, current_height)
         .await
         .context("Error happened while querying node.")?;
