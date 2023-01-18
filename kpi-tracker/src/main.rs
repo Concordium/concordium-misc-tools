@@ -55,34 +55,37 @@ struct BlockDetails {
 struct AccountDetails {
     /// Whether an account was created as an initial account or not.
     is_initial: bool,
-    /// FK to the block in which the account was created.
+    /// Foreign key to the block in which the account was created.
     block_hash: BlockHash,
 }
 
 /// Holds selected attributes of an account transaction.
 #[derive(Debug)]
 struct TransactionDetails {
-    /// The transaction type of the account transaction
-    transaction_type: TransactionType,
-    /// FK to the block in which the transaction was finalized.
+    /// The transaction type of the account transaction. Can be none if transaction was rejected
+    /// due to serialization failure.
+    transaction_type: Option<TransactionType>,
+    /// Foreign key to the block in which the transaction was finalized.
     block_hash: BlockHash,
     /// The cost of the transaction.
     cost: Amount,
+    /// Whether the transaction failed or not.
+    is_failed: bool,
 }
 
 /// Holds selected attributes of a contract module deployed on chain.
 #[derive(Debug)]
 struct ContractModuleDetails {
-    /// FK to the block in which the module was deployed.
+    /// Foreign key to the block in which the module was deployed.
     block_hash: BlockHash,
 }
 
 /// Holds selected attributes of a contract instance created on chain.
 #[derive(Debug)]
 struct ContractInstanceDetails {
-    /// FK to the module used to instantiate the contract
+    /// Foreign key to the module used to instantiate the contract
     module_ref: ModuleRef,
-    /// FK to the block in which the contract was instantiated.
+    /// Foreign key to the block in which the contract was instantiated.
     block_hash: BlockHash,
 }
 
@@ -192,14 +195,16 @@ async fn accounts_in_block(
 fn get_account_transaction_details(
     details: &AccountTransactionDetails,
     block_hash: BlockHash,
-) -> Option<TransactionDetails> {
-    details
-        .transaction_type()
-        .map(|transaction_type| TransactionDetails {
-            block_hash,
-            transaction_type,
-            cost: details.cost,
-        })
+) -> TransactionDetails {
+    let transaction_type = details.transaction_type();
+    let is_failed = details.effects.is_rejected().is_some();
+
+    TransactionDetails {
+        block_hash,
+        transaction_type,
+        is_failed,
+        cost: details.cost,
+    }
 }
 
 /// Maps `BlockItemSummary` to `BlockEvent`, which represent entities stored in the database.
@@ -208,15 +213,13 @@ fn to_block_events(block_hash: BlockHash, block_item: BlockItemSummary) -> Vec<B
 
     match block_item.details {
         AccountTransaction(atd) => {
-            // TODO: do we want to store failed transactions?
-            if let Some(details) = get_account_transaction_details(&atd, block_hash) {
-                println!(
-                    "TRANSACTION:\nhash: {}\ndetails: {:?}",
-                    &block_item.hash, &details
-                ); // Logger debug
-                let event = BlockEvent::AccountTransaction(block_item.hash, details);
-                events.push(event);
-            }
+            let details = get_account_transaction_details(&atd, block_hash);
+            println!(
+                "TRANSACTION:\nhash: {}\ndetails: {:?}",
+                block_item.hash, &details
+            ); // Logger debug
+            let event = BlockEvent::AccountTransaction(block_item.hash, details);
+            events.push(event);
 
             match atd.effects {
                 AccountTransactionEffects::ModuleDeployed { module_ref } => {
@@ -290,27 +293,32 @@ async fn get_block_events(
     Ok(block_events)
 }
 
+/// Init db with a block and corresponding accounts found in block. This is a helper function to be used
+/// for genesis block only.
+fn init_db(
+    db: &mut DB,
+    (block_hash, block_details): (BlockHash, BlockDetails),
+    accounts: BTreeMap<AccountAddress, AccountDetails>,
+) {
+    db.blocks.insert(block_hash, block_details);
+    db.accounts.extend(accounts.into_iter());
+}
+
 /// Insert as a single DB transaction to facilitate easy recovery, as the service can restart from
 /// current height stored in DB.
 fn update_db(
     db: &mut DB,
     (block_hash, block_details): (BlockHash, BlockDetails),
     accounts: BTreeMap<AccountAddress, AccountDetails>,
-    transactions: Option<BTreeMap<TransactionHash, TransactionDetails>>,
-    contract_modules: Option<BTreeMap<ModuleRef, ContractModuleDetails>>,
-    contract_instances: Option<BTreeMap<ContractAddress, ContractInstanceDetails>>,
+    transactions: BTreeMap<TransactionHash, TransactionDetails>,
+    contract_modules: BTreeMap<ModuleRef, ContractModuleDetails>,
+    contract_instances: BTreeMap<ContractAddress, ContractInstanceDetails>,
 ) {
     db.blocks.insert(block_hash, block_details);
     db.accounts.extend(accounts.into_iter());
-    if let Some(ts) = transactions {
-        db.account_transactions.extend(ts.into_iter());
-    }
-    if let Some(ms) = contract_modules {
-        db.contract_modules.extend(ms.into_iter());
-    }
-    if let Some(is) = contract_instances {
-        db.contract_instances.extend(is.into_iter());
-    }
+    db.account_transactions.extend(transactions.into_iter());
+    db.contract_modules.extend(contract_modules.into_iter());
+    db.contract_instances.extend(contract_instances.into_iter());
 }
 
 /// Processes a block, represented by `block_hash` by querying the node for entities present in the block state, updating the `db`. Should only be
@@ -332,14 +340,7 @@ async fn process_genesis_block(
     };
 
     let genesis_accounts = accounts_in_block(node, block_hash).await?;
-    update_db(
-        db,
-        (block_hash, block_details),
-        genesis_accounts,
-        None,
-        None,
-        None,
-    );
+    init_db(db, (block_hash, block_details), genesis_accounts);
 
     Ok(())
 }
@@ -393,9 +394,9 @@ async fn process_block(
         db,
         (block_hash, block_details),
         accounts,
-        Some(account_transactions),
-        Some(contract_modules),
-        Some(contract_instances),
+        account_transactions,
+        contract_modules,
+        contract_instances,
     );
 
     Ok(())
