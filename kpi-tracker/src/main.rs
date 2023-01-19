@@ -13,7 +13,7 @@ use concordium_rust_sdk::{
         AbsoluteBlockHeight, AccountCreationDetails, AccountTransactionDetails,
         AccountTransactionEffects, BlockItemSummary,
         BlockItemSummaryDetails::{AccountCreation, AccountTransaction},
-        ContractAddress, CredentialType, TransactionType,
+        ContractAddress, CredentialType, SpecialTransactionOutcome, TransactionType,
     },
     v2::{AccountIdentifier, Client, Endpoint},
 };
@@ -73,7 +73,7 @@ struct BlockDetails {
     /// metrics from the latest block recorded.
     height:      AbsoluteBlockHeight,
     /// Total amount staked across all pools inclusive passive delegation.
-    total_stake: Amount,
+    total_stake: Option<Amount>,
 }
 
 /// Holds selected attributes about accounts created on chain.
@@ -423,7 +423,7 @@ async fn process_genesis_block(
     let block_details = BlockDetails {
         block_time:  block_info.block_slot_time,
         height:      block_info.block_height,
-        total_stake: Amount { micro_ccd: 0 },
+        total_stake: None,
     };
 
     let genesis_accounts = accounts_in_block(node, block_hash).await?;
@@ -443,6 +443,33 @@ async fn process_genesis_block(
     Ok(())
 }
 
+async fn is_p4_payday_block(node: &mut Client, block_hash: BlockHash) -> anyhow::Result<bool> {
+    let mut special_events = node
+        .get_block_special_events(block_hash)
+        .await
+        .with_context(|| format!("Could not get special events for block: {}", block_hash))?
+        .response;
+
+    let mut is_payday_block = false;
+    while let Some(res) = special_events.next().await {
+        let event = res?;
+
+        let has_payday_event = match event {
+            SpecialTransactionOutcome::PaydayPoolReward { .. } => true,
+            SpecialTransactionOutcome::PaydayAccountReward { .. } => true,
+            SpecialTransactionOutcome::PaydayFoundationReward { .. } => true,
+            _ => false,
+        };
+
+        if has_payday_event {
+            is_payday_block = true;
+            break;
+        };
+    }
+
+    Ok(is_payday_block)
+}
+
 /// Get `BlockDetails` for given block represented by `block_hash`
 async fn get_block_details(
     node: &mut Client,
@@ -454,16 +481,23 @@ async fn get_block_details(
         .with_context(|| format!("Could not get block info for block: {}", block_hash))?
         .response;
 
-    let total_stake =
-        // TODO: Find a good way to get total stake across bakers prior to protocol version 4. The
-        // implementation below is not a good solution, as it assumes an error is only returned if
-        // the block is prior to protocol version 4, as the block will already have been found due to
-        // the node query for block info just above. (which might not be a correct assumption)
-        if let Ok(delegation_info) = node.get_passive_delegation_info(block_hash).await {
-            delegation_info.response.all_pool_total_capital
-        } else {
-            Amount { micro_ccd: 0 }
-        };
+    let total_stake = if is_p4_payday_block(node, block_hash).await? {
+        let payday_stake = node
+            .get_passive_delegation_info(block_hash)
+            .await
+            .with_context(|| {
+                format!(
+                    "Could not get passive delegation info for block: {}",
+                    block_hash
+                )
+            })?
+            .response
+            .all_pool_total_capital;
+
+        Some(payday_stake)
+    } else {
+        None
+    };
 
     let block_details = BlockDetails {
         block_time: block_info.block_slot_time,
@@ -472,6 +506,10 @@ async fn get_block_details(
     };
 
     log::trace!("BLOCK: {}\n{:?}", block_hash, block_details);
+
+    if block_details.total_stake.is_some() {
+        log::debug!("PAYDAY BLOCK: {}\n{:?}", block_hash, block_details);
+    }
 
     Ok(block_details)
 }
@@ -548,6 +586,14 @@ async fn process_block(
 fn print_db(db: DB) {
     // Print blocks
     println!("{} blocks stored\n", &db.blocks.len());
+
+    let payday_blocks = db
+        .blocks
+        .values()
+        .filter(|bd| bd.total_stake.is_some())
+        .collect::<Vec<_>>()
+        .len();
+    println!("{} payday blocks stored\n", payday_blocks);
 
     let get_block_time = |block_hash: BlockHash| {
         db.blocks
