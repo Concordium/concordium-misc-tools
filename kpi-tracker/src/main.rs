@@ -66,7 +66,7 @@ struct TransactionDetails {
     /// The cost of the transaction.
     cost:             Amount,
     /// Whether the transaction failed or not.
-    is_failed:        bool,
+    is_success:       bool,
 }
 
 /// Holds selected attributes of a contract module deployed on chain.
@@ -194,12 +194,12 @@ fn get_account_transaction_details(
     block_hash: BlockHash,
 ) -> TransactionDetails {
     let transaction_type = details.transaction_type();
-    let is_failed = details.effects.is_rejected().is_some();
+    let is_success = details.effects.is_rejected().is_none();
 
     TransactionDetails {
         block_hash,
         transaction_type,
-        is_failed,
+        is_success,
         cost: details.cost,
     }
 }
