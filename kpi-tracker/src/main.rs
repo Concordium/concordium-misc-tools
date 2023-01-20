@@ -27,14 +27,14 @@ struct Args {
         help = "The endpoint is expected to point to a concordium node grpc v2 API.",
         default_value = "http://localhost:20001"
     )]
-    node: Endpoint,
+    node:       Endpoint,
     /// How many blocks to process.
     // Only here for testing purposes...
     #[arg(long = "num-blocks", default_value_t = 10000)]
     num_blocks: u64,
     /// Logging level of the application
     #[arg(long = "log-level", default_value = "debug")]
-    log_level: log::LevelFilter,
+    log_level:  log::LevelFilter,
 }
 
 #[derive(Eq, PartialEq, Copy, Clone, PartialOrd, Ord, Debug, Hash)]
@@ -50,9 +50,7 @@ impl From<AccountAddress> for CanonicalAccountAddress {
     }
 }
 impl fmt::Display for CanonicalAccountAddress {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        AccountAddress(self.0).fmt(f)
-    }
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { AccountAddress(self.0).fmt(f) }
 }
 
 /// Information about individual blocks. Useful for linking entities to a block
@@ -65,7 +63,7 @@ struct BlockDetails {
     block_time: DateTime<Utc>,
     /// Height of block from genesis. Used to restart the process of collecting
     /// metrics from the latest block recorded.
-    height: AbsoluteBlockHeight,
+    height:     AbsoluteBlockHeight,
 }
 
 /// Holds selected attributes about accounts created on chain.
@@ -84,11 +82,11 @@ struct TransactionDetails {
     /// transaction was rejected due to serialization failure.
     transaction_type: Option<TransactionType>,
     /// Foreign key to the block in which the transaction was finalized.
-    block_hash: BlockHash,
+    block_hash:       BlockHash,
     /// The cost of the transaction.
-    cost: Amount,
+    cost:             Amount,
     /// Whether the transaction failed or not.
-    is_success: bool,
+    is_success:       bool,
 }
 
 /// Holds selected attributes of a contract module deployed on chain.
@@ -253,56 +251,83 @@ fn to_block_events(block_hash: BlockHash, block_item: BlockItemSummary) -> Vec<B
 
     match &block_item.details {
         AccountTransaction(atd) => {
-            log::debug!("TRANSACTION: {}", block_item.hash);
-
             let details = get_account_transaction_details(atd, block_hash);
-            let affected_accounts = block_item.affected_addresses().into_iter().map(|address| {
-                TransactionAccountRelation(CanonicalAccountAddress::from(address), block_item.hash)
-            });
+            let affected_accounts: Vec<TransactionAccountRelation> = block_item
+                .affected_addresses()
+                .into_iter()
+                .map(|address| {
+                    TransactionAccountRelation(
+                        CanonicalAccountAddress::from(address),
+                        block_item.hash,
+                    )
+                })
+                .collect();
 
-            let affected_contracts = block_item
+            let affected_contracts: Vec<TransactionContractRelation> = block_item
                 .affected_contracts()
                 .into_iter()
-                .map(|address| TransactionContractRelation(address, block_item.hash));
+                .map(|address| TransactionContractRelation(address, block_item.hash))
+                .collect();
+
+            log::debug!(
+                "Account transaction found: {}\n{:?}\n{}\n{}",
+                block_item.hash,
+                details,
+                &affected_accounts
+                    .iter()
+                    .map(|account_relation| format!("{:?}", account_relation))
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+                &affected_contracts
+                    .iter()
+                    .map(|contract_relation| format!("{:?}", contract_relation))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            );
 
             let event = BlockEvent::AccountTransaction(
                 block_item.hash,
                 details,
-                affected_accounts.collect(),
-                affected_contracts.collect(),
+                affected_accounts,
+                affected_contracts,
             );
 
             events.push(event);
 
             match &atd.effects {
                 AccountTransactionEffects::ModuleDeployed { module_ref } => {
-                    log::debug!("CONTRACT MODULE: {}", module_ref);
-
                     let details = ContractModuleDetails { block_hash };
-                    let event = BlockEvent::ContractModuleDeployment(*module_ref, details);
+                    log::debug!(
+                        "Contract module deployment found: {}\n{:?}",
+                        module_ref,
+                        &details
+                    );
 
+                    let event = BlockEvent::ContractModuleDeployment(*module_ref, details);
                     events.push(event);
                 }
                 AccountTransactionEffects::ContractInitialized { data } => {
-                    log::debug!("CONTRACT INSTANCE: {}", data.address);
-
                     let details = ContractInstanceDetails {
                         block_hash,
                         module_ref: data.origin_ref,
                     };
-                    let event = BlockEvent::ContractInstantiation(data.address, details);
+                    log::debug!(
+                        "Contract instantiation found: {}\n{:?}",
+                        data.address,
+                        &details
+                    );
 
+                    let event = BlockEvent::ContractInstantiation(data.address, details);
                     events.push(event);
                 }
                 _ => {}
             };
         }
         AccountCreation(acd) => {
-            log::debug!("ACCOUNT: {}", acd.address);
-
             let details = account_details(block_hash, acd);
-            let block_event = BlockEvent::AccountCreation(acd.address, details);
+            log::debug!("Account creation found: {}\n{:?}", acd.address, &details);
 
+            let block_event = BlockEvent::AccountCreation(acd.address, details);
             events.push(block_event);
         }
         _ => {}
@@ -393,10 +418,25 @@ async fn process_genesis_block(
 
     let block_details = BlockDetails {
         block_time: block_info.block_slot_time,
-        height: block_info.block_height,
+        height:     block_info.block_height,
     };
 
     let genesis_accounts = accounts_in_block(node, block_hash).await?;
+
+    log::debug!(
+        "Genesis block processed: {}\n{:?}",
+        block_hash,
+        block_details
+    );
+    log::debug!(
+        "Genesis accounts found:\n{}",
+        &genesis_accounts
+            .keys()
+            .map(|address| address.to_string())
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+
     init_db(db, (block_hash, block_details), genesis_accounts);
 
     Ok(())
@@ -417,7 +457,7 @@ async fn process_block(
 
     let block_details = BlockDetails {
         block_time: block_info.block_slot_time,
-        height: block_info.block_height,
+        height:     block_info.block_height,
     };
 
     let mut accounts: BTreeMap<CanonicalAccountAddress, AccountDetails> = BTreeMap::new();
