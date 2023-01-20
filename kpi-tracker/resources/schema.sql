@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS transactions (
   id SERIAL8 PRIMARY KEY,
   hash BYTEA NOT NULL UNIQUE,
   block INT8 NOT NULL REFERENCES blocks(id) ON DELETE RESTRICT ON UPDATE RESTRICT,
-  type INT8 -- NULL means the transaction was rejected
+  type INT2 -- NULL means the transaction was rejected
 );
 
 CREATE TABLE IF NOT EXISTS accounts_blocks (
@@ -47,4 +47,4 @@ CREATE TABLE IF NOT EXISTS contracts_blocks (
   PRIMARY KEY (contract, block)
 );
 
-CREATE INDEX IF NOT EXISTS transactions_type ON transactions(type);
+CREATE INDEX IF NOT EXISTS transactions_type ON transactions USING HASH (type);
