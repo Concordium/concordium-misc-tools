@@ -39,14 +39,14 @@ CREATE TABLE IF NOT EXISTS transactions (
 CREATE TABLE IF NOT EXISTS accounts_transactions (
   account INT8 REFERENCES accounts(id) ON DELETE RESTRICT ON UPDATE RESTRICT,
   transaction INT8 REFERENCES transactions(id) ON DELETE RESTRICT ON UPDATE RESTRICT,
-  PRIMARY KEY (account, transaction)
+  PRIMARY KEY (account, transaction) -- Ensures only unique rows can be inserted
 );
 
 -- Keeps track of relations between contracts and transactions to support contract activeness.
 CREATE TABLE IF NOT EXISTS contracts_transactions (
   contract INT8 REFERENCES contracts(id) ON DELETE RESTRICT ON UPDATE RESTRICT,
   transaction INT8 REFERENCES transactions(id) ON DELETE RESTRICT ON UPDATE RESTRICT,
-  PRIMARY KEY (contract, transaction)
+  PRIMARY KEY (contract, transaction) -- Ensures only unique rows can be inserted
 );
 
 -- Create index on transaction type to improve performance when querying for transactions of specific types.

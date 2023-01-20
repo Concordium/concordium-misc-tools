@@ -433,6 +433,7 @@ dependencies = [
  "concordium-rust-sdk",
  "futures",
  "tokio",
+ "tonic",
 ]
 
 [[package]]
