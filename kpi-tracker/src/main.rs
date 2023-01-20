@@ -27,14 +27,14 @@ struct Args {
         help = "The endpoint is expected to point to a concordium node grpc v2 API.",
         default_value = "http://localhost:20001"
     )]
-    node:       Endpoint,
+    node: Endpoint,
     /// How many blocks to process.
     // Only here for testing purposes...
     #[arg(long = "num-blocks", default_value_t = 10000)]
     num_blocks: u64,
     /// Logging level of the application
     #[arg(long = "log-level", default_value = "debug")]
-    log_level:  log::LevelFilter,
+    log_level: log::LevelFilter,
 }
 
 #[derive(Eq, PartialEq, Copy, Clone, PartialOrd, Ord, Debug, Hash)]
@@ -43,19 +43,16 @@ struct CanonicalAccountAddress([u8; ACCOUNT_ADDRESS_SIZE]);
 impl From<AccountAddress> for CanonicalAccountAddress {
     fn from(aa: AccountAddress) -> Self {
         let bytes: &[u8; ACCOUNT_ADDRESS_SIZE] = aa.as_ref();
-        let canonical_bytes: [u8; ACCOUNT_ADDRESS_SIZE] = bytes[0..29]
-            .into_iter()
-            .enumerate()
-            .fold([0; ACCOUNT_ADDRESS_SIZE], |mut acc, (i, byte)| {
-                acc[i] = *byte;
-                acc
-            });
+        let mut canonical_bytes = [0u8; ACCOUNT_ADDRESS_SIZE];
 
+        canonical_bytes[..29].copy_from_slice(&bytes[..29]);
         CanonicalAccountAddress(canonical_bytes)
     }
 }
 impl fmt::Display for CanonicalAccountAddress {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { AccountAddress(self.0).fmt(f) }
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        AccountAddress(self.0).fmt(f)
+    }
 }
 
 /// Information about individual blocks. Useful for linking entities to a block
@@ -68,7 +65,7 @@ struct BlockDetails {
     block_time: DateTime<Utc>,
     /// Height of block from genesis. Used to restart the process of collecting
     /// metrics from the latest block recorded.
-    height:     AbsoluteBlockHeight,
+    height: AbsoluteBlockHeight,
 }
 
 /// Holds selected attributes about accounts created on chain.
@@ -87,11 +84,11 @@ struct TransactionDetails {
     /// transaction was rejected due to serialization failure.
     transaction_type: Option<TransactionType>,
     /// Foreign key to the block in which the transaction was finalized.
-    block_hash:       BlockHash,
+    block_hash: BlockHash,
     /// The cost of the transaction.
-    cost:             Amount,
+    cost: Amount,
     /// Whether the transaction failed or not.
-    is_success:       bool,
+    is_success: bool,
 }
 
 /// Holds selected attributes of a contract module deployed on chain.
@@ -110,13 +107,11 @@ struct ContractInstanceDetails {
     block_hash: BlockHash,
 }
 
-/// Represents a compound unique constraint for relations between accounts and
-/// transactions
+/// Represents a relation between an account and a transaction
 #[derive(Debug, Hash, PartialEq, PartialOrd, Ord, Eq)]
 struct TransactionAccountRelation(CanonicalAccountAddress, TransactionHash);
 
-/// Represents a compound unique constraint for relations between contracts and
-/// transactions
+/// Represents a relation between a contract and a transaction
 #[derive(Debug, Hash, PartialEq, PartialOrd, Ord, Eq)]
 struct TransactionContractRelation(ContractAddress, TransactionHash);
 
@@ -398,7 +393,7 @@ async fn process_genesis_block(
 
     let block_details = BlockDetails {
         block_time: block_info.block_slot_time,
-        height:     block_info.block_height,
+        height: block_info.block_height,
     };
 
     let genesis_accounts = accounts_in_block(node, block_hash).await?;
@@ -422,7 +417,7 @@ async fn process_block(
 
     let block_details = BlockDetails {
         block_time: block_info.block_slot_time,
-        height:     block_info.block_height,
+        height: block_info.block_height,
     };
 
     let mut accounts: BTreeMap<CanonicalAccountAddress, AccountDetails> = BTreeMap::new();
@@ -448,14 +443,9 @@ async fn process_block(
                 ) => {
                     account_transactions.insert(hash, details);
 
-                    if !affected_accounts.is_empty() {
-                        transaction_account_relations
-                            .append(&mut BTreeSet::from_iter(affected_accounts.into_iter()));
-                    }
-
+                    transaction_account_relations.extend(affected_accounts.into_iter());
                     if !affected_contracts.is_empty() {
-                        transaction_contract_relations
-                            .append(&mut BTreeSet::from_iter(affected_contracts.into_iter()));
+                        transaction_contract_relations.extend(affected_contracts.into_iter());
                     }
                 }
                 BlockEvent::ContractModuleDeployment(module_ref, details) => {
