@@ -17,6 +17,7 @@ use concordium_rust_sdk::{
     v2::{AccountIdentifier, Client, Endpoint},
 };
 use futures::{self, future, Stream, StreamExt, TryStreamExt};
+use tokio_postgres::{config::Config as DBConfig, Client as DBClient, NoTls};
 
 #[derive(Debug, Parser)]
 struct Args {
@@ -26,11 +27,18 @@ struct Args {
         help = "The endpoint is expected to point to a concordium node grpc v2 API.",
         default_value = "http://localhost:20001"
     )]
-    node:       Endpoint,
+    node:          Endpoint,
     /// How many blocks to process.
     // Only here for testing purposes...
     #[arg(long = "num-blocks", default_value_t = 10000)]
-    num_blocks: u64,
+    num_blocks:    u64,
+    /// Database connection string.
+    #[arg(
+        long = "db-connection",
+        default_value = "host=localhost dbname=kpi-tracker user=postgres password=password \
+                         port=5432"
+    )]
+    db_connection: DBConfig,
 }
 
 /// Information about individual blocks. Useful for linking entities to a block
@@ -105,6 +113,36 @@ struct DB {
     contract_modules:     ContractModulesTable,
     /// Table containing all smart contract instances created on chain.
     contract_instances:   ContractInstancesTable,
+}
+
+struct DBConn {
+    client: DBClient,
+}
+
+impl DBConn {
+    async fn create(conn_string: DBConfig, try_create_tables: bool) -> anyhow::Result<Self> {
+        let (client, connection) = conn_string
+            .connect(NoTls)
+            .await
+            .context("Could not create database connection")?;
+
+        tokio::spawn(async move {
+            if let Err(e) = connection.await {
+                eprintln!("Connection error: {}", e); // TODO: log as error.
+            }
+        });
+
+        if try_create_tables {
+            let create_statements = include_str!("../resources/schema.sql");
+            client
+                .batch_execute(create_statements)
+                .await
+                .context("Failed to execute create statements")?;
+        }
+
+        let db_conn = DBConn { client };
+        Ok(db_conn)
+    }
 }
 
 /// Events from individual transactions to store in the database.
@@ -537,6 +575,10 @@ async fn use_node(db: &mut DB, from_height: AbsoluteBlockHeight) -> anyhow::Resu
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let args = Args::parse();
+
+    let _ = DBConn::create(args.db_connection, true).await?;
+
     let mut db = DB {
         blocks:               HashMap::new(),
         accounts:             HashMap::new(),
