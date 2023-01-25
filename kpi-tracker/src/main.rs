@@ -18,7 +18,9 @@ use concordium_rust_sdk::{
     v2::{AccountIdentifier, Client, Endpoint},
 };
 use futures::{self, future, Stream, StreamExt, TryStreamExt};
-use tokio_postgres::{config::Config as DBConfig, Client as DBClient, NoTls};
+use tokio_postgres::{
+    config::Config as DBConfig, types::Type as DBType, Client as DBClient, NoTls,
+};
 
 #[derive(Debug, Parser)]
 struct Args {
@@ -28,11 +30,11 @@ struct Args {
         help = "The endpoint is expected to point to a concordium node grpc v2 API.",
         default_value = "http://localhost:20001"
     )]
-    node:          Endpoint,
+    node: Endpoint,
     /// How many blocks to process.
     // Only here for testing purposes...
     #[arg(long = "num-blocks", default_value_t = 10000)]
-    num_blocks:    u64,
+    num_blocks: u64,
     /// Database connection string.
     #[arg(
         long = "db-connection",
@@ -42,7 +44,7 @@ struct Args {
     db_connection: DBConfig,
     /// Logging level of the application
     #[arg(long = "log-level", default_value = "debug")]
-    log_level:     log::LevelFilter,
+    log_level: log::LevelFilter,
 }
 
 #[derive(Eq, PartialEq, Copy, Clone, PartialOrd, Ord, Debug, Hash)]
@@ -58,7 +60,9 @@ impl From<AccountAddress> for CanonicalAccountAddress {
     }
 }
 impl fmt::Display for CanonicalAccountAddress {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { AccountAddress(self.0).fmt(f) }
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        AccountAddress(self.0).fmt(f)
+    }
 }
 
 /// Information about individual blocks. Useful for linking entities to a block
@@ -71,7 +75,7 @@ struct BlockDetails {
     block_time: DateTime<Utc>,
     /// Height of block from genesis. Used to restart the process of collecting
     /// metrics from the latest block recorded.
-    height:     AbsoluteBlockHeight,
+    height: AbsoluteBlockHeight,
 }
 
 /// Holds selected attributes about accounts created on chain.
@@ -90,11 +94,11 @@ struct TransactionDetails {
     /// transaction was rejected due to serialization failure.
     transaction_type: Option<TransactionType>,
     /// Foreign key to the block in which the transaction was finalized.
-    block_hash:       BlockHash,
+    block_hash: BlockHash,
     /// The cost of the transaction.
-    cost:             Amount,
+    cost: Amount,
     /// Whether the transaction failed or not.
-    is_success:       bool,
+    is_success: bool,
 }
 
 /// Holds selected attributes of a contract module deployed on chain.
@@ -116,14 +120,14 @@ struct ContractInstanceDetails {
 /// Represents a relation between an account and a transaction
 #[derive(Debug, Hash, PartialEq, PartialOrd, Ord, Eq)]
 struct TransactionAccountRelation {
-    account:     CanonicalAccountAddress,
+    account: CanonicalAccountAddress,
     transaction: TransactionHash,
 }
 
 /// Represents a relation between a contract and a transaction
 #[derive(Debug, Hash, PartialEq, PartialOrd, Ord, Eq)]
 struct TransactionContractRelation {
-    contract:    ContractAddress,
+    contract: ContractAddress,
     transaction: TransactionHash,
 }
 
@@ -155,8 +159,19 @@ struct DB {
     transaction_contract_relations: TransactionsContractsTable,
 }
 
+struct PreparedStatements {
+    insert_block: tokio_postgres::Statement,
+    insert_account: tokio_postgres::Statement,
+    insert_contract_module: tokio_postgres::Statement,
+    insert_contract_instance: tokio_postgres::Statement,
+    insert_transaction: tokio_postgres::Statement,
+    insert_account_transaction_relation: tokio_postgres::Statement,
+    insert_contract_transaction_relation: tokio_postgres::Statement,
+}
+
 struct DBConn {
     client: DBClient,
+    prepared: PreparedStatements,
 }
 
 impl DBConn {
@@ -180,7 +195,48 @@ impl DBConn {
                 .context("Failed to execute create statements")?;
         }
 
-        let db_conn = DBConn { client };
+        let insert_block = client
+            .prepare(
+                "INSERT INTO blocks (hash, timestamp, height, total_stake) VALUES ($1, $2, $3, \
+                 $4) RETURNING id",
+            )
+            .await?;
+        let insert_account = client
+            .prepare(
+                "INSERT INTO accounts (address, block, is_initial) VALUES ($1, $2, $3) RETURNING \
+                 id",
+            )
+            .await?;
+        let insert_contract_module = client
+            .prepare("INSERT INTO modules (ref, block) VALUES ($1, $2) RETURNING id")
+            .await?;
+        let insert_contract_instance = client
+            .prepare(
+                "INSERT INTO contracts (index, subindex, module, block) VALUES ($1, $2, $3, $4) \
+                 RETURNING id",
+            )
+            .await?;
+        let insert_transaction = client
+            .prepare("INSERT INTO blocks (hash, block, type) VALUES ($1, $2, $3) RETURNING id")
+            .await?;
+        let insert_account_transaction_relation = client
+            .prepare("INSERT INTO accounts_transactions (account, transaction) VALUES ($1, $2)")
+            .await?;
+        let insert_contract_transaction_relation = client
+            .prepare("INSERT INTO contracts_transactions (contract, transaction) VALUES ($1, $2)")
+            .await?;
+
+        let prepared = PreparedStatements {
+            insert_block,
+            insert_account,
+            insert_contract_module,
+            insert_contract_instance,
+            insert_transaction,
+            insert_account_transaction_relation,
+            insert_contract_transaction_relation,
+        };
+
+        let db_conn = DBConn { client, prepared };
         Ok(db_conn)
     }
 }
@@ -300,7 +356,7 @@ fn to_block_events(block_hash: BlockHash, block_item: BlockItemSummary) -> Vec<B
                 .affected_addresses()
                 .into_iter()
                 .map(|address| TransactionAccountRelation {
-                    account:     CanonicalAccountAddress::from(address),
+                    account: CanonicalAccountAddress::from(address),
                     transaction: block_item.hash,
                 })
                 .collect();
@@ -436,7 +492,7 @@ async fn process_genesis_block(
 
     let block_details = BlockDetails {
         block_time: block_info.block_slot_time,
-        height:     block_info.block_height,
+        height: block_info.block_height,
     };
 
     let genesis_accounts = accounts_in_block(node, block_hash).await?;
@@ -460,7 +516,7 @@ async fn process_block(
 
     let block_details = BlockDetails {
         block_time: block_info.block_slot_time,
-        height:     block_info.block_height,
+        height: block_info.block_height,
     };
 
     let mut accounts: BTreeMap<CanonicalAccountAddress, AccountDetails> = BTreeMap::new();
