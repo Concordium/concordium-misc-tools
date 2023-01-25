@@ -1,3 +1,4 @@
+-- All blocks. Mostly act as a time reference for other entities.
 CREATE TABLE IF NOT EXISTS blocks (
   id SERIAL8 PRIMARY KEY,
   hash BYTEA NOT NULL UNIQUE,
@@ -6,6 +7,7 @@ CREATE TABLE IF NOT EXISTS blocks (
   total_stake INT8 -- NULL means the block is NOT a payday block.
 );
 
+-- All accounts created.
 CREATE TABLE IF NOT EXISTS accounts (
   id SERIAL8 PRIMARY KEY,
   address BYTEA NOT NULL UNIQUE,
@@ -13,12 +15,14 @@ CREATE TABLE IF NOT EXISTS accounts (
   is_initial BOOLEAN NOT NULL
 );
 
+-- All smart contract modules deployed
 CREATE TABLE IF NOT EXISTS modules (
   id SERIAL8 PRIMARY KEY,
   ref BYTEA NOT NULL UNIQUE,
   block INT8 NOT NULL REFERENCES blocks(id) ON DELETE RESTRICT ON UPDATE RESTRICT -- To support time series output.
 );
 
+-- All smart contract instances created
 CREATE TABLE IF NOT EXISTS contracts (
   id SERIAL8 PRIMARY KEY,
   index INT8 NOT NULL,
@@ -28,6 +32,7 @@ CREATE TABLE IF NOT EXISTS contracts (
   UNIQUE (index, subindex)
 );
 
+-- All transactions
 CREATE TABLE IF NOT EXISTS transactions (
   id SERIAL8 PRIMARY KEY,
   hash BYTEA NOT NULL UNIQUE,
