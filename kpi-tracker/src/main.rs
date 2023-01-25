@@ -46,14 +46,9 @@ struct CanonicalAccountAddress([u8; ACCOUNT_ADDRESS_SIZE]);
 impl From<AccountAddress> for CanonicalAccountAddress {
     fn from(aa: AccountAddress) -> Self {
         let bytes: &[u8; ACCOUNT_ADDRESS_SIZE] = aa.as_ref();
-        let canonical_bytes: [u8; ACCOUNT_ADDRESS_SIZE] = bytes[0..29]
-            .into_iter()
-            .enumerate()
-            .fold([0; ACCOUNT_ADDRESS_SIZE], |mut acc, (i, byte)| {
-                acc[i] = *byte;
-                acc
-            });
+        let mut canonical_bytes = [0u8; ACCOUNT_ADDRESS_SIZE];
 
+        canonical_bytes[..29].copy_from_slice(&bytes[..29]);
         CanonicalAccountAddress(canonical_bytes)
     }
 }
@@ -96,7 +91,7 @@ struct TransactionDetails {
     /// The cost of the transaction.
     cost:             Amount,
     /// Whether the transaction failed or not.
-    is_failed:        bool,
+    is_success:       bool,
 }
 
 /// Holds selected attributes of a contract module deployed on chain.
@@ -115,15 +110,19 @@ struct ContractInstanceDetails {
     block_hash: BlockHash,
 }
 
-/// Represents a compound unique constraint for relations between accounts and
-/// transactions
+/// Represents a relation between an account and a transaction
 #[derive(Debug, Hash, PartialEq, PartialOrd, Ord, Eq)]
-struct TransactionAccountRelation(CanonicalAccountAddress, TransactionHash);
+struct TransactionAccountRelation {
+    account:     CanonicalAccountAddress,
+    transaction: TransactionHash,
+}
 
-/// Represents a compound unique constraint for relations between contracts and
-/// transactions
+/// Represents a relation between a contract and a transaction
 #[derive(Debug, Hash, PartialEq, PartialOrd, Ord, Eq)]
-struct TransactionContractRelation(ContractAddress, TransactionHash);
+struct TransactionContractRelation {
+    contract:    ContractAddress,
+    transaction: TransactionHash,
+}
 
 type BlocksTable = HashMap<BlockHash, BlockDetails>;
 type AccountsTable = HashMap<CanonicalAccountAddress, AccountDetails>;
@@ -246,12 +245,12 @@ fn get_account_transaction_details(
     block_hash: BlockHash,
 ) -> TransactionDetails {
     let transaction_type = details.transaction_type();
-    let is_failed = details.effects.is_rejected().is_some();
+    let is_success = details.effects.is_rejected().is_none();
 
     TransactionDetails {
         block_hash,
         transaction_type,
-        is_failed,
+        is_success,
         cost: details.cost,
     }
 }
@@ -267,35 +266,20 @@ fn to_block_events(block_hash: BlockHash, block_item: BlockItemSummary) -> Vec<B
             let affected_accounts: Vec<TransactionAccountRelation> = block_item
                 .affected_addresses()
                 .into_iter()
-                .map(|address| {
-                    TransactionAccountRelation(
-                        CanonicalAccountAddress::from(address),
-                        block_item.hash,
-                    )
+                .map(|address| TransactionAccountRelation {
+                    account:     CanonicalAccountAddress::from(address),
+                    transaction: block_item.hash,
                 })
                 .collect();
 
             let affected_contracts: Vec<TransactionContractRelation> = block_item
                 .affected_contracts()
                 .into_iter()
-                .map(|address| TransactionContractRelation(address, block_item.hash))
+                .map(|contract| TransactionContractRelation {
+                    contract,
+                    transaction: block_item.hash,
+                })
                 .collect();
-
-            log::debug!(
-                "TRANSACTION: {}\n{:?}\n{}\n{}",
-                block_item.hash,
-                details,
-                &affected_accounts
-                    .iter()
-                    .map(|account_relation| format!("{:?}", account_relation))
-                    .collect::<Vec<_>>()
-                    .join("\n"),
-                &affected_contracts
-                    .iter()
-                    .map(|contract_relation| format!("{:?}", contract_relation))
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            );
 
             let event = BlockEvent::AccountTransaction(
                 block_item.hash,
@@ -545,16 +529,8 @@ async fn process_block(
                     affected_contracts,
                 ) => {
                     account_transactions.insert(hash, details);
-
-                    if !affected_accounts.is_empty() {
-                        transaction_account_relations
-                            .append(&mut BTreeSet::from_iter(affected_accounts.into_iter()));
-                    }
-
-                    if !affected_contracts.is_empty() {
-                        transaction_contract_relations
-                            .append(&mut BTreeSet::from_iter(affected_contracts.into_iter()));
-                    }
+                    transaction_account_relations.extend(affected_accounts.into_iter());
+                    transaction_contract_relations.extend(affected_contracts.into_iter());
                 }
                 BlockEvent::ContractModuleDeployment(module_ref, details) => {
                     contract_modules.insert(module_ref, details);
@@ -693,10 +669,10 @@ fn print_db(db: DB) {
     let tar_strings: Vec<String> = db
         .transaction_account_relations
         .into_iter()
-        .map(|TransactionAccountRelation(account, transaction)| {
+        .map(|tar| {
             format!(
                 "Transaction-Account relation: {} - {}",
-                transaction, account
+                tar.transaction, tar.account
             )
         })
         .collect();
@@ -711,10 +687,10 @@ fn print_db(db: DB) {
     let tcr_strings: Vec<String> = db
         .transaction_contract_relations
         .into_iter()
-        .map(|TransactionContractRelation(contract, transaction)| {
+        .map(|tcr| {
             format!(
                 "Transaction-Contract relation: {} - {}",
-                transaction, contract
+                tcr.transaction, tcr.contract
             )
         })
         .collect();
@@ -752,15 +728,17 @@ async fn use_node(db: &mut DB, from_height: AbsoluteBlockHeight) -> anyhow::Resu
     let start_height = if from_height.height == 0 {
         if let Some(genesis_block) = blocks_stream.next().await {
             process_genesis_block(&mut node, genesis_block.block_hash, db).await?;
+            log::info!("Processed genesis block: {}", genesis_block.block_hash);
         }
         from_height.height + 1
     } else {
         from_height.height
     };
 
-    for _ in start_height..blocks_to_process {
+    for height in start_height..blocks_to_process {
         if let Some(block) = blocks_stream.next().await {
             process_block(&mut node, block.block_hash, db).await?;
+            log::info!("Processed block ({}): {}", height, block.block_hash);
         }
     }
 
