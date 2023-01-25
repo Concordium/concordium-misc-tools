@@ -27,14 +27,14 @@ struct Args {
         help = "The endpoint is expected to point to a concordium node grpc v2 API.",
         default_value = "http://localhost:20001"
     )]
-    node: Endpoint,
+    node:       Endpoint,
     /// How many blocks to process.
     // Only here for testing purposes...
     #[arg(long = "num-blocks", default_value_t = 10000)]
     num_blocks: u64,
     /// Logging level of the application
     #[arg(long = "log-level", default_value = "debug")]
-    log_level: log::LevelFilter,
+    log_level:  log::LevelFilter,
 }
 
 #[derive(Eq, PartialEq, Copy, Clone, PartialOrd, Ord, Debug, Hash)]
@@ -50,9 +50,7 @@ impl From<AccountAddress> for CanonicalAccountAddress {
     }
 }
 impl fmt::Display for CanonicalAccountAddress {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        AccountAddress(self.0).fmt(f)
-    }
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { AccountAddress(self.0).fmt(f) }
 }
 
 /// Information about individual blocks. Useful for linking entities to a block
@@ -65,7 +63,7 @@ struct BlockDetails {
     block_time: DateTime<Utc>,
     /// Height of block from genesis. Used to restart the process of collecting
     /// metrics from the latest block recorded.
-    height: AbsoluteBlockHeight,
+    height:     AbsoluteBlockHeight,
 }
 
 /// Holds selected attributes about accounts created on chain.
@@ -84,11 +82,11 @@ struct TransactionDetails {
     /// transaction was rejected due to serialization failure.
     transaction_type: Option<TransactionType>,
     /// Foreign key to the block in which the transaction was finalized.
-    block_hash: BlockHash,
+    block_hash:       BlockHash,
     /// The cost of the transaction.
-    cost: Amount,
+    cost:             Amount,
     /// Whether the transaction failed or not.
-    is_success: bool,
+    is_success:       bool,
 }
 
 /// Holds selected attributes of a contract module deployed on chain.
@@ -110,14 +108,14 @@ struct ContractInstanceDetails {
 /// Represents a relation between an account and a transaction
 #[derive(Debug, Hash, PartialEq, PartialOrd, Ord, Eq)]
 struct TransactionAccountRelation {
-    account: CanonicalAccountAddress,
+    account:     CanonicalAccountAddress,
     transaction: TransactionHash,
 }
 
 /// Represents a relation between a contract and a transaction
 #[derive(Debug, Hash, PartialEq, PartialOrd, Ord, Eq)]
 struct TransactionContractRelation {
-    contract: ContractAddress,
+    contract:    ContractAddress,
     transaction: TransactionHash,
 }
 
@@ -264,7 +262,7 @@ fn to_block_events(block_hash: BlockHash, block_item: BlockItemSummary) -> Vec<B
                 .affected_addresses()
                 .into_iter()
                 .map(|address| TransactionAccountRelation {
-                    account: CanonicalAccountAddress::from(address),
+                    account:     CanonicalAccountAddress::from(address),
                     transaction: block_item.hash,
                 })
                 .collect();
@@ -400,7 +398,7 @@ async fn process_genesis_block(
 
     let block_details = BlockDetails {
         block_time: block_info.block_slot_time,
-        height: block_info.block_height,
+        height:     block_info.block_height,
     };
 
     let genesis_accounts = accounts_in_block(node, block_hash).await?;
@@ -424,7 +422,7 @@ async fn process_block(
 
     let block_details = BlockDetails {
         block_time: block_info.block_slot_time,
-        height: block_info.block_height,
+        height:     block_info.block_height,
     };
 
     let mut accounts: BTreeMap<CanonicalAccountAddress, AccountDetails> = BTreeMap::new();
