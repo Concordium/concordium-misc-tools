@@ -13,7 +13,8 @@ use concordium_rust_sdk::{
         AbsoluteBlockHeight, AccountCreationDetails, AccountTransactionDetails,
         AccountTransactionEffects, BlockItemSummary,
         BlockItemSummaryDetails::{AccountCreation, AccountTransaction},
-        ContractAddress, CredentialType, SpecialTransactionOutcome, TransactionType,
+        ContractAddress, CredentialType, RewardsOverview, SpecialTransactionOutcome,
+        TransactionType,
     },
     v2::{AccountIdentifier, Client, Endpoint},
 };
@@ -295,9 +296,8 @@ fn to_block_events(block_hash: BlockHash, block_item: BlockItemSummary) -> Vec<B
             match &atd.effects {
                 AccountTransactionEffects::ModuleDeployed { module_ref } => {
                     let details = ContractModuleDetails { block_hash };
-                    log::debug!("CONTRACT MODULE: {}\n{:?}", module_ref, &details);
-
                     let event = BlockEvent::ContractModuleDeployment(*module_ref, details);
+
                     events.push(event);
                 }
                 AccountTransactionEffects::ContractInitialized { data } => {
@@ -305,9 +305,8 @@ fn to_block_events(block_hash: BlockHash, block_item: BlockItemSummary) -> Vec<B
                         block_hash,
                         module_ref: data.origin_ref,
                     };
-                    log::debug!("CONTRACT INSTANCE: {}\n{:?}", data.address, &details);
-
                     let event = BlockEvent::ContractInstantiation(data.address, details);
+
                     events.push(event);
                 }
                 _ => {}
@@ -315,9 +314,8 @@ fn to_block_events(block_hash: BlockHash, block_item: BlockItemSummary) -> Vec<B
         }
         AccountCreation(acd) => {
             let details = account_details(block_hash, acd);
-            log::debug!("ACCOUNT: {}\n{:?}", acd.address, &details);
-
             let block_event = BlockEvent::AccountCreation(acd.address, details);
+
             events.push(block_event);
         }
         _ => {}
@@ -413,47 +411,52 @@ async fn process_genesis_block(
     };
 
     let genesis_accounts = accounts_in_block(node, block_hash).await?;
-
-    log::debug!("GENESIS BLOCK: {}\n{:?}", block_hash, block_details);
-    log::debug!(
-        "GENESIS ACCOUNTS:\n{}",
-        &genesis_accounts
-            .keys()
-            .map(|address| address.to_string())
-            .collect::<Vec<_>>()
-            .join("\n")
-    );
-
     init_db(db, (block_hash, block_details), genesis_accounts);
 
     Ok(())
 }
 
-async fn is_p4_payday_block(node: &mut Client, block_hash: BlockHash) -> anyhow::Result<bool> {
-    let mut special_events = node
-        .get_block_special_events(block_hash)
+/// If block specified by `block_hash` is a payday block (also implies >=
+/// protocol version 4), this returns the total stake for that block. Otherwise
+/// returns `None`.
+async fn p4_payday_total_stake(
+    node: &mut Client,
+    block_hash: BlockHash,
+) -> anyhow::Result<Option<Amount>> {
+    let tokenomics_info = node
+        .get_tokenomics_info(block_hash)
         .await
-        .with_context(|| format!("Could not get special events for block: {}", block_hash))?
+        .with_context(|| format!("Could not get tokenomics info for block: {}", block_hash))?
         .response;
 
-    let mut is_payday_block = false;
-    while let Some(res) = special_events.next().await {
-        let event = res?;
+    if let RewardsOverview::V1 {
+        total_staked_capital,
+        ..
+    } = tokenomics_info
+    {
+        let mut special_events = node
+            .get_block_special_events(block_hash)
+            .await
+            .with_context(|| format!("Could not get special events for block: {}", block_hash))?
+            .response;
 
-        let has_payday_event = match event {
-            SpecialTransactionOutcome::PaydayPoolReward { .. } => true,
-            SpecialTransactionOutcome::PaydayAccountReward { .. } => true,
-            SpecialTransactionOutcome::PaydayFoundationReward { .. } => true,
-            _ => false,
-        };
+        while let Some(event) = special_events.next().await.transpose()? {
+            let has_payday_event = match event {
+                SpecialTransactionOutcome::PaydayPoolReward { .. } => true,
+                SpecialTransactionOutcome::PaydayAccountReward { .. } => true,
+                SpecialTransactionOutcome::PaydayFoundationReward { .. } => true,
+                _ => false,
+            };
 
-        if has_payday_event {
-            is_payday_block = true;
-            break;
-        };
+            if has_payday_event {
+                return Ok(Some(total_staked_capital));
+            };
+        }
+
+        return Ok(None);
     }
 
-    Ok(is_payday_block)
+    Ok(None)
 }
 
 /// Get `BlockDetails` for given block represented by `block_hash`
@@ -467,35 +470,12 @@ async fn get_block_details(
         .with_context(|| format!("Could not get block info for block: {}", block_hash))?
         .response;
 
-    let total_stake = if is_p4_payday_block(node, block_hash).await? {
-        let payday_stake = node
-            .get_passive_delegation_info(block_hash)
-            .await
-            .with_context(|| {
-                format!(
-                    "Could not get passive delegation info for block: {}",
-                    block_hash
-                )
-            })?
-            .response
-            .all_pool_total_capital;
-
-        Some(payday_stake)
-    } else {
-        None
-    };
-
+    let total_stake = p4_payday_total_stake(node, block_hash).await?;
     let block_details = BlockDetails {
         block_time: block_info.block_slot_time,
         height: block_info.block_height,
         total_stake,
     };
-
-    log::trace!("BLOCK: {}\n{:?}", block_hash, block_details);
-
-    if block_details.total_stake.is_some() {
-        log::debug!("PAYDAY BLOCK: {}\n{:?}", block_hash, block_details);
-    }
 
     Ok(block_details)
 }
@@ -569,8 +549,7 @@ fn print_db(db: DB) {
         .blocks
         .values()
         .filter(|bd| bd.total_stake.is_some())
-        .collect::<Vec<_>>()
-        .len();
+        .count();
     println!("{} payday blocks stored\n", payday_blocks);
 
     let get_block_time = |block_hash: BlockHash| {
@@ -767,7 +746,7 @@ async fn main() -> anyhow::Result<()> {
 
     let current_height = AbsoluteBlockHeight {
         height: args.from_height,
-    }; // TOOD: get this from actual DB
+    }; // TODO: get this from actual DB
     use_node(&mut db, current_height)
         .await
         .context("Error happened while querying node.")?;
