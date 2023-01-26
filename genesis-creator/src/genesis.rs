@@ -504,6 +504,7 @@ pub fn make_genesis_data_cpv0(
         }),
         ProtocolVersion::P4 => None,
         ProtocolVersion::P5 => None,
+        ProtocolVersion::P6 => None,
     }
 }
 

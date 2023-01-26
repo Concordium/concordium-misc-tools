@@ -187,7 +187,7 @@ pub struct UpdateKeysConfig {
 #[derive(SerdeDeserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct OutputConfig {
-    pub update_keys:              PathBuf,
+    pub update_keys:              Option<PathBuf>,
     pub account_keys:             PathBuf,
     pub baker_keys:               PathBuf,
     pub identity_providers:       PathBuf,
