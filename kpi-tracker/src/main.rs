@@ -18,9 +18,7 @@ use concordium_rust_sdk::{
     v2::{AccountIdentifier, Client, Endpoint},
 };
 use futures::{self, future, Stream, StreamExt, TryStreamExt};
-use tokio_postgres::{
-    config::Config as DBConfig, types::Type as DBType, Client as DBClient, NoTls,
-};
+use tokio_postgres::{config::Config as DBConfig, Client as DBClient, NoTls};
 
 #[derive(Debug, Parser)]
 struct Args {
@@ -754,6 +752,10 @@ async fn main() -> anyhow::Result<()> {
     env_logger::Builder::new()
         .filter_module(module_path!(), args.log_level) // Only log the current module (main).
         .init();
+
+    // Create a channel between the task querying the node and the task logging
+    // transactions.
+    let (sender, receiver) = tokio::sync::mpsc::channel(100);
 
     let mut db = DB {
         blocks: HashMap::new(),
