@@ -33,7 +33,7 @@ struct Args {
     #[arg(long = "num-blocks", default_value_t = 10000)]
     num_blocks:  u64,
     /// Logging level of the application
-    #[arg(long = "log-level", default_value = "debug")]
+    #[arg(long = "log-level", default_value_t = log::LevelFilter::Debug)]
     log_level:   log::LevelFilter,
     /// Block height to start collecting from
     #[arg(long = "from-height", default_value_t = 0)]
@@ -67,7 +67,9 @@ struct BlockDetails {
     /// Height of block from genesis. Used to restart the process of collecting
     /// metrics from the latest block recorded.
     height:      AbsoluteBlockHeight,
-    /// Total amount staked across all pools inclusive passive delegation.
+    /// Total amount staked across all pools inclusive passive delegation. This
+    /// is only recorded for "payday" blocks reflected by `Some`, where non
+    /// payday blocks are reflected by `None`.
     total_stake: Option<Amount>,
 }
 
