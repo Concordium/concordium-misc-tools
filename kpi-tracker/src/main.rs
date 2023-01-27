@@ -41,7 +41,7 @@ struct Args {
     )]
     db_connection: DBConfig,
     /// Logging level of the application
-    #[arg(long = "log-level", default_value = "debug")]
+    #[arg(long = "log-level", default_value_t = log::LevelFilter::Debug)]
     log_level:     log::LevelFilter,
 }
 
@@ -238,7 +238,10 @@ impl DBConn {
             )
             .await?;
         let insert_transaction = client
-            .prepare("INSERT INTO blocks (hash, block, type) VALUES ($1, $2, $3) RETURNING id")
+            .prepare(
+                "INSERT INTO transactions (hash, block, cost, type) VALUES ($1, $2, $3, $4) \
+                 RETURNING id",
+            )
             .await?;
         let insert_account_transaction_relation = client
             .prepare("INSERT INTO accounts_transactions (account, transaction) VALUES ($1, $2)")

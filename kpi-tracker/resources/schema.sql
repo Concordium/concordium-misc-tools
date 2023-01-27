@@ -32,11 +32,12 @@ CREATE TABLE IF NOT EXISTS contracts (
   UNIQUE (index, subindex)
 );
 
--- All transactions
+-- All account transactions
 CREATE TABLE IF NOT EXISTS transactions (
   id SERIAL8 PRIMARY KEY,
   hash BYTEA NOT NULL UNIQUE,
   block INT8 NOT NULL REFERENCES blocks(id) ON DELETE RESTRICT ON UPDATE RESTRICT, -- To support time series output.
+  cost INT8 NOT NULL,
   type INT2 -- NULL means the transaction was rejected
 );
 
