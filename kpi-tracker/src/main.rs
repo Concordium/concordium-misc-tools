@@ -13,13 +13,15 @@ use concordium_rust_sdk::{
         AbsoluteBlockHeight, AccountCreationDetails, AccountTransactionDetails,
         AccountTransactionEffects, BlockItemSummary,
         BlockItemSummaryDetails::{AccountCreation, AccountTransaction},
-        ContractAddress, CredentialType, RewardsOverview, SpecialTransactionOutcome,
-        TransactionType,
+        ContractAddress, CredentialType, RewardsOverview, TransactionType,
     },
     v2::{AccountIdentifier, Client, Endpoint},
 };
 use futures::{self, future, Stream, StreamExt, TryStreamExt};
-use tokio_postgres::{config::Config as DBConfig, Client as DBClient, NoTls};
+use tokio_postgres::{
+    config::Config as DBConfig, types::ToSql, Client as DBClient, NoTls,
+    Transaction as DBTransaction,
+};
 
 #[derive(Debug, Parser)]
 struct Args {
@@ -179,6 +181,30 @@ struct PreparedStatements {
     insert_transaction: tokio_postgres::Statement,
     insert_account_transaction_relation: tokio_postgres::Statement,
     insert_contract_transaction_relation: tokio_postgres::Statement,
+}
+
+impl PreparedStatements {
+    async fn insert_block<'a, 'b>(
+        &'a self,
+        tx: &DBTransaction<'b>,
+        block_hash: BlockHash,
+        block_details: BlockDetails,
+    ) -> Result<i64, tokio_postgres::Error> {
+        let total_stake = block_details
+            .total_stake
+            .map(|amount| (amount.micro_ccd() as i64));
+        let values: [&(dyn ToSql + Sync); 4] = [
+            &block_hash.as_ref(),
+            &block_details.block_time.timestamp(),
+            &(block_details.height.height as i64),
+            &total_stake,
+        ];
+
+        let row = tx.query_one(&self.insert_block, &values).await?;
+        let id = row.try_get::<_, i64>(0)?;
+
+        Ok(id)
+    }
 }
 
 struct DBConn {
@@ -652,17 +678,67 @@ async fn use_node(
     Ok(())
 }
 
-async fn db_writer(mut receiver: tokio::sync::mpsc::Receiver<BlockData>) {
-    while let Some(block_data) = receiver.recv().await {
-        println!("Block data received: {:?}", block_data);
+/// Inserts the `block_data` collected for a single block into the database defined by `db`.
+/// Everything is commited as a single transactions allowing for easy restoration from the last
+/// recorded block (by height) inserted into the database.
+async fn db_insert_block(db: &mut DBConn, block_data: BlockData) -> anyhow::Result<()> {
+    let tx = db
+        .client
+        .transaction()
+        .await
+        .context("Failed to build transaction")?;
+
+    let tx_ref = &tx;
+    let prepared_ref = &db.prepared;
+
+    let insert_common = |block_hash: BlockHash, block_details: BlockDetails| async move {
+        prepared_ref
+            .insert_block(tx_ref, block_hash, block_details)
+            .await
+    };
+
+    match block_data {
+        BlockData::Genesis(GenesisBlockData {
+            block_hash,
+            block_details,
+            ..
+        }) => {
+            insert_common(block_hash, block_details).await?;
+        }
+        BlockData::Normal(NormalBlockData {
+            block_hash,
+            block_details,
+            ..
+        }) => {
+            insert_common(block_hash, block_details).await?;
+        }
     }
+
+    tx.commit().await.context("Failed to commit transaction.")?;
+
+    Ok(())
+}
+
+/// Runs a process of inserting data coming in on `receiver` in a database defined in
+/// [`Args.db_connection`]
+async fn run_db_process<'a>(
+    mut receiver: tokio::sync::mpsc::Receiver<BlockData>,
+) -> anyhow::Result<()> {
+    let args = Args::parse();
+    let mut db = DBConn::create(args.db_connection, true).await?;
+
+    while let Some(block_data) = receiver.recv().await {
+        db_insert_block(&mut db, block_data).await?;
+        println!("Inserted block into db");
+    }
+
+    Ok(())
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
-    let _ = DBConn::create(args.db_connection, true).await?;
     env_logger::Builder::new()
         .filter_module(module_path!(), args.log_level) // Only log the current module (main).
         .init();
@@ -671,7 +747,7 @@ async fn main() -> anyhow::Result<()> {
     // transactions.
     let (sender, receiver) = tokio::sync::mpsc::channel(100);
 
-    tokio::spawn(db_writer(receiver));
+    tokio::spawn(run_db_process(receiver));
 
     let current_height = AbsoluteBlockHeight {
         height: args.from_height,
