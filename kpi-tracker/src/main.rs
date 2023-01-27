@@ -1,5 +1,5 @@
 use core::fmt;
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 
 use anyhow::{anyhow, Context};
 use chrono::{DateTime, Utc};
@@ -13,7 +13,8 @@ use concordium_rust_sdk::{
         AbsoluteBlockHeight, AccountCreationDetails, AccountTransactionDetails,
         AccountTransactionEffects, BlockItemSummary,
         BlockItemSummaryDetails::{AccountCreation, AccountTransaction},
-        ContractAddress, CredentialType, TransactionType,
+        ContractAddress, CredentialType, RewardsOverview, SpecialTransactionOutcome,
+        TransactionType,
     },
     v2::{AccountIdentifier, Client, Endpoint},
 };
@@ -28,11 +29,11 @@ struct Args {
         help = "The endpoint is expected to point to a concordium node grpc v2 API.",
         default_value = "http://localhost:20001"
     )]
-    node:          Endpoint,
+    node: Endpoint,
     /// How many blocks to process.
     // Only here for testing purposes...
     #[arg(long = "num-blocks", default_value_t = 10000)]
-    num_blocks:    u64,
+    num_blocks: u64,
     /// Database connection string.
     #[arg(
         long = "db-connection",
@@ -42,9 +43,14 @@ struct Args {
     db_connection: DBConfig,
     /// Logging level of the application
     #[arg(long = "log-level", default_value_t = log::LevelFilter::Debug)]
-    log_level:     log::LevelFilter,
+    log_level: log::LevelFilter,
+    /// Block height to start collecting from
+    #[arg(long = "from-height", default_value_t = 0)]
+    from_height: u64,
 }
 
+/// Used to canonicalize account addresses to ensure no aliases are stored (as aliases are included
+/// in the affected accounts of transactions.)
 #[derive(Eq, PartialEq, Copy, Clone, PartialOrd, Ord, Debug, Hash)]
 struct CanonicalAccountAddress([u8; ACCOUNT_ADDRESS_SIZE]);
 
@@ -58,7 +64,9 @@ impl From<AccountAddress> for CanonicalAccountAddress {
     }
 }
 impl fmt::Display for CanonicalAccountAddress {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { AccountAddress(self.0).fmt(f) }
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        AccountAddress(self.0).fmt(f)
+    }
 }
 
 /// Information about individual blocks. Useful for linking entities to a block
@@ -71,7 +79,11 @@ struct BlockDetails {
     block_time: DateTime<Utc>,
     /// Height of block from genesis. Used to restart the process of collecting
     /// metrics from the latest block recorded.
-    height:     AbsoluteBlockHeight,
+    height: AbsoluteBlockHeight,
+    /// Total amount staked across all pools inclusive passive delegation. This
+    /// is only recorded for "payday" blocks reflected by `Some`, where non
+    /// payday blocks are reflected by `None`.
+    total_stake: Option<Amount>,
 }
 
 /// Holds selected attributes about accounts created on chain.
@@ -90,11 +102,11 @@ struct TransactionDetails {
     /// transaction was rejected due to serialization failure.
     transaction_type: Option<TransactionType>,
     /// Foreign key to the block in which the transaction was finalized.
-    block_hash:       BlockHash,
+    block_hash: BlockHash,
     /// The cost of the transaction.
-    cost:             Amount,
+    cost: Amount,
     /// Whether the transaction failed or not.
-    is_success:       bool,
+    is_success: bool,
 }
 
 /// Holds selected attributes of a contract module deployed on chain.
@@ -116,18 +128,17 @@ struct ContractInstanceDetails {
 /// Represents a relation between an account and a transaction
 #[derive(Debug, Hash, PartialEq, PartialOrd, Ord, Eq)]
 struct TransactionAccountRelation {
-    account:     CanonicalAccountAddress,
+    account: CanonicalAccountAddress,
     transaction: TransactionHash,
 }
 
 /// Represents a relation between a contract and a transaction
 #[derive(Debug, Hash, PartialEq, PartialOrd, Ord, Eq)]
 struct TransactionContractRelation {
-    contract:    ContractAddress,
+    contract: ContractAddress,
     transaction: TransactionHash,
 }
 
-type Blocks = HashMap<BlockHash, BlockDetails>;
 type Accounts = HashMap<CanonicalAccountAddress, AccountDetails>;
 type AccountTransactions = HashMap<TransactionHash, TransactionDetails>;
 type ContractModules = HashMap<ModuleRef, ContractModuleDetails>;
@@ -137,9 +148,9 @@ type TransactionContractRelations = HashSet<TransactionContractRelation>;
 
 #[derive(Debug)]
 struct GenesisBlockData {
-    block_hash:    BlockHash,
+    block_hash: BlockHash,
     block_details: BlockDetails,
-    accounts:      Accounts,
+    accounts: Accounts,
 }
 
 #[derive(Debug)]
@@ -160,26 +171,6 @@ enum BlockData {
     Normal(NormalBlockData),
 }
 
-/// This is intended as a in-memory DB, which follows the same schema as the
-/// final DB will follow.
-struct DB {
-    /// Table containing all blocks queried from node.
-    blocks: Blocks,
-    /// Table containing all accounts created on chain, along with accounts
-    /// present in genesis block
-    accounts: Accounts,
-    /// Table containing all account transactions finalized on chain.
-    account_transactions: AccountTransactions,
-    /// Table containing all smart contract modules deployed on chain.
-    contract_modules: ContractModules,
-    /// Table containing all smart contract instances created on chain.
-    contract_instances: ContractInstances,
-    /// Table containing relations between accounts and transactions.
-    transaction_account_relations: TransactionAccountRelations,
-    /// Table containing relations between contract instances and transactions.
-    transaction_contract_relations: TransactionContractRelations,
-}
-
 struct PreparedStatements {
     insert_block: tokio_postgres::Statement,
     insert_account: tokio_postgres::Statement,
@@ -191,7 +182,7 @@ struct PreparedStatements {
 }
 
 struct DBConn {
-    client:   DBClient,
+    client: DBClient,
     prepared: PreparedStatements,
 }
 
@@ -380,7 +371,7 @@ fn to_block_events(block_hash: BlockHash, block_item: BlockItemSummary) -> Vec<B
                 .affected_addresses()
                 .into_iter()
                 .map(|address| TransactionAccountRelation {
-                    account:     CanonicalAccountAddress::from(address),
+                    account: CanonicalAccountAddress::from(address),
                     transaction: block_item.hash,
                 })
                 .collect();
@@ -466,40 +457,6 @@ async fn get_block_events(
     Ok(block_events)
 }
 
-/// Init db with a block and corresponding accounts found in block. This is a
-/// helper function to be used for genesis block only.
-fn init_db(
-    db: &mut DB,
-    (block_hash, block_details): (BlockHash, BlockDetails),
-    accounts: HashMap<CanonicalAccountAddress, AccountDetails>,
-) {
-    db.blocks.insert(block_hash, block_details);
-    db.accounts.extend(accounts.into_iter());
-}
-
-/// Insert as a single DB transaction to facilitate easy recovery, as the
-/// service can restart from current height stored in DB.
-fn update_db(
-    db: &mut DB,
-    (block_hash, block_details): (BlockHash, BlockDetails),
-    accounts: HashMap<CanonicalAccountAddress, AccountDetails>,
-    transactions: HashMap<TransactionHash, TransactionDetails>,
-    contract_modules: HashMap<ModuleRef, ContractModuleDetails>,
-    contract_instances: HashMap<ContractAddress, ContractInstanceDetails>,
-    transaction_account_relations: HashSet<TransactionAccountRelation>,
-    transaction_contract_relations: HashSet<TransactionContractRelation>,
-) {
-    db.blocks.insert(block_hash, block_details);
-    db.accounts.extend(accounts.into_iter());
-    db.account_transactions.extend(transactions.into_iter());
-    db.contract_modules.extend(contract_modules.into_iter());
-    db.contract_instances.extend(contract_instances.into_iter());
-    db.transaction_account_relations
-        .extend(transaction_account_relations.into_iter());
-    db.transaction_contract_relations
-        .extend(transaction_contract_relations.into_iter());
-}
-
 /// Processes a block, represented by `block_hash` by querying the node for
 /// entities present in the block state, updating the `db`. Should only be
 /// used to process the genesis block.
@@ -515,7 +472,8 @@ async fn process_genesis_block(
 
     let block_details = BlockDetails {
         block_time: block_info.block_slot_time,
-        height:     block_info.block_height,
+        height: block_info.block_height,
+        total_stake: None,
     };
 
     let accounts = accounts_in_block(node, block_hash).await?;
@@ -526,6 +484,70 @@ async fn process_genesis_block(
     };
 
     Ok(genesis_data)
+}
+
+/// If block specified by `block_hash` is a payday block (also implies >=
+/// protocol version 4), this returns the total stake for that block. Otherwise
+/// returns `None`.
+async fn p4_payday_total_stake(
+    node: &mut Client,
+    block_hash: BlockHash,
+) -> anyhow::Result<Option<Amount>> {
+    let tokenomics_info = node
+        .get_tokenomics_info(block_hash)
+        .await
+        .with_context(|| format!("Could not get tokenomics info for block: {}", block_hash))?
+        .response;
+
+    if let RewardsOverview::V1 {
+        total_staked_capital,
+        ..
+    } = tokenomics_info
+    {
+        let mut special_events = node
+            .get_block_special_events(block_hash)
+            .await
+            .with_context(|| format!("Could not get special events for block: {}", block_hash))?
+            .response;
+
+        while let Some(event) = special_events.next().await.transpose()? {
+            let has_payday_event = match event {
+                SpecialTransactionOutcome::PaydayPoolReward { .. } => true,
+                SpecialTransactionOutcome::PaydayAccountReward { .. } => true,
+                SpecialTransactionOutcome::PaydayFoundationReward { .. } => true,
+                _ => false,
+            };
+
+            if has_payday_event {
+                return Ok(Some(total_staked_capital));
+            };
+        }
+
+        return Ok(None);
+    }
+
+    Ok(None)
+}
+
+/// Get `BlockDetails` for given block represented by `block_hash`
+async fn get_block_details(
+    node: &mut Client,
+    block_hash: BlockHash,
+) -> anyhow::Result<BlockDetails> {
+    let block_info = node
+        .get_block_info(block_hash)
+        .await
+        .with_context(|| format!("Could not get block info for block: {}", block_hash))?
+        .response;
+
+    let total_stake = p4_payday_total_stake(node, block_hash).await?;
+    let block_details = BlockDetails {
+        block_time: block_info.block_slot_time,
+        height: block_info.block_height,
+        total_stake,
+    };
+
+    Ok(block_details)
 }
 
 /// Process a block, represented by `block_hash`, updating the `db`
@@ -539,11 +561,8 @@ async fn process_block(
         .await
         .with_context(|| format!("Could not get block info for block: {}", block_hash))?
         .response;
-
-    let block_details = BlockDetails {
-        block_time: block_info.block_slot_time,
-        height:     block_info.block_height,
-    };
+    let block_details = get_block_details(node, block_hash).await?;
+    let block_events = get_block_events(node, block_hash).await?;
 
     let mut block_data = NormalBlockData {
         block_hash,
@@ -556,7 +575,6 @@ async fn process_block(
         transaction_contract_relations: HashSet::new(),
     };
 
-    let block_events = get_block_events(node, block_info.block_hash).await?;
     block_events
         .try_for_each(|be| {
             match be {
@@ -620,16 +638,19 @@ async fn use_node(
         .await
         .context("Error querying blocks")?;
 
-    if from_height.height == 0 {
+    let start_height = if from_height.height == 0 {
         if let Some(genesis_block) = blocks_stream.next().await {
             let genesis_block_data =
                 process_genesis_block(&mut node, genesis_block.block_hash).await?;
             sender.send(BlockData::Genesis(genesis_block_data)).await?;
             log::info!("Processed genesis block: {}", genesis_block.block_hash);
         }
-    }
+        from_height.height + 1
+    } else {
+        from_height.height
+    };
 
-    for height in from_height.height + 1..blocks_to_process {
+    for height in start_height..blocks_to_process {
         if let Some(block) = blocks_stream.next().await {
             let block_data = process_block(&mut node, block.block_hash).await?;
             sender.send(BlockData::Normal(block_data)).await?;
@@ -661,7 +682,9 @@ async fn main() -> anyhow::Result<()> {
 
     tokio::spawn(db_writer(receiver));
 
-    let current_height = AbsoluteBlockHeight { height: 0 }; // TOOD: get this from actual DB
+    let current_height = AbsoluteBlockHeight {
+        height: args.from_height,
+    }; // TODO: get this from actual DB
     use_node(current_height, sender)
         .await
         .context("Error happened while querying node.")?;
