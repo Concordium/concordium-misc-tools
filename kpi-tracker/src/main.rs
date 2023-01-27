@@ -152,6 +152,7 @@ struct PreparedStatements {
     insert_transaction: tokio_postgres::Statement,
     insert_account_transaction_relation: tokio_postgres::Statement,
     insert_contract_transaction_relation: tokio_postgres::Statement,
+    get_latest_height: tokio_postgres::Statement,
 }
 
 impl PreparedStatements {
@@ -175,6 +176,19 @@ impl PreparedStatements {
         let id = row.try_get::<_, i64>(0)?;
 
         Ok(id)
+    }
+
+    async fn get_latest_height(
+        &self,
+        db: &DBClient,
+    ) -> Result<Option<AbsoluteBlockHeight>, tokio_postgres::Error> {
+        let row = db.query_opt(&self.get_latest_height, &[]).await?;
+        if let Some(row) = row {
+            let raw = row.try_get::<_, i64>(0)?;
+            Ok(Some((raw as u64).into()))
+        } else {
+            Ok(None)
+        }
     }
 }
 
@@ -237,6 +251,9 @@ impl DBConn {
         let insert_contract_transaction_relation = client
             .prepare("INSERT INTO contracts_transactions (contract, transaction) VALUES ($1, $2)")
             .await?;
+        let get_latest_height = client
+            .prepare("SELECT blocks.height FROM blocks ORDER BY blocks.id DESC LIMIT 1")
+            .await?;
 
         let prepared = PreparedStatements {
             insert_block,
@@ -246,6 +263,7 @@ impl DBConn {
             insert_transaction,
             insert_account_transaction_relation,
             insert_contract_transaction_relation,
+            get_latest_height,
         };
 
         let db_conn = DBConn { client, prepared };
@@ -547,14 +565,18 @@ async fn process_block(
     Ok(block_data)
 }
 
-/// Queries the node available at `Args.endpoint` from `from_height` for
-/// `Args.num_blocks` blocks. Inserts results captured into the supplied `db`.
-async fn use_node(
-    from_height: AbsoluteBlockHeight,
-    sender: tokio::sync::mpsc::Sender<BlockData>,
+/// Queries the node available at `Args.endpoint` from height received from DB
+/// process for `Args.num_blocks` blocks. Sends the data structured by block to
+/// DB process through `block_sender`.
+async fn run_node_process(
+    height_receiver: tokio::sync::oneshot::Receiver<AbsoluteBlockHeight>,
+    block_sender: tokio::sync::mpsc::Sender<BlockData>,
 ) -> anyhow::Result<()> {
     let args = Args::parse();
     let endpoint = args.node;
+    let from_height = height_receiver
+        .await
+        .context("Did not receive height of most recent block recorded in database")?;
     let blocks_to_process = from_height.height + args.num_blocks;
 
     log::info!(
@@ -577,7 +599,9 @@ async fn use_node(
         if let Some(genesis_block) = blocks_stream.next().await {
             let genesis_block_data =
                 process_genesis_block(&mut node, genesis_block.block_hash).await?;
-            sender.send(BlockData::Genesis(genesis_block_data)).await?;
+            block_sender
+                .send(BlockData::Genesis(genesis_block_data))
+                .await?;
             log::info!("Processed genesis block: {}", genesis_block.block_hash);
         }
         from_height.height + 1
@@ -588,7 +612,7 @@ async fn use_node(
     for height in start_height..blocks_to_process {
         if let Some(block) = blocks_stream.next().await {
             let block_data = process_block(&mut node, block.block_hash).await?;
-            sender.send(BlockData::Normal(block_data)).await?;
+            block_sender.send(BlockData::Normal(block_data)).await?;
             log::info!("Processed block ({}): {}", height, block.block_hash);
         }
     }
@@ -638,15 +662,26 @@ async fn db_insert_block(db: &mut DBConn, block_data: BlockData) -> anyhow::Resu
     Ok(())
 }
 
-/// Runs a process of inserting data coming in on `receiver` in a database
+/// Runs a process of inserting data coming in on `block_receiver` in a database
 /// defined in [`Args.db_connection`]
 async fn run_db_process<'a>(
-    mut receiver: tokio::sync::mpsc::Receiver<BlockData>,
+    mut block_receiver: tokio::sync::mpsc::Receiver<BlockData>,
+    height_sender: tokio::sync::oneshot::Sender<AbsoluteBlockHeight>,
 ) -> anyhow::Result<()> {
     let args = Args::parse();
     let mut db = DBConn::create(args.db_connection, true).await?;
+    let latest_height = db
+        .prepared
+        .get_latest_height(&db.client)
+        .await
+        .context("Could not get best height from database")?
+        .map_or(0.into(), |h| h);
 
-    while let Some(block_data) = receiver.recv().await {
+    height_sender
+        .send(latest_height)
+        .map_err(|_| anyhow!("Best block height could not be sent to node process"))?;
+
+    while let Some(block_data) = block_receiver.recv().await {
         db_insert_block(&mut db, block_data).await?;
         println!("Inserted block into db");
     }
@@ -662,16 +697,18 @@ async fn main() -> anyhow::Result<()> {
         .filter_module(module_path!(), args.log_level) // Only log the current module (main).
         .init();
 
+    // Since the database connection is managed by the background task we use a
+    // oneshot channel to get the height we should start querying at. First the
+    // background database task is started which then sends the height over this
+    // channel.
+    let (height_sender, height_receiver) = tokio::sync::oneshot::channel();
     // Create a channel between the task querying the node and the task logging
     // transactions.
-    let (sender, receiver) = tokio::sync::mpsc::channel(100);
+    let (block_sender, block_receiver) = tokio::sync::mpsc::channel(100);
 
-    tokio::spawn(run_db_process(receiver));
+    tokio::spawn(run_db_process(block_receiver, height_sender));
 
-    let current_height = AbsoluteBlockHeight {
-        height: args.from_height,
-    }; // TODO: get this from actual DB
-    use_node(current_height, sender)
+    run_node_process(height_receiver, block_sender)
         .await
         .context("Error happened while querying node.")?;
 
