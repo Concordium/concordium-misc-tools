@@ -261,7 +261,7 @@ fn anonymity_revokers(
 /// vector with the public keys.
 fn read_or_generate_update_keys<R: rand::Rng + rand::CryptoRng>(
     ctx: &str,
-    root_out: &Path,
+    root_out: Option<&Path>,
     csprng: &mut R,
     key_cfgs: &[HigherLevelKey],
 ) -> anyhow::Result<Vec<UpdatePublicKey>> {
@@ -281,10 +281,12 @@ fn read_or_generate_update_keys<R: rand::Rng + rand::CryptoRng>(
             HigherLevelKey::Fresh { repeat } => {
                 for _ in 0..*repeat {
                     let new_key = UpdateKeyPair::generate(csprng);
-                    let mut path = root_out.to_path_buf();
-                    path.push(format!("{}-key-{}.json", ctx, out.len()));
-                    std::fs::write(path, serde_json::to_string_pretty(&new_key).unwrap())
-                        .context(format!("Unable to write {} key.", ctx))?;
+                    if let Some(root_out) = root_out {
+                        let mut path = root_out.to_path_buf();
+                        path.push(format!("{}-key-{}.json", ctx, out.len()));
+                        std::fs::write(path, serde_json::to_string_pretty(&new_key).unwrap())
+                            .context(format!("Unable to write {} key.", ctx))?;
+                    }
                     out.push(new_key.public);
                 }
             }
@@ -302,12 +304,16 @@ fn read_or_generate_update_keys<R: rand::Rng + rand::CryptoRng>(
 /// version 0 `UpdateKeysCollection`. NB: To be used only in chain parameters
 /// version 0.
 fn updates_v0(
-    updates_out: PathBuf,
+    updates_out: Option<PathBuf>,
     update_cfg: UpdateKeysConfig,
 ) -> anyhow::Result<UpdateKeysCollection<ChainParameterVersion0>> {
     let mut csprng = rand::thread_rng();
-    let root_keys =
-        read_or_generate_update_keys("root", &updates_out, &mut csprng, &update_cfg.root.keys)?;
+    let root_keys = read_or_generate_update_keys(
+        "root",
+        updates_out.as_deref(),
+        &mut csprng,
+        &update_cfg.root.keys,
+    )?;
     ensure!(
         usize::from(u16::from(update_cfg.root.threshold)) <= root_keys.len(),
         "The number of root keys ({}) is less than the threshold ({}).",
@@ -315,8 +321,12 @@ fn updates_v0(
         update_cfg.root.threshold
     );
 
-    let level1_keys =
-        read_or_generate_update_keys("level1", &updates_out, &mut csprng, &update_cfg.level1.keys)?;
+    let level1_keys = read_or_generate_update_keys(
+        "level1",
+        updates_out.as_deref(),
+        &mut csprng,
+        &update_cfg.level1.keys,
+    )?;
     ensure!(
         usize::from(u16::from(update_cfg.level1.threshold)) <= level1_keys.len(),
         "The number of level_1 keys ({}) is less than the threshold ({}).",
@@ -324,8 +334,12 @@ fn updates_v0(
         update_cfg.level1.threshold
     );
 
-    let level2_keys =
-        read_or_generate_update_keys("level2", &updates_out, &mut csprng, &update_cfg.level2.keys)?;
+    let level2_keys = read_or_generate_update_keys(
+        "level2",
+        updates_out.as_deref(),
+        &mut csprng,
+        &update_cfg.level2.keys,
+    )?;
     ensure!(
         !level2_keys.is_empty(),
         "There must be at least one level 2 key.",
@@ -381,8 +395,7 @@ fn updates_v0(
         level_2_keys,
     };
 
-    {
-        let mut path = updates_out.to_path_buf();
+    if let Some(mut path) = updates_out {
         path.push("governance-keys.json");
         std::fs::write(path, serde_json::to_string_pretty(&uks).unwrap())
             .context("Unable to write authorizations.")?;
@@ -400,12 +413,16 @@ fn updates_v0(
 /// version 1 `UpdateKeysCollection`. NB: To be used only in chain parameters
 /// version 1.
 fn updates_v1(
-    updates_out: PathBuf,
+    updates_out: Option<PathBuf>,
     update_cfg: UpdateKeysConfig,
 ) -> anyhow::Result<UpdateKeysCollection<ChainParameterVersion1>> {
     let mut csprng = rand::thread_rng();
-    let root_keys =
-        read_or_generate_update_keys("root", &updates_out, &mut csprng, &update_cfg.root.keys)?;
+    let root_keys = read_or_generate_update_keys(
+        "root",
+        updates_out.as_deref(),
+        &mut csprng,
+        &update_cfg.root.keys,
+    )?;
     ensure!(
         usize::from(u16::from(update_cfg.root.threshold)) <= root_keys.len(),
         "The number of root keys ({}) is less than the threshold ({}).",
@@ -413,8 +430,12 @@ fn updates_v1(
         update_cfg.root.threshold
     );
 
-    let level1_keys =
-        read_or_generate_update_keys("level1", &updates_out, &mut csprng, &update_cfg.level1.keys)?;
+    let level1_keys = read_or_generate_update_keys(
+        "level1",
+        updates_out.as_deref(),
+        &mut csprng,
+        &update_cfg.level1.keys,
+    )?;
     ensure!(
         usize::from(u16::from(update_cfg.level1.threshold)) <= level1_keys.len(),
         "The number of level_1 keys ({}) is less than the threshold ({}).",
@@ -422,8 +443,12 @@ fn updates_v1(
         update_cfg.level1.threshold
     );
 
-    let level2_keys =
-        read_or_generate_update_keys("level2", &updates_out, &mut csprng, &update_cfg.level2.keys)?;
+    let level2_keys = read_or_generate_update_keys(
+        "level2",
+        updates_out.as_deref(),
+        &mut csprng,
+        &update_cfg.level2.keys,
+    )?;
     ensure!(
         !level2_keys.is_empty(),
         "There must be at least one level 2 key.",
@@ -492,8 +517,7 @@ fn updates_v1(
         level_2_keys,
     };
 
-    {
-        let mut path = updates_out.to_path_buf();
+    if let Some(mut path) = updates_out {
         path.push("governance-keys.json");
         std::fs::write(path, serde_json::to_string_pretty(&uks).unwrap())
             .context("Unable to write authorizations.")?;
@@ -971,7 +995,9 @@ fn handle_generate(config_path: &Path, verbose: bool) -> anyhow::Result<()> {
         &config.out.account_keys,
         verbose,
     )?;
-    check_and_create_dir(config.out.delete_existing, &config.out.update_keys, verbose)?;
+    if let Some(dir) = config.out.update_keys.as_ref() {
+        check_and_create_dir(config.out.delete_existing, dir, verbose)?;
+    }
     check_and_create_dir(
         config.out.delete_existing,
         &config.out.identity_providers,
@@ -991,10 +1017,9 @@ fn handle_generate(config_path: &Path, verbose: bool) -> anyhow::Result<()> {
         "Account keys will be generated in {}",
         config.out.account_keys.display()
     );
-    println!(
-        "Chain update keys will be generated in {}",
-        config.out.update_keys.display()
-    );
+    if let Some(dir) = config.out.update_keys.as_ref() {
+        println!("Chain update keys will be generated in {}", dir.display(),)
+    }
     println!(
         "Identity providers will be generated in {}",
         config.out.identity_providers.display()
@@ -1108,7 +1133,10 @@ fn handle_generate(config_path: &Path, verbose: bool) -> anyhow::Result<()> {
                 accounts,
             };
             match config.protocol_version {
-                ProtocolVersion::P1 | ProtocolVersion::P2 | ProtocolVersion::P3 => {
+                ProtocolVersion::P1
+                | ProtocolVersion::P2
+                | ProtocolVersion::P3
+                | ProtocolVersion::P6 => {
                     unreachable!("Already checked.")
                 }
                 ProtocolVersion::P4 => GenesisData::P4 {
@@ -1120,6 +1148,9 @@ fn handle_generate(config_path: &Path, verbose: bool) -> anyhow::Result<()> {
                     initial_state,
                 },
             }
+        }
+        ProtocolVersion::P6 => {
+            bail!("Protocol version 6 is not supported at present.");
         }
     };
     {

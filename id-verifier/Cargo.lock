@@ -415,7 +415,7 @@ dependencies = [
 
 [[package]]
 name = "concordium-contracts-common"
-version = "4.1.0"
+version = "5.1.1"
 dependencies = [
  "bs58",
  "chrono",
@@ -443,7 +443,7 @@ dependencies = [
 
 [[package]]
 name = "concordium-rust-sdk"
-version = "2.1.0"
+version = "2.2.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -467,6 +467,17 @@ dependencies = [
  "tonic",
  "tonic-build",
  "wasm-chain-integration",
+]
+
+[[package]]
+name = "concordium-wasm"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "concordium-contracts-common",
+ "derive_more",
+ "leb128",
+ "num_enum",
 ]
 
 [[package]]
@@ -2989,6 +3000,7 @@ dependencies = [
  "anyhow",
  "byteorder",
  "concordium-contracts-common",
+ "concordium-wasm",
  "derive_more",
  "ed25519-zebra",
  "futures",
@@ -3002,18 +3014,6 @@ dependencies = [
  "slab",
  "thiserror",
  "tinyvec",
- "wasm-transform",
-]
-
-[[package]]
-name = "wasm-transform"
-version = "0.1.1"
-dependencies = [
- "anyhow",
- "concordium-contracts-common",
- "derive_more",
- "leb128",
- "num_enum",
 ]
 
 [[package]]
