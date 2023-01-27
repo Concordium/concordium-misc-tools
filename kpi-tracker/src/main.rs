@@ -13,7 +13,8 @@ use concordium_rust_sdk::{
         AbsoluteBlockHeight, AccountCreationDetails, AccountTransactionDetails,
         AccountTransactionEffects, BlockItemSummary,
         BlockItemSummaryDetails::{AccountCreation, AccountTransaction},
-        ContractAddress, CredentialType, TransactionType,
+        ContractAddress, CredentialType, RewardsOverview, SpecialTransactionOutcome,
+        TransactionType,
     },
     v2::{AccountIdentifier, Client, Endpoint},
 };
@@ -27,14 +28,17 @@ struct Args {
         help = "The endpoint is expected to point to a concordium node grpc v2 API.",
         default_value = "http://localhost:20001"
     )]
-    node:       Endpoint,
+    node:        Endpoint,
     /// How many blocks to process.
     // Only here for testing purposes...
     #[arg(long = "num-blocks", default_value_t = 10000)]
-    num_blocks: u64,
+    num_blocks:  u64,
     /// Logging level of the application
-    #[arg(long = "log-level", default_value = "debug")]
-    log_level:  log::LevelFilter,
+    #[arg(long = "log-level", default_value_t = log::LevelFilter::Debug)]
+    log_level:   log::LevelFilter,
+    /// Block height to start collecting from
+    #[arg(long = "from-height", default_value_t = 0)]
+    from_height: u64,
 }
 
 #[derive(Eq, PartialEq, Copy, Clone, PartialOrd, Ord, Debug, Hash)]
@@ -60,10 +64,14 @@ struct BlockDetails {
     /// Finalization time of the block. Used to show how metrics evolve over
     /// time by linking entities, such as accounts and transactions, to
     /// the block in which they are created.
-    block_time: DateTime<Utc>,
+    block_time:  DateTime<Utc>,
     /// Height of block from genesis. Used to restart the process of collecting
     /// metrics from the latest block recorded.
-    height:     AbsoluteBlockHeight,
+    height:      AbsoluteBlockHeight,
+    /// Total amount staked across all pools inclusive passive delegation. This
+    /// is only recorded for "payday" blocks reflected by `Some`, where non
+    /// payday blocks are reflected by `None`.
+    total_stake: Option<Amount>,
 }
 
 /// Holds selected attributes about accounts created on chain.
@@ -397,14 +405,79 @@ async fn process_genesis_block(
         .response;
 
     let block_details = BlockDetails {
-        block_time: block_info.block_slot_time,
-        height:     block_info.block_height,
+        block_time:  block_info.block_slot_time,
+        height:      block_info.block_height,
+        total_stake: None,
     };
 
     let genesis_accounts = accounts_in_block(node, block_hash).await?;
     init_db(db, (block_hash, block_details), genesis_accounts);
 
     Ok(())
+}
+
+/// If block specified by `block_hash` is a payday block (also implies >=
+/// protocol version 4), this returns the total stake for that block. Otherwise
+/// returns `None`.
+async fn p4_payday_total_stake(
+    node: &mut Client,
+    block_hash: BlockHash,
+) -> anyhow::Result<Option<Amount>> {
+    let tokenomics_info = node
+        .get_tokenomics_info(block_hash)
+        .await
+        .with_context(|| format!("Could not get tokenomics info for block: {}", block_hash))?
+        .response;
+
+    if let RewardsOverview::V1 {
+        total_staked_capital,
+        ..
+    } = tokenomics_info
+    {
+        let mut special_events = node
+            .get_block_special_events(block_hash)
+            .await
+            .with_context(|| format!("Could not get special events for block: {}", block_hash))?
+            .response;
+
+        while let Some(event) = special_events.next().await.transpose()? {
+            let has_payday_event = match event {
+                SpecialTransactionOutcome::PaydayPoolReward { .. } => true,
+                SpecialTransactionOutcome::PaydayAccountReward { .. } => true,
+                SpecialTransactionOutcome::PaydayFoundationReward { .. } => true,
+                _ => false,
+            };
+
+            if has_payday_event {
+                return Ok(Some(total_staked_capital));
+            };
+        }
+
+        return Ok(None);
+    }
+
+    Ok(None)
+}
+
+/// Get `BlockDetails` for given block represented by `block_hash`
+async fn get_block_details(
+    node: &mut Client,
+    block_hash: BlockHash,
+) -> anyhow::Result<BlockDetails> {
+    let block_info = node
+        .get_block_info(block_hash)
+        .await
+        .with_context(|| format!("Could not get block info for block: {}", block_hash))?
+        .response;
+
+    let total_stake = p4_payday_total_stake(node, block_hash).await?;
+    let block_details = BlockDetails {
+        block_time: block_info.block_slot_time,
+        height: block_info.block_height,
+        total_stake,
+    };
+
+    Ok(block_details)
 }
 
 /// Process a block, represented by `block_hash`, updating the `db`
@@ -414,17 +487,6 @@ async fn process_block(
     block_hash: BlockHash,
     db: &mut DB,
 ) -> anyhow::Result<()> {
-    let block_info = node
-        .get_block_info(block_hash)
-        .await
-        .with_context(|| format!("Could not get block info for block: {}", block_hash))?
-        .response;
-
-    let block_details = BlockDetails {
-        block_time: block_info.block_slot_time,
-        height:     block_info.block_height,
-    };
-
     let mut accounts: BTreeMap<CanonicalAccountAddress, AccountDetails> = BTreeMap::new();
     let mut account_transactions: BTreeMap<TransactionHash, TransactionDetails> = BTreeMap::new();
     let mut contract_modules: BTreeMap<ModuleRef, ContractModuleDetails> = BTreeMap::new();
@@ -433,7 +495,9 @@ async fn process_block(
     let mut transaction_account_relations: BTreeSet<TransactionAccountRelation> = BTreeSet::new();
     let mut transaction_contract_relations: BTreeSet<TransactionContractRelation> = BTreeSet::new();
 
-    let block_events = get_block_events(node, block_info.block_hash).await?;
+    let block_details = get_block_details(node, block_hash).await?;
+    let block_events = get_block_events(node, block_hash).await?;
+
     block_events
         .try_for_each(|be| {
             match be {
@@ -480,6 +544,13 @@ async fn process_block(
 fn print_db(db: DB) {
     // Print blocks
     println!("{} blocks stored\n", &db.blocks.len());
+
+    let payday_blocks = db
+        .blocks
+        .values()
+        .filter(|bd| bd.total_stake.is_some())
+        .count();
+    println!("{} payday blocks stored\n", payday_blocks);
 
     let get_block_time = |block_hash: BlockHash| {
         db.blocks
@@ -635,14 +706,17 @@ async fn use_node(db: &mut DB, from_height: AbsoluteBlockHeight) -> anyhow::Resu
         .await
         .context("Error querying blocks")?;
 
-    if from_height.height == 0 {
+    let start_height = if from_height.height == 0 {
         if let Some(genesis_block) = blocks_stream.next().await {
             process_genesis_block(&mut node, genesis_block.block_hash, db).await?;
             log::info!("Processed genesis block: {}", genesis_block.block_hash);
         }
-    }
+        from_height.height + 1
+    } else {
+        from_height.height
+    };
 
-    for height in from_height.height + 1..blocks_to_process {
+    for height in start_height..blocks_to_process {
         if let Some(block) = blocks_stream.next().await {
             process_block(&mut node, block.block_hash, db).await?;
             log::info!("Processed block ({}): {}", height, block.block_hash);
@@ -670,7 +744,9 @@ async fn main() -> anyhow::Result<()> {
         transaction_contract_relations: HashSet::new(),
     };
 
-    let current_height = AbsoluteBlockHeight { height: 0 }; // TOOD: get this from actual DB
+    let current_height = AbsoluteBlockHeight {
+        height: args.from_height,
+    }; // TODO: get this from actual DB
     use_node(&mut db, current_height)
         .await
         .context("Error happened while querying node.")?;
