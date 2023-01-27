@@ -504,24 +504,20 @@ async fn p4_payday_total_stake(
         ..
     } = tokenomics_info
     {
-        let mut special_events = node
-            .get_block_special_events(block_hash)
+        let is_payday_block = node
+            .is_payday_block(block_hash)
             .await
-            .with_context(|| format!("Could not get special events for block: {}", block_hash))?
+            .with_context(|| {
+                format!(
+                    "Could not assert whether block is payday block for: {}",
+                    block_hash
+                )
+            })?
             .response;
 
-        while let Some(event) = special_events.next().await.transpose()? {
-            let has_payday_event = match event {
-                SpecialTransactionOutcome::PaydayPoolReward { .. } => true,
-                SpecialTransactionOutcome::PaydayAccountReward { .. } => true,
-                SpecialTransactionOutcome::PaydayFoundationReward { .. } => true,
-                _ => false,
-            };
-
-            if has_payday_event {
-                return Ok(Some(total_staked_capital));
-            };
-        }
+        if is_payday_block {
+            return Ok(Some(total_staked_capital));
+        };
 
         return Ok(None);
     }
@@ -556,11 +552,6 @@ async fn process_block(
     node: &mut Client,
     block_hash: BlockHash,
 ) -> anyhow::Result<NormalBlockData> {
-    let block_info = node
-        .get_block_info(block_hash)
-        .await
-        .with_context(|| format!("Could not get block info for block: {}", block_hash))?
-        .response;
     let block_details = get_block_details(node, block_hash).await?;
     let block_events = get_block_events(node, block_hash).await?;
 
