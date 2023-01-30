@@ -155,6 +155,8 @@ struct PreparedStatements {
     insert_account_transaction_relation: tokio_postgres::Statement,
     insert_contract_transaction_relation: tokio_postgres::Statement,
     get_latest_height: tokio_postgres::Statement,
+    account_by_id: tokio_postgres::Statement,
+    contract_by_id: tokio_postgres::Statement,
 }
 
 impl PreparedStatements {
@@ -218,15 +220,15 @@ impl PreparedStatements {
         let row = db_tx.query_one(&self.insert_transaction, &values).await?;
         let id = row.try_get::<_, i64>(0)?;
 
-        // for account in transaction_details.affected_accounts {
-        //     self.insert_account_transaction_relation(db_tx, id, account)
-        //         .await?;
-        // }
+        for account in transaction_details.affected_accounts {
+            self.insert_account_transaction_relation(db_tx, id, account)
+                .await?;
+        }
 
-        // for contract in transaction_details.affected_contracts {
-        //     self.insert_contract_transaction_relation(db_tx, id, contract)
-        //         .await?;
-        // }
+        for contract in transaction_details.affected_contracts {
+            self.insert_contract_transaction_relation(db_tx, id, contract)
+                .await?;
+        }
 
         Ok(())
     }
@@ -237,7 +239,10 @@ impl PreparedStatements {
         transaction_id: i64,
         account_address: CanonicalAccountAddress,
     ) -> Result<(), tokio_postgres::Error> {
-        let account_id: i64 = 0; // TODO: Look up accounts in DB for a match on address.
+        let row = db_tx
+            .query_one(&self.account_by_id, &[&account_address.0.as_ref()])
+            .await?;
+        let account_id = row.try_get::<_, i64>(0)?;
         let values: [&(dyn ToSql + Sync); 2] = [&transaction_id, &account_id];
 
         db_tx
@@ -253,7 +258,15 @@ impl PreparedStatements {
         transaction_id: i64,
         contract_address: ContractAddress,
     ) -> Result<(), tokio_postgres::Error> {
-        let contract_id: i64 = 0; // TODO: Look up accounts in DB for a match on address.
+        let contract_id_params: [&(dyn ToSql + Sync); 2] = [
+            &(contract_address.index as i64),
+            &(contract_address.subindex as i64),
+        ];
+        let row = db_tx
+            .query_one(&self.contract_by_id, &contract_id_params)
+            .await?;
+
+        let contract_id = row.try_get::<_, i64>(0)?;
         let values: [&(dyn ToSql + Sync); 2] = [&transaction_id, &contract_id];
 
         db_tx
@@ -339,6 +352,12 @@ impl DBConn {
         let get_latest_height = client
             .prepare("SELECT blocks.height FROM blocks ORDER BY blocks.id DESC LIMIT 1")
             .await?;
+        let account_by_id = client
+            .prepare("SELECT accounts.id FROM accounts WHERE address=$1 LIMIT 1")
+            .await?;
+        let contract_by_id = client
+            .prepare("SELECT contracts.id FROM contracts WHERE index=$1 AND subindex=$2 LIMIT 1")
+            .await?;
 
         let prepared = PreparedStatements {
             insert_block,
@@ -349,6 +368,8 @@ impl DBConn {
             insert_account_transaction_relation,
             insert_contract_transaction_relation,
             get_latest_height,
+            account_by_id,
+            contract_by_id,
         };
 
         let db_conn = DBConn { client, prepared };
