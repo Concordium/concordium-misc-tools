@@ -603,7 +603,7 @@ async fn node_process(
         }
     };
 
-    for height in latest_height.height + 1..blocks_to_process {
+    for height in latest_height.height..blocks_to_process {
         if let Some(block) = blocks_stream.next().await {
             let block_data = process_block(&mut node, block.block_hash).await?;
             block_sender.send(BlockData::Normal(block_data)).await?;
@@ -630,7 +630,6 @@ async fn db_insert_block(db: &mut DBConn, block_data: BlockData) -> anyhow::Resu
     let prepared_ref = &db.prepared;
 
     let insert_common = |block_hash: BlockHash, block_details: BlockDetails| async move {
-        println!("insert_common");
         prepared_ref
             .insert_block(tx_ref, block_hash, block_details)
             .await
@@ -677,10 +676,7 @@ async fn run_db_process<'a>(
         .map_err(|_| anyhow!("Best block height could not be sent to node process"))?;
 
     while let Some(block_data) = block_receiver.recv().await {
-        if let Err(e) = db_insert_block(&mut db, block_data).await {
-            log::error!("Error when trying to insert into DB: {}", e);
-            block_receiver.close();
-        }
+        db_insert_block(&mut db, block_data).await?;
     }
 
     Ok(())
@@ -703,7 +699,11 @@ async fn main() -> anyhow::Result<()> {
     // transactions.
     let (block_sender, block_receiver) = tokio::sync::mpsc::channel(100);
 
-    tokio::spawn(run_db_process(block_receiver, height_sender));
+    tokio::spawn(async {
+        if let Err(e) = run_db_process(block_receiver, height_sender).await {
+            log::error!("Error happened while running DB process: {}", e);
+        }
+    });
 
     let latest_height = height_receiver
         .await
