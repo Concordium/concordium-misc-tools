@@ -568,21 +568,18 @@ async fn process_block(
 /// Queries the node available at `Args.endpoint` from height received from DB
 /// process for `Args.num_blocks` blocks. Sends the data structured by block to
 /// DB process through `block_sender`.
-async fn run_node_process(
-    height_receiver: tokio::sync::oneshot::Receiver<AbsoluteBlockHeight>,
+async fn node_process(
+    latest_height: AbsoluteBlockHeight,
     block_sender: tokio::sync::mpsc::Sender<BlockData>,
 ) -> anyhow::Result<()> {
     let args = Args::parse();
     let endpoint = args.node;
-    let from_height = height_receiver
-        .await
-        .context("Did not receive height of most recent block recorded in database")?;
-    let blocks_to_process = from_height.height + args.num_blocks;
+    let blocks_to_process = latest_height.height + args.num_blocks;
 
     log::info!(
         "Processing {} blocks from height {} using node {}",
         args.num_blocks,
-        from_height,
+        latest_height,
         endpoint.uri()
     );
 
@@ -591,11 +588,11 @@ async fn run_node_process(
         .context("Could not connect to node.")?;
 
     let mut blocks_stream = node
-        .get_finalized_blocks_from(from_height)
+        .get_finalized_blocks_from(latest_height)
         .await
         .context("Error querying blocks")?;
 
-    let start_height = if from_height.height == 0 {
+    if latest_height.height == 0 {
         if let Some(genesis_block) = blocks_stream.next().await {
             let genesis_block_data =
                 process_genesis_block(&mut node, genesis_block.block_hash).await?;
@@ -604,12 +601,9 @@ async fn run_node_process(
                 .await?;
             log::info!("Processed genesis block: {}", genesis_block.block_hash);
         }
-        from_height.height + 1
-    } else {
-        from_height.height
     };
 
-    for height in start_height..blocks_to_process {
+    for height in latest_height.height + 1..blocks_to_process {
         if let Some(block) = blocks_stream.next().await {
             let block_data = process_block(&mut node, block.block_hash).await?;
             block_sender.send(BlockData::Normal(block_data)).await?;
@@ -625,6 +619,7 @@ async fn run_node_process(
 /// for easy restoration from the last recorded block (by height) inserted into
 /// the database.
 async fn db_insert_block(db: &mut DBConn, block_data: BlockData) -> anyhow::Result<()> {
+    println!("db_insert_block");
     let tx = db
         .client
         .transaction()
@@ -635,6 +630,7 @@ async fn db_insert_block(db: &mut DBConn, block_data: BlockData) -> anyhow::Resu
     let prepared_ref = &db.prepared;
 
     let insert_common = |block_hash: BlockHash, block_details: BlockDetails| async move {
+        println!("insert_common");
         prepared_ref
             .insert_block(tx_ref, block_hash, block_details)
             .await
@@ -655,10 +651,9 @@ async fn db_insert_block(db: &mut DBConn, block_data: BlockData) -> anyhow::Resu
         }) => {
             insert_common(block_hash, block_details).await?;
         }
-    }
+    };
 
     tx.commit().await.context("Failed to commit transaction.")?;
-
     Ok(())
 }
 
@@ -675,15 +670,17 @@ async fn run_db_process<'a>(
         .get_latest_height(&db.client)
         .await
         .context("Could not get best height from database")?
-        .map_or(0.into(), |h| h);
+        .map_or(0.into(), |h| h.next());
 
     height_sender
         .send(latest_height)
         .map_err(|_| anyhow!("Best block height could not be sent to node process"))?;
 
     while let Some(block_data) = block_receiver.recv().await {
-        db_insert_block(&mut db, block_data).await?;
-        println!("Inserted block into db");
+        if let Err(e) = db_insert_block(&mut db, block_data).await {
+            log::error!("Error when trying to insert into DB: {}", e);
+            block_receiver.close();
+        }
     }
 
     Ok(())
@@ -708,7 +705,11 @@ async fn main() -> anyhow::Result<()> {
 
     tokio::spawn(run_db_process(block_receiver, height_sender));
 
-    run_node_process(height_receiver, block_sender)
+    let latest_height = height_receiver
+        .await
+        .context("Did not receive height of most recent block recorded in database")?;
+
+    node_process(latest_height, block_sender)
         .await
         .context("Error happened while querying node.")?;
 
