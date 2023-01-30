@@ -158,7 +158,7 @@ struct PreparedStatements {
 impl PreparedStatements {
     async fn insert_block<'a, 'b>(
         &'a self,
-        tx: &DBTransaction<'b>,
+        db_tx: &DBTransaction<'b>,
         block_hash: BlockHash,
         block_details: BlockDetails,
     ) -> Result<i64, tokio_postgres::Error> {
@@ -172,10 +172,93 @@ impl PreparedStatements {
             &total_stake,
         ];
 
-        let row = tx.query_one(&self.insert_block, &values).await?;
+        let row = db_tx.query_one(&self.insert_block, &values).await?;
         let id = row.try_get::<_, i64>(0)?;
 
         Ok(id)
+    }
+
+    async fn insert_account<'a, 'b>(
+        &'a self,
+        db_tx: &DBTransaction<'b>,
+        block_id: i64,
+        account_address: CanonicalAccountAddress,
+        account_details: AccountDetails,
+    ) -> Result<i64, tokio_postgres::Error> {
+        let values: [&(dyn ToSql + Sync); 3] = [
+            &account_address.0.as_ref(),
+            &block_id,
+            &account_details.is_initial,
+        ];
+
+        let row = db_tx.query_one(&self.insert_account, &values).await?;
+        let id = row.try_get::<_, i64>(0)?;
+
+        Ok(id)
+    }
+
+    async fn insert_transaction<'a, 'b>(
+        &'a self,
+        db_tx: &DBTransaction<'b>,
+        block_id: i64,
+        transaction_hash: TransactionHash,
+        transaction_details: TransactionDetails,
+    ) -> Result<(), tokio_postgres::Error> {
+        let transaction_cost = transaction_details.cost.micro_ccd() as i64;
+        let transaction_type = transaction_details.transaction_type.map(|tt| tt as i32);
+        let values: [&(dyn ToSql + Sync); 4] = [
+            &transaction_hash.as_ref(),
+            &block_id,
+            &transaction_cost,
+            &transaction_type,
+        ];
+
+        let row = db_tx.query_one(&self.insert_account, &values).await?;
+        let id = row.try_get::<_, i64>(0)?;
+
+        for account in transaction_details.affected_accounts {
+            self.insert_account_transaction_relation(db_tx, id, account)
+                .await?;
+        }
+
+        for contract in transaction_details.affected_contracts {
+            self.insert_contract_transaction_relation(db_tx, id, contract)
+                .await?;
+        }
+
+        Ok(())
+    }
+
+    async fn insert_account_transaction_relation<'a, 'b>(
+        &'a self,
+        db_tx: &DBTransaction<'b>,
+        transaction_id: i64,
+        account_address: CanonicalAccountAddress,
+    ) -> Result<(), tokio_postgres::Error> {
+        let account_id: i64 = 0; // TODO: Look up accounts in DB for a match on address.
+        let values: [&(dyn ToSql + Sync); 2] = [&transaction_id, &account_id];
+
+        db_tx
+            .query_opt(&self.insert_account_transaction_relation, &values)
+            .await?;
+
+        Ok(())
+    }
+
+    async fn insert_contract_transaction_relation<'a, 'b>(
+        &'a self,
+        db_tx: &DBTransaction<'b>,
+        transaction_id: i64,
+        contract_address: ContractAddress,
+    ) -> Result<(), tokio_postgres::Error> {
+        let contract_id: i64 = 0; // TODO: Look up accounts in DB for a match on address.
+        let values: [&(dyn ToSql + Sync); 2] = [&transaction_id, &contract_id];
+
+        db_tx
+            .query_opt(&self.insert_contract_transaction_relation, &values)
+            .await?;
+
+        Ok(())
     }
 
     async fn get_latest_height(
@@ -629,26 +712,37 @@ async fn db_insert_block(db: &mut DBConn, block_data: BlockData) -> anyhow::Resu
     let tx_ref = &tx;
     let prepared_ref = &db.prepared;
 
-    let insert_common = |block_hash: BlockHash, block_details: BlockDetails| async move {
-        prepared_ref
+    let insert_common = |block_hash: BlockHash, block_details: BlockDetails, accounts: Accounts| async move {
+        let block_id = prepared_ref
             .insert_block(tx_ref, block_hash, block_details)
             .await
+            .context("Failed to insert block")?;
+
+        for (address, details) in accounts.into_iter() {
+            prepared_ref
+                .insert_account(tx_ref, block_id, address, details)
+                .await
+                .context("Failed to insert account")?;
+        }
+
+        anyhow::Ok(())
     };
 
     match block_data {
         BlockData::Genesis(GenesisBlockData {
             block_hash,
             block_details,
-            ..
+            accounts,
         }) => {
-            insert_common(block_hash, block_details).await?;
+            insert_common(block_hash, block_details, accounts).await?;
         }
         BlockData::Normal(NormalBlockData {
             block_hash,
             block_details,
+            accounts,
             ..
         }) => {
-            insert_common(block_hash, block_details).await?;
+            insert_common(block_hash, block_details, accounts).await?;
         }
     };
 
