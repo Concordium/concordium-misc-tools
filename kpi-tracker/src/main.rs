@@ -31,11 +31,11 @@ struct Args {
         help = "The endpoint is expected to point to a concordium node grpc v2 API.",
         default_value = "http://localhost:20001"
     )]
-    node: Endpoint,
+    node:          Endpoint,
     /// How many blocks to process.
     // Only here for testing purposes...
     #[arg(long = "num-blocks", default_value_t = 10000)]
-    num_blocks: u64,
+    num_blocks:    u64,
     /// Database connection string.
     #[arg(
         long = "db-connection",
@@ -45,7 +45,7 @@ struct Args {
     db_connection: DBConfig,
     /// Logging level of the application
     #[arg(long = "log-level", default_value_t = log::LevelFilter::Debug)]
-    log_level: log::LevelFilter,
+    log_level:     log::LevelFilter,
 }
 
 /// Used to canonicalize account addresses to ensure no aliases are stored (as
@@ -63,9 +63,7 @@ impl From<AccountAddress> for CanonicalAccountAddress {
     }
 }
 impl fmt::Display for CanonicalAccountAddress {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        AccountAddress(self.0).fmt(f)
-    }
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { AccountAddress(self.0).fmt(f) }
 }
 
 /// Information about individual blocks. Useful for linking entities to a block
@@ -75,10 +73,10 @@ struct BlockDetails {
     /// Finalization time of the block. Used to show how metrics evolve over
     /// time by linking entities, such as accounts and transactions, to
     /// the block in which they are created.
-    block_time: DateTime<Utc>,
+    block_time:  DateTime<Utc>,
     /// Height of block from genesis. Used to restart the process of collecting
     /// metrics from the latest block recorded.
-    height: AbsoluteBlockHeight,
+    height:      AbsoluteBlockHeight,
     /// Total amount staked across all pools inclusive passive delegation. This
     /// is only recorded for "payday" blocks reflected by `Some`, where non
     /// payday blocks are reflected by `None`.
@@ -97,13 +95,13 @@ struct AccountDetails {
 struct TransactionDetails {
     /// The transaction type of the account transaction. Can be none if
     /// transaction was rejected due to serialization failure.
-    transaction_type: Option<TransactionType>,
+    transaction_type:   Option<TransactionType>,
     /// The cost of the transaction.
-    cost: Amount,
+    cost:               Amount,
     /// Whether the transaction failed or not.
-    is_success: bool,
+    is_success:         bool,
     /// Accounts affected by the transactions.
-    affected_accounts: Vec<CanonicalAccountAddress>,
+    affected_accounts:  Vec<CanonicalAccountAddress>,
     /// Contracts affected by the transactions.
     affected_contracts: Vec<ContractAddress>,
 }
@@ -122,18 +120,18 @@ type ContractInstances = HashMap<ContractAddress, ContractInstanceDetails>;
 
 #[derive(Debug)]
 struct GenesisBlockData {
-    block_hash: BlockHash,
+    block_hash:    BlockHash,
     block_details: BlockDetails,
-    accounts: Accounts,
+    accounts:      Accounts,
 }
 
 #[derive(Debug)]
 struct NormalBlockData {
-    block_hash: BlockHash,
-    block_details: BlockDetails,
-    accounts: Accounts,
-    transactions: AccountTransactions,
-    contract_modules: ContractModules,
+    block_hash:         BlockHash,
+    block_details:      BlockDetails,
+    accounts:           Accounts,
+    transactions:       AccountTransactions,
+    contract_modules:   ContractModules,
     contract_instances: ContractInstances,
 }
 
@@ -277,14 +275,12 @@ impl PreparedStatements {
         block_id: i64,
         contract_address: ContractAddress,
         contract_details: ContractInstanceDetails,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), tokio_postgres::Error> {
         let row = db_tx
-            .query_one(
-                &self.contract_module_by_ref,
-                &[&contract_details.module_ref.as_ref()],
-            )
-            .await
-            .context("Expected module ref to be found")?;
+            .query_one(&self.contract_module_by_ref, &[&contract_details
+                .module_ref
+                .as_ref()])
+            .await?;
         let module_id = row.try_get::<_, i64>(0)?;
 
         let values: [&(dyn ToSql + Sync); 4] = [
@@ -307,7 +303,7 @@ impl PreparedStatements {
         block_id: i64,
         transaction_hash: TransactionHash,
         transaction_details: TransactionDetails,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), tokio_postgres::Error> {
         let transaction_cost = transaction_details.cost.micro_ccd() as i64;
         let transaction_type = transaction_details.transaction_type.map(|tt| tt as i16);
         let values: [&(dyn ToSql + Sync); 5] = [
@@ -358,15 +354,14 @@ impl PreparedStatements {
         db_tx: &DBTransaction<'b>,
         transaction_id: i64,
         contract_address: ContractAddress,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), tokio_postgres::Error> {
         let contract_id_params: [&(dyn ToSql + Sync); 2] = [
             &(contract_address.index as i64),
             &(contract_address.subindex as i64),
         ];
         let row = db_tx
             .query_one(&self.contract_by_address, &contract_id_params)
-            .await
-            .context("Expected contract instance to be found")?;
+            .await?;
 
         let contract_id = row.try_get::<_, i64>(0)?;
         let values: [&(dyn ToSql + Sync); 2] = [&contract_id, &transaction_id];
@@ -393,7 +388,7 @@ impl PreparedStatements {
 }
 
 struct DBConn {
-    client: DBClient,
+    client:   DBClient,
     prepared: PreparedStatements,
 }
 
@@ -602,8 +597,8 @@ async fn process_genesis_block(
         .response;
 
     let block_details = BlockDetails {
-        block_time: block_info.block_slot_time,
-        height: block_info.block_height,
+        block_time:  block_info.block_slot_time,
+        height:      block_info.block_height,
         total_stake: None,
     };
 
