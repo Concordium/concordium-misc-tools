@@ -46,9 +46,6 @@ struct Args {
     /// Logging level of the application
     #[arg(long = "log-level", default_value_t = log::LevelFilter::Debug)]
     log_level: log::LevelFilter,
-    /// Block height to start collecting from
-    #[arg(long = "from-height", default_value_t = 0)]
-    from_height: u64,
 }
 
 /// Used to canonicalize account addresses to ensure no aliases are stored (as
@@ -155,11 +152,70 @@ struct PreparedStatements {
     insert_account_transaction_relation: tokio_postgres::Statement,
     insert_contract_transaction_relation: tokio_postgres::Statement,
     get_latest_height: tokio_postgres::Statement,
-    account_by_id: tokio_postgres::Statement,
-    contract_by_id: tokio_postgres::Statement,
+    account_by_address: tokio_postgres::Statement,
+    contract_by_address: tokio_postgres::Statement,
+    contract_module_by_ref: tokio_postgres::Statement,
 }
 
 impl PreparedStatements {
+    async fn new(client: &DBClient) -> Result<Self, tokio_postgres::Error> {
+        let insert_block = client
+            .prepare(
+                "INSERT INTO blocks (hash, timestamp, height, total_stake) VALUES ($1, $2, $3, \
+                 $4) RETURNING id",
+            )
+            .await?;
+        let insert_account = client
+            .prepare("INSERT INTO accounts (address, block, is_initial) VALUES ($1, $2, $3)")
+            .await?;
+        let insert_contract_module = client
+            .prepare("INSERT INTO modules (ref, block) VALUES ($1, $2)")
+            .await?;
+        let insert_contract_instance = client
+            .prepare(
+                "INSERT INTO contracts (index, subindex, module, block) VALUES ($1, $2, $3, $4)",
+            )
+            .await?;
+        let insert_transaction = client
+            .prepare(
+                "INSERT INTO transactions (hash, block, cost, is_success, type) VALUES ($1, $2, \
+                 $3, $4, $5) RETURNING id",
+            )
+            .await?;
+        let insert_account_transaction_relation = client
+            .prepare("INSERT INTO accounts_transactions (account, transaction) VALUES ($1, $2)")
+            .await?;
+        let insert_contract_transaction_relation = client
+            .prepare("INSERT INTO contracts_transactions (contract, transaction) VALUES ($1, $2)")
+            .await?;
+        let get_latest_height = client
+            .prepare("SELECT blocks.height FROM blocks ORDER BY blocks.id DESC LIMIT 1")
+            .await?;
+        let account_by_address = client
+            .prepare("SELECT accounts.id FROM accounts WHERE address=$1 LIMIT 1")
+            .await?;
+        let contract_by_address = client
+            .prepare("SELECT contracts.id FROM contracts WHERE index=$1 AND subindex=$2 LIMIT 1")
+            .await?;
+        let contract_module_by_ref = client
+            .prepare("SELECT modules.id FROM modules WHERE ref=$1 LIMIT 1")
+            .await?;
+
+        Ok(Self {
+            insert_block,
+            insert_account,
+            insert_contract_module,
+            insert_contract_instance,
+            insert_transaction,
+            insert_account_transaction_relation,
+            insert_contract_transaction_relation,
+            get_latest_height,
+            account_by_address,
+            contract_by_address,
+            contract_module_by_ref,
+        })
+    }
+
     async fn insert_block<'a, 'b>(
         &'a self,
         db_tx: &DBTransaction<'b>,
@@ -188,17 +244,61 @@ impl PreparedStatements {
         block_id: i64,
         account_address: CanonicalAccountAddress,
         account_details: AccountDetails,
-    ) -> Result<i64, tokio_postgres::Error> {
+    ) -> Result<(), tokio_postgres::Error> {
         let values: [&(dyn ToSql + Sync); 3] = [
             &account_address.0.as_ref(),
             &block_id,
             &account_details.is_initial,
         ];
 
-        let row = db_tx.query_one(&self.insert_account, &values).await?;
-        let id = row.try_get::<_, i64>(0)?;
+        db_tx.query_opt(&self.insert_account, &values).await?;
 
-        Ok(id)
+        Ok(())
+    }
+
+    async fn insert_contract_module<'a, 'b>(
+        &'a self,
+        db_tx: &DBTransaction<'b>,
+        block_id: i64,
+        module_ref: ModuleRef,
+    ) -> Result<(), tokio_postgres::Error> {
+        let values: [&(dyn ToSql + Sync); 2] = [&module_ref.as_ref(), &block_id];
+
+        db_tx
+            .query_opt(&self.insert_contract_module, &values)
+            .await?;
+
+        Ok(())
+    }
+
+    async fn insert_contract_instance<'a, 'b>(
+        &'a self,
+        db_tx: &DBTransaction<'b>,
+        block_id: i64,
+        contract_address: ContractAddress,
+        contract_details: ContractInstanceDetails,
+    ) -> anyhow::Result<()> {
+        let row = db_tx
+            .query_one(
+                &self.contract_module_by_ref,
+                &[&contract_details.module_ref.as_ref()],
+            )
+            .await
+            .context("Expected module ref to be found")?;
+        let module_id = row.try_get::<_, i64>(0)?;
+
+        let values: [&(dyn ToSql + Sync); 4] = [
+            &(contract_address.index as i64),
+            &(contract_address.subindex as i64),
+            &module_id,
+            &block_id,
+        ];
+
+        db_tx
+            .query_opt(&self.insert_contract_instance, &values)
+            .await?;
+
+        Ok(())
     }
 
     async fn insert_transaction<'a, 'b>(
@@ -207,13 +307,14 @@ impl PreparedStatements {
         block_id: i64,
         transaction_hash: TransactionHash,
         transaction_details: TransactionDetails,
-    ) -> Result<(), tokio_postgres::Error> {
+    ) -> anyhow::Result<()> {
         let transaction_cost = transaction_details.cost.micro_ccd() as i64;
         let transaction_type = transaction_details.transaction_type.map(|tt| tt as i16);
-        let values: [&(dyn ToSql + Sync); 4] = [
+        let values: [&(dyn ToSql + Sync); 5] = [
             &transaction_hash.as_ref(),
             &block_id,
             &transaction_cost,
+            &transaction_details.is_success,
             &transaction_type,
         ];
 
@@ -240,10 +341,10 @@ impl PreparedStatements {
         account_address: CanonicalAccountAddress,
     ) -> Result<(), tokio_postgres::Error> {
         let row = db_tx
-            .query_one(&self.account_by_id, &[&account_address.0.as_ref()])
+            .query_one(&self.account_by_address, &[&account_address.0.as_ref()])
             .await?;
         let account_id = row.try_get::<_, i64>(0)?;
-        let values: [&(dyn ToSql + Sync); 2] = [&transaction_id, &account_id];
+        let values: [&(dyn ToSql + Sync); 2] = [&account_id, &transaction_id];
 
         db_tx
             .query_opt(&self.insert_account_transaction_relation, &values)
@@ -257,17 +358,18 @@ impl PreparedStatements {
         db_tx: &DBTransaction<'b>,
         transaction_id: i64,
         contract_address: ContractAddress,
-    ) -> Result<(), tokio_postgres::Error> {
+    ) -> anyhow::Result<()> {
         let contract_id_params: [&(dyn ToSql + Sync); 2] = [
             &(contract_address.index as i64),
             &(contract_address.subindex as i64),
         ];
         let row = db_tx
-            .query_one(&self.contract_by_id, &contract_id_params)
-            .await?;
+            .query_one(&self.contract_by_address, &contract_id_params)
+            .await
+            .context("Expected contract instance to be found")?;
 
         let contract_id = row.try_get::<_, i64>(0)?;
-        let values: [&(dyn ToSql + Sync); 2] = [&transaction_id, &contract_id];
+        let values: [&(dyn ToSql + Sync); 2] = [&contract_id, &transaction_id];
 
         db_tx
             .query_opt(&self.insert_contract_transaction_relation, &values)
@@ -316,63 +418,9 @@ impl DBConn {
                 .context("Failed to execute create statements")?;
         }
 
-        let insert_block = client
-            .prepare(
-                "INSERT INTO blocks (hash, timestamp, height, total_stake) VALUES ($1, $2, $3, \
-                 $4) RETURNING id",
-            )
-            .await?;
-        let insert_account = client
-            .prepare(
-                "INSERT INTO accounts (address, block, is_initial) VALUES ($1, $2, $3) RETURNING \
-                 id",
-            )
-            .await?;
-        let insert_contract_module = client
-            .prepare("INSERT INTO modules (ref, block) VALUES ($1, $2) RETURNING id")
-            .await?;
-        let insert_contract_instance = client
-            .prepare(
-                "INSERT INTO contracts (index, subindex, module, block) VALUES ($1, $2, $3, $4) \
-                 RETURNING id",
-            )
-            .await?;
-        let insert_transaction = client
-            .prepare(
-                "INSERT INTO transactions (hash, block, cost, type) VALUES ($1, $2, $3, $4) \
-                 RETURNING id",
-            )
-            .await?;
-        let insert_account_transaction_relation = client
-            .prepare("INSERT INTO accounts_transactions (account, transaction) VALUES ($1, $2)")
-            .await?;
-        let insert_contract_transaction_relation = client
-            .prepare("INSERT INTO contracts_transactions (contract, transaction) VALUES ($1, $2)")
-            .await?;
-        let get_latest_height = client
-            .prepare("SELECT blocks.height FROM blocks ORDER BY blocks.id DESC LIMIT 1")
-            .await?;
-        let account_by_id = client
-            .prepare("SELECT accounts.id FROM accounts WHERE address=$1 LIMIT 1")
-            .await?;
-        let contract_by_id = client
-            .prepare("SELECT contracts.id FROM contracts WHERE index=$1 AND subindex=$2 LIMIT 1")
-            .await?;
-
-        let prepared = PreparedStatements {
-            insert_block,
-            insert_account,
-            insert_contract_module,
-            insert_contract_instance,
-            insert_transaction,
-            insert_account_transaction_relation,
-            insert_contract_transaction_relation,
-            get_latest_height,
-            account_by_id,
-            contract_by_id,
-        };
-
+        let prepared = PreparedStatements::new(&client).await?;
         let db_conn = DBConn { client, prepared };
+
         Ok(db_conn)
     }
 }
@@ -761,9 +809,22 @@ async fn db_insert_block(db: &mut DBConn, block_data: BlockData) -> anyhow::Resu
             block_details,
             accounts,
             transactions,
-            ..
+            contract_modules,
+            contract_instances,
         }) => {
             let block_id = insert_common(block_hash, block_details, accounts).await?;
+
+            for module_ref in contract_modules.into_iter() {
+                db.prepared
+                    .insert_contract_module(&db_tx, block_id, module_ref)
+                    .await?;
+            }
+
+            for (address, details) in contract_instances.into_iter() {
+                db.prepared
+                    .insert_contract_instance(&db_tx, block_id, address, details)
+                    .await?;
+            }
 
             for (hash, details) in transactions.into_iter() {
                 db.prepared
