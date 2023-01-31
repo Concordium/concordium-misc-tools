@@ -19,8 +19,8 @@ use concordium_rust_sdk::{
 };
 use futures::{self, future, Stream, StreamExt, TryStreamExt};
 use tokio_postgres::{
-    config::Config as DBConfig, types::ToSql, Client as DBClient, NoTls,
-    Transaction as DBTransaction,
+    config::Config as DBConfig, types::ToSql, Client as DBClient, Error as DBError, NoTls,
+    Statement as DBStatement, Transaction as DBTransaction,
 };
 
 #[derive(Debug, Parser)]
@@ -113,11 +113,16 @@ struct ContractInstanceDetails {
     module_ref: ModuleRef,
 }
 
+/// Map of accounts indexed by canonical address
 type Accounts = HashMap<CanonicalAccountAddress, AccountDetails>;
+/// Map of transactions indexed by transaction hash
 type AccountTransactions = HashMap<TransactionHash, TransactionDetails>;
+/// Set of contract modules references
 type ContractModules = HashSet<ModuleRef>;
+/// Map of contract instances indexed by contract address
 type ContractInstances = HashMap<ContractAddress, ContractInstanceDetails>;
 
+/// Model for data collected for genesis block
 #[derive(Debug)]
 struct GenesisBlockData {
     block_hash:    BlockHash,
@@ -125,6 +130,7 @@ struct GenesisBlockData {
     accounts:      Accounts,
 }
 
+/// Model for data collected for normal blocks
 #[derive(Debug)]
 struct NormalBlockData {
     block_hash:         BlockHash,
@@ -135,28 +141,43 @@ struct NormalBlockData {
     contract_instances: ContractInstances,
 }
 
+/// Used for sending data to db process.
 #[derive(Debug)]
 enum BlockData {
     Genesis(GenesisBlockData),
     Normal(NormalBlockData),
 }
 
+/// The set of queries used to communicate with the postgres DB.
 struct PreparedStatements {
-    insert_block: tokio_postgres::Statement,
-    insert_account: tokio_postgres::Statement,
-    insert_contract_module: tokio_postgres::Statement,
-    insert_contract_instance: tokio_postgres::Statement,
-    insert_transaction: tokio_postgres::Statement,
-    insert_account_transaction_relation: tokio_postgres::Statement,
-    insert_contract_transaction_relation: tokio_postgres::Statement,
-    get_latest_height: tokio_postgres::Statement,
-    account_by_address: tokio_postgres::Statement,
-    contract_by_address: tokio_postgres::Statement,
-    contract_module_by_ref: tokio_postgres::Statement,
+    /// Insert block into DB
+    insert_block: DBStatement,
+    /// Insert account into DB
+    insert_account: DBStatement,
+    /// Insert contract module into DB
+    insert_contract_module: DBStatement,
+    /// Insert contract instance into DB
+    insert_contract_instance: DBStatement,
+    /// Insert transaction into DB
+    insert_transaction: DBStatement,
+    /// Insert account-transaction relation into DB
+    insert_account_transaction_relation: DBStatement,
+    /// Insert contract-transaction relation into DB
+    insert_contract_transaction_relation: DBStatement,
+    /// Get the latest recorded block height from the DB
+    get_latest_height: DBStatement,
+    /// Select single account ID by account address
+    account_by_address: DBStatement,
+    /// Select single cointract instance ID by contract address
+    contract_by_address: DBStatement,
+    /// Select single contract module ID by module ref
+    contract_module_by_ref: DBStatement,
 }
 
 impl PreparedStatements {
-    async fn new(client: &DBClient) -> Result<Self, tokio_postgres::Error> {
+    /// Construct `PreparedStatements` using the supplied
+    /// `tokio_postgres::Client`
+    async fn new(client: &DBClient) -> Result<Self, DBError> {
         let insert_block = client
             .prepare(
                 "INSERT INTO blocks (hash, timestamp, height, total_stake) VALUES ($1, $2, $3, \
@@ -214,12 +235,13 @@ impl PreparedStatements {
         })
     }
 
+    /// Add block to DB transaction `db_tx`.
     async fn insert_block<'a, 'b>(
         &'a self,
         db_tx: &DBTransaction<'b>,
         block_hash: BlockHash,
         block_details: BlockDetails,
-    ) -> Result<i64, tokio_postgres::Error> {
+    ) -> Result<i64, DBError> {
         let total_stake = block_details
             .total_stake
             .map(|amount| (amount.micro_ccd() as i64));
@@ -236,13 +258,14 @@ impl PreparedStatements {
         Ok(id)
     }
 
+    /// Add account to DB transaction `db_tx`.
     async fn insert_account<'a, 'b>(
         &'a self,
         db_tx: &DBTransaction<'b>,
         block_id: i64,
         account_address: CanonicalAccountAddress,
         account_details: AccountDetails,
-    ) -> Result<(), tokio_postgres::Error> {
+    ) -> Result<(), DBError> {
         let values: [&(dyn ToSql + Sync); 3] = [
             &account_address.0.as_ref(),
             &block_id,
@@ -254,12 +277,13 @@ impl PreparedStatements {
         Ok(())
     }
 
+    /// Add contract module to DB transaction `db_tx`.
     async fn insert_contract_module<'a, 'b>(
         &'a self,
         db_tx: &DBTransaction<'b>,
         block_id: i64,
         module_ref: ModuleRef,
-    ) -> Result<(), tokio_postgres::Error> {
+    ) -> Result<(), DBError> {
         let values: [&(dyn ToSql + Sync); 2] = [&module_ref.as_ref(), &block_id];
 
         db_tx
@@ -269,13 +293,14 @@ impl PreparedStatements {
         Ok(())
     }
 
+    /// Add contract instance to DB transaction `db_tx`.
     async fn insert_contract_instance<'a, 'b>(
         &'a self,
         db_tx: &DBTransaction<'b>,
         block_id: i64,
         contract_address: ContractAddress,
         contract_details: ContractInstanceDetails,
-    ) -> Result<(), tokio_postgres::Error> {
+    ) -> Result<(), DBError> {
         let row = db_tx
             .query_one(&self.contract_module_by_ref, &[&contract_details
                 .module_ref
@@ -297,13 +322,15 @@ impl PreparedStatements {
         Ok(())
     }
 
+    /// Add transaction to DB transaction `db_tx`. This also adds relations
+    /// between the transaction and contracts/accounts.
     async fn insert_transaction<'a, 'b>(
         &'a self,
         db_tx: &DBTransaction<'b>,
         block_id: i64,
         transaction_hash: TransactionHash,
         transaction_details: TransactionDetails,
-    ) -> Result<(), tokio_postgres::Error> {
+    ) -> Result<(), DBError> {
         let transaction_cost = transaction_details.cost.micro_ccd() as i64;
         let transaction_type = transaction_details.transaction_type.map(|tt| tt as i16);
         let values: [&(dyn ToSql + Sync); 5] = [
@@ -330,12 +357,13 @@ impl PreparedStatements {
         Ok(())
     }
 
+    /// Add account-transaction relation to DB transaction `db_tx`.
     async fn insert_account_transaction_relation<'a, 'b>(
         &'a self,
         db_tx: &DBTransaction<'b>,
         transaction_id: i64,
         account_address: CanonicalAccountAddress,
-    ) -> Result<(), tokio_postgres::Error> {
+    ) -> Result<(), DBError> {
         let row = db_tx
             .query_one(&self.account_by_address, &[&account_address.0.as_ref()])
             .await?;
@@ -349,12 +377,13 @@ impl PreparedStatements {
         Ok(())
     }
 
+    /// Add contract-transaction relation to DB transaction `db_tx`.
     async fn insert_contract_transaction_relation<'a, 'b>(
         &'a self,
         db_tx: &DBTransaction<'b>,
         transaction_id: i64,
         contract_address: ContractAddress,
-    ) -> Result<(), tokio_postgres::Error> {
+    ) -> Result<(), DBError> {
         let contract_id_params: [&(dyn ToSql + Sync); 2] = [
             &(contract_address.index as i64),
             &(contract_address.subindex as i64),
@@ -373,10 +402,11 @@ impl PreparedStatements {
         Ok(())
     }
 
+    /// Get the latest block height recorded in the DB.
     async fn get_latest_height(
         &self,
         db: &DBClient,
-    ) -> Result<Option<AbsoluteBlockHeight>, tokio_postgres::Error> {
+    ) -> Result<Option<AbsoluteBlockHeight>, DBError> {
         let row = db.query_opt(&self.get_latest_height, &[]).await?;
         if let Some(row) = row {
             let raw = row.try_get::<_, i64>(0)?;
@@ -387,12 +417,17 @@ impl PreparedStatements {
     }
 }
 
+/// Holds `tokio_postgres::Client` to query the database and
+/// `PreparedStatements` which can be executed with the client.
 struct DBConn {
     client:   DBClient,
     prepared: PreparedStatements,
 }
 
 impl DBConn {
+    /// Create new `DBConn` from `tokio_postgres::config::Config`. If
+    /// `try_create_tables` is true, database tables are created using
+    /// `/resources/schema.sql`.
     async fn create(conn_string: DBConfig, try_create_tables: bool) -> anyhow::Result<Self> {
         let (client, connection) = conn_string
             .connect(NoTls)
@@ -788,7 +823,7 @@ async fn db_insert_block(db: &mut DBConn, block_data: BlockData) -> anyhow::Resu
                 .await?;
         }
 
-        anyhow::Ok(block_id)
+        Ok::<_, DBError>(block_id)
     };
 
     match block_data {
