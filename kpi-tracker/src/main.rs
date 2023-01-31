@@ -32,10 +32,6 @@ struct Args {
         default_value = "http://localhost:20001"
     )]
     node:          Endpoint,
-    /// How many blocks to process.
-    // Only here for testing purposes...
-    #[arg(long = "num-blocks", default_value_t = 10000)]
-    num_blocks:    u64,
     /// Database connection string.
     #[arg(
         long = "db-connection",
@@ -301,10 +297,9 @@ impl PreparedStatements {
         contract_address: ContractAddress,
         contract_details: ContractInstanceDetails,
     ) -> Result<(), DBError> {
+        let module_ref = contract_details.module_ref.as_ref();
         let row = db_tx
-            .query_one(&self.contract_module_by_ref, &[&contract_details
-                .module_ref
-                .as_ref()])
+            .query_one(&self.contract_module_by_ref, &[&module_ref])
             .await?;
         let module_id = row.try_get::<_, i64>(0)?;
 
@@ -384,12 +379,12 @@ impl PreparedStatements {
         transaction_id: i64,
         contract_address: ContractAddress,
     ) -> Result<(), DBError> {
-        let contract_id_params: [&(dyn ToSql + Sync); 2] = [
+        let contract_address: [&(dyn ToSql + Sync); 2] = [
             &(contract_address.index as i64),
             &(contract_address.subindex as i64),
         ];
         let row = db_tx
-            .query_one(&self.contract_by_address, &contract_id_params)
+            .query_one(&self.contract_by_address, &contract_address)
             .await?;
 
         let contract_id = row.try_get::<_, i64>(0)?;
@@ -750,7 +745,7 @@ async fn process_block(
 }
 
 /// Queries the node available at `Args.endpoint` from height received from DB
-/// process for `Args.num_blocks` blocks. Sends the data structured by block to
+/// process until stopped. Sends the data structured by block to
 /// DB process through `block_sender`.
 async fn node_process(
     latest_height: AbsoluteBlockHeight,
@@ -758,11 +753,9 @@ async fn node_process(
 ) -> anyhow::Result<()> {
     let args = Args::parse();
     let endpoint = args.node;
-    let blocks_to_process = latest_height.height + args.num_blocks;
 
     log::info!(
-        "Processing {} blocks from height {} using node {}",
-        args.num_blocks,
+        "Processing blocks from height {} using node {}",
         latest_height,
         endpoint.uri()
     );
@@ -787,7 +780,7 @@ async fn node_process(
         }
     };
 
-    for height in latest_height.height..blocks_to_process {
+    for height in latest_height.height.. {
         if let Some(block) = blocks_stream.next().await {
             let block_data = process_block(&mut node, block.block_hash).await?;
             block_sender.send(BlockData::Normal(block_data)).await?;
