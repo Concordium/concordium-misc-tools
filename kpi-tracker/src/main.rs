@@ -412,8 +412,8 @@ impl PreparedStatements {
     }
 }
 
-/// Holds `tokio_postgres::Client` to query the database and
-/// `PreparedStatements` which can be executed with the client.
+/// Holds [`tokio_postgres::Client`] to query the database and
+/// [`PreparedStatements`] which can be executed with the client.
 struct DBConn {
     client:   DBClient,
     prepared: PreparedStatements,
@@ -469,7 +469,7 @@ fn account_details(account_creation_details: &AccountCreationDetails) -> Account
     AccountDetails { is_initial }
 }
 
-/// Returns accounts on chain at the give `block_hash`
+/// Returns accounts on chain at the given `block_hash`
 async fn accounts_in_block(
     node: &mut Client,
     block_hash: BlockHash,
