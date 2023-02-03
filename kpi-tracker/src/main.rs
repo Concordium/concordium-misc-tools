@@ -1,5 +1,4 @@
 use core::fmt;
-use std::collections::{HashMap, HashSet};
 
 use anyhow::{anyhow, Context};
 use chrono::{DateTime, Utc};
@@ -18,11 +17,9 @@ use concordium_rust_sdk::{
     v2::{AccountIdentifier, Client, Endpoint},
 };
 use futures::{self, future, Stream, StreamExt, TryStreamExt};
-use tokio_postgres::{
-    config::Config as DBConfig, types::ToSql, Client as DBClient, Error as DBError, NoTls,
-    Statement as DBStatement, Transaction as DBTransaction,
-};
+use tokio_postgres::{types::ToSql, NoTls};
 
+/// Command line configuration of the application.
 #[derive(Debug, Parser)]
 struct Args {
     /// The node used for querying
@@ -36,9 +33,11 @@ struct Args {
     #[arg(
         long = "db-connection",
         default_value = "host=localhost dbname=kpi-tracker user=postgres password=password \
-                         port=5432"
+                         port=5432",
+        help = "A connection string detailing the connection to the database used by the \
+                application."
     )]
-    db_connection: DBConfig,
+    db_connection: tokio_postgres::config::Config,
     /// Logging level of the application
     #[arg(long = "log-level", default_value_t = log::LevelFilter::Debug)]
     log_level:     log::LevelFilter,
@@ -110,17 +109,18 @@ struct ContractInstanceDetails {
 }
 
 /// Map of accounts indexed by canonical address
-type Accounts = HashMap<CanonicalAccountAddress, AccountDetails>;
+type Accounts = Vec<(CanonicalAccountAddress, AccountDetails)>;
 /// Map of transactions indexed by transaction hash
-type AccountTransactions = HashMap<TransactionHash, TransactionDetails>;
+type AccountTransactions = Vec<(TransactionHash, TransactionDetails)>;
 /// Set of contract modules references
-type ContractModules = HashSet<ModuleRef>;
+type ContractModules = Vec<ModuleRef>;
 /// Map of contract instances indexed by contract address
-type ContractInstances = HashMap<ContractAddress, ContractInstanceDetails>;
+type ContractInstances = Vec<(ContractAddress, ContractInstanceDetails)>;
 
-/// Model for data collected for genesis block
+/// Model for data collected for genesis block (of the entire chain, not
+/// subsequent ones from protocol updates)
 #[derive(Debug)]
-struct GenesisBlockData {
+struct ChainGenesisBlockData {
     block_hash:    BlockHash,
     block_details: BlockDetails,
     accounts:      Accounts,
@@ -140,40 +140,40 @@ struct NormalBlockData {
 /// Used for sending data to db process.
 #[derive(Debug)]
 enum BlockData {
-    Genesis(GenesisBlockData),
+    ChainGenesis(ChainGenesisBlockData),
     Normal(NormalBlockData),
 }
 
 /// The set of queries used to communicate with the postgres DB.
 struct PreparedStatements {
     /// Insert block into DB
-    insert_block: DBStatement,
+    insert_block: tokio_postgres::Statement,
     /// Insert account into DB
-    insert_account: DBStatement,
+    insert_account: tokio_postgres::Statement,
     /// Insert contract module into DB
-    insert_contract_module: DBStatement,
+    insert_contract_module: tokio_postgres::Statement,
     /// Insert contract instance into DB
-    insert_contract_instance: DBStatement,
+    insert_contract_instance: tokio_postgres::Statement,
     /// Insert transaction into DB
-    insert_transaction: DBStatement,
+    insert_transaction: tokio_postgres::Statement,
     /// Insert account-transaction relation into DB
-    insert_account_transaction_relation: DBStatement,
+    insert_account_transaction_relation: tokio_postgres::Statement,
     /// Insert contract-transaction relation into DB
-    insert_contract_transaction_relation: DBStatement,
+    insert_contract_transaction_relation: tokio_postgres::Statement,
     /// Get the latest recorded block height from the DB
-    get_latest_height: DBStatement,
+    get_latest_height: tokio_postgres::Statement,
     /// Select single account ID by account address
-    account_by_address: DBStatement,
+    account_by_address: tokio_postgres::Statement,
     /// Select single cointract instance ID by contract address
-    contract_by_address: DBStatement,
+    contract_by_address: tokio_postgres::Statement,
     /// Select single contract module ID by module ref
-    contract_module_by_ref: DBStatement,
+    contract_module_by_ref: tokio_postgres::Statement,
 }
 
 impl PreparedStatements {
     /// Construct `PreparedStatements` using the supplied
     /// `tokio_postgres::Client`
-    async fn new(client: &DBClient) -> Result<Self, DBError> {
+    async fn new(client: &tokio_postgres::Client) -> Result<Self, tokio_postgres::Error> {
         let insert_block = client
             .prepare(
                 "INSERT INTO blocks (hash, timestamp, height, total_stake) VALUES ($1, $2, $3, \
@@ -234,10 +234,10 @@ impl PreparedStatements {
     /// Add block to DB transaction `db_tx`.
     async fn insert_block<'a, 'b>(
         &'a self,
-        db_tx: &DBTransaction<'b>,
+        db_tx: &tokio_postgres::Transaction<'b>,
         block_hash: BlockHash,
         block_details: BlockDetails,
-    ) -> Result<i64, DBError> {
+    ) -> Result<i64, tokio_postgres::Error> {
         let total_stake = block_details
             .total_stake
             .map(|amount| (amount.micro_ccd() as i64));
@@ -257,11 +257,11 @@ impl PreparedStatements {
     /// Add account to DB transaction `db_tx`.
     async fn insert_account<'a, 'b>(
         &'a self,
-        db_tx: &DBTransaction<'b>,
+        db_tx: &tokio_postgres::Transaction<'b>,
         block_id: i64,
         account_address: CanonicalAccountAddress,
         account_details: AccountDetails,
-    ) -> Result<(), DBError> {
+    ) -> Result<(), tokio_postgres::Error> {
         let values: [&(dyn ToSql + Sync); 3] = [
             &account_address.0.as_ref(),
             &block_id,
@@ -276,10 +276,10 @@ impl PreparedStatements {
     /// Add contract module to DB transaction `db_tx`.
     async fn insert_contract_module<'a, 'b>(
         &'a self,
-        db_tx: &DBTransaction<'b>,
+        db_tx: &tokio_postgres::Transaction<'b>,
         block_id: i64,
         module_ref: ModuleRef,
-    ) -> Result<(), DBError> {
+    ) -> Result<(), tokio_postgres::Error> {
         let values: [&(dyn ToSql + Sync); 2] = [&module_ref.as_ref(), &block_id];
 
         db_tx
@@ -292,11 +292,11 @@ impl PreparedStatements {
     /// Add contract instance to DB transaction `db_tx`.
     async fn insert_contract_instance<'a, 'b>(
         &'a self,
-        db_tx: &DBTransaction<'b>,
+        db_tx: &tokio_postgres::Transaction<'b>,
         block_id: i64,
         contract_address: ContractAddress,
         contract_details: ContractInstanceDetails,
-    ) -> Result<(), DBError> {
+    ) -> Result<(), tokio_postgres::Error> {
         let module_ref = contract_details.module_ref.as_ref();
         let row = db_tx
             .query_one(&self.contract_module_by_ref, &[&module_ref])
@@ -321,11 +321,11 @@ impl PreparedStatements {
     /// between the transaction and contracts/accounts.
     async fn insert_transaction<'a, 'b>(
         &'a self,
-        db_tx: &DBTransaction<'b>,
+        db_tx: &tokio_postgres::Transaction<'b>,
         block_id: i64,
         transaction_hash: TransactionHash,
         transaction_details: TransactionDetails,
-    ) -> Result<(), DBError> {
+    ) -> Result<(), tokio_postgres::Error> {
         let transaction_cost = transaction_details.cost.micro_ccd() as i64;
         let transaction_type = transaction_details.transaction_type.map(|tt| tt as i16);
         let values: [&(dyn ToSql + Sync); 5] = [
@@ -355,10 +355,10 @@ impl PreparedStatements {
     /// Add account-transaction relation to DB transaction `db_tx`.
     async fn insert_account_transaction_relation<'a, 'b>(
         &'a self,
-        db_tx: &DBTransaction<'b>,
+        db_tx: &tokio_postgres::Transaction<'b>,
         transaction_id: i64,
         account_address: CanonicalAccountAddress,
-    ) -> Result<(), DBError> {
+    ) -> Result<(), tokio_postgres::Error> {
         let row = db_tx
             .query_one(&self.account_by_address, &[&account_address.0.as_ref()])
             .await?;
@@ -375,10 +375,10 @@ impl PreparedStatements {
     /// Add contract-transaction relation to DB transaction `db_tx`.
     async fn insert_contract_transaction_relation<'a, 'b>(
         &'a self,
-        db_tx: &DBTransaction<'b>,
+        db_tx: &tokio_postgres::Transaction<'b>,
         transaction_id: i64,
         contract_address: ContractAddress,
-    ) -> Result<(), DBError> {
+    ) -> Result<(), tokio_postgres::Error> {
         let contract_address: [&(dyn ToSql + Sync); 2] = [
             &(contract_address.index as i64),
             &(contract_address.subindex as i64),
@@ -400,8 +400,8 @@ impl PreparedStatements {
     /// Get the latest block height recorded in the DB.
     async fn get_latest_height(
         &self,
-        db: &DBClient,
-    ) -> Result<Option<AbsoluteBlockHeight>, DBError> {
+        db: &tokio_postgres::Client,
+    ) -> Result<Option<AbsoluteBlockHeight>, tokio_postgres::Error> {
         let row = db.query_opt(&self.get_latest_height, &[]).await?;
         if let Some(row) = row {
             let raw = row.try_get::<_, i64>(0)?;
@@ -415,7 +415,7 @@ impl PreparedStatements {
 /// Holds [`tokio_postgres::Client`] to query the database and
 /// [`PreparedStatements`] which can be executed with the client.
 struct DBConn {
-    client:   DBClient,
+    client:   tokio_postgres::Client,
     prepared: PreparedStatements,
 }
 
@@ -423,7 +423,10 @@ impl DBConn {
     /// Create new `DBConn` from `tokio_postgres::config::Config`. If
     /// `try_create_tables` is true, database tables are created using
     /// `/resources/schema.sql`.
-    async fn create(conn_string: DBConfig, try_create_tables: bool) -> anyhow::Result<Self> {
+    async fn create(
+        conn_string: tokio_postgres::config::Config,
+        try_create_tables: bool,
+    ) -> anyhow::Result<Self> {
         let (client, connection) = conn_string
             .connect(NoTls)
             .await
@@ -431,7 +434,7 @@ impl DBConn {
 
         tokio::spawn(async move {
             if let Err(e) = connection.await {
-                eprintln!("Connection error: {}", e); // TODO: log as error.
+                log::error!("Connection error: {}", e);
             }
         });
 
@@ -473,7 +476,7 @@ fn account_details(account_creation_details: &AccountCreationDetails) -> Account
 async fn accounts_in_block(
     node: &mut Client,
     block_hash: BlockHash,
-) -> anyhow::Result<HashMap<CanonicalAccountAddress, AccountDetails>> {
+) -> anyhow::Result<Vec<(CanonicalAccountAddress, AccountDetails)>> {
     let accounts = node
         .get_account_list(block_hash)
         .await
@@ -502,7 +505,7 @@ async fn accounts_in_block(
                 anyhow::Ok((account, account_info))
             }
         })
-        .try_fold(HashMap::new(), |mut map, (account, info)| async move {
+        .map_ok(|(account, info)| {
             let is_initial = info
                 .account_credentials
                 .get(&0.into())
@@ -513,10 +516,10 @@ async fn accounts_in_block(
 
             let canonical_account = CanonicalAccountAddress::from(account);
             let details = AccountDetails { is_initial };
-            map.insert(canonical_account, details);
 
-            Ok(map)
+            (canonical_account, details)
         })
+        .try_collect()
         .await?;
 
     Ok(accounts_details_map)
@@ -615,11 +618,11 @@ async fn get_block_events(
 
 /// Processes a block, represented by `block_hash` by querying the node for
 /// entities present in the block state, updating the `db`. Should only be
-/// used to process the genesis block.
-async fn process_genesis_block(
+/// used to process the chain's genesis block.
+async fn process_chain_genesis_block(
     node: &mut Client,
     block_hash: BlockHash,
-) -> anyhow::Result<GenesisBlockData> {
+) -> anyhow::Result<ChainGenesisBlockData> {
     let block_info = node
         .get_block_info(block_hash)
         .await
@@ -633,7 +636,7 @@ async fn process_genesis_block(
     };
 
     let accounts = accounts_in_block(node, block_hash).await?;
-    let genesis_data = GenesisBlockData {
+    let genesis_data = ChainGenesisBlockData {
         block_hash,
         block_details,
         accounts,
@@ -714,26 +717,26 @@ async fn process_block(
     let mut block_data = NormalBlockData {
         block_hash,
         block_details,
-        accounts: HashMap::new(),
-        transactions: HashMap::new(),
-        contract_modules: HashSet::new(),
-        contract_instances: HashMap::new(),
+        accounts: Vec::new(),
+        transactions: Vec::new(),
+        contract_modules: Vec::new(),
+        contract_instances: Vec::new(),
     };
 
     block_events
         .try_for_each(|be| {
             match be {
                 BlockEvent::AccountCreation(address, details) => {
-                    block_data.accounts.insert(address, details);
+                    block_data.accounts.push((address, details));
                 }
                 BlockEvent::AccountTransaction(hash, details) => {
-                    block_data.transactions.insert(hash, details);
+                    block_data.transactions.push((hash, details));
                 }
                 BlockEvent::ContractModuleDeployment(module_ref) => {
-                    block_data.contract_modules.insert(module_ref);
+                    block_data.contract_modules.push(module_ref);
                 }
                 BlockEvent::ContractInstantiation(address, details) => {
-                    block_data.contract_instances.insert(address, details);
+                    block_data.contract_instances.push((address, details));
                 }
             };
 
@@ -744,23 +747,21 @@ async fn process_block(
     Ok(block_data)
 }
 
-/// Queries the node available at `Args.endpoint` from height received from DB
+/// Queries the node available at `node_endpoint` from height received from DB
 /// process until stopped. Sends the data structured by block to
 /// DB process through `block_sender`.
 async fn node_process(
+    node_endpoint: Endpoint,
     latest_height: AbsoluteBlockHeight,
     block_sender: tokio::sync::mpsc::Sender<BlockData>,
 ) -> anyhow::Result<()> {
-    let args = Args::parse();
-    let endpoint = args.node;
-
     log::info!(
         "Processing blocks from height {} using node {}",
         latest_height,
-        endpoint.uri()
+        node_endpoint.uri()
     );
 
-    let mut node = Client::new(endpoint)
+    let mut node = Client::new(node_endpoint)
         .await
         .context("Could not connect to node.")?;
 
@@ -772,20 +773,22 @@ async fn node_process(
     if latest_height.height == 0 {
         if let Some(genesis_block) = blocks_stream.next().await {
             let genesis_block_data =
-                process_genesis_block(&mut node, genesis_block.block_hash).await?;
+                process_chain_genesis_block(&mut node, genesis_block.block_hash).await?;
             block_sender
-                .send(BlockData::Genesis(genesis_block_data))
+                .send(BlockData::ChainGenesis(genesis_block_data))
                 .await?;
             log::info!("Processed genesis block: {}", genesis_block.block_hash);
         }
     };
 
-    for height in latest_height.height.. {
-        if let Some(block) = blocks_stream.next().await {
-            let block_data = process_block(&mut node, block.block_hash).await?;
-            block_sender.send(BlockData::Normal(block_data)).await?;
-            log::info!("Processed block ({}): {}", height, block.block_hash);
-        }
+    while let Some(block) = blocks_stream.next().await {
+        let block_data = process_block(&mut node, block.block_hash).await?;
+        block_sender.send(BlockData::Normal(block_data)).await?;
+        log::info!(
+            "Processed block ({}): {}",
+            block.height.height,
+            block.block_hash
+        );
     }
 
     Ok(())
@@ -816,11 +819,11 @@ async fn db_insert_block(db: &mut DBConn, block_data: BlockData) -> anyhow::Resu
                 .await?;
         }
 
-        Ok::<_, DBError>(block_id)
+        Ok::<_, tokio_postgres::Error>(block_id)
     };
 
     match block_data {
-        BlockData::Genesis(GenesisBlockData {
+        BlockData::ChainGenesis(ChainGenesisBlockData {
             block_hash,
             block_details,
             accounts,
@@ -865,13 +868,13 @@ async fn db_insert_block(db: &mut DBConn, block_data: BlockData) -> anyhow::Resu
 }
 
 /// Runs a process of inserting data coming in on `block_receiver` in a database
-/// defined in [`Args.db_connection`]
-async fn run_db_process<'a>(
+/// defined in `db_connection`
+async fn run_db_process(
+    db_connection: tokio_postgres::config::Config,
     mut block_receiver: tokio::sync::mpsc::Receiver<BlockData>,
     height_sender: tokio::sync::oneshot::Sender<AbsoluteBlockHeight>,
 ) -> anyhow::Result<()> {
-    let args = Args::parse();
-    let mut db = DBConn::create(args.db_connection, true).await?;
+    let mut db = DBConn::create(db_connection, true).await?;
     let latest_height = db
         .prepared
         .get_latest_height(&db.client)
@@ -908,7 +911,7 @@ async fn main() -> anyhow::Result<()> {
     let (block_sender, block_receiver) = tokio::sync::mpsc::channel(100);
 
     tokio::spawn(async {
-        if let Err(e) = run_db_process(block_receiver, height_sender).await {
+        if let Err(e) = run_db_process(args.db_connection, block_receiver, height_sender).await {
             log::error!("Error happened while running DB process: {}", e);
         }
     });
@@ -917,7 +920,7 @@ async fn main() -> anyhow::Result<()> {
         .await
         .context("Did not receive height of most recent block recorded in database")?;
 
-    node_process(latest_height, block_sender)
+    node_process(args.node, latest_height, block_sender)
         .await
         .context("Error happened while querying node.")?;
 
