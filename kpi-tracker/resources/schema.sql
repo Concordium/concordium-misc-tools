@@ -42,6 +42,12 @@ CREATE TABLE IF NOT EXISTS transactions (
   type INT2 -- NULL means the transaction was rejected
 );
 
+-- Create index on transaction type to improve performance when querying for transactions of specific types.
+CREATE INDEX IF NOT EXISTS transactions_type ON transactions USING HASH (type);
+
+-- Create index on transactions reference to block to improve performance when querying for transactions linked to specific blocks. This is heavily used for account/contract activeness.
+CREATE INDEX IF NOT EXISTS transactions_block ON transactions USING HASH (block);
+
 -- Keeps track of relations between accounts and transactions to support account activeness.
 CREATE TABLE IF NOT EXISTS accounts_transactions (
   account INT8 NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT ON UPDATE RESTRICT,
@@ -53,6 +59,3 @@ CREATE TABLE IF NOT EXISTS contracts_transactions (
   contract INT8 NOT NULL REFERENCES contracts(id) ON DELETE RESTRICT ON UPDATE RESTRICT,
   transaction INT8 NOT NULL REFERENCES transactions(id) ON DELETE RESTRICT ON UPDATE RESTRICT
 );
-
--- Create index on transaction type to improve performance when querying for transactions of specific types.
-CREATE INDEX IF NOT EXISTS transactions_type ON transactions USING HASH (type);
