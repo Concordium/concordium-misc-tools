@@ -14,4 +14,5 @@ env_logger = "0.10"
 futures = "0.3"
 log = "0.4"
 tokio = { version = "1.23", features = ["rt-multi-thread"] }
+tokio-postgres = "0.7"
 tonic = "0.8"
