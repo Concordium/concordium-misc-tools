@@ -1,5 +1,3 @@
-use core::fmt;
-
 use anyhow::{anyhow, Context};
 use chrono::{DateTime, Utc};
 use clap::Parser;
@@ -16,6 +14,7 @@ use concordium_rust_sdk::{
     },
     v2::{AccountIdentifier, Client, Endpoint},
 };
+use core::fmt;
 use futures::{self, future, Stream, StreamExt, TryStreamExt};
 use tokio_postgres::{types::ToSql, NoTls};
 
@@ -108,32 +107,41 @@ struct ContractInstanceDetails {
     module_ref: ModuleRef,
 }
 
-/// Map of accounts indexed by canonical address
+/// List of (canonical) account address, account detail pairs
 type Accounts = Vec<(CanonicalAccountAddress, AccountDetails)>;
-/// Map of transactions indexed by transaction hash
+/// List of transaction hash, transaction detail pairs
 type AccountTransactions = Vec<(TransactionHash, TransactionDetails)>;
-/// Set of contract modules references
+/// List of contract modules references
 type ContractModules = Vec<ModuleRef>;
-/// Map of contract instances indexed by contract address
+/// List of contract address, contract instance detail pairs
 type ContractInstances = Vec<(ContractAddress, ContractInstanceDetails)>;
 
 /// Model for data collected for genesis block (of the entire chain, not
 /// subsequent ones from protocol updates)
 #[derive(Debug)]
 struct ChainGenesisBlockData {
+    /// Block hash of the genesis block
     block_hash:    BlockHash,
+    /// Block details of the genesis block
     block_details: BlockDetails,
+    /// Accounts included in the genesis block
     accounts:      Accounts,
 }
 
 /// Model for data collected for normal blocks
 #[derive(Debug)]
 struct NormalBlockData {
+    /// Block hash of the block
     block_hash:         BlockHash,
+    /// Block details of the block
     block_details:      BlockDetails,
+    /// Accounts created in the block
     accounts:           Accounts,
+    /// Transactions included in the block
     transactions:       AccountTransactions,
+    /// Smart contract module deployments included in the block
     contract_modules:   ContractModules,
+    /// Smart contract instantiations included in the block
     contract_instances: ContractInstances,
 }
 
