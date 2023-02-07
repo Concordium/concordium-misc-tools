@@ -16,6 +16,7 @@ use concordium_rust_sdk::{
 };
 use core::fmt;
 use futures::{self, future, Stream, StreamExt, TryStreamExt};
+use std::time::Duration;
 use tokio_postgres::{types::ToSql, NoTls};
 
 /// Command line configuration of the application.
@@ -40,6 +41,18 @@ struct Args {
     /// Logging level of the application
     #[arg(long = "log-level", default_value_t = log::LevelFilter::Debug)]
     log_level:     log::LevelFilter,
+    /// Number of parallel queries to run against node
+    #[arg(
+        long = "num-parallel",
+        default_value_t = 1,
+        help = "The number of parallel queries to run against a node. Only relevant to set to \
+                something different than 1 when catching up."
+    )]
+    num_parallel:  u8,
+    /// Max amount of seconds a response from a node can fall behind before
+    /// trying another.
+    #[arg(long = "max-behind-seconds", default_value_t = 240)]
+    max_behind_s:  u8,
 }
 
 /// Used to canonicalize account addresses to ensure no aliases are stored (as
@@ -762,6 +775,8 @@ async fn node_process(
     node_endpoint: Endpoint,
     latest_height: AbsoluteBlockHeight,
     block_sender: tokio::sync::mpsc::Sender<BlockData>,
+    num_parallel: u8,
+    max_behind_s: u8,
 ) -> anyhow::Result<()> {
     log::info!(
         "Processing blocks from height {} using node {}",
@@ -769,7 +784,7 @@ async fn node_process(
         node_endpoint.uri()
     );
 
-    let mut node = Client::new(node_endpoint)
+    let mut node = Client::new(node_endpoint.clone())
         .await
         .context("Could not connect to node.")?;
 
@@ -789,17 +804,28 @@ async fn node_process(
         }
     };
 
-    while let Some(block) = blocks_stream.next().await {
-        let block_data = process_block(&mut node, block.block_hash).await?;
-        block_sender.send(BlockData::Normal(block_data)).await?;
-        log::info!(
-            "Processed block ({}): {}",
-            block.height.height,
-            block.block_hash
-        );
-    }
+    let timeout = Duration::from_secs(max_behind_s.into());
 
-    Ok(())
+    loop {
+        let (has_error, chunks) = blocks_stream
+            .next_chunk_timeout(num_parallel.into(), timeout)
+            .await
+            .with_context(|| format!("Timeout reached for node: {}", node_endpoint.uri()))?;
+
+        for block in chunks {
+            let block_data = process_block(&mut node, block.block_hash).await?;
+            block_sender.send(BlockData::Normal(block_data)).await?;
+            log::info!(
+                "Processed block ({}): {}",
+                block.height.height,
+                block.block_hash
+            );
+        }
+
+        if has_error {
+            return Err(anyhow!("Finalized block stream dropped"));
+        }
+    }
 }
 
 /// Inserts the `block_data` collected for a single block into the database
@@ -928,9 +954,15 @@ async fn main() -> anyhow::Result<()> {
         .await
         .context("Did not receive height of most recent block recorded in database")?;
 
-    node_process(args.node, latest_height, block_sender)
-        .await
-        .context("Error happened while querying node.")?;
+    node_process(
+        args.node,
+        latest_height,
+        block_sender,
+        args.num_parallel,
+        args.max_behind_s,
+    )
+    .await
+    .context("Error happened while querying node.")?;
 
     Ok(())
 }
