@@ -24,11 +24,11 @@ use tokio_postgres::{types::ToSql, NoTls};
 struct Args {
     /// The node used for querying
     #[arg(
-        long = "node",
-        help = "The endpoint is expected to point to a concordium node grpc v2 API.",
+        long = "node-endpoint",
+        help = "The endpoints are expected to point to concordium node grpc v2 API's.",
         default_value = "http://localhost:20001"
     )]
-    node:          Endpoint,
+    node_endpoints: Vec<Endpoint>,
     /// Database connection string.
     #[arg(
         long = "db-connection",
@@ -37,10 +37,10 @@ struct Args {
         help = "A connection string detailing the connection to the database used by the \
                 application."
     )]
-    db_connection: tokio_postgres::config::Config,
+    db_connection:  tokio_postgres::config::Config,
     /// Logging level of the application
     #[arg(long = "log-level", default_value_t = log::LevelFilter::Debug)]
-    log_level:     log::LevelFilter,
+    log_level:      log::LevelFilter,
     /// Number of parallel queries to run against node
     #[arg(
         long = "num-parallel",
@@ -48,11 +48,11 @@ struct Args {
         help = "The number of parallel queries to run against a node. Only relevant to set to \
                 something different than 1 when catching up."
     )]
-    num_parallel:  u8,
+    num_parallel:   u8,
     /// Max amount of seconds a response from a node can fall behind before
     /// trying another.
     #[arg(long = "max-behind-seconds", default_value_t = 240)]
-    max_behind_s:  u8,
+    max_behind_s:   u8,
 }
 
 /// Used to canonicalize account addresses to ensure no aliases are stored (as
@@ -770,11 +770,12 @@ async fn process_block(
 
 /// Queries the node available at `node_endpoint` from height received from DB
 /// process until stopped. Sends the data structured by block to
-/// DB process through `block_sender`.
+/// DB process through `block_sender`. Process runs until stopped or an error
+/// happens internally.
 async fn node_process(
     node_endpoint: Endpoint,
-    latest_height: AbsoluteBlockHeight,
-    block_sender: tokio::sync::mpsc::Sender<BlockData>,
+    latest_height: &mut AbsoluteBlockHeight,
+    block_sender: &tokio::sync::mpsc::Sender<BlockData>,
     num_parallel: u8,
     max_behind_s: u8,
 ) -> anyhow::Result<()> {
@@ -789,7 +790,7 @@ async fn node_process(
         .context("Could not connect to node.")?;
 
     let mut blocks_stream = node
-        .get_finalized_blocks_from(latest_height)
+        .get_finalized_blocks_from(*latest_height)
         .await
         .context("Error querying blocks")?;
 
@@ -820,6 +821,8 @@ async fn node_process(
                 block.height.height,
                 block.block_hash
             );
+
+            *latest_height = block.height;
         }
 
         if has_error {
@@ -950,19 +953,30 @@ async fn main() -> anyhow::Result<()> {
         }
     });
 
-    let latest_height = height_receiver
+    let mut latest_height = height_receiver
         .await
         .context("Did not receive height of most recent block recorded in database")?;
 
-    node_process(
-        args.node,
-        latest_height,
-        block_sender,
-        args.num_parallel,
-        args.max_behind_s,
-    )
-    .await
-    .context("Error happened while querying node.")?;
+    for node in args.node_endpoints.into_iter().cycle() {
+        // The process keeps running until stopped manually, or an error happens.
+        let node_result = node_process(
+            node.clone(),
+            &mut latest_height,
+            &block_sender,
+            args.num_parallel,
+            args.max_behind_s,
+        )
+        .await;
+
+        if let Err(e) = node_result {
+            log::error!("Endpoint {} failed. Trying next. Error {}", node.uri(), e);
+        } else {
+            // `node_process` terminated with [`Ok`], meaning we should stop the service
+            // entirely.
+            log::info!("Stopping service.");
+            break;
+        }
+    }
 
     Ok(())
 }
