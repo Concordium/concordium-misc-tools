@@ -46,16 +46,20 @@ CREATE TABLE IF NOT EXISTS transactions (
 -- Create index on transaction type to improve performance when querying for transactions of specific types.
 CREATE INDEX IF NOT EXISTS transactions_type ON transactions USING HASH (type);
 -- Create index on transactions reference to block to improve performance when querying for transactions linked to specific blocks.
-CREATE INDEX IF NOT EXISTS transactions_block ON transactions USING HASH (block);
+CREATE INDEX IF NOT EXISTS transactions_block ON transactions (block);
 
 -- Keeps track of relations between accounts and transactions to support account activeness.
 CREATE TABLE IF NOT EXISTS accounts_transactions (
   account INT8 NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT ON UPDATE RESTRICT,
   transaction INT8 NOT NULL REFERENCES transactions(id) ON DELETE RESTRICT ON UPDATE RESTRICT
 );
+-- Create index on account-transaction relations references to transactions to improve performance when querying accounts related to specific transactions.
+CREATE INDEX IF NOT EXISTS at_transaction ON accounts_transactions (transaction);
 
 -- Keeps track of relations between contracts and transactions to support contract activeness.
 CREATE TABLE IF NOT EXISTS contracts_transactions (
   contract INT8 NOT NULL REFERENCES contracts(id) ON DELETE RESTRICT ON UPDATE RESTRICT,
   transaction INT8 NOT NULL REFERENCES transactions(id) ON DELETE RESTRICT ON UPDATE RESTRICT
 );
+-- Create index on contract-transaction relations references to transactions to improve performance when querying contracts related to specific transactions.
+CREATE INDEX IF NOT EXISTS ct_transaction ON contracts_transactions (transaction);
