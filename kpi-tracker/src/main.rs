@@ -24,9 +24,10 @@ use tokio_postgres::{types::ToSql, NoTls};
 struct Args {
     /// The node used for querying
     #[arg(
-        long = "node-endpoint",
+        long = "node",
         help = "The endpoints are expected to point to concordium node grpc v2 API's.",
-        default_value = "http://localhost:20001"
+        default_value = "http://localhost:20001",
+        env = "KPI-TRACKER-NODES"
     )]
     node_endpoints: Vec<Endpoint>,
     /// Database connection string.
@@ -35,24 +36,30 @@ struct Args {
         default_value = "host=localhost dbname=kpi-tracker user=postgres password=password \
                          port=5432",
         help = "A connection string detailing the connection to the database used by the \
-                application."
+                application.",
+        env = "KPI-TRACKER-DB-CONNECTION"
     )]
-    db_connection:  tokio_postgres::config::Config,
+    db_connection: tokio_postgres::config::Config,
     /// Logging level of the application
-    #[arg(long = "log-level", default_value_t = log::LevelFilter::Debug)]
-    log_level:      log::LevelFilter,
+    #[arg(long = "log-level", default_value_t = log::LevelFilter::Debug, env = "KPI-TRACKER-LOG-LEVEL")]
+    log_level: log::LevelFilter,
     /// Number of parallel queries to run against node
     #[arg(
         long = "num-parallel",
         default_value_t = 1,
         help = "The number of parallel queries to run against a node. Only relevant to set to \
-                something different than 1 when catching up."
+                something different than 1 when catching up.",
+        env = "KPI-TRACKER-NUM-PARALLEL"
     )]
-    num_parallel:   u8,
+    num_parallel: u8,
     /// Max amount of seconds a response from a node can fall behind before
     /// trying another.
-    #[arg(long = "max-behind-seconds", default_value_t = 240)]
-    max_behind_s:   u8,
+    #[arg(
+        long = "max-behind-seconds",
+        default_value_t = 240,
+        env = "KPI-TRACKER-MAX-BEHIND-SECONDS"
+    )]
+    max_behind_s: u8,
 }
 
 /// Used to canonicalize account addresses to ensure no aliases are stored (as
@@ -70,7 +77,9 @@ impl From<AccountAddress> for CanonicalAccountAddress {
     }
 }
 impl fmt::Display for CanonicalAccountAddress {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { AccountAddress(self.0).fmt(f) }
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        AccountAddress(self.0).fmt(f)
+    }
 }
 
 /// Information about individual blocks. Useful for linking entities to a block
@@ -80,10 +89,10 @@ struct BlockDetails {
     /// Finalization time of the block. Used to show how metrics evolve over
     /// time by linking entities, such as accounts and transactions, to
     /// the block in which they are created.
-    block_time:  DateTime<Utc>,
+    block_time: DateTime<Utc>,
     /// Height of block from genesis. Used to restart the process of collecting
     /// metrics from the latest block recorded.
-    height:      AbsoluteBlockHeight,
+    height: AbsoluteBlockHeight,
     /// Total amount staked across all pools inclusive passive delegation. This
     /// is only recorded for "payday" blocks reflected by `Some`, where non
     /// payday blocks are reflected by `None`.
@@ -102,13 +111,13 @@ struct AccountDetails {
 struct TransactionDetails {
     /// The transaction type of the account transaction. Can be none if
     /// transaction was rejected due to serialization failure.
-    transaction_type:   Option<TransactionType>,
+    transaction_type: Option<TransactionType>,
     /// The cost of the transaction.
-    cost:               Amount,
+    cost: Amount,
     /// Whether the transaction failed or not.
-    is_success:         bool,
+    is_success: bool,
     /// Accounts affected by the transactions.
-    affected_accounts:  Vec<CanonicalAccountAddress>,
+    affected_accounts: Vec<CanonicalAccountAddress>,
     /// Contracts affected by the transactions.
     affected_contracts: Vec<ContractAddress>,
 }
@@ -134,26 +143,26 @@ type ContractInstances = Vec<(ContractAddress, ContractInstanceDetails)>;
 #[derive(Debug)]
 struct ChainGenesisBlockData {
     /// Block hash of the genesis block
-    block_hash:    BlockHash,
+    block_hash: BlockHash,
     /// Block details of the genesis block
     block_details: BlockDetails,
     /// Accounts included in the genesis block
-    accounts:      Accounts,
+    accounts: Accounts,
 }
 
 /// Model for data collected for normal blocks
 #[derive(Debug)]
 struct NormalBlockData {
     /// Block hash of the block
-    block_hash:         BlockHash,
+    block_hash: BlockHash,
     /// Block details of the block
-    block_details:      BlockDetails,
+    block_details: BlockDetails,
     /// Accounts created in the block
-    accounts:           Accounts,
+    accounts: Accounts,
     /// Transactions included in the block
-    transactions:       AccountTransactions,
+    transactions: AccountTransactions,
     /// Smart contract module deployments included in the block
-    contract_modules:   ContractModules,
+    contract_modules: ContractModules,
     /// Smart contract instantiations included in the block
     contract_instances: ContractInstances,
 }
@@ -257,7 +266,7 @@ impl PreparedStatements {
         &'a self,
         db_tx: &tokio_postgres::Transaction<'b>,
         block_hash: BlockHash,
-        block_details: BlockDetails,
+        block_details: &BlockDetails,
     ) -> Result<i64, tokio_postgres::Error> {
         let total_stake = block_details
             .total_stake
@@ -281,7 +290,7 @@ impl PreparedStatements {
         db_tx: &tokio_postgres::Transaction<'b>,
         block_id: i64,
         account_address: CanonicalAccountAddress,
-        account_details: AccountDetails,
+        account_details: &AccountDetails,
     ) -> Result<(), tokio_postgres::Error> {
         let values: [&(dyn ToSql + Sync); 3] = [
             &account_address.0.as_ref(),
@@ -316,7 +325,7 @@ impl PreparedStatements {
         db_tx: &tokio_postgres::Transaction<'b>,
         block_id: i64,
         contract_address: ContractAddress,
-        contract_details: ContractInstanceDetails,
+        contract_details: &ContractInstanceDetails,
     ) -> Result<(), tokio_postgres::Error> {
         let module_ref = contract_details.module_ref.as_ref();
         let row = db_tx
@@ -345,7 +354,7 @@ impl PreparedStatements {
         db_tx: &tokio_postgres::Transaction<'b>,
         block_id: i64,
         transaction_hash: TransactionHash,
-        transaction_details: TransactionDetails,
+        transaction_details: &TransactionDetails,
     ) -> Result<(), tokio_postgres::Error> {
         let transaction_cost = transaction_details.cost.micro_ccd() as i64;
         let transaction_type = transaction_details.transaction_type.map(|tt| tt as i16);
@@ -360,13 +369,13 @@ impl PreparedStatements {
         let row = db_tx.query_one(&self.insert_transaction, &values).await?;
         let id = row.try_get::<_, i64>(0)?;
 
-        for account in transaction_details.affected_accounts {
-            self.insert_account_transaction_relation(db_tx, id, account)
+        for account in &transaction_details.affected_accounts {
+            self.insert_account_transaction_relation(db_tx, id, *account)
                 .await?;
         }
 
-        for contract in transaction_details.affected_contracts {
-            self.insert_contract_transaction_relation(db_tx, id, contract)
+        for contract in &transaction_details.affected_contracts {
+            self.insert_contract_transaction_relation(db_tx, id, *contract)
                 .await?;
         }
 
@@ -436,7 +445,7 @@ impl PreparedStatements {
 /// Holds [`tokio_postgres::Client`] to query the database and
 /// [`PreparedStatements`] which can be executed with the client.
 struct DBConn {
-    client:   tokio_postgres::Client,
+    client: tokio_postgres::Client,
     prepared: PreparedStatements,
 }
 
@@ -651,8 +660,8 @@ async fn process_chain_genesis_block(
         .response;
 
     let block_details = BlockDetails {
-        block_time:  block_info.block_slot_time,
-        height:      block_info.block_height,
+        block_time: block_info.block_slot_time,
+        height: block_info.block_height,
         total_stake: None,
     };
 
@@ -807,6 +816,7 @@ async fn node_process(
 
     let timeout = Duration::from_secs(max_behind_s.into());
 
+    // TODO: stop gracefully from stop signal
     loop {
         let (has_error, chunks) = blocks_stream
             .next_chunk_timeout(num_parallel.into(), timeout)
@@ -816,11 +826,6 @@ async fn node_process(
         for block in chunks {
             let block_data = process_block(&mut node, block.block_hash).await?;
             block_sender.send(BlockData::Normal(block_data)).await?;
-            log::info!(
-                "Processed block ({}): {}",
-                block.height.height,
-                block.block_hash
-            );
 
             *latest_height = block.height;
         }
@@ -835,7 +840,11 @@ async fn node_process(
 /// defined by `db`. Everything is commited as a single transactions allowing
 /// for easy restoration from the last recorded block (by height) inserted into
 /// the database.
-async fn db_insert_block(db: &mut DBConn, block_data: BlockData) -> anyhow::Result<()> {
+async fn db_insert_block<'a>(
+    db: &mut DBConn,
+    block_data: &'a BlockData,
+) -> anyhow::Result<(AbsoluteBlockHeight, chrono::Duration)> {
+    let start = chrono::Utc::now();
     let db_tx = db
         .client
         .transaction()
@@ -845,19 +854,23 @@ async fn db_insert_block(db: &mut DBConn, block_data: BlockData) -> anyhow::Resu
     let tx_ref = &db_tx;
     let prepared_ref = &db.prepared;
 
-    let insert_common = |block_hash: BlockHash, block_details: BlockDetails, accounts: Accounts| async move {
+    let insert_common = |block_hash: BlockHash,
+                         block_details: &'a BlockDetails,
+                         accounts: &'a Accounts| async move {
         let block_id = prepared_ref
             .insert_block(tx_ref, block_hash, block_details)
             .await?;
 
         for (address, details) in accounts.into_iter() {
             prepared_ref
-                .insert_account(tx_ref, block_id, address, details)
+                .insert_account(tx_ref, block_id, *address, details)
                 .await?;
         }
 
         Ok::<_, tokio_postgres::Error>(block_id)
     };
+
+    let height: AbsoluteBlockHeight;
 
     match block_data {
         BlockData::ChainGenesis(ChainGenesisBlockData {
@@ -865,7 +878,8 @@ async fn db_insert_block(db: &mut DBConn, block_data: BlockData) -> anyhow::Resu
             block_details,
             accounts,
         }) => {
-            insert_common(block_hash, block_details, accounts).await?;
+            height = block_details.height;
+            insert_common(*block_hash, block_details, accounts).await?;
         }
         BlockData::Normal(NormalBlockData {
             block_hash,
@@ -875,23 +889,24 @@ async fn db_insert_block(db: &mut DBConn, block_data: BlockData) -> anyhow::Resu
             contract_modules,
             contract_instances,
         }) => {
-            let block_id = insert_common(block_hash, block_details, accounts).await?;
+            height = block_details.height;
+            let block_id = insert_common(*block_hash, block_details, accounts).await?;
 
             for module_ref in contract_modules.into_iter() {
                 db.prepared
-                    .insert_contract_module(&db_tx, block_id, module_ref)
+                    .insert_contract_module(&db_tx, block_id, *module_ref)
                     .await?;
             }
 
             for (address, details) in contract_instances.into_iter() {
                 db.prepared
-                    .insert_contract_instance(&db_tx, block_id, address, details)
+                    .insert_contract_instance(&db_tx, block_id, *address, details)
                     .await?;
             }
 
             for (hash, details) in transactions.into_iter() {
                 db.prepared
-                    .insert_transaction(&db_tx, block_id, hash, details)
+                    .insert_transaction(&db_tx, block_id, *hash, details)
                     .await?;
             }
         }
@@ -901,7 +916,9 @@ async fn db_insert_block(db: &mut DBConn, block_data: BlockData) -> anyhow::Resu
         .commit()
         .await
         .context("Failed to commit DB transaction.")?;
-    Ok(())
+
+    let end = chrono::Utc::now().signed_duration_since(start);
+    Ok((height, end))
 }
 
 /// Runs a process of inserting data coming in on `block_receiver` in a database
@@ -923,8 +940,36 @@ async fn run_db_process(
         .send(latest_height)
         .map_err(|_| anyhow!("Best block height could not be sent to node process"))?;
 
-    while let Some(block_data) = block_receiver.recv().await {
-        db_insert_block(&mut db, block_data).await?;
+    let mut retry_block_data = None;
+
+    // TODO: stop gracefully from stop signal.
+    loop {
+        let next_block_data = if retry_block_data.is_some() {
+            retry_block_data
+        } else {
+            block_receiver.recv().await
+        };
+
+        if let Some(block_data) = next_block_data {
+            match db_insert_block(&mut db, &block_data).await {
+                Ok((height, time)) => {
+                    log::info!(
+                        "Processed block ({}) in {}ms",
+                        height.height,
+                        time.num_milliseconds()
+                    );
+                    retry_block_data = None;
+                }
+                Err(e) => {
+                    // TODO: handle this properly by making a new DB connection and retying the
+                    // insertion.
+                    log::error!("Database connection lost due to {:#}", e);
+                    retry_block_data = Some(block_data);
+                }
+            }
+        } else {
+            break;
+        }
     }
 
     Ok(())
@@ -947,7 +992,7 @@ async fn main() -> anyhow::Result<()> {
     // transactions.
     let (block_sender, block_receiver) = tokio::sync::mpsc::channel(100);
 
-    tokio::spawn(async {
+    let db_handle = tokio::spawn(async {
         if let Err(e) = run_db_process(args.db_connection, block_receiver, height_sender).await {
             log::error!("Error happened while running DB process: {}", e);
         }
@@ -978,5 +1023,6 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
+    db_handle.abort();
     Ok(())
 }
