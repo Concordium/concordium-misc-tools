@@ -23,6 +23,7 @@ use std::{
     },
     time::Duration,
 };
+use tokio::task::JoinHandle;
 use tokio_postgres::{types::ToSql, NoTls};
 
 /// Command line configuration of the application.
@@ -449,8 +450,9 @@ impl PreparedStatements {
 /// Holds [`tokio_postgres::Client`] to query the database and
 /// [`PreparedStatements`] which can be executed with the client.
 struct DBConn {
-    client:   tokio_postgres::Client,
-    prepared: PreparedStatements,
+    client:            tokio_postgres::Client,
+    prepared:          PreparedStatements,
+    connection_handle: JoinHandle<()>,
 }
 
 impl DBConn {
@@ -466,7 +468,7 @@ impl DBConn {
             .await
             .context("Could not create database connection")?;
 
-        tokio::spawn(async move {
+        let connection_handle = tokio::spawn(async move {
             if let Err(e) = connection.await {
                 log::error!("Connection error: {}", e);
             }
@@ -481,7 +483,11 @@ impl DBConn {
         }
 
         let prepared = PreparedStatements::new(&client).await?;
-        let db_conn = DBConn { client, prepared };
+        let db_conn = DBConn {
+            client,
+            prepared,
+            connection_handle,
+        };
 
         Ok(db_conn)
     }
@@ -935,7 +941,7 @@ async fn run_db_process(
     height_sender: tokio::sync::oneshot::Sender<AbsoluteBlockHeight>,
     stop_flag: Arc<AtomicBool>,
 ) -> anyhow::Result<()> {
-    let mut db = DBConn::create(db_connection, true).await?;
+    let mut db = DBConn::create(db_connection.clone(), true).await?;
     let latest_height = db
         .prepared
         .get_latest_height(&db.client)
@@ -947,7 +953,11 @@ async fn run_db_process(
         .send(latest_height)
         .map_err(|_| anyhow!("Best block height could not be sent to node process"))?;
 
+    // In case of DB errors, this is used to store the value to retry insertion for
     let mut retry_block_data = None;
+    // How many successive insertion errors were encountered.
+    // This is used to slow down attempts to not spam the database
+    let mut successive_db_errors = 0;
 
     while !stop_flag.load(Ordering::Acquire) {
         let next_block_data = if retry_block_data.is_some() {
@@ -959,6 +969,7 @@ async fn run_db_process(
         if let Some(block_data) = next_block_data {
             match db_insert_block(&mut db, &block_data).await {
                 Ok((height, time)) => {
+                    successive_db_errors = 0;
                     log::info!(
                         "Processed block ({}) in {}ms",
                         height.height,
@@ -967,9 +978,31 @@ async fn run_db_process(
                     retry_block_data = None;
                 }
                 Err(e) => {
-                    // TODO: handle this properly by making a new DB connection and retying the
-                    // insertion.
-                    log::error!("Database connection lost due to {:#}", e);
+                    successive_db_errors += 1;
+                    // wait for 2^(min(successive_errors - 1, 7)) seconds before attempting.
+                    // The reason for the min is that we bound the time between reconnects.
+                    let delay = std::time::Duration::from_millis(
+                        500 * (1 << std::cmp::min(successive_db_errors, 8)),
+                    );
+                    log::error!(
+                        "Database connection lost due to {:#}. Will attempt to reconnect in {}ms.",
+                        e,
+                        delay.as_millis()
+                    );
+                    tokio::time::sleep(delay).await;
+
+                    let new_db = match DBConn::create(db_connection.clone(), false).await {
+                        Ok(db) => db,
+                        Err(e) => {
+                            block_receiver.close();
+                            return Err(e);
+                        }
+                    };
+
+                    // and drop the old database connection.
+                    let old_db = std::mem::replace(&mut db, new_db);
+                    old_db.connection_handle.abort();
+
                     retry_block_data = Some(block_data);
                 }
             }
@@ -1023,6 +1056,7 @@ async fn main() -> anyhow::Result<()> {
     // Create a channel between the task querying the node and the task logging
     // transactions.
     let (block_sender, block_receiver) = tokio::sync::mpsc::channel(100);
+    // node/db processes run until the stop flag is triggered.
     let stop_flag = Arc::new(AtomicBool::new(false));
     let shutdown_handle = tokio::spawn(set_shutdown(stop_flag.clone()));
 
@@ -1060,7 +1094,7 @@ async fn main() -> anyhow::Result<()> {
         if let Err(e) = node_result {
             log::error!("Endpoint {} failed. Trying next. Error {}", node.uri(), e);
         } else {
-            // `node_process` terminated with [`Ok`], meaning we should stop the service
+            // `node_process` terminated with `Ok`, meaning we should stop the service
             // entirely.
             log::info!("Stopping service.");
             break;
