@@ -16,7 +16,10 @@ use concordium_rust_sdk::{
 };
 use core::fmt;
 use futures::{self, future, Stream, StreamExt, TryStreamExt};
-use tokio_postgres::{types::ToSql, NoTls};
+use tokio_postgres::{
+    types::{ToSql, Type},
+    NoTls,
+};
 
 /// Command line configuration of the application.
 #[derive(Debug, Parser)]
@@ -176,6 +179,10 @@ struct PreparedStatements {
     contract_by_address: tokio_postgres::Statement,
     /// Select single contract module ID by module ref
     contract_module_by_ref: tokio_postgres::Statement,
+    /// Insert record of time an account was part of a transaction
+    insert_account_activeness: tokio_postgres::Statement,
+    /// Insert record of time a contract was part of a transaction
+    insert_contract_activeness: tokio_postgres::Statement,
 }
 
 impl PreparedStatements {
@@ -223,6 +230,20 @@ impl PreparedStatements {
         let contract_module_by_ref = client
             .prepare("SELECT modules.id FROM modules WHERE ref=$1 LIMIT 1")
             .await?;
+        let insert_account_activeness = client
+            .prepare_typed(
+                "INSERT INTO account_activeness (account, time) VALUES ($1, date_seconds($2)) ON \
+                 CONFLICT DO NOTHING",
+                &[Type::INT8, Type::INT8],
+            )
+            .await?;
+        let insert_contract_activeness = client
+            .prepare_typed(
+                "INSERT INTO contract_activeness (contract, time) VALUES ($1, date_seconds($2)) \
+                 ON CONFLICT DO NOTHING",
+                &[Type::INT8, Type::INT8],
+            )
+            .await?;
 
         Ok(Self {
             insert_block,
@@ -236,6 +257,8 @@ impl PreparedStatements {
             account_by_address,
             contract_by_address,
             contract_module_by_ref,
+            insert_account_activeness,
+            insert_contract_activeness,
         })
     }
 
@@ -331,6 +354,7 @@ impl PreparedStatements {
         &'a self,
         db_tx: &tokio_postgres::Transaction<'b>,
         block_id: i64,
+        block_time: i64,
         transaction_hash: TransactionHash,
         transaction_details: TransactionDetails,
     ) -> Result<(), tokio_postgres::Error> {
@@ -348,12 +372,12 @@ impl PreparedStatements {
         let id = row.try_get::<_, i64>(0)?;
 
         for account in transaction_details.affected_accounts {
-            self.insert_account_transaction_relation(db_tx, id, account)
+            self.insert_account_transaction_relation(db_tx, id, account, block_time)
                 .await?;
         }
 
         for contract in transaction_details.affected_contracts {
-            self.insert_contract_transaction_relation(db_tx, id, contract)
+            self.insert_contract_transaction_relation(db_tx, id, contract, block_time)
                 .await?;
         }
 
@@ -366,15 +390,24 @@ impl PreparedStatements {
         db_tx: &tokio_postgres::Transaction<'b>,
         transaction_id: i64,
         account_address: CanonicalAccountAddress,
+        block_time: i64,
     ) -> Result<(), tokio_postgres::Error> {
         let row = db_tx
             .query_one(&self.account_by_address, &[&account_address.0.as_ref()])
             .await?;
         let account_id = row.try_get::<_, i64>(0)?;
-        let values: [&(dyn ToSql + Sync); 2] = [&account_id, &transaction_id];
+        let transaction_relation_values: [&(dyn ToSql + Sync); 2] = [&account_id, &transaction_id];
 
         db_tx
-            .query_opt(&self.insert_account_transaction_relation, &values)
+            .query_opt(
+                &self.insert_account_transaction_relation,
+                &transaction_relation_values,
+            )
+            .await?;
+
+        let activeness_values: [&(dyn ToSql + Sync); 2] = [&account_id, &block_time];
+        db_tx
+            .query_opt(&self.insert_account_activeness, &activeness_values)
             .await?;
 
         Ok(())
@@ -386,6 +419,7 @@ impl PreparedStatements {
         db_tx: &tokio_postgres::Transaction<'b>,
         transaction_id: i64,
         contract_address: ContractAddress,
+        block_time: i64,
     ) -> Result<(), tokio_postgres::Error> {
         let contract_address: [&(dyn ToSql + Sync); 2] = [
             &(contract_address.index as i64),
@@ -396,10 +430,18 @@ impl PreparedStatements {
             .await?;
 
         let contract_id = row.try_get::<_, i64>(0)?;
-        let values: [&(dyn ToSql + Sync); 2] = [&contract_id, &transaction_id];
+        let transaction_relation_values: [&(dyn ToSql + Sync); 2] = [&contract_id, &transaction_id];
 
         db_tx
-            .query_opt(&self.insert_contract_transaction_relation, &values)
+            .query_opt(
+                &self.insert_contract_transaction_relation,
+                &transaction_relation_values,
+            )
+            .await?;
+
+        let activeness_values: [&(dyn ToSql + Sync); 2] = [&contract_id, &block_time];
+        db_tx
+            .query_opt(&self.insert_contract_activeness, &activeness_values)
             .await?;
 
         Ok(())
@@ -862,7 +904,13 @@ async fn db_insert_block(db: &mut DBConn, block_data: BlockData) -> anyhow::Resu
 
             for (hash, details) in transactions.into_iter() {
                 db.prepared
-                    .insert_transaction(&db_tx, block_id, hash, details)
+                    .insert_transaction(
+                        &db_tx,
+                        block_id,
+                        block_details.block_time.timestamp(),
+                        hash,
+                        details,
+                    )
                     .await?;
             }
         }

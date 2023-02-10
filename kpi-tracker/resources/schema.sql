@@ -1,3 +1,18 @@
+-- Floors a (bigint) timestamp in seconds into date in seconds, e.g. 15/02/2022:14:00:00 -> 15/02/2022:00:00:00
+CREATE OR REPLACE FUNCTION date_seconds(t bigint)
+  RETURNS bigint
+  LANGUAGE plpgsql
+AS $$
+DECLARE
+  date bigint;
+BEGIN
+  SELECT floor((t)/86400)*86400::bigint
+  INTO date;
+
+  RETURN date;
+END;
+$$;
+
 -- All blocks. Mostly act as a time reference for other entities.
 CREATE TABLE IF NOT EXISTS blocks (
   id SERIAL8 PRIMARY KEY,
