@@ -787,10 +787,9 @@ async fn process_block(
     Ok(block_data)
 }
 
-/// Queries the node available at `node_endpoint` from height received from DB
-/// process until stopped. Sends the data structured by block to
-/// DB process through `block_sender`. Process runs until stopped or an error
-/// happens internally.
+/// Queries the node available at `node_endpoint` from `latest_height` until
+/// stopped. Sends the data structured by block to DB process through
+/// `block_sender`. Process runs until stopped or an error happens internally.
 async fn node_process(
     node_endpoint: Endpoint,
     latest_height: &mut AbsoluteBlockHeight,
@@ -1075,9 +1074,24 @@ async fn main() -> anyhow::Result<()> {
         .await
         .context("Did not receive height of most recent block recorded in database")?;
 
-    for node in args.node_endpoints.into_iter().cycle() {
+    let mut latest_successful_node: u64 = 0;
+    let num_nodes = args.node_endpoints.len() as u64;
+    for (node, i) in args.node_endpoints.into_iter().cycle().zip(0u64..) {
+        let start_height = latest_height;
         if stop_flag.load(Ordering::Acquire) {
             break;
+        }
+
+        if i.saturating_sub(latest_successful_node) >= num_nodes {
+            // we skipped all the nodes without success.
+            let delay = std::time::Duration::from_secs(5);
+            log::error!(
+                "Connections to all nodes have failed. Pausing for {}s before trying node {} \
+                 again.",
+                delay.as_secs(),
+                node.uri()
+            );
+            tokio::time::sleep(delay).await;
         }
 
         // The process keeps running until stopped manually, or an error happens.
@@ -1092,12 +1106,16 @@ async fn main() -> anyhow::Result<()> {
         .await;
 
         if let Err(e) = node_result {
-            log::error!("Endpoint {} failed. Trying next. Error {}", node.uri(), e);
+            log::warn!("Endpoint {} failed. Trying next. Error {}", node.uri(), e);
         } else {
             // `node_process` terminated with `Ok`, meaning we should stop the service
             // entirely.
             log::info!("Stopping service.");
             break;
+        }
+
+        if latest_height > start_height {
+            latest_successful_node = i;
         }
     }
 
