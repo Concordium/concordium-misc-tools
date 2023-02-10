@@ -16,7 +16,13 @@ use concordium_rust_sdk::{
 };
 use core::fmt;
 use futures::{self, future, Stream, StreamExt, TryStreamExt};
-use std::time::Duration;
+use std::{
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
 use tokio_postgres::{types::ToSql, NoTls};
 
 /// Command line configuration of the application.
@@ -39,10 +45,10 @@ struct Args {
                 application.",
         env = "KPI-TRACKER-DB-CONNECTION"
     )]
-    db_connection: tokio_postgres::config::Config,
+    db_connection:  tokio_postgres::config::Config,
     /// Logging level of the application
     #[arg(long = "log-level", default_value_t = log::LevelFilter::Debug, env = "KPI-TRACKER-LOG-LEVEL")]
-    log_level: log::LevelFilter,
+    log_level:      log::LevelFilter,
     /// Number of parallel queries to run against node
     #[arg(
         long = "num-parallel",
@@ -51,7 +57,7 @@ struct Args {
                 something different than 1 when catching up.",
         env = "KPI-TRACKER-NUM-PARALLEL"
     )]
-    num_parallel: u8,
+    num_parallel:   u8,
     /// Max amount of seconds a response from a node can fall behind before
     /// trying another.
     #[arg(
@@ -59,7 +65,7 @@ struct Args {
         default_value_t = 240,
         env = "KPI-TRACKER-MAX-BEHIND-SECONDS"
     )]
-    max_behind_s: u8,
+    max_behind_s:   u8,
 }
 
 /// Used to canonicalize account addresses to ensure no aliases are stored (as
@@ -77,9 +83,7 @@ impl From<AccountAddress> for CanonicalAccountAddress {
     }
 }
 impl fmt::Display for CanonicalAccountAddress {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        AccountAddress(self.0).fmt(f)
-    }
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { AccountAddress(self.0).fmt(f) }
 }
 
 /// Information about individual blocks. Useful for linking entities to a block
@@ -89,10 +93,10 @@ struct BlockDetails {
     /// Finalization time of the block. Used to show how metrics evolve over
     /// time by linking entities, such as accounts and transactions, to
     /// the block in which they are created.
-    block_time: DateTime<Utc>,
+    block_time:  DateTime<Utc>,
     /// Height of block from genesis. Used to restart the process of collecting
     /// metrics from the latest block recorded.
-    height: AbsoluteBlockHeight,
+    height:      AbsoluteBlockHeight,
     /// Total amount staked across all pools inclusive passive delegation. This
     /// is only recorded for "payday" blocks reflected by `Some`, where non
     /// payday blocks are reflected by `None`.
@@ -111,13 +115,13 @@ struct AccountDetails {
 struct TransactionDetails {
     /// The transaction type of the account transaction. Can be none if
     /// transaction was rejected due to serialization failure.
-    transaction_type: Option<TransactionType>,
+    transaction_type:   Option<TransactionType>,
     /// The cost of the transaction.
-    cost: Amount,
+    cost:               Amount,
     /// Whether the transaction failed or not.
-    is_success: bool,
+    is_success:         bool,
     /// Accounts affected by the transactions.
-    affected_accounts: Vec<CanonicalAccountAddress>,
+    affected_accounts:  Vec<CanonicalAccountAddress>,
     /// Contracts affected by the transactions.
     affected_contracts: Vec<ContractAddress>,
 }
@@ -143,26 +147,26 @@ type ContractInstances = Vec<(ContractAddress, ContractInstanceDetails)>;
 #[derive(Debug)]
 struct ChainGenesisBlockData {
     /// Block hash of the genesis block
-    block_hash: BlockHash,
+    block_hash:    BlockHash,
     /// Block details of the genesis block
     block_details: BlockDetails,
     /// Accounts included in the genesis block
-    accounts: Accounts,
+    accounts:      Accounts,
 }
 
 /// Model for data collected for normal blocks
 #[derive(Debug)]
 struct NormalBlockData {
     /// Block hash of the block
-    block_hash: BlockHash,
+    block_hash:         BlockHash,
     /// Block details of the block
-    block_details: BlockDetails,
+    block_details:      BlockDetails,
     /// Accounts created in the block
-    accounts: Accounts,
+    accounts:           Accounts,
     /// Transactions included in the block
-    transactions: AccountTransactions,
+    transactions:       AccountTransactions,
     /// Smart contract module deployments included in the block
-    contract_modules: ContractModules,
+    contract_modules:   ContractModules,
     /// Smart contract instantiations included in the block
     contract_instances: ContractInstances,
 }
@@ -445,7 +449,7 @@ impl PreparedStatements {
 /// Holds [`tokio_postgres::Client`] to query the database and
 /// [`PreparedStatements`] which can be executed with the client.
 struct DBConn {
-    client: tokio_postgres::Client,
+    client:   tokio_postgres::Client,
     prepared: PreparedStatements,
 }
 
@@ -660,8 +664,8 @@ async fn process_chain_genesis_block(
         .response;
 
     let block_details = BlockDetails {
-        block_time: block_info.block_slot_time,
-        height: block_info.block_height,
+        block_time:  block_info.block_slot_time,
+        height:      block_info.block_height,
         total_stake: None,
     };
 
@@ -787,6 +791,7 @@ async fn node_process(
     block_sender: &tokio::sync::mpsc::Sender<BlockData>,
     num_parallel: u8,
     max_behind_s: u8,
+    stop_flag: &AtomicBool,
 ) -> anyhow::Result<()> {
     log::info!(
         "Processing blocks from height {} using node {}",
@@ -816,8 +821,7 @@ async fn node_process(
 
     let timeout = Duration::from_secs(max_behind_s.into());
 
-    // TODO: stop gracefully from stop signal
-    loop {
+    while !stop_flag.load(Ordering::Acquire) {
         let (has_error, chunks) = blocks_stream
             .next_chunk_timeout(num_parallel.into(), timeout)
             .await
@@ -834,6 +838,8 @@ async fn node_process(
             return Err(anyhow!("Finalized block stream dropped"));
         }
     }
+
+    Ok(())
 }
 
 /// Inserts the `block_data` collected for a single block into the database
@@ -927,6 +933,7 @@ async fn run_db_process(
     db_connection: tokio_postgres::config::Config,
     mut block_receiver: tokio::sync::mpsc::Receiver<BlockData>,
     height_sender: tokio::sync::oneshot::Sender<AbsoluteBlockHeight>,
+    stop_flag: Arc<AtomicBool>,
 ) -> anyhow::Result<()> {
     let mut db = DBConn::create(db_connection, true).await?;
     let latest_height = db
@@ -942,8 +949,7 @@ async fn run_db_process(
 
     let mut retry_block_data = None;
 
-    // TODO: stop gracefully from stop signal.
-    loop {
+    while !stop_flag.load(Ordering::Acquire) {
         let next_block_data = if retry_block_data.is_some() {
             retry_block_data
         } else {
@@ -974,6 +980,32 @@ async fn run_db_process(
 
     Ok(())
 }
+/// Construct a future for shutdown signals (for unix: SIGINT and SIGTERM) (for
+/// windows: ctrl c and ctrl break). The signal handler is set when the future
+/// is polled and until then the default signal handler.
+async fn set_shutdown(flag: Arc<AtomicBool>) -> anyhow::Result<()> {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix as unix_signal;
+        let mut terminate_stream = unix_signal::signal(unix_signal::SignalKind::terminate())?;
+        let mut interrupt_stream = unix_signal::signal(unix_signal::SignalKind::interrupt())?;
+        let terminate = Box::pin(terminate_stream.recv());
+        let interrupt = Box::pin(interrupt_stream.recv());
+        futures::future::select(terminate, interrupt).await;
+        flag.store(true, Ordering::Release);
+    }
+    #[cfg(windows)]
+    {
+        use tokio::signal::windows as windows_signal;
+        let mut ctrl_break_stream = windows_signal::ctrl_break()?;
+        let mut ctrl_c_stream = windows_signal::ctrl_c()?;
+        let ctrl_break = Box::pin(ctrl_break_stream.recv());
+        let ctrl_c = Box::pin(ctrl_c_stream.recv());
+        futures::future::select(ctrl_break, ctrl_c).await;
+        flag.store(true, Ordering::Release);
+    }
+    Ok(())
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -991,18 +1023,29 @@ async fn main() -> anyhow::Result<()> {
     // Create a channel between the task querying the node and the task logging
     // transactions.
     let (block_sender, block_receiver) = tokio::sync::mpsc::channel(100);
+    let stop_flag = Arc::new(AtomicBool::new(false));
+    let shutdown_handle = tokio::spawn(set_shutdown(stop_flag.clone()));
 
-    let db_handle = tokio::spawn(async {
-        if let Err(e) = run_db_process(args.db_connection, block_receiver, height_sender).await {
-            log::error!("Error happened while running DB process: {}", e);
-        }
-    });
+    let db_handle = {
+        let stop_flag = stop_flag.clone();
+        tokio::spawn(async move {
+            if let Err(e) =
+                run_db_process(args.db_connection, block_receiver, height_sender, stop_flag).await
+            {
+                log::error!("Error happened while running DB process: {}", e);
+            }
+        })
+    };
 
     let mut latest_height = height_receiver
         .await
         .context("Did not receive height of most recent block recorded in database")?;
 
     for node in args.node_endpoints.into_iter().cycle() {
+        if stop_flag.load(Ordering::Acquire) {
+            break;
+        }
+
         // The process keeps running until stopped manually, or an error happens.
         let node_result = node_process(
             node.clone(),
@@ -1010,6 +1053,7 @@ async fn main() -> anyhow::Result<()> {
             &block_sender,
             args.num_parallel,
             args.max_behind_s,
+            stop_flag.as_ref(),
         )
         .await;
 
@@ -1024,5 +1068,6 @@ async fn main() -> anyhow::Result<()> {
     }
 
     db_handle.abort();
+    shutdown_handle.abort();
     Ok(())
 }
