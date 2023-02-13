@@ -834,28 +834,29 @@ async fn process_block(
 /// `block_sender`. Process runs until stopped or an error happens internally.
 async fn node_process(
     node_endpoint: Endpoint,
-    latest_height: &mut AbsoluteBlockHeight,
+    latest_height: &mut Option<AbsoluteBlockHeight>,
     block_sender: &tokio::sync::mpsc::Sender<BlockData>,
     num_parallel: u8,
     max_behind_s: u8,
     stop_flag: &AtomicBool,
 ) -> anyhow::Result<()> {
+    let from_height = latest_height.map_or(0.into(), |h| h.next());
+
     log::info!(
         "Processing blocks from height {} using node {}",
-        latest_height,
+        from_height,
         node_endpoint.uri()
     );
 
     let mut node = Client::new(node_endpoint.clone())
         .await
         .context("Could not connect to node.")?;
-
     let mut blocks_stream = node
-        .get_finalized_blocks_from(*latest_height)
+        .get_finalized_blocks_from(from_height)
         .await
         .context("Error querying blocks")?;
 
-    if latest_height.height == 0 {
+    if from_height.height == 0 {
         if let Some(genesis_block) = blocks_stream.next().await {
             let genesis_block_data =
                 process_chain_genesis_block(&mut node, genesis_block.block_hash).await?;
@@ -878,7 +879,7 @@ async fn node_process(
             let block_data = process_block(&mut node, block.block_hash).await?;
             block_sender.send(BlockData::Normal(block_data)).await?;
 
-            *latest_height = block.height;
+            *latest_height = Some(block.height);
         }
 
         if has_error {
@@ -985,7 +986,7 @@ async fn db_insert_block<'a>(
 async fn run_db_process(
     db_connection: tokio_postgres::config::Config,
     mut block_receiver: tokio::sync::mpsc::Receiver<BlockData>,
-    height_sender: tokio::sync::oneshot::Sender<AbsoluteBlockHeight>,
+    height_sender: tokio::sync::oneshot::Sender<Option<AbsoluteBlockHeight>>,
     stop_flag: Arc<AtomicBool>,
 ) -> anyhow::Result<()> {
     let mut db = DBConn::create(db_connection.clone(), true).await?;
@@ -994,7 +995,7 @@ async fn run_db_process(
         .get_latest_height(&db.client)
         .await
         .context("Could not get best height from database")?
-        .map_or(0.into(), |h| h.next());
+        .or(Some(0.into()));
 
     height_sender
         .send(latest_height)
@@ -1126,7 +1127,7 @@ async fn main() -> anyhow::Result<()> {
     let num_nodes = args.node_endpoints.len() as u64;
     for (node, i) in args.node_endpoints.into_iter().cycle().zip(0u64..) {
         let start_height = latest_height;
-        if stop_flag.load(Ordering::Acquire) {
+        if stop_flag.load(Ordering::Acquire) || block_sender.is_closed() {
             break;
         }
 
@@ -1154,11 +1155,15 @@ async fn main() -> anyhow::Result<()> {
         .await;
 
         if let Err(e) = node_result {
-            log::warn!("Endpoint {} failed. Trying next. Error {}", node.uri(), e);
+            log::warn!(
+                "Endpoint {} failed with error {}. Trying next.",
+                node.uri(),
+                e
+            );
         } else {
             // `node_process` terminated with `Ok`, meaning we should stop the service
             // entirely.
-            log::info!("Stopping service.");
+            log::info!("Service stopped gracefully from exit signal.");
             break;
         }
 
