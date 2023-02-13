@@ -8,7 +8,7 @@ We use Grafana to visualize the data collected by the service. The configuration
 
 ### Installation and running
 
-Follow the steps to [install grafana](https://grafana.com/docs/grafana/latest/setup-grafana/installation/) for your OS, which should also the steps required to run the installed service.
+Follow the steps to [install grafana](https://grafana.com/docs/grafana/latest/setup-grafana/installation/) for your OS, which should also go through the steps required to run the installed service.
 
 ### Configuration
 

@@ -166,7 +166,7 @@
         "type": "postgres",
         "uid": "${postgres_db}"
       },
-      "description": "This will be slow, as for every date we try to look up all transactions for the past 30 days",
+      "description": "",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -301,7 +301,7 @@
         "type": "postgres",
         "uid": "${postgres_db}"
       },
-      "description": "This will be slow, as for every date we try to look up all transactions for the past 30 days",
+      "description": "",
       "fieldConfig": {
         "defaults": {
           "color": {
