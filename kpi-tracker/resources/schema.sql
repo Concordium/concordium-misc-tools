@@ -1,3 +1,18 @@
+-- Floors a (bigint) timestamp in seconds into 24h slots in seconds, e.g. 15/02/2022:14:00:00 -> 15/02/2022:00:00:00. This grouping matches how Grafana groups seconds into days.
+CREATE OR REPLACE FUNCTION date_seconds(t bigint)
+  RETURNS bigint
+  LANGUAGE plpgsql
+AS $$
+DECLARE
+  date bigint;
+BEGIN
+  SELECT floor((t)/86400)*86400::bigint
+  INTO date;
+
+  RETURN date;
+END;
+$$;
+
 -- All blocks. Mostly act as a time reference for other entities.
 CREATE TABLE IF NOT EXISTS blocks (
   id SERIAL8 PRIMARY KEY,
@@ -63,3 +78,21 @@ CREATE TABLE IF NOT EXISTS contracts_transactions (
 );
 -- Create index on contract-transaction relations references to transactions to improve performance when querying contracts related to specific transactions.
 CREATE INDEX IF NOT EXISTS ct_transaction ON contracts_transactions (transaction);
+
+-- Create table keeping track of accounts and the dates they have been part of a transations.
+CREATE TABLE IF NOT EXISTS account_activeness (
+  account INT8 NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT ON UPDATE RESTRICT, -- dependant on inserts into `accounts_transactions`.
+  time INT8 NOT NULL, -- Date represented in seconds, rounded value of the `timestamp` column on `blocks` corresponding to the block the transaction was a part of.
+  UNIQUE (account, time)
+);
+-- To support binary search instead of sequential scan of active accounts.
+CREATE INDEX IF NOT EXISTS account_activeness_time ON account_activeness (time);
+
+-- Create table keeping track of contracts and the dates they have been part of a transations.
+CREATE TABLE IF NOT EXISTS contract_activeness (
+  contract INT8 NOT NULL REFERENCES contracts(id) ON DELETE RESTRICT ON UPDATE RESTRICT, -- dependant on inserts into `contracts_transactions`.
+  time INT8 NOT NULL, -- Date represented in seconds, rounded value of the `timestamp` column on `blocks` corresponding to the block the transaction was a part of.
+  UNIQUE (contract, time)
+);
+-- To support binary search instead of sequential scan of active contracts.
+CREATE INDEX IF NOT EXISTS contract_activeness_time ON contract_activeness (time);

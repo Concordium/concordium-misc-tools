@@ -25,3 +25,5 @@ yarn-error.log*
 target
 dist
 .eslintcache
+
+!kpi-tracker/grafana/dashboard.json
