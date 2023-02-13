@@ -915,7 +915,7 @@ async fn db_insert_block<'a>(
             .insert_block(tx_ref, block_hash, block_details)
             .await?;
 
-        for (address, details) in accounts.into_iter() {
+        for (address, details) in accounts.iter() {
             prepared_ref
                 .insert_account(tx_ref, block_id, *address, details)
                 .await?;
@@ -946,19 +946,19 @@ async fn db_insert_block<'a>(
             height = block_details.height;
             let block_id = insert_common(*block_hash, block_details, accounts).await?;
 
-            for module_ref in contract_modules.into_iter() {
+            for module_ref in contract_modules.iter() {
                 db.prepared
                     .insert_contract_module(&db_tx, block_id, *module_ref)
                     .await?;
             }
 
-            for (address, details) in contract_instances.into_iter() {
+            for (address, details) in contract_instances.iter() {
                 db.prepared
                     .insert_contract_instance(&db_tx, block_id, *address, details)
                     .await?;
             }
 
-            for (hash, details) in transactions.into_iter() {
+            for (hash, details) in transactions.iter() {
                 db.prepared
                     .insert_transaction(
                         &db_tx,
@@ -995,7 +995,7 @@ async fn run_db_process(
         .get_latest_height(&db.client)
         .await
         .context("Could not get best height from database")?
-        .or(Some(0.into()));
+        .or_else(|| Some(0.into()));
 
     height_sender
         .send(latest_height)
