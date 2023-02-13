@@ -1,4 +1,4 @@
--- Floors a (bigint) timestamp in seconds into date in seconds, e.g. 15/02/2022:14:00:00 -> 15/02/2022:00:00:00
+-- Floors a (bigint) timestamp in seconds into 24h slots in seconds, e.g. 15/02/2022:14:00:00 -> 15/02/2022:00:00:00. This grouping matches how Grafana groups seconds into days.
 CREATE OR REPLACE FUNCTION date_seconds(t bigint)
   RETURNS bigint
   LANGUAGE plpgsql
