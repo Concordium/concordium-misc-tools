@@ -37,7 +37,7 @@ struct Args {
         long = "node",
         help = "The endpoints are expected to point to concordium node grpc v2 API's.",
         default_value = "http://localhost:20001",
-        env = "KPI-TRACKER-NODES"
+        env = "KPI_TRACKER_NODES"
     )]
     node_endpoints: Vec<Endpoint>,
     /// Database connection string.
@@ -47,11 +47,11 @@ struct Args {
                          port=5432",
         help = "A connection string detailing the connection to the database used by the \
                 application.",
-        env = "KPI-TRACKER-DB-CONNECTION"
+        env = "KPI_TRACKER_DB_CONNECTION"
     )]
     db_connection:  tokio_postgres::config::Config,
     /// Logging level of the application
-    #[arg(long = "log-level", default_value_t = log::LevelFilter::Debug, env = "KPI-TRACKER-LOG-LEVEL")]
+    #[arg(long = "log-level", default_value_t = log::LevelFilter::Debug, env = "KPI_TRACKER_LOG_LEVEL")]
     log_level:      log::LevelFilter,
     /// Number of parallel queries to run against node
     #[arg(
@@ -59,7 +59,7 @@ struct Args {
         default_value_t = 1,
         help = "The number of parallel queries to run against a node. Only relevant to set to \
                 something different than 1 when catching up.",
-        env = "KPI-TRACKER-NUM-PARALLEL"
+        env = "KPI_TRACKER_NUM_PARALLEL"
     )]
     num_parallel:   u8,
     /// Max amount of seconds a response from a node can fall behind before
@@ -67,7 +67,7 @@ struct Args {
     #[arg(
         long = "max-behind-seconds",
         default_value_t = 240,
-        env = "KPI-TRACKER-MAX-BEHIND-SECONDS"
+        env = "KPI_TRACKER_MAX_BEHIND_SECONDS"
     )]
     max_behind_s:   u8,
 }
