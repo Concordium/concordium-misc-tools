@@ -69,7 +69,7 @@ struct Args {
         default_value_t = 240,
         env = "KPI_TRACKER_MAX_BEHIND_SECONDS"
     )]
-    max_behind_s:   u8,
+    max_behind_s:   u32,
 }
 
 /// Used to canonicalize account addresses to ensure no aliases are stored (as
@@ -837,7 +837,7 @@ async fn node_process(
     latest_height: &mut Option<AbsoluteBlockHeight>,
     block_sender: &tokio::sync::mpsc::Sender<BlockData>,
     num_parallel: u8,
-    max_behind_s: u8,
+    max_behind_s: u32,
     stop_flag: &AtomicBool,
 ) -> anyhow::Result<()> {
     let from_height = latest_height.map_or(0.into(), |h| h.next());
@@ -924,16 +924,14 @@ async fn db_insert_block<'a>(
         Ok::<_, tokio_postgres::Error>(block_id)
     };
 
-    let height: AbsoluteBlockHeight;
-
-    match block_data {
+    let height = match block_data {
         BlockData::ChainGenesis(ChainGenesisBlockData {
             block_hash,
             block_details,
             accounts,
         }) => {
-            height = block_details.height;
             insert_common(*block_hash, block_details, accounts).await?;
+            block_details.height
         }
         BlockData::Normal(NormalBlockData {
             block_hash,
@@ -943,7 +941,6 @@ async fn db_insert_block<'a>(
             contract_modules,
             contract_instances,
         }) => {
-            height = block_details.height;
             let block_id = insert_common(*block_hash, block_details, accounts).await?;
 
             for module_ref in contract_modules.iter() {
@@ -969,6 +966,8 @@ async fn db_insert_block<'a>(
                     )
                     .await?;
             }
+
+            block_details.height
         }
     };
 
