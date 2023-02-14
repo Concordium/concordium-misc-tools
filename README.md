@@ -17,6 +17,7 @@ The tools are
   API) of two blocks, either by the same node, or different nodes.
 - [genesis-creator](./genesis-creator) A tool to create genesis files to start
   custom chains.
+- [kpi-tracker](./kpi-tracker) A service that collects metrics from a concordium blockchain and stores them in a database. The data collected is intended for visualization in Grafana.
 
 # Contributing
 
