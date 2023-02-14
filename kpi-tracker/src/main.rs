@@ -893,7 +893,8 @@ async fn node_process(
 /// Inserts the `block_data` collected for a single block into the database
 /// defined by `db`. Everything is commited as a single transactions allowing
 /// for easy restoration from the last recorded block (by height) inserted into
-/// the database.
+/// the database. Returns the height of the processed block along with the
+/// duration it took to process.
 async fn db_insert_block<'a>(
     db: &mut DBConn,
     block_data: &'a BlockData,
@@ -993,8 +994,7 @@ async fn run_db_process(
         .prepared
         .get_latest_height(&db.client)
         .await
-        .context("Could not get best height from database")?
-        .or_else(|| Some(0.into()));
+        .context("Could not get best height from database")?;
 
     height_sender
         .send(latest_height)
@@ -1126,6 +1126,10 @@ async fn main() -> anyhow::Result<()> {
     let num_nodes = args.node_endpoints.len() as u64;
     for (node, i) in args.node_endpoints.into_iter().cycle().zip(0u64..) {
         let start_height = latest_height;
+        // Keep going until either
+        // 1. stop flag is set, or
+        // 2. channel for sending blocks to DB process is closed. This happens if DB
+        // connection was lost and could not be re-established.
         if stop_flag.load(Ordering::Acquire) || block_sender.is_closed() {
             break;
         }
