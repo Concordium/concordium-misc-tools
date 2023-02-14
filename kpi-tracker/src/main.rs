@@ -37,7 +37,7 @@ struct Args {
         long = "node",
         help = "The endpoints are expected to point to concordium node grpc v2 API's.",
         default_value = "http://localhost:20001",
-        env = "KPI-TRACKER-NODES"
+        env = "KPI_TRACKER_NODES"
     )]
     node_endpoints: Vec<Endpoint>,
     /// Database connection string.
@@ -47,11 +47,11 @@ struct Args {
                          port=5432",
         help = "A connection string detailing the connection to the database used by the \
                 application.",
-        env = "KPI-TRACKER-DB-CONNECTION"
+        env = "KPI_TRACKER_DB_CONNECTION"
     )]
     db_connection:  tokio_postgres::config::Config,
     /// Logging level of the application
-    #[arg(long = "log-level", default_value_t = log::LevelFilter::Debug, env = "KPI-TRACKER-LOG-LEVEL")]
+    #[arg(long = "log-level", default_value_t = log::LevelFilter::Debug, env = "KPI_TRACKER_LOG_LEVEL")]
     log_level:      log::LevelFilter,
     /// Number of parallel queries to run against node
     #[arg(
@@ -59,7 +59,7 @@ struct Args {
         default_value_t = 1,
         help = "The number of parallel queries to run against a node. Only relevant to set to \
                 something different than 1 when catching up.",
-        env = "KPI-TRACKER-NUM-PARALLEL"
+        env = "KPI_TRACKER_NUM_PARALLEL"
     )]
     num_parallel:   u8,
     /// Max amount of seconds a response from a node can fall behind before
@@ -67,7 +67,7 @@ struct Args {
     #[arg(
         long = "max-behind-seconds",
         default_value_t = 240,
-        env = "KPI-TRACKER-MAX-BEHIND-SECONDS"
+        env = "KPI_TRACKER_MAX_BEHIND_SECONDS"
     )]
     max_behind_s:   u8,
 }
@@ -915,7 +915,7 @@ async fn db_insert_block<'a>(
             .insert_block(tx_ref, block_hash, block_details)
             .await?;
 
-        for (address, details) in accounts.into_iter() {
+        for (address, details) in accounts.iter() {
             prepared_ref
                 .insert_account(tx_ref, block_id, *address, details)
                 .await?;
@@ -946,19 +946,19 @@ async fn db_insert_block<'a>(
             height = block_details.height;
             let block_id = insert_common(*block_hash, block_details, accounts).await?;
 
-            for module_ref in contract_modules.into_iter() {
+            for module_ref in contract_modules.iter() {
                 db.prepared
                     .insert_contract_module(&db_tx, block_id, *module_ref)
                     .await?;
             }
 
-            for (address, details) in contract_instances.into_iter() {
+            for (address, details) in contract_instances.iter() {
                 db.prepared
                     .insert_contract_instance(&db_tx, block_id, *address, details)
                     .await?;
             }
 
-            for (hash, details) in transactions.into_iter() {
+            for (hash, details) in transactions.iter() {
                 db.prepared
                     .insert_transaction(
                         &db_tx,
@@ -995,7 +995,7 @@ async fn run_db_process(
         .get_latest_height(&db.client)
         .await
         .context("Could not get best height from database")?
-        .or(Some(0.into()));
+        .or_else(|| Some(0.into()));
 
     height_sender
         .send(latest_height)
