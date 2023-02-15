@@ -2,7 +2,7 @@
 pipeline {
     agent any
     environment {
-        image_repo = "concordium/concordium-misc-tools"
+        image_repo = "concordium/kpi-tracker"
         image_name = "${image_repo}:${image_tag}"
     }
     stages {
@@ -26,7 +26,7 @@ pipeline {
                       --label=base_image="${base_image}" \
                       --tag="${image_name}" \
                       --pull \
-                      --file ./kpi-tracker/Dockerfile \
+                      --file ./kpi-tracker/scripts/Dockerfile \
                       .
                 '''.stripIndent()
             }
