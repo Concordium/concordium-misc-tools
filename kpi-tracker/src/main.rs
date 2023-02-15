@@ -877,7 +877,14 @@ async fn node_process(
 
         for block in chunks {
             let block_data = process_block(&mut node, block.block_hash).await?;
-            block_sender.send(BlockData::Normal(block_data)).await?;
+            if block_sender
+                .send(BlockData::Normal(block_data))
+                .await
+                .is_err()
+            {
+                log::error!("The database connection has been closed. Terminating node queries.");
+                return Ok(());
+            }
 
             *latest_height = Some(block.height);
         }
@@ -887,6 +894,7 @@ async fn node_process(
         }
     }
 
+    log::info!("Service stopped gracefully from exit signal.");
     Ok(())
 }
 
@@ -1058,6 +1066,9 @@ async fn run_db_process(
         }
     }
 
+    block_receiver.close();
+    db.connection_handle.abort();
+
     Ok(())
 }
 /// Construct a future for shutdown signals (for unix: SIGINT and SIGTERM) (for
@@ -1107,16 +1118,12 @@ async fn main() -> anyhow::Result<()> {
     let stop_flag = Arc::new(AtomicBool::new(false));
     let shutdown_handle = tokio::spawn(set_shutdown(stop_flag.clone()));
 
-    let db_handle = {
-        let stop_flag = stop_flag.clone();
-        tokio::spawn(async move {
-            if let Err(e) =
-                run_db_process(args.db_connection, block_receiver, height_sender, stop_flag).await
-            {
-                log::error!("Error happened while running DB process: {}", e);
-            }
-        })
-    };
+    let db_handle = tokio::spawn(run_db_process(
+        args.db_connection,
+        block_receiver,
+        height_sender,
+        stop_flag.clone(),
+    ));
 
     let mut latest_height = height_receiver
         .await
@@ -1126,11 +1133,8 @@ async fn main() -> anyhow::Result<()> {
     let num_nodes = args.node_endpoints.len() as u64;
     for (node, i) in args.node_endpoints.into_iter().cycle().zip(0u64..) {
         let start_height = latest_height;
-        // Keep going until either
-        // 1. stop flag is set, or
-        // 2. channel for sending blocks to DB process is closed. This happens if DB
-        // connection was lost and could not be re-established.
-        if stop_flag.load(Ordering::Acquire) || block_sender.is_closed() {
+
+        if stop_flag.load(Ordering::Acquire) {
             break;
         }
 
@@ -1166,7 +1170,6 @@ async fn main() -> anyhow::Result<()> {
         } else {
             // `node_process` terminated with `Ok`, meaning we should stop the service
             // entirely.
-            log::info!("Service stopped gracefully from exit signal.");
             break;
         }
 
