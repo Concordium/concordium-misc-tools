@@ -1,0 +1,5 @@
+../*
+!../deps/concordium-rust-sdk
+!./kpi-tracker
+./kpi-tracker/target
+./kpi-tracker/grafana

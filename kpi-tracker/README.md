@@ -46,3 +46,13 @@ Follow the steps to [install Grafana](https://grafana.com/docs/grafana/latest/se
 - Set up a PostgreSQL data source pointing to your local database, by following [the instructions](https://grafana.com/docs/grafana/latest/datasources/postgres/).
   - It is recommended to set up a user with read-only access to the tables in the database, however for running locally it will be easier just to use the same user/password combination used for the service database connection
 - In the Grafana interface under "Dashboards", click "+ Import", and import `grafana/dashboard.json`.
+
+## Docker build
+
+A [Dockerfile](./Dockerfile) is available that produces a self-contained image with the service installed and set as the entrypoint.
+
+This docker image can be built using
+```
+docker buildx build --build-arg build_image=rust:1.62-buster --build-arg base_image=debian:buster -f ./Dockerfile ../
+```
+which produces a debian-buster based image.
