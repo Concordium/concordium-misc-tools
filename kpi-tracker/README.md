@@ -33,6 +33,36 @@ The service can be configured with a number of runtime arguments:
 
 The default configuration is meant for use in a development environment.
 
+## Database
+
+The database schema can be seen in [resources/schema.sql](./resources/schema.sql).
+
+### Structure
+
+The database is structured in a way that facilitates time-series output for all data collected, by always linking to blocks. The specific entities stored are:
+
+- Blocks in `blocks`
+- Accounts in `accounts`
+- Contract modules in `modules`
+- Contract instances in `contracts`
+- Account transactions in `transactions`
+
+Indices are created where needed to improve performance on certain queries. As everything is linked to blocks mainly to join rows with a timestamp, the most critical of these is the index on `blocks.timestamp`.
+
+Furthermore, to store relations between account/contracts and transactions there are two relations tables
+
+- Relations between accounts and transactions in `accounts_transactions`
+- Relations between contract instances and transactions in `contracts_transactions`
+
+#### Entity activeness
+
+To support querying accounts and contract instances which have been active, two additional tables have been created. These store derived data (like a materialized view), and only exist to support querying this with reasonable performance.
+
+- Account activeness in `account_activeness`
+- Contract instance activeness in `contract_activeness`
+
+These record dates (in timestamps) accounts/contracts have been part of a transaction. The relation between the tables recording the basic entities (accounts, contract instances, transactions, and blocks) and the tables storing the derived data is described in [resources/populate-activeness.sql](./resources/populate-activeness.sql).
+
 ## Grafana
 
 We use Grafana to visualize the data collected by the service. The configuration of the dashboard can be found under [grafana/dashboard.json](./grafana/dashboard.json).
