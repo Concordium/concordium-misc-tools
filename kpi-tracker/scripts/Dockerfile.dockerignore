@@ -1,4 +1,4 @@
-# Assumes docker context is repository root, i.e. ../ relative to this file.
+# Assumes docker context is repository root, i.e. ../../ relative to this file.
 *
 !deps/concordium-rust-sdk
 deps/concordium-rust-sdk/target
