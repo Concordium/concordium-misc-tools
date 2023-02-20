@@ -37,7 +37,8 @@ struct Args {
         long = "node",
         help = "The endpoints are expected to point to concordium node grpc v2 API's.",
         default_value = "http://localhost:20001",
-        env = "KPI_TRACKER_NODES"
+        env = "KPI_TRACKER_NODES",
+        value_delimiter = ','
     )]
     node_endpoints: Vec<Endpoint>,
     /// Database connection string.
