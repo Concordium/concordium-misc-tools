@@ -16,6 +16,14 @@ use concordium_rust_sdk::{
 };
 use core::fmt;
 use futures::{self, future, Stream, StreamExt, TryStreamExt};
+use std::{
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
+use tokio::task::JoinHandle;
 use tokio_postgres::{
     types::{ToSql, Type},
     NoTls,
@@ -27,22 +35,41 @@ struct Args {
     /// The node used for querying
     #[arg(
         long = "node",
-        help = "The endpoint is expected to point to a concordium node grpc v2 API.",
-        default_value = "http://localhost:20001"
+        help = "The endpoints are expected to point to concordium node grpc v2 API's.",
+        default_value = "http://localhost:20001",
+        env = "KPI_TRACKER_NODES"
     )]
-    node:          Endpoint,
+    node_endpoints: Vec<Endpoint>,
     /// Database connection string.
     #[arg(
         long = "db-connection",
         default_value = "host=localhost dbname=kpi-tracker user=postgres password=password \
                          port=5432",
         help = "A connection string detailing the connection to the database used by the \
-                application."
+                application.",
+        env = "KPI_TRACKER_DB_CONNECTION"
     )]
-    db_connection: tokio_postgres::config::Config,
+    db_connection:  tokio_postgres::config::Config,
     /// Logging level of the application
-    #[arg(long = "log-level", default_value_t = log::LevelFilter::Debug)]
-    log_level:     log::LevelFilter,
+    #[arg(long = "log-level", default_value_t = log::LevelFilter::Debug, env = "KPI_TRACKER_LOG_LEVEL")]
+    log_level:      log::LevelFilter,
+    /// Number of parallel queries to run against node
+    #[arg(
+        long = "num-parallel",
+        default_value_t = 1,
+        help = "The number of parallel queries to run against a node. Only relevant to set to \
+                something different than 1 when catching up.",
+        env = "KPI_TRACKER_NUM_PARALLEL"
+    )]
+    num_parallel:   u8,
+    /// Max amount of seconds a response from a node can fall behind before
+    /// trying another.
+    #[arg(
+        long = "max-behind-seconds",
+        default_value_t = 240,
+        env = "KPI_TRACKER_MAX_BEHIND_SECONDS"
+    )]
+    max_behind_s:   u32,
 }
 
 /// Used to canonicalize account addresses to ensure no aliases are stored (as
@@ -267,7 +294,7 @@ impl PreparedStatements {
         &'a self,
         db_tx: &tokio_postgres::Transaction<'b>,
         block_hash: BlockHash,
-        block_details: BlockDetails,
+        block_details: &BlockDetails,
     ) -> Result<i64, tokio_postgres::Error> {
         let total_stake = block_details
             .total_stake
@@ -291,7 +318,7 @@ impl PreparedStatements {
         db_tx: &tokio_postgres::Transaction<'b>,
         block_id: i64,
         account_address: CanonicalAccountAddress,
-        account_details: AccountDetails,
+        account_details: &AccountDetails,
     ) -> Result<(), tokio_postgres::Error> {
         let values: [&(dyn ToSql + Sync); 3] = [
             &account_address.0.as_ref(),
@@ -326,7 +353,7 @@ impl PreparedStatements {
         db_tx: &tokio_postgres::Transaction<'b>,
         block_id: i64,
         contract_address: ContractAddress,
-        contract_details: ContractInstanceDetails,
+        contract_details: &ContractInstanceDetails,
     ) -> Result<(), tokio_postgres::Error> {
         let module_ref = contract_details.module_ref.as_ref();
         let row = db_tx
@@ -356,7 +383,7 @@ impl PreparedStatements {
         block_id: i64,
         block_time: i64,
         transaction_hash: TransactionHash,
-        transaction_details: TransactionDetails,
+        transaction_details: &TransactionDetails,
     ) -> Result<(), tokio_postgres::Error> {
         let transaction_cost = transaction_details.cost.micro_ccd() as i64;
         let transaction_type = transaction_details.transaction_type.map(|tt| tt as i16);
@@ -371,13 +398,13 @@ impl PreparedStatements {
         let row = db_tx.query_one(&self.insert_transaction, &values).await?;
         let id = row.try_get::<_, i64>(0)?;
 
-        for account in transaction_details.affected_accounts {
-            self.insert_account_transaction_relation(db_tx, id, account, block_time)
+        for account in &transaction_details.affected_accounts {
+            self.insert_account_transaction_relation(db_tx, id, *account, block_time)
                 .await?;
         }
 
-        for contract in transaction_details.affected_contracts {
-            self.insert_contract_transaction_relation(db_tx, id, contract, block_time)
+        for contract in &transaction_details.affected_contracts {
+            self.insert_contract_transaction_relation(db_tx, id, *contract, block_time)
                 .await?;
         }
 
@@ -465,8 +492,9 @@ impl PreparedStatements {
 /// Holds [`tokio_postgres::Client`] to query the database and
 /// [`PreparedStatements`] which can be executed with the client.
 struct DBConn {
-    client:   tokio_postgres::Client,
-    prepared: PreparedStatements,
+    client:            tokio_postgres::Client,
+    prepared:          PreparedStatements,
+    connection_handle: JoinHandle<()>,
 }
 
 impl DBConn {
@@ -482,7 +510,7 @@ impl DBConn {
             .await
             .context("Could not create database connection")?;
 
-        tokio::spawn(async move {
+        let connection_handle = tokio::spawn(async move {
             if let Err(e) = connection.await {
                 log::error!("Connection error: {}", e);
             }
@@ -497,7 +525,11 @@ impl DBConn {
         }
 
         let prepared = PreparedStatements::new(&client).await?;
-        let db_conn = DBConn { client, prepared };
+        let db_conn = DBConn {
+            client,
+            prepared,
+            connection_handle,
+        };
 
         Ok(db_conn)
     }
@@ -797,30 +829,34 @@ async fn process_block(
     Ok(block_data)
 }
 
-/// Queries the node available at `node_endpoint` from height received from DB
-/// process until stopped. Sends the data structured by block to
-/// DB process through `block_sender`.
+/// Queries the node available at `node_endpoint` from `latest_height` until
+/// stopped. Sends the data structured by block to DB process through
+/// `block_sender`. Process runs until stopped or an error happens internally.
 async fn node_process(
     node_endpoint: Endpoint,
-    latest_height: AbsoluteBlockHeight,
-    block_sender: tokio::sync::mpsc::Sender<BlockData>,
+    latest_height: &mut Option<AbsoluteBlockHeight>,
+    block_sender: &tokio::sync::mpsc::Sender<BlockData>,
+    num_parallel: u8,
+    max_behind_s: u32,
+    stop_flag: &AtomicBool,
 ) -> anyhow::Result<()> {
+    let from_height = latest_height.map_or(0.into(), |h| h.next());
+
     log::info!(
         "Processing blocks from height {} using node {}",
-        latest_height,
+        from_height,
         node_endpoint.uri()
     );
 
-    let mut node = Client::new(node_endpoint)
+    let mut node = Client::new(node_endpoint.clone())
         .await
         .context("Could not connect to node.")?;
-
     let mut blocks_stream = node
-        .get_finalized_blocks_from(latest_height)
+        .get_finalized_blocks_from(from_height)
         .await
         .context("Error querying blocks")?;
 
-    if latest_height.height == 0 {
+    if from_height.height == 0 {
         if let Some(genesis_block) = blocks_stream.next().await {
             let genesis_block_data =
                 process_chain_genesis_block(&mut node, genesis_block.block_hash).await?;
@@ -831,24 +867,47 @@ async fn node_process(
         }
     };
 
-    while let Some(block) = blocks_stream.next().await {
-        let block_data = process_block(&mut node, block.block_hash).await?;
-        block_sender.send(BlockData::Normal(block_data)).await?;
-        log::info!(
-            "Processed block ({}): {}",
-            block.height.height,
-            block.block_hash
-        );
+    let timeout = Duration::from_secs(max_behind_s.into());
+
+    while !stop_flag.load(Ordering::Acquire) {
+        let (has_error, chunks) = blocks_stream
+            .next_chunk_timeout(num_parallel.into(), timeout)
+            .await
+            .with_context(|| format!("Timeout reached for node: {}", node_endpoint.uri()))?;
+
+        for block in chunks {
+            let block_data = process_block(&mut node, block.block_hash).await?;
+            if block_sender
+                .send(BlockData::Normal(block_data))
+                .await
+                .is_err()
+            {
+                log::error!("The database connection has been closed. Terminating node queries.");
+                return Ok(());
+            }
+
+            *latest_height = Some(block.height);
+        }
+
+        if has_error {
+            return Err(anyhow!("Finalized block stream dropped"));
+        }
     }
 
+    log::info!("Service stopped gracefully from exit signal.");
     Ok(())
 }
 
 /// Inserts the `block_data` collected for a single block into the database
 /// defined by `db`. Everything is commited as a single transactions allowing
 /// for easy restoration from the last recorded block (by height) inserted into
-/// the database.
-async fn db_insert_block(db: &mut DBConn, block_data: BlockData) -> anyhow::Result<()> {
+/// the database. Returns the height of the processed block along with the
+/// duration it took to process.
+async fn db_insert_block<'a>(
+    db: &mut DBConn,
+    block_data: &'a BlockData,
+) -> anyhow::Result<(AbsoluteBlockHeight, chrono::Duration)> {
+    let start = chrono::Utc::now();
     let db_tx = db
         .client
         .transaction()
@@ -858,27 +917,30 @@ async fn db_insert_block(db: &mut DBConn, block_data: BlockData) -> anyhow::Resu
     let tx_ref = &db_tx;
     let prepared_ref = &db.prepared;
 
-    let insert_common = |block_hash: BlockHash, block_details: BlockDetails, accounts: Accounts| async move {
+    let insert_common = |block_hash: BlockHash,
+                         block_details: &'a BlockDetails,
+                         accounts: &'a Accounts| async move {
         let block_id = prepared_ref
             .insert_block(tx_ref, block_hash, block_details)
             .await?;
 
-        for (address, details) in accounts.into_iter() {
+        for (address, details) in accounts.iter() {
             prepared_ref
-                .insert_account(tx_ref, block_id, address, details)
+                .insert_account(tx_ref, block_id, *address, details)
                 .await?;
         }
 
         Ok::<_, tokio_postgres::Error>(block_id)
     };
 
-    match block_data {
+    let height = match block_data {
         BlockData::ChainGenesis(ChainGenesisBlockData {
             block_hash,
             block_details,
             accounts,
         }) => {
-            insert_common(block_hash, block_details, accounts).await?;
+            insert_common(*block_hash, block_details, accounts).await?;
+            block_details.height
         }
         BlockData::Normal(NormalBlockData {
             block_hash,
@@ -888,31 +950,33 @@ async fn db_insert_block(db: &mut DBConn, block_data: BlockData) -> anyhow::Resu
             contract_modules,
             contract_instances,
         }) => {
-            let block_id = insert_common(block_hash, block_details, accounts).await?;
+            let block_id = insert_common(*block_hash, block_details, accounts).await?;
 
-            for module_ref in contract_modules.into_iter() {
+            for module_ref in contract_modules.iter() {
                 db.prepared
-                    .insert_contract_module(&db_tx, block_id, module_ref)
+                    .insert_contract_module(&db_tx, block_id, *module_ref)
                     .await?;
             }
 
-            for (address, details) in contract_instances.into_iter() {
+            for (address, details) in contract_instances.iter() {
                 db.prepared
-                    .insert_contract_instance(&db_tx, block_id, address, details)
+                    .insert_contract_instance(&db_tx, block_id, *address, details)
                     .await?;
             }
 
-            for (hash, details) in transactions.into_iter() {
+            for (hash, details) in transactions.iter() {
                 db.prepared
                     .insert_transaction(
                         &db_tx,
                         block_id,
                         block_details.block_time.timestamp(),
-                        hash,
+                        *hash,
                         details,
                     )
                     .await?;
             }
+
+            block_details.height
         }
     };
 
@@ -920,7 +984,9 @@ async fn db_insert_block(db: &mut DBConn, block_data: BlockData) -> anyhow::Resu
         .commit()
         .await
         .context("Failed to commit DB transaction.")?;
-    Ok(())
+
+    let end = chrono::Utc::now().signed_duration_since(start);
+    Ok((height, end))
 }
 
 /// Runs a process of inserting data coming in on `block_receiver` in a database
@@ -928,24 +994,107 @@ async fn db_insert_block(db: &mut DBConn, block_data: BlockData) -> anyhow::Resu
 async fn run_db_process(
     db_connection: tokio_postgres::config::Config,
     mut block_receiver: tokio::sync::mpsc::Receiver<BlockData>,
-    height_sender: tokio::sync::oneshot::Sender<AbsoluteBlockHeight>,
+    height_sender: tokio::sync::oneshot::Sender<Option<AbsoluteBlockHeight>>,
+    stop_flag: Arc<AtomicBool>,
 ) -> anyhow::Result<()> {
-    let mut db = DBConn::create(db_connection, true).await?;
+    let mut db = DBConn::create(db_connection.clone(), true).await?;
     let latest_height = db
         .prepared
         .get_latest_height(&db.client)
         .await
-        .context("Could not get best height from database")?
-        .map_or(0.into(), |h| h.next());
+        .context("Could not get best height from database")?;
 
     height_sender
         .send(latest_height)
         .map_err(|_| anyhow!("Best block height could not be sent to node process"))?;
 
-    while let Some(block_data) = block_receiver.recv().await {
-        db_insert_block(&mut db, block_data).await?;
+    // In case of DB errors, this is used to store the value to retry insertion for
+    let mut retry_block_data = None;
+    // How many successive insertion errors were encountered.
+    // This is used to slow down attempts to not spam the database
+    let mut successive_db_errors = 0;
+
+    while !stop_flag.load(Ordering::Acquire) {
+        let next_block_data = if retry_block_data.is_some() {
+            retry_block_data
+        } else {
+            block_receiver.recv().await
+        };
+
+        if let Some(block_data) = next_block_data {
+            match db_insert_block(&mut db, &block_data).await {
+                Ok((height, time)) => {
+                    successive_db_errors = 0;
+                    log::info!(
+                        "Processed block ({}) in {}ms",
+                        height.height,
+                        time.num_milliseconds()
+                    );
+                    retry_block_data = None;
+                }
+                Err(e) => {
+                    successive_db_errors += 1;
+                    // wait for 2^(min(successive_errors - 1, 7)) seconds before attempting.
+                    // The reason for the min is that we bound the time between reconnects.
+                    let delay = std::time::Duration::from_millis(
+                        500 * (1 << std::cmp::min(successive_db_errors, 8)),
+                    );
+                    log::error!(
+                        "Database connection lost due to {:#}. Will attempt to reconnect in {}ms.",
+                        e,
+                        delay.as_millis()
+                    );
+                    tokio::time::sleep(delay).await;
+
+                    let new_db = match DBConn::create(db_connection.clone(), false).await {
+                        Ok(db) => db,
+                        Err(e) => {
+                            block_receiver.close();
+                            return Err(e);
+                        }
+                    };
+
+                    // and drop the old database connection.
+                    let old_db = std::mem::replace(&mut db, new_db);
+                    old_db.connection_handle.abort();
+
+                    retry_block_data = Some(block_data);
+                }
+            }
+        } else {
+            break;
+        }
     }
 
+    block_receiver.close();
+    db.connection_handle.abort();
+
+    Ok(())
+}
+/// Construct a future for shutdown signals (for unix: SIGINT and SIGTERM) (for
+/// windows: ctrl c and ctrl break). The signal handler is set when the future
+/// is polled and until then the default signal handler.
+async fn set_shutdown(flag: Arc<AtomicBool>) -> anyhow::Result<()> {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix as unix_signal;
+        let mut terminate_stream = unix_signal::signal(unix_signal::SignalKind::terminate())?;
+        let mut interrupt_stream = unix_signal::signal(unix_signal::SignalKind::interrupt())?;
+        let terminate = Box::pin(terminate_stream.recv());
+        let interrupt = Box::pin(interrupt_stream.recv());
+        futures::future::select(terminate, interrupt).await;
+        flag.store(true, Ordering::Release);
+    }
+    #[cfg(windows)]
+    {
+        use tokio::signal::windows as windows_signal;
+        let mut ctrl_break_stream = windows_signal::ctrl_break()?;
+        let mut ctrl_c_stream = windows_signal::ctrl_c()?;
+        let ctrl_break = Box::pin(ctrl_break_stream.recv());
+        let ctrl_c = Box::pin(ctrl_c_stream.recv());
+        futures::future::select(ctrl_break, ctrl_c).await;
+        flag.store(true, Ordering::Release);
+    }
     Ok(())
 }
 
@@ -965,20 +1114,71 @@ async fn main() -> anyhow::Result<()> {
     // Create a channel between the task querying the node and the task logging
     // transactions.
     let (block_sender, block_receiver) = tokio::sync::mpsc::channel(100);
+    // node/db processes run until the stop flag is triggered.
+    let stop_flag = Arc::new(AtomicBool::new(false));
+    let shutdown_handle = tokio::spawn(set_shutdown(stop_flag.clone()));
 
-    tokio::spawn(async {
-        if let Err(e) = run_db_process(args.db_connection, block_receiver, height_sender).await {
-            log::error!("Error happened while running DB process: {}", e);
-        }
-    });
+    let db_handle = tokio::spawn(run_db_process(
+        args.db_connection,
+        block_receiver,
+        height_sender,
+        stop_flag.clone(),
+    ));
 
-    let latest_height = height_receiver
+    let mut latest_height = height_receiver
         .await
         .context("Did not receive height of most recent block recorded in database")?;
 
-    node_process(args.node, latest_height, block_sender)
-        .await
-        .context("Error happened while querying node.")?;
+    let mut latest_successful_node: u64 = 0;
+    let num_nodes = args.node_endpoints.len() as u64;
+    for (node, i) in args.node_endpoints.into_iter().cycle().zip(0u64..) {
+        let start_height = latest_height;
 
+        if stop_flag.load(Ordering::Acquire) {
+            break;
+        }
+
+        if i.saturating_sub(latest_successful_node) >= num_nodes {
+            // we skipped all the nodes without success.
+            let delay = std::time::Duration::from_secs(5);
+            log::error!(
+                "Connections to all nodes have failed. Pausing for {}s before trying node {} \
+                 again.",
+                delay.as_secs(),
+                node.uri()
+            );
+            tokio::time::sleep(delay).await;
+        }
+
+        // The process keeps running until stopped manually, or an error happens.
+        let node_result = node_process(
+            node.clone(),
+            &mut latest_height,
+            &block_sender,
+            args.num_parallel,
+            args.max_behind_s,
+            stop_flag.as_ref(),
+        )
+        .await;
+
+        if let Err(e) = node_result {
+            log::warn!(
+                "Endpoint {} failed with error {}. Trying next.",
+                node.uri(),
+                e
+            );
+        } else {
+            // `node_process` terminated with `Ok`, meaning we should stop the service
+            // entirely.
+            break;
+        }
+
+        if latest_height > start_height {
+            latest_successful_node = i;
+        }
+    }
+
+    db_handle.abort();
+    shutdown_handle.abort();
     Ok(())
 }
