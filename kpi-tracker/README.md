@@ -14,7 +14,11 @@ To run the service successfully, the following dependencies are required to be a
 
 Do the following to install the project
 
-- Create PostgreSQL database to be used by service. Default configuration tries to access a database with name `kpi-tracker` on `localhost:5432` with user `postgres` and password `password`. The necessary tables for storing the data will be created by the service.
+To run the project, it's required to have access to a postgres database to be used by the service. Default configuration tries to access a database with name `kpi-tracker` on `localhost:5432` with user `postgres` and password `password`. The necessary tables for storing the data will be created by the service.
+
+For development purposes a transient database can be run using docker as
+
+`docker run -e POSTGRES_PASSWORD=password -p 5432:5432 postgres`
 
 ## Build and run
 
@@ -69,7 +73,13 @@ We use Grafana to visualize the data collected by the service. The configuration
 
 ### Installation and running
 
-Follow the steps to [install Grafana](https://grafana.com/docs/grafana/latest/setup-grafana/installation/) for your OS, which should also go through the steps required to run the installed service.
+Follow the steps to [install Grafana](https://grafana.com/docs/grafana/latest/setup-grafana/installation/) for your OS, which should also go through the steps required to run the installed service. 
+
+Can also be run using docker with docker using
+
+`docker run -d -p 3000:3000 grafana/grafana-oss`
+
+which runs a grafana server on port `3000` in the background.
 
 ### Configuration
 
