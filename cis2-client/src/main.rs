@@ -16,12 +16,13 @@ use concordium_rust_sdk::{
 };
 use std::path::PathBuf;
 
-// The actions available for operators.
+/// The actions available for operators.
 // Note that the arguments are duplicated here for better command-line
 // ergonomics. Arguments without default values (such as `contract` cannot be
 // marked `global` in `clap` at the moment, which leads to problems in usage
 // since the arguments need to be given before the subcommand).
 #[derive(clap::Subcommand, Debug)]
+#[clap(arg_required_else_help(true))]
 enum OperatorAction {
     #[clap(name = "add")]
     Add {
@@ -59,12 +60,18 @@ enum OperatorAction {
 }
 
 #[derive(clap::Subcommand, Debug)]
+#[clap(arg_required_else_help(true))]
+#[clap(author, version)]
+#[clap(propagate_version = true)]
 enum TransactionAction {
     #[clap(name = "show")]
     Show { hash: TransactionHash },
 }
 
 #[derive(clap::Subcommand, Debug)]
+#[clap(author, version)]
+#[clap(propagate_version = true)]
+#[clap(arg_required_else_help(true))]
 enum ContractAction {
     #[clap(name = "balance", help = "Query token balance for an address.")]
     Balance {
@@ -82,7 +89,7 @@ enum ContractAction {
         #[clap(long = "contract", help = "Address of the token.")]
         contract: ContractAddress,
     },
-    #[clap(name = "operator", help = "Commands related to operators.")]
+    #[clap(name = "operator", about = "Commands related to operators.")]
     OperatorOf {
         #[clap(subcommand)]
         action: OperatorAction,
@@ -114,16 +121,17 @@ enum ContractAction {
 }
 
 #[derive(clap::Subcommand, Debug)]
+#[clap(propagate_version = true)]
 enum Action {
     #[clap(
         name = "contract",
-        help = "Subcommands related to querying and updating the contract instance."
+        about = "Subcommands related to querying and updating the contract instance."
     )]
     Contract {
         #[clap(subcommand)]
         action: ContractAction,
     },
-    #[clap(name = "transaction", help = "Commands to inspect CIS2 transactions.")]
+    #[clap(name = "transaction", about = "Commands to inspect CIS2 transactions.")]
     Transaction {
         #[clap(subcommand)]
         action: TransactionAction,
