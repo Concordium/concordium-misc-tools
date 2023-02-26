@@ -176,6 +176,22 @@ struct NormalBlockData {
     contract_instances: ContractInstances,
 }
 
+impl BlockData {
+    pub fn block_hash(&self) -> BlockHash {
+        match self {
+            BlockData::ChainGenesis(gd) => gd.block_hash,
+            BlockData::Normal(n) => n.block_hash,
+        }
+    }
+
+    pub fn num_transactions(&self) -> usize {
+        match self {
+            BlockData::ChainGenesis(_) => 0,
+            BlockData::Normal(n) => n.transactions.len(),
+        }
+    }
+}
+
 /// Used for sending data to db process.
 #[derive(Debug)]
 enum BlockData {
@@ -186,31 +202,25 @@ enum BlockData {
 /// The set of queries used to communicate with the postgres DB.
 struct PreparedStatements {
     /// Insert block into DB
-    insert_block: tokio_postgres::Statement,
+    insert_block:             tokio_postgres::Statement,
     /// Insert account into DB
-    insert_account: tokio_postgres::Statement,
+    insert_account:           tokio_postgres::Statement,
     /// Insert contract module into DB
-    insert_contract_module: tokio_postgres::Statement,
+    insert_contract_module:   tokio_postgres::Statement,
     /// Insert contract instance into DB
     insert_contract_instance: tokio_postgres::Statement,
     /// Insert transaction into DB
-    insert_transaction: tokio_postgres::Statement,
-    /// Insert account-transaction relation into DB
-    insert_account_transaction_relation: tokio_postgres::Statement,
-    /// Insert contract-transaction relation into DB
-    insert_contract_transaction_relation: tokio_postgres::Statement,
+    insert_transaction:       tokio_postgres::Statement,
     /// Get the latest recorded block height from the DB
-    get_latest_height: tokio_postgres::Statement,
-    /// Select single account ID by account address
-    account_by_address: tokio_postgres::Statement,
-    /// Select single cointract instance ID by contract address
-    contract_by_address: tokio_postgres::Statement,
+    get_latest_height:        tokio_postgres::Statement,
     /// Select single contract module ID by module ref
-    contract_module_by_ref: tokio_postgres::Statement,
-    /// Insert record of time an account was part of a transaction
-    insert_account_activeness: tokio_postgres::Statement,
-    /// Insert record of time a contract was part of a transaction
-    insert_contract_activeness: tokio_postgres::Statement,
+    contract_module_by_ref:   tokio_postgres::Statement,
+    /// Update `account_transactions` and `account_activeness` tables in a
+    /// single statement.
+    update_account_stats:     tokio_postgres::Statement,
+    /// Update `contract_transactions` and `contract_activeness` tables in a
+    /// single statement.
+    update_contract_stats:    tokio_postgres::Statement,
 }
 
 impl PreparedStatements {
@@ -240,37 +250,36 @@ impl PreparedStatements {
                  $3, $4, $5) RETURNING id",
             )
             .await?;
-        let insert_account_transaction_relation = client
-            .prepare("INSERT INTO accounts_transactions (account, transaction) VALUES ($1, $2)")
-            .await?;
-        let insert_contract_transaction_relation = client
-            .prepare("INSERT INTO contracts_transactions (contract, transaction) VALUES ($1, $2)")
-            .await?;
         let get_latest_height = client
             .prepare("SELECT blocks.height FROM blocks ORDER BY blocks.id DESC LIMIT 1")
             .await?;
-        let account_by_address = client
-            .prepare("SELECT accounts.id FROM accounts WHERE address=$1 LIMIT 1")
+        let update_account_stats = client
+            .prepare_typed(
+                "WITH id_table AS (SELECT accounts.id FROM accounts WHERE address=$1 LIMIT 1)
+                   , at AS (INSERT INTO accounts_transactions (account, transaction) VALUES \
+                 ((SELECT id FROM id_table), $2))
+             INSERT INTO account_activeness (account, time)
+                    VALUES ((SELECT id FROM id_table), date_seconds($3))
+                    ON CONFLICT DO NOTHING",
+                &[Type::BYTEA, Type::INT8, Type::INT8],
+            )
             .await?;
-        let contract_by_address = client
-            .prepare("SELECT contracts.id FROM contracts WHERE index=$1 AND subindex=$2 LIMIT 1")
+
+        let update_contract_stats = client
+            .prepare_typed(
+                "WITH id_table AS (SELECT contracts.id FROM contracts WHERE index=$1 AND \
+                 subindex=$2 LIMIT 1),
+             ct AS (INSERT INTO contracts_transactions (contract, transaction) VALUES ((SELECT id \
+                 FROM id_table), $3))
+             INSERT INTO contract_activeness (contract, time)
+                    VALUES ((SELECT id FROM id_table), date_seconds($4))
+                    ON CONFLICT DO NOTHING",
+                &[Type::INT8, Type::INT8, Type::INT8],
+            )
             .await?;
+
         let contract_module_by_ref = client
             .prepare("SELECT modules.id FROM modules WHERE ref=$1 LIMIT 1")
-            .await?;
-        let insert_account_activeness = client
-            .prepare_typed(
-                "INSERT INTO account_activeness (account, time) VALUES ($1, date_seconds($2)) ON \
-                 CONFLICT DO NOTHING",
-                &[Type::INT8, Type::INT8],
-            )
-            .await?;
-        let insert_contract_activeness = client
-            .prepare_typed(
-                "INSERT INTO contract_activeness (contract, time) VALUES ($1, date_seconds($2)) \
-                 ON CONFLICT DO NOTHING",
-                &[Type::INT8, Type::INT8],
-            )
             .await?;
 
         Ok(Self {
@@ -279,14 +288,10 @@ impl PreparedStatements {
             insert_contract_module,
             insert_contract_instance,
             insert_transaction,
-            insert_account_transaction_relation,
-            insert_contract_transaction_relation,
             get_latest_height,
-            account_by_address,
-            contract_by_address,
             contract_module_by_ref,
-            insert_account_activeness,
-            insert_contract_activeness,
+            update_account_stats,
+            update_contract_stats,
         })
     }
 
@@ -357,6 +362,7 @@ impl PreparedStatements {
         contract_details: &ContractInstanceDetails,
     ) -> Result<(), tokio_postgres::Error> {
         let module_ref = contract_details.module_ref.as_ref();
+        // TODO: Use WITH
         let row = db_tx
             .query_one(&self.contract_module_by_ref, &[&module_ref])
             .await?;
@@ -399,10 +405,11 @@ impl PreparedStatements {
         let row = db_tx.query_one(&self.insert_transaction, &values).await?;
         let id = row.try_get::<_, i64>(0)?;
 
+        let mut queries = Vec::with_capacity(transaction_details.affected_accounts.len());
         for account in &transaction_details.affected_accounts {
-            self.insert_account_transaction_relation(db_tx, id, *account, block_time)
-                .await?;
+            queries.push(self.insert_account_transaction_relation(db_tx, id, *account, block_time));
         }
+        futures::future::try_join_all(queries).await?;
 
         for contract in &transaction_details.affected_contracts {
             self.insert_contract_transaction_relation(db_tx, id, *contract, block_time)
@@ -420,24 +427,13 @@ impl PreparedStatements {
         account_address: CanonicalAccountAddress,
         block_time: i64,
     ) -> Result<(), tokio_postgres::Error> {
-        let row = db_tx
-            .query_one(&self.account_by_address, &[&account_address.0.as_ref()])
-            .await?;
-        let account_id = row.try_get::<_, i64>(0)?;
-        let transaction_relation_values: [&(dyn ToSql + Sync); 2] = [&account_id, &transaction_id];
-
         db_tx
-            .query_opt(
-                &self.insert_account_transaction_relation,
-                &transaction_relation_values,
-            )
+            .query_opt(&self.update_account_stats, &[
+                &account_address.0.as_ref(),
+                &transaction_id,
+                &block_time,
+            ])
             .await?;
-
-        let activeness_values: [&(dyn ToSql + Sync); 2] = [&account_id, &block_time];
-        db_tx
-            .query_opt(&self.insert_account_activeness, &activeness_values)
-            .await?;
-
         Ok(())
     }
 
@@ -449,29 +445,15 @@ impl PreparedStatements {
         contract_address: ContractAddress,
         block_time: i64,
     ) -> Result<(), tokio_postgres::Error> {
-        let contract_address: [&(dyn ToSql + Sync); 2] = [
+        let params: [&(dyn ToSql + Sync); 4] = [
             &(contract_address.index as i64),
             &(contract_address.subindex as i64),
+            &transaction_id,
+            &block_time,
         ];
-        let row = db_tx
-            .query_one(&self.contract_by_address, &contract_address)
+        let _ = db_tx
+            .query_opt(&self.update_contract_stats, &params)
             .await?;
-
-        let contract_id = row.try_get::<_, i64>(0)?;
-        let transaction_relation_values: [&(dyn ToSql + Sync); 2] = [&contract_id, &transaction_id];
-
-        db_tx
-            .query_opt(
-                &self.insert_contract_transaction_relation,
-                &transaction_relation_values,
-            )
-            .await?;
-
-        let activeness_values: [&(dyn ToSql + Sync); 2] = [&contract_id, &block_time];
-        db_tx
-            .query_opt(&self.insert_contract_activeness, &activeness_values)
-            .await?;
-
         Ok(())
     }
 
@@ -955,27 +937,27 @@ async fn db_insert_block<'a>(
 
             for module_ref in contract_modules.iter() {
                 db.prepared
-                    .insert_contract_module(&db_tx, block_id, *module_ref)
+                    .insert_contract_module(tx_ref, block_id, *module_ref)
                     .await?;
             }
 
             for (address, details) in contract_instances.iter() {
                 db.prepared
-                    .insert_contract_instance(&db_tx, block_id, *address, details)
+                    .insert_contract_instance(tx_ref, block_id, *address, details)
                     .await?;
             }
 
+            let mut futs = Vec::new();
             for (hash, details) in transactions.iter() {
-                db.prepared
-                    .insert_transaction(
-                        &db_tx,
-                        block_id,
-                        block_details.block_time.timestamp(),
-                        *hash,
-                        details,
-                    )
-                    .await?;
+                futs.push(db.prepared.insert_transaction(
+                    tx_ref,
+                    block_id,
+                    block_details.block_time.timestamp(),
+                    *hash,
+                    details,
+                ));
             }
+            futures::future::try_join_all(futs).await?;
 
             block_details.height
         }
@@ -1027,8 +1009,10 @@ async fn run_db_process(
                 Ok((height, time)) => {
                     successive_db_errors = 0;
                     log::info!(
-                        "Processed block ({}) in {}ms",
+                        "Processed block {} at height {} with {} transactions in {}ms",
+                        block_data.block_hash(),
                         height.height,
+                        block_data.num_transactions(),
                         time.num_milliseconds()
                     );
                     retry_block_data = None;
