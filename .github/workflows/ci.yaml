@@ -60,11 +60,6 @@ jobs:
           - genesis-creator/Cargo.toml
           - id-verifier/Cargo.toml
     steps:
-      - name: Install protobuf
-        run: |
-          wget https://github.com/protocolbuffers/protobuf/releases/download/v3.15.3/protoc-3.15.3-linux-x86_64.zip
-          unzip protoc-3.15.3-linux-x86_64.zip
-          sudo mv ./bin/protoc /usr/bin/protoc
       - name: Checkout
         uses: actions/checkout@v2
         with:
