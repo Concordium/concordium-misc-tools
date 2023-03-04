@@ -29,6 +29,7 @@ jobs:
           - state-compare/Cargo.toml
           - genesis-creator/Cargo.toml
           - id-verifier/Cargo.toml
+          - network-dashboard-proxy/Cargo.toml
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -59,6 +60,7 @@ jobs:
           - state-compare/Cargo.toml
           - genesis-creator/Cargo.toml
           - id-verifier/Cargo.toml
+          - network-dashboard-proxy/Cargo.toml
     steps:
       - name: Checkout
         uses: actions/checkout@v2
