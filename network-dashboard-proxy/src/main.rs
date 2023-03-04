@@ -76,16 +76,20 @@ impl axum::response::IntoResponse for Error {
                         axum::Json("Requested value not found.".to_string()),
                     )
                 } else {
+                    tracing::error!("Error querying the node: {}", err);
                     (
                         StatusCode::BAD_GATEWAY,
                         axum::Json("Cannot reach the node".into()),
                     )
                 }
             }
-            Error::Network(_) => (
-                StatusCode::BAD_GATEWAY,
-                axum::Json("Error processing stream from the node.".into()),
-            ),
+            Error::Network(err) => {
+                tracing::error!("Error processing the stream from the node: {}", err);
+                (
+                    StatusCode::BAD_GATEWAY,
+                    axum::Json("Error processing stream from the node.".into()),
+                )
+            }
         };
         r.into_response()
     }
@@ -224,7 +228,7 @@ async fn main() -> anyhow::Result<()> {
         .await
         .context("Unable to establish connection to the node.")?;
 
-    // build our application with a single route
+    // build routes
     let server = Router::new().route("/v1/transactionStatus", get(transaction_status))
         .route("/v1/consensusStatus", get(consensus_status))
         .route("/v1/blockSummary/:blockHash", get(block_summary))
