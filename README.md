@@ -17,6 +17,9 @@ The tools are
   API) of two blocks, either by the same node, or different nodes.
 - [genesis-creator](./genesis-creator) A tool to create genesis files to start
   custom chains.
+- [network-dashboard-proxy](./network-dashboard-proxy) A simple wrapper around a
+  few V2 GRPC endpoints to support the [network
+  dashboard](https://github.com/Concordium/concordium-network-dashboard).
 
 # Contributing
 
