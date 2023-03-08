@@ -99,6 +99,8 @@ async fn transaction_status(
     axum::extract::Path(tx): axum::extract::Path<TransactionHash>,
     axum::extract::State(mut client): axum::extract::State<v2::Client>,
 ) -> Result<axum::Json<TransactionStatus>, Error> {
+    let _span = tracing::debug_span!("transaction_status");
+    tracing::debug!("Request for transaction status for {tx}.");
     let r = client.get_block_item_status(&tx).await?;
     Ok(r.into())
 }
@@ -136,36 +138,63 @@ async fn consensus_status(
 
 async fn block_summary(
     axum::extract::Path(block_hash): axum::extract::Path<BlockHash>,
-    axum::extract::State(mut client): axum::extract::State<v2::Client>,
+    axum::extract::State(c): axum::extract::State<v2::Client>,
 ) -> Result<axum::Json<serde_json::Value>, Error> {
     let _span = tracing::debug_span!("block_summary");
     tracing::debug!("Request for block summary for {block_hash}.");
-    let txs = client
-        .get_block_transaction_events(block_hash)
-        .await?
-        .response
-        .try_collect::<Vec<_>>()
-        .await?;
-    let special = client
-        .get_block_special_events(block_hash)
-        .await?
-        .response
-        .try_collect::<Vec<_>>()
-        .await?;
-    let finalization_data = client
-        .get_block_finalization_summary(block_hash)
-        .await?
-        .response;
-    let pending_updates = client
-        .get_block_pending_updates(block_hash)
-        .await?
-        .response
-        .try_collect::<Vec<_>>()
-        .await?;
-    let chain_parameters = client
-        .get_block_chain_parameters(block_hash)
-        .await?
-        .response;
+    let mut client = c.clone();
+    let txs = async move {
+        let txs = client
+            .get_block_transaction_events(block_hash)
+            .await?
+            .response
+            .try_collect::<Vec<_>>()
+            .await?;
+        Ok::<_, Error>(txs)
+    };
+    let mut client = c.clone();
+    let special = async move {
+        let special = client
+            .get_block_special_events(block_hash)
+            .await?
+            .response
+            .try_collect::<Vec<_>>()
+            .await?;
+        Ok::<_, Error>(special)
+    };
+    let mut client = c.clone();
+    let finalization_data = async move {
+        let finalization_data = client
+            .get_block_finalization_summary(block_hash)
+            .await?
+            .response;
+        Ok::<_, Error>(finalization_data)
+    };
+    let mut client = c.clone();
+    let pending_updates = async move {
+        let pending = client
+            .get_block_pending_updates(block_hash)
+            .await?
+            .response
+            .try_collect::<Vec<_>>()
+            .await?;
+        Ok::<_, Error>(pending)
+    };
+    let mut client = c;
+    let chain_parameters = async move {
+        let chain_parameters = client
+            .get_block_chain_parameters(block_hash)
+            .await?
+            .response;
+        Ok::<_, Error>(chain_parameters)
+    };
+    let (txs, special, finalization_data, pending_updates, chain_parameters) = futures::try_join!(
+        txs,
+        special,
+        finalization_data,
+        pending_updates,
+        chain_parameters
+    )?;
     let reward_parameters = match chain_parameters {
         v2::ChainParameters::V0(cp) => {
             serde_json::json!({
