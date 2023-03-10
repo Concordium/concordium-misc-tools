@@ -258,7 +258,7 @@ async fn main() -> anyhow::Result<()> {
         .context("Unable to establish connection to the node.")?;
 
     // build routes
-    let server = Router::new().route("/v1/transactionStatus", get(transaction_status))
+    let server = Router::new().route("/v1/transactionStatus/:transactionHash", get(transaction_status))
         .route("/v1/consensusStatus", get(consensus_status))
         .route("/v1/blockSummary/:blockHash", get(block_summary))
         .route("/v1/blockInfo/:blockHash", get(block_info))
