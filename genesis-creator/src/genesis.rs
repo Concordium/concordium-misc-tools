@@ -1,11 +1,10 @@
 use anyhow::{ensure, Context};
 use concordium_rust_sdk::{
+    base as concordium_base,
     common::{
-        self as crypto_common,
-        derive::{Serial, Serialize},
         types::{Amount, CredentialIndex, Timestamp},
         Buffer, Deserial, Get, ParseResult, ReadBytesExt, SerdeDeserialize, SerdeSerialize, Serial,
-        Versioned,
+        Serialize, Versioned,
     },
     id,
     id::{
