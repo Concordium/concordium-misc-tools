@@ -73,7 +73,7 @@ enum TransactionAction {
 #[clap(propagate_version = true)]
 #[clap(arg_required_else_help(true))]
 enum ContractAction {
-    #[clap(name = "balance", help = "Query token balance for an address.")]
+    #[clap(name = "balance", about = "Query token balance for an address.")]
     Balance {
         #[clap(long = "address", help = "Address to query balance of.")]
         address:  Address,
@@ -82,7 +82,7 @@ enum ContractAction {
         #[clap(long = "contract", help = "Address of the token.")]
         contract: ContractAddress,
     },
-    #[clap(name = "metadata", help = "Query token metadata.")]
+    #[clap(name = "metadata", about = "Query token metadata.")]
     Metadata {
         #[clap(long = "token", help = "Token id.")]
         token_id: TokenId,
@@ -94,7 +94,7 @@ enum ContractAction {
         #[clap(subcommand)]
         action: OperatorAction,
     },
-    #[clap(name = "transfer", help = "Transfer an amount of a token.")]
+    #[clap(name = "transfer", about = "Transfer an amount of a token.")]
     Transfer {
         #[clap(long = "sender", help = "Sender of the transaction.")]
         sender:   PathBuf,

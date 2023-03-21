@@ -3,35 +3,6 @@
 version = 3
 
 [[package]]
-name = "aes"
-version = "0.8.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "433cfd6710c9986c576a25ca913c39d66a6474107b406f34f91d4a8923395241"
-dependencies = [
- "cfg-if",
- "cipher",
- "cpufeatures",
-]
-
-[[package]]
-name = "aggregate_sig"
-version = "0.1.0"
-dependencies = [
- "crypto_common",
- "crypto_common_derive",
- "curve_arithmetic",
- "ff",
- "generic-array",
- "id",
- "pairing",
- "rand 0.7.3",
- "random_oracle",
- "rayon",
- "serde",
- "sha2 0.10.6",
-]
-
-[[package]]
 name = "ahash"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -164,12 +135,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9e1b586273c5702936fe7b7d6896644d8be71e6314cfe09d3167c95f712589e8"
 
 [[package]]
-name = "base64ct"
-version = "1.5.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b645a089122eccb6111b4f81cbc1a49f5900ac4666bb93ac027feaecf15607bf"
-
-[[package]]
 name = "bitflags"
 version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -194,37 +159,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "block-padding"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0a90ec2df9600c28a01c56c4784c9207a96d2451833aeceb8cc97e4c9548bb78"
-dependencies = [
- "generic-array",
-]
-
-[[package]]
 name = "bs58"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "771fe0050b883fcc3ea2359b1a96bcfbc090b7116eae7c3c512c7a083fdf23d3"
 dependencies = [
  "sha2 0.9.9",
-]
-
-[[package]]
-name = "bulletproofs"
-version = "0.1.0"
-dependencies = [
- "crypto_common",
- "crypto_common_derive",
- "curve_arithmetic",
- "ff",
- "group",
- "pairing",
- "pedersen_scheme",
- "rand 0.7.3",
- "random_oracle",
- "serde",
 ]
 
 [[package]]
@@ -244,15 +184,6 @@ name = "bytes"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ec8a7b6a70fde80372154c65702f00a0f56f3e1c36abbc6c440484be248856db"
-
-[[package]]
-name = "cbc"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "26b52a9543ae338f279b96b0b9fed9c8093744685043739079ce85cd58f289a6"
-dependencies = [
- "cipher",
-]
 
 [[package]]
 name = "cc"
@@ -280,16 +211,6 @@ dependencies = [
  "time",
  "wasm-bindgen",
  "winapi",
-]
-
-[[package]]
-name = "cipher"
-version = "0.4.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d1873270f8f7942c191139cb8a40fd228da6c3fd2fc376d7e92d47aa14aeb59e"
-dependencies = [
- "crypto-common",
- "inout",
 ]
 
 [[package]]
@@ -357,7 +278,7 @@ dependencies = [
 
 [[package]]
 name = "concordium-contracts-common"
-version = "5.1.1"
+version = "5.3.1"
 dependencies = [
  "bs58",
  "chrono",
@@ -385,10 +306,11 @@ dependencies = [
 
 [[package]]
 name = "concordium-rust-sdk"
-version = "2.2.0"
+version = "2.3.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "concordium-smart-contract-engine",
  "concordium_base",
  "derive_more",
  "ed25519-dalek",
@@ -398,6 +320,7 @@ dependencies = [
  "num-bigint 0.4.3",
  "num-traits",
  "prost",
+ "prost-derive",
  "rand 0.7.3",
  "rust_decimal",
  "semver",
@@ -407,8 +330,29 @@ dependencies = [
  "thiserror",
  "tokio",
  "tonic",
- "tonic-build",
- "wasm-chain-integration",
+]
+
+[[package]]
+name = "concordium-smart-contract-engine"
+version = "1.0.1"
+dependencies = [
+ "anyhow",
+ "byteorder",
+ "concordium-contracts-common",
+ "concordium-wasm",
+ "derive_more",
+ "ed25519-zebra",
+ "futures",
+ "libc",
+ "num_enum",
+ "rand 0.8.5",
+ "secp256k1",
+ "serde",
+ "sha2 0.10.6",
+ "sha3",
+ "slab",
+ "thiserror",
+ "tinyvec",
 ]
 
 [[package]]
@@ -424,24 +368,23 @@ dependencies = [
 
 [[package]]
 name = "concordium_base"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
- "aggregate_sig",
  "anyhow",
+ "bs58",
  "byteorder",
  "chrono",
  "concordium-contracts-common",
- "crypto_common",
+ "concordium_base_derive",
+ "curve25519-dalek",
  "derive_more",
- "ecvrf",
  "ed25519-dalek",
- "eddsa_ed25519",
  "either",
- "encrypted_transfers",
  "ff",
+ "group",
  "hex",
- "id",
  "itertools",
+ "leb128",
  "libc",
  "num",
  "num-bigint 0.4.3",
@@ -449,12 +392,24 @@ dependencies = [
  "pairing",
  "rand 0.7.3",
  "rand_core 0.5.1",
- "random_oracle",
+ "rayon",
  "rust_decimal",
  "serde",
  "serde_json",
  "sha2 0.10.6",
+ "sha3",
+ "subtle",
  "thiserror",
+ "zeroize",
+]
+
+[[package]]
+name = "concordium_base_derive"
+version = "1.0.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -542,42 +497,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "crypto_common"
-version = "0.1.0"
-dependencies = [
- "aes",
- "anyhow",
- "base64",
- "byteorder",
- "cbc",
- "concordium-contracts-common",
- "crypto_common_derive",
- "derive_more",
- "ed25519-dalek",
- "either",
- "ff",
- "group",
- "hex",
- "hmac",
- "libc",
- "pairing",
- "pbkdf2",
- "rand 0.7.3",
- "serde",
- "sha2 0.10.6",
- "thiserror",
-]
-
-[[package]]
-name = "crypto_common_derive"
-version = "0.1.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "curve25519-dalek"
 version = "3.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -588,23 +507,6 @@ dependencies = [
  "rand_core 0.5.1",
  "subtle",
  "zeroize",
-]
-
-[[package]]
-name = "curve_arithmetic"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "byteorder",
- "crypto_common",
- "crypto_common_derive",
- "ff",
- "group",
- "pairing",
- "rand 0.7.3",
- "serde",
- "sha2 0.10.6",
- "thiserror",
 ]
 
 [[package]]
@@ -681,37 +583,6 @@ checksum = "adfbc57365a37acbd2ebf2b64d7e69bb766e2fea813521ed536f5d0520dcf86c"
 dependencies = [
  "block-buffer 0.10.3",
  "crypto-common",
- "subtle",
-]
-
-[[package]]
-name = "dodis_yampolskiy_prf"
-version = "0.1.0"
-dependencies = [
- "crypto_common",
- "crypto_common_derive",
- "curve_arithmetic",
- "ff",
- "pairing",
- "rand 0.7.3",
- "rand_core 0.5.1",
- "serde",
- "thiserror",
-]
-
-[[package]]
-name = "ecvrf"
-version = "0.0.1"
-dependencies = [
- "crypto_common",
- "crypto_common_derive",
- "curve25519-dalek",
- "libc",
- "rand 0.7.3",
- "sha2 0.10.6",
- "subtle",
- "thiserror",
- "zeroize",
 ]
 
 [[package]]
@@ -753,44 +624,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "eddsa_ed25519"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "crypto_common",
- "crypto_common_derive",
- "curve25519-dalek",
- "ed25519-dalek",
- "libc",
- "rand 0.7.3",
- "random_oracle",
- "serde",
- "sha2 0.10.6",
- "thiserror",
-]
-
-[[package]]
 name = "either"
 version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "90e5c1c8368803113bf0c9584fc495a58b86dc8a29edbf8fe877d21d9507e797"
-
-[[package]]
-name = "elgamal"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "crypto_common",
- "crypto_common_derive",
- "curve_arithmetic",
- "ff",
- "libc",
- "pairing",
- "rand 0.7.3",
- "rand_core 0.5.1",
- "serde",
- "thiserror",
-]
 
 [[package]]
 name = "encoding_rs"
@@ -799,27 +636,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9852635589dc9f9ea1b6fe9f05b50ef208c85c834a562f0c6abb1c475736ec2b"
 dependencies = [
  "cfg-if",
-]
-
-[[package]]
-name = "encrypted_transfers"
-version = "0.1.0"
-dependencies = [
- "bulletproofs",
- "crypto_common",
- "crypto_common_derive",
- "curve_arithmetic",
- "elgamal",
- "ff",
- "id",
- "itertools",
- "libc",
- "pairing",
- "pedersen_scheme",
- "rand 0.7.3",
- "random_oracle",
- "serde",
- "wasm-bindgen",
 ]
 
 [[package]]
@@ -855,12 +671,6 @@ dependencies = [
  "quote",
  "syn",
 ]
-
-[[package]]
-name = "fixedbitset"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ce7134b9999ecaf8bcd65542e436736ef32ddca1b3e06094cb6ec5755203b80"
 
 [[package]]
 name = "fnv"
@@ -998,10 +808,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8fc3cb4d91f53b50155bdcfd23f6a4c39ae1969c2ae85982b135750cccaf5fce"
 dependencies = [
  "cfg-if",
- "js-sys",
  "libc",
  "wasi 0.9.0+wasi-snapshot-preview1",
- "wasm-bindgen",
 ]
 
 [[package]]
@@ -1080,15 +888,6 @@ name = "hex"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
-
-[[package]]
-name = "hmac"
-version = "0.12.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c49c37c09c17a53d937dfbb742eb3a961d65a994e6bcdcf37e7399d0cc8ab5e"
-dependencies = [
- "digest 0.10.5",
-]
 
 [[package]]
 name = "http"
@@ -1204,39 +1003,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "id"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bulletproofs",
- "byteorder",
- "chrono",
- "crypto_common",
- "crypto_common_derive",
- "curve_arithmetic",
- "derive_more",
- "dodis_yampolskiy_prf",
- "ed25519-dalek",
- "either",
- "elgamal",
- "ff",
- "hex",
- "itertools",
- "libc",
- "pairing",
- "pedersen_scheme",
- "ps_sig",
- "rand 0.7.3",
- "rand_core 0.5.1",
- "random_oracle",
- "serde",
- "serde_json",
- "sha2 0.10.6",
- "thiserror",
- "wasm-bindgen",
-]
-
-[[package]]
 name = "idna"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1254,16 +1020,6 @@ checksum = "10a35a97730320ffe8e2d410b5d3b69279b98d2c14bdb8b70ea89ecf7888d41e"
 dependencies = [
  "autocfg",
  "hashbrown 0.12.3",
-]
-
-[[package]]
-name = "inout"
-version = "0.1.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a0c10553d664a4d0bcff9f4215d0aac67a639cc68ef660840afe309b807bc9f5"
-dependencies = [
- "block-padding",
- "generic-array",
 ]
 
 [[package]]
@@ -1385,12 +1141,6 @@ dependencies = [
  "wasi 0.11.0+wasi-snapshot-preview1",
  "windows-sys 0.42.0",
 ]
-
-[[package]]
-name = "multimap"
-version = "0.8.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e5ce46fe64a9d73be07dcbe690a38ce1b293be448fd8ce1e6c1b8062c9f72c6a"
 
 [[package]]
 name = "native-tls"
@@ -1604,59 +1354,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "password-hash"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7676374caaee8a325c9e7a2ae557f216c5563a171d6997b0ef8a65af35147700"
-dependencies = [
- "base64ct",
- "rand_core 0.6.4",
- "subtle",
-]
-
-[[package]]
-name = "pbkdf2"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83a0692ec44e4cf1ef28ca317f14f8f07da2d95ec3fa01f86e4467b725e60917"
-dependencies = [
- "digest 0.10.5",
- "hmac",
- "password-hash",
- "sha2 0.10.6",
-]
-
-[[package]]
-name = "pedersen_scheme"
-version = "0.1.0"
-dependencies = [
- "byteorder",
- "crypto_common",
- "crypto_common_derive",
- "curve_arithmetic",
- "ff",
- "pairing",
- "rand 0.7.3",
- "rand_core 0.5.1",
- "serde",
- "thiserror",
-]
-
-[[package]]
 name = "percent-encoding"
 version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "478c572c3d73181ff3c2539045f6eb99e5491218eae919370993b890cdbdd98e"
-
-[[package]]
-name = "petgraph"
-version = "0.6.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6d5014253a1331579ce62aa67443b4a658c5e7dd03d4bc6d302b94474888143"
-dependencies = [
- "fixedbitset",
- "indexmap",
-]
 
 [[package]]
 name = "pin-project"
@@ -1701,16 +1402,6 @@ name = "ppv-lite86"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5b40af805b3121feab8a3c29f04d8ad262fa8e0561883e7653e024ae4479e6de"
-
-[[package]]
-name = "prettyplease"
-version = "0.1.21"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c142c0e46b57171fe0c528bee8c5b7569e80f0c17e377cd0e30ea57dbc11bb51"
-dependencies = [
- "proc-macro2",
- "syn",
-]
 
 [[package]]
 name = "proc-macro-crate"
@@ -1767,28 +1458,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "prost-build"
-version = "0.11.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1d8b442418ea0822409d9e7d047cbf1e7e9e1760b172bf9982cf29d517c93511"
-dependencies = [
- "bytes",
- "heck",
- "itertools",
- "lazy_static",
- "log",
- "multimap",
- "petgraph",
- "prettyplease",
- "prost",
- "prost-types",
- "regex",
- "syn",
- "tempfile",
- "which",
-]
-
-[[package]]
 name = "prost-derive"
 version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1799,35 +1468,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "prost-types"
-version = "0.11.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "747761bc3dc48f9a34553bf65605cf6cb6288ba219f3450b4275dbd81539551a"
-dependencies = [
- "bytes",
- "prost",
-]
-
-[[package]]
-name = "ps_sig"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "byteorder",
- "crypto_common",
- "crypto_common_derive",
- "curve_arithmetic",
- "ff",
- "libc",
- "pairing",
- "pedersen_scheme",
- "rand 0.7.3",
- "rand_core 0.5.1",
- "serde",
- "thiserror",
 ]
 
 [[package]]
@@ -1930,21 +1570,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "random_oracle"
-version = "0.1.0"
-dependencies = [
- "crypto_common",
- "crypto_common_derive",
- "curve_arithmetic",
- "rand 0.7.3",
- "sha3",
-]
-
-[[package]]
 name = "rayon"
-version = "1.6.1"
+version = "1.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6db3a213adf02b3bcfd2d3846bb41cb22857d131789e01df434fb7e7bc0759b7"
+checksum = "1d2df5196e37bcc87abebc0053e20787d73847bb33134a69841207dd0a47f03b"
 dependencies = [
  "either",
  "rayon-core",
@@ -1952,9 +1581,9 @@ dependencies = [
 
 [[package]]
 name = "rayon-core"
-version = "1.10.1"
+version = "1.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cac410af5d00ab6884528b4ab69d1e8e146e8d471201800fa1b4524126de6ad3"
+checksum = "4b8f95bd6966f5c87776639160a66bd8ab9895d9d4ab01ddba9fc60661aebe8d"
 dependencies = [
  "crossbeam-channel",
  "crossbeam-deque",
@@ -1970,21 +1599,6 @@ checksum = "fb5a58c1855b4b6819d59012155603f0b22ad30cad752600aadfcb695265519a"
 dependencies = [
  "bitflags",
 ]
-
-[[package]]
-name = "regex"
-version = "1.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e076559ef8e241f2ae3479e36f97bd5741c0330689e217ad51ce2c76808b868a"
-dependencies = [
- "regex-syntax",
-]
-
-[[package]]
-name = "regex-syntax"
-version = "0.6.28"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "456c603be3e8d448b072f410900c09faf164fbce2d480456f50eea6e25f9c848"
 
 [[package]]
 name = "remove_dir_all"
@@ -2462,19 +2076,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tonic-build"
-version = "0.8.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "48c6fd7c2581e36d63388a9e04c350c21beb7a8b059580b2e93993c526899ddc"
-dependencies = [
- "prettyplease",
- "proc-macro2",
- "prost-build",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "tower"
 version = "0.4.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2731,29 +2332,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1c38c045535d93ec4f0b4defec448e4291638ee608530863b1e2ba115d4fff7f"
 
 [[package]]
-name = "wasm-chain-integration"
-version = "0.2.0"
-dependencies = [
- "anyhow",
- "byteorder",
- "concordium-contracts-common",
- "concordium-wasm",
- "derive_more",
- "ed25519-zebra",
- "futures",
- "libc",
- "num_enum",
- "rand 0.8.5",
- "secp256k1",
- "serde",
- "sha2 0.10.6",
- "sha3",
- "slab",
- "thiserror",
- "tinyvec",
-]
-
-[[package]]
 name = "web-sys"
 version = "0.3.60"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2761,17 +2339,6 @@ checksum = "bcda906d8be16e728fd5adc5b729afad4e444e106ab28cd1c7256e54fa61510f"
 dependencies = [
  "js-sys",
  "wasm-bindgen",
-]
-
-[[package]]
-name = "which"
-version = "4.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1c831fbbee9e129a8cf93e7747a82da9d95ba8e16621cae60ec2cdc849bacb7b"
-dependencies = [
- "either",
- "libc",
- "once_cell",
 ]
 
 [[package]]
