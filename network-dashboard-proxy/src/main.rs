@@ -95,21 +95,21 @@ impl axum::response::IntoResponse for Error {
     }
 }
 
+#[tracing::instrument(level = "debug", skip(client))]
 async fn transaction_status(
     axum::extract::Path(tx): axum::extract::Path<TransactionHash>,
     axum::extract::State(mut client): axum::extract::State<v2::Client>,
 ) -> Result<axum::Json<TransactionStatus>, Error> {
-    let _span = tracing::debug_span!("transaction_status");
     tracing::debug!("Request for transaction status for {tx}.");
     let r = client.get_block_item_status(&tx).await?;
     Ok(r.into())
 }
 
+#[tracing::instrument(level = "debug", skip(client))]
 async fn blocks_by_height(
     axum::extract::Path(height): axum::extract::Path<u64>,
     axum::extract::State(mut client): axum::extract::State<v2::Client>,
 ) -> Result<axum::Json<Vec<BlockHash>>, Error> {
-    let _span = tracing::debug_span!("blocks_by_height", height = height);
     tracing::debug!("Request for blocks at height {height}.");
     let r = client
         .get_blocks_at_height(&AbsoluteBlockHeight::from(height).into())
@@ -117,31 +117,30 @@ async fn blocks_by_height(
     Ok(r.into())
 }
 
+#[tracing::instrument(level = "debug", skip(client))]
 async fn block_info(
     axum::extract::Path(block_hash): axum::extract::Path<BlockHash>,
     axum::extract::State(mut client): axum::extract::State<v2::Client>,
 ) -> Result<axum::Json<BlockInfo>, Error> {
-    let _span = tracing::debug_span!("block_info");
     tracing::debug!("Request for block info for {block_hash}.");
     let r = client.get_block_info(&block_hash).await?;
     Ok(r.response.into())
 }
 
+#[tracing::instrument(level = "debug", skip(client))]
 async fn consensus_status(
     axum::extract::State(mut client): axum::extract::State<v2::Client>,
 ) -> Result<axum::Json<ConsensusInfo>, Error> {
-    let _span = tracing::debug_span!("consensus_status");
     tracing::debug!("Request for consensus status.");
     let r = client.get_consensus_info().await?;
     Ok(r.into())
 }
 
+#[tracing::instrument(level = "debug", skip(c))]
 async fn block_summary(
     axum::extract::Path(block_hash): axum::extract::Path<BlockHash>,
     axum::extract::State(c): axum::extract::State<v2::Client>,
 ) -> Result<axum::Json<serde_json::Value>, Error> {
-    let _span = tracing::debug_span!("block_summary");
-    tracing::debug!("Request for block summary for {block_hash}.");
     let mut client = c.clone();
     let txs = async move {
         let txs = client
