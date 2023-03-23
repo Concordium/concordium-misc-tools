@@ -12,7 +12,7 @@ use concordium_rust_sdk::{
     endpoints,
     id::types::AccountAddress,
     types::{
-        hashes::BlockHash, smart_contracts::ModuleRef, AccountInfo, ContractAddress,
+        hashes::BlockHash, smart_contracts::ModuleReference, AccountInfo, ContractAddress,
         ProtocolVersion,
     },
     v2,
@@ -214,7 +214,7 @@ async fn compare_module_lists(
     client2: &mut v2::Client,
     block1: BlockHash,
     block2: BlockHash,
-) -> anyhow::Result<(bool, Vec<ModuleRef>)> {
+) -> anyhow::Result<(bool, Vec<ModuleReference>)> {
     let mut ms1 = client1
         .get_module_list(block1)
         .await?
