@@ -28,6 +28,7 @@ use tokio_postgres::{
     types::{ToSql, Type},
     NoTls,
 };
+use tonic::transport::ClientTlsConfig;
 
 /// Command line configuration of the application.
 #[derive(Debug, Parser)]
@@ -868,6 +869,18 @@ async fn node_process(
         from_height,
         node_endpoint.uri()
     );
+
+    // Use TLS if the URI scheme is HTTPS.
+    // This uses whatever system certificates have been installed as trusted roots.
+    let node_endpoint = if node_endpoint
+        .uri()
+        .scheme()
+        .map_or(false, |x| x == &http::uri::Scheme::HTTPS)
+    {
+        node_endpoint.tls_config(ClientTlsConfig::new())?
+    } else {
+        node_endpoint
+    };
 
     let mut node = Client::new(node_endpoint.clone())
         .await
