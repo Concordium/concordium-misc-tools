@@ -51,15 +51,13 @@ CREATE TABLE IF NOT EXISTS contracts (
 
 -- All account transactions
 CREATE TABLE IF NOT EXISTS transactions (
-  id SERIAL8 PRIMARY KEY,
+  id INT8 PRIMARY KEY,
   hash BYTEA NOT NULL UNIQUE,
   block INT8 NOT NULL REFERENCES blocks(id) ON DELETE RESTRICT ON UPDATE RESTRICT, -- To support time series output.
   cost INT8 NOT NULL,
   is_success BOOLEAN NOT NULL,
   type INT2 -- NULL means the transaction was rejected
 );
--- Create index on transaction type to improve performance when querying for transactions of specific types.
-CREATE INDEX IF NOT EXISTS transactions_type ON transactions USING HASH (type);
 -- Create index on transactions reference to block to improve performance when querying for transactions linked to specific blocks.
 CREATE INDEX IF NOT EXISTS transactions_block ON transactions (block);
 
