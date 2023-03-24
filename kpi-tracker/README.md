@@ -93,6 +93,6 @@ A [Dockerfile](./Dockerfile) is available that produces a self-contained image w
 
 This docker image can be built using
 ```
-docker build --build-arg build_image=rust:1.62-buster --build-arg base_image=debian:buster -f ./scripts/Dockerfile ../
+docker build --build-arg build_image=rust:1.66-buster --build-arg base_image=debian:buster -f ./scripts/Dockerfile ../
 ```
 which produces a debian-buster based image.
