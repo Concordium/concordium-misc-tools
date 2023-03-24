@@ -6,7 +6,7 @@ This folder contains the source code for the KPI-tracker service used to collect
 
 To run the service successfully, the following dependencies are required to be available:
 
-- Rust v1.62
+- Rust v1.64
 - PostgreSQL with database to be used in configuration.
 - Grafana (not required to run the service, but needed to view the data as intended).
 
@@ -29,7 +29,7 @@ For development purposes a transient database can be run using docker as
 
 The service can be configured with a number of runtime arguments:
 
-- `--node` (environment variable `KPI_TRACKER_NODES`), which takes a list of node GRPC2 endpoints consisting of both host and port. Default value is `http://localhost:20001`.
+- `--node` (environment variable `KPI_TRACKER_NODES`), which takes a list of node GRPC2 endpoints consisting of both host and port. Default value is `http://localhost:20001`. If the URL starts with `https` schema then the tool will establish TLS connection to the node, using the system trust roots.
 - `--db-connection` (environment variable `KPI_TRACKER_DB_CONNECTION`), which takes a database connection string. Default value is `host=localhost dbname=kpi-tracker user=postgres password=password port=5432`.
 - `--log-level` (environment variable `KPI_TRACKER_LOG_LEVEL`), which takes a logging level. Possible values are `off`, `trace`, `debug`, `info`, `warn`, `error`. Default value is `debug`.
 - `--num-parallel` (environment variable `KPI_TRACKER_NUM_PARALLEL`), which takes an integer specifying the number of parallel queries to be made to a node. Default value is `1`.
