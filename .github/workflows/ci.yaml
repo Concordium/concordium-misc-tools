@@ -13,7 +13,7 @@ on:
 
 env:
   RUST_FMT: nightly-2022-06-09-x86_64-unknown-linux-gnu
-  RUST_CLIPPY: 1.62
+  RUST_CLIPPY: 1.64
 
 jobs:
   "lint_fmt":
@@ -30,6 +30,7 @@ jobs:
           - genesis-creator/Cargo.toml
           - id-verifier/Cargo.toml
           - kpi-tracker/Cargo.toml
+          - network-dashboard-proxy/Cargo.toml
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -61,12 +62,8 @@ jobs:
           - genesis-creator/Cargo.toml
           - id-verifier/Cargo.toml
           - kpi-tracker/Cargo.toml
+          - network-dashboard-proxy/Cargo.toml
     steps:
-      - name: Install protobuf
-        run: |
-          wget https://github.com/protocolbuffers/protobuf/releases/download/v3.15.3/protoc-3.15.3-linux-x86_64.zip
-          unzip protoc-3.15.3-linux-x86_64.zip
-          sudo mv ./bin/protoc /usr/bin/protoc
       - name: Checkout
         uses: actions/checkout@v2
         with:
