@@ -243,10 +243,9 @@ function AgeInRange({ setStatement }: ExtendStatementProps) {
 
     const onClickAdd: MouseEventHandler<HTMLButtonElement> = () => {
         const builder = new IdStatementBuilder(false);
-        // Deliberately try to not do any validation for testing.
-        // If the value is not an integer then some part of the wallet pipeline should handle the error
-        // somewhat gracefully.
-        builder.addAgeInRange(lower as unknown as number, upper as unknown as number);
+        // Since addAgeInRange does some arithmetic we need to parse inputs as integers
+        // first. Otherwise we get unexpected behaviour.
+        builder.addAgeInRange(parseInt(lower), parseInt(upper));
         setStatement((oldStatements) => oldStatements.concat(builder.getStatement()));
     };
 
