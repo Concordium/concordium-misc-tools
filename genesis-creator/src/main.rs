@@ -269,7 +269,7 @@ fn read_or_generate_update_keys<R: rand::Rng + rand::CryptoRng>(
     for key_cfg in key_cfgs {
         match key_cfg {
             HigherLevelKey::Existing { source } => {
-                let data = std::fs::read(&source).context(format!(
+                let data = std::fs::read(source).context(format!(
                     "Could not read the {} key: {}",
                     ctx,
                     source.display()

@@ -6,7 +6,7 @@ This folder contains the source code for the KPI-tracker service used to collect
 
 To run the service successfully, the following dependencies are required to be available:
 
-- Rust v1.64
+- Rust v1.65
 - PostgreSQL with database to be used in configuration.
 - Grafana (not required to run the service, but needed to view the data as intended).
 
