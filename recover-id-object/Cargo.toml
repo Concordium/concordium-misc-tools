@@ -1,22 +1,24 @@
 [package]
-name = "network-dashboard-proxy"
-version = "2.0.2"
+name = "recover-id-object"
+version = "1.0.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+clap = { version = "4", features = ["env", "derive"] }
 anyhow = "1"
 tokio = {version = "1.20", features = ["rt-multi-thread", "macros"]}
-clap = { version = "4", features = ["derive", "env"] }
-chrono = "0.4"
-futures = "0.3"
-axum = "0.6"
-serde_json = "1"
 tonic = {version = "0.8", features = ["tls", "tls-roots", "tls-webpki-roots"]}
-tracing-subscriber = { version = "0.3" }
-tracing = { version = "0.1" }
-tower-http = {version = "0.4", features = ["trace", "timeout", "limit", "cors"]}
 thiserror = "1"
 
 concordium-rust-sdk = { path = "../deps/concordium-rust-sdk", version = "*" }
+key_derivation = { path = "../deps/concordium-rust-sdk/concordium-base/rust-src/key_derivation/", version = "*" }
+serde_json = "1.0.96"
+serde = "1.0.162"
+reqwest = { version = "0.11.17", features = ["json"] }
+url = { version = "2.3.1", features = ["serde"] }
+http = "0.2.9"
+chrono = "0.4.24"
+
+
