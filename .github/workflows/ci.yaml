@@ -31,6 +31,7 @@ jobs:
           - id-verifier/Cargo.toml
           - kpi-tracker/Cargo.toml
           - network-dashboard-proxy/Cargo.toml
+          - chain-prometheus-exporter/Cargo.toml
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -63,6 +64,7 @@ jobs:
           - id-verifier/Cargo.toml
           - kpi-tracker/Cargo.toml
           - network-dashboard-proxy/Cargo.toml
+          - chain-prometheus-exporter/Cargo.toml
     steps:
       - name: Checkout
         uses: actions/checkout@v2
