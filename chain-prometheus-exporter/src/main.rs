@@ -173,13 +173,19 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// State maintained by the service.
+type ServiceState = (
+    // Connection to the node.
+    v2::Client,
+    // Prometheus registry
+    Registry,
+    // List of accounts to query, along with their gauges for recording balances.
+    Arc<Vec<(AccountAddress, GenericGauge<AtomicU64>)>>,
+);
+
 #[tracing::instrument(level = "debug", skip(client, registry))]
 async fn text_metrics(
-    axum::extract::State((client, registry, gauges)): axum::extract::State<(
-        v2::Client,
-        Registry,
-        Arc<Vec<(AccountAddress, GenericGauge<AtomicU64>)>>,
-    )>,
+    axum::extract::State((client, registry, gauges)): axum::extract::State<ServiceState>,
 ) -> Result<String, axum::response::ErrorResponse> {
     let mut futures = FuturesOrdered::new();
     for acc in gauges.iter().map(|x| x.0) {
