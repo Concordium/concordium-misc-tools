@@ -411,7 +411,7 @@ To generate a genesis from existing file, run
 ```console
 genesis-creator assemble -- assemble-config.toml
 ```
-where `genesis-config.toml` is a TOML file specifying the genesis. The TOML configuration file should specify
+where `assemble-config.toml` is a TOML file specifying the genesis. The TOML configuration file should specify
 - the protocol version
 - the foundation account
 - a path to a file with the genesis accounts

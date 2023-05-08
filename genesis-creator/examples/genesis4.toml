@@ -1,4 +1,4 @@
-protocolVersion = 4
+protocolVersion = "4"
 
 [out]
 updateKeys = "./update-keys"

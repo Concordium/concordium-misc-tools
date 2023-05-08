@@ -4,7 +4,7 @@ use concordium_rust_sdk::{
 };
 use std::path::PathBuf;
 
-use crate::genesis::GenesisParameters;
+use crate::genesis::GenesisParametersConfigV0;
 
 /// Configuration struct for specifying protocol version, the genesis
 /// parameters, the foundation account and where to find genesis accounts,
@@ -14,7 +14,7 @@ use crate::genesis::GenesisParameters;
 #[serde(rename_all = "camelCase")]
 pub struct AssembleGenesisConfig {
     pub protocol_version:   ProtocolVersion,
-    pub parameters:         GenesisParameters,
+    pub parameters:         GenesisParametersConfigV0,
     pub foundation_account: AccountAddress,
     /// A file with a list of accounts that should be assembled into
     /// genesis.

@@ -304,7 +304,7 @@ fn read_or_generate_update_keys<R: rand::Rng + rand::CryptoRng>(
 /// version 0 `UpdateKeysCollection`. NB: To be used only in chain parameters
 /// version 0.
 fn updates_v0(
-    updates_out: Option<PathBuf>,
+    updates_out: Option<&Path>,
     update_cfg: UpdateKeysConfig,
 ) -> anyhow::Result<UpdateKeysCollection<ChainParameterVersion0>> {
     let mut csprng = rand::thread_rng();
@@ -395,7 +395,8 @@ fn updates_v0(
         level_2_keys,
     };
 
-    if let Some(mut path) = updates_out {
+    if let Some(path) = updates_out {
+        let mut path = path.to_owned();
         path.push("governance-keys.json");
         std::fs::write(path, serde_json::to_string_pretty(&uks).unwrap())
             .context("Unable to write authorizations.")?;
@@ -413,7 +414,7 @@ fn updates_v0(
 /// version 1 `UpdateKeysCollection`. NB: To be used only in chain parameters
 /// version 1.
 fn updates_v1(
-    updates_out: Option<PathBuf>,
+    updates_out: Option<&Path>,
     update_cfg: UpdateKeysConfig,
 ) -> anyhow::Result<UpdateKeysCollection<ChainParameterVersion1>> {
     let mut csprng = rand::thread_rng();
@@ -517,7 +518,8 @@ fn updates_v1(
         level_2_keys,
     };
 
-    if let Some(mut path) = updates_out {
+    if let Some(path) = updates_out {
+        let mut path = path.to_owned();
         path.push("governance-keys.json");
         std::fs::write(path, serde_json::to_string_pretty(&uks).unwrap())
             .context("Unable to write authorizations.")?;
@@ -986,53 +988,55 @@ fn handle_generate(config_path: &Path, verbose: bool) -> anyhow::Result<()> {
         println!("{:#?}", config);
     }
 
-    if config.out.delete_existing {
+    let common = config.common();
+
+    if common.out.delete_existing {
         println!("Deleting any existing directories.")
     }
 
     check_and_create_dir(
-        config.out.delete_existing,
-        &config.out.account_keys,
+        common.out.delete_existing,
+        &common.out.account_keys,
         verbose,
     )?;
-    if let Some(dir) = config.out.update_keys.as_ref() {
-        check_and_create_dir(config.out.delete_existing, dir, verbose)?;
+    if let Some(dir) = common.out.update_keys.as_ref() {
+        check_and_create_dir(common.out.delete_existing, dir, verbose)?;
     }
     check_and_create_dir(
-        config.out.delete_existing,
-        &config.out.identity_providers,
+        common.out.delete_existing,
+        &common.out.identity_providers,
         verbose,
     )?;
     check_and_create_dir(
-        config.out.delete_existing,
-        &config.out.anonymity_revokers,
+        common.out.delete_existing,
+        &common.out.anonymity_revokers,
         verbose,
     )?;
-    check_and_create_dir(config.out.delete_existing, &config.out.baker_keys, verbose)?;
-    if let Some(global) = &config.out.cryptographic_parameters {
-        check_and_create_dir(config.out.delete_existing, global, verbose)?;
+    check_and_create_dir(common.out.delete_existing, &common.out.baker_keys, verbose)?;
+    if let Some(global) = &common.out.cryptographic_parameters {
+        check_and_create_dir(common.out.delete_existing, global, verbose)?;
     }
 
     println!(
         "Account keys will be generated in {}",
-        config.out.account_keys.display()
+        common.out.account_keys.display()
     );
-    if let Some(dir) = config.out.update_keys.as_ref() {
+    if let Some(dir) = common.out.update_keys.as_ref() {
         println!("Chain update keys will be generated in {}", dir.display(),)
     }
     println!(
         "Identity providers will be generated in {}",
-        config.out.identity_providers.display()
+        common.out.identity_providers.display()
     );
     println!(
         "Anonymity revokers will be generated in {}",
-        config.out.anonymity_revokers.display()
+        common.out.anonymity_revokers.display()
     );
     println!(
         "Baker keys will be generated in {}",
-        config.out.baker_keys.display()
+        common.out.baker_keys.display()
     );
-    if let Some(global) = &config.out.cryptographic_parameters {
+    if let Some(global) = &common.out.cryptographic_parameters {
         println!(
             "Cryptographic parameter will be generated in {}",
             global.display()
@@ -1041,132 +1045,212 @@ fn handle_generate(config_path: &Path, verbose: bool) -> anyhow::Result<()> {
 
     println!(
         "The genesis data will be stored in {}",
-        config.out.genesis.display()
+        common.out.genesis.display()
     );
     println!(
         "The genesis hash will be written to {}",
-        config.out.genesis_hash.display()
+        common.out.genesis_hash.display()
     );
 
-    let core = config.parameters.to_core()?;
+    let protocol_version = config.protocol_version();
 
-    let genesis_time = chrono::DateTime::<chrono::Utc>::from(std::time::UNIX_EPOCH)
-        + chrono::Duration::milliseconds(core.time.millis as i64);
+    match config {
+        Config::P1(ConfigV0 {
+            parameters, common, ..
+        })
+        | Config::P2(ConfigV0 {
+            parameters, common, ..
+        })
+        | Config::P3(ConfigV0 {
+            parameters, common, ..
+        })
+        | Config::P4(ConfigV0 {
+            parameters, common, ..
+        })
+        | Config::P5(ConfigV0 {
+            parameters, common, ..
+        }) => {
+            let core = parameters.to_core()?;
+            let genesis_time = chrono::DateTime::<chrono::Utc>::from(std::time::UNIX_EPOCH)
+                + chrono::Duration::milliseconds(core.time.millis as i64);
 
-    println!("Genesis time is set to {}.", genesis_time);
-    let slot_duration = rust_decimal::Decimal::from_u64(config.parameters.slot_duration.millis)
-        .context("Too large slot duration.")?;
-    let elect_diff = config.parameters.chain.election_difficulty();
-    let average_block_time: rust_decimal::Decimal =
-        slot_duration / rust_decimal::Decimal::from(elect_diff);
-    println!("Average block time is set to {}ms.", average_block_time);
+            println!("Genesis time is set to {}.", genesis_time);
+            let slot_duration = rust_decimal::Decimal::from_u64(parameters.slot_duration.millis)
+                .context("Too large slot duration.")?;
+            let elect_diff = parameters.chain.election_difficulty();
+            let average_block_time: rust_decimal::Decimal =
+                slot_duration / rust_decimal::Decimal::from(elect_diff);
+            println!("Average block time is set to {}ms.", average_block_time);
 
-    let cryptographic_parameters = crypto_parameters(
-        config.out.cryptographic_parameters,
-        config.cryptographic_parameters,
-    )?;
-    let identity_providers =
-        identity_providers(config.out.identity_providers, config.identity_providers)?;
-    let anonymity_revokers = anonymity_revokers(
-        config.out.anonymity_revokers,
-        &cryptographic_parameters,
-        config.anonymity_revokers,
-    )?;
-    let (foundation_idx, num_bakers, accounts) = accounts(
-        config.out.baker_keys,
-        config.out.account_keys,
-        &cryptographic_parameters,
-        &anonymity_revokers,
-        config.accounts,
-    )?;
+            let cryptographic_parameters = crypto_parameters(
+                common.out.cryptographic_parameters,
+                common.cryptographic_parameters,
+            )?;
+            let identity_providers =
+                identity_providers(common.out.identity_providers, common.identity_providers)?;
+            let anonymity_revokers = anonymity_revokers(
+                common.out.anonymity_revokers,
+                &cryptographic_parameters,
+                common.anonymity_revokers,
+            )?;
 
-    println!(
-        "There are {} accounts in genesis, {} of which are bakers.",
-        accounts.len(),
-        num_bakers
-    );
+            let (foundation_idx, num_bakers, accounts) = accounts(
+                common.out.baker_keys,
+                common.out.account_keys,
+                &cryptographic_parameters,
+                &anonymity_revokers,
+                common.accounts,
+            )?;
 
-    let genesis = match config.protocol_version {
-        ProtocolVersion::P1 | ProtocolVersion::P2 | ProtocolVersion::P3 => {
-            let params = match config.parameters.chain {
-                GenesisChainParameters::V0(params) => params,
-                GenesisChainParameters::V1(_) => {
-                    bail!(format!(
-                        "Protocol version {} supports only chain parameters
-    version 0.",
-                        config.protocol_version
-                    ))
+            println!(
+                "There are {} accounts in genesis, {} of which are bakers.",
+                accounts.len(),
+                num_bakers
+            );
+
+            let genesis = match protocol_version {
+                ProtocolVersion::P1 | ProtocolVersion::P2 | ProtocolVersion::P3 => {
+                    let params = match parameters.chain {
+                        GenesisChainParameters::V0(params) => params,
+                        GenesisChainParameters::V1(_) => {
+                            bail!(format!(
+                                "Protocol version {} supports only chain
+    parameters version 0.",
+                                protocol_version
+                            ))
+                        }
+                    };
+                    let update_keys =
+                        updates_v0(common.out.update_keys.as_deref(), common.updates)?;
+                    let initial_state = GenesisStateCPV0 {
+                        cryptographic_parameters,
+                        identity_providers,
+                        anonymity_revokers,
+                        update_keys,
+                        chain_parameters: params.chain_parameters(foundation_idx),
+                        leadership_election_nonce: parameters.leadership_election_nonce,
+                        accounts,
+                    };
+                    make_genesis_data_cpv0(protocol_version, core, initial_state).context(
+                        "Chain parameters version 0 should not be used
+    in P4",
+                    )? // Should go well since we know we are not in
                 }
-            };
-            let update_keys = updates_v0(config.out.update_keys, config.updates)?;
-            let initial_state = GenesisStateCPV0 {
-                cryptographic_parameters,
-                identity_providers,
-                anonymity_revokers,
-                update_keys,
-                chain_parameters: params.chain_parameters(foundation_idx),
-                leadership_election_nonce: config.parameters.leadership_election_nonce,
-                accounts,
-            };
-            make_genesis_data_cpv0(config.protocol_version, core, initial_state)
-                .context("Chain parameters version 0 should not be used in P4")?
-            // Should go well since we know we are not in P4.
-        }
-        ProtocolVersion::P4 | ProtocolVersion::P5 => {
-            let core = config.parameters.to_core()?;
-            let params = match config.parameters.chain {
-                GenesisChainParameters::V1(params) => params,
-                GenesisChainParameters::V0(_) => {
-                    bail!(format!(
-                        "Protocol version P4 supports only chain parameters version 1."
-                    ))
+
+                ProtocolVersion::P4 | ProtocolVersion::P5 => {
+                    let core = parameters.to_core()?;
+                    let params = match parameters.chain {
+                        GenesisChainParameters::V1(params) => params,
+                        GenesisChainParameters::V0(_) => {
+                            bail!(format!(
+                                "Protocol version P4 supports only chain
+    parameters version 1."
+                            ))
+                        }
+                    };
+                    let update_keys =
+                        updates_v1(common.out.update_keys.as_deref(), common.updates)?;
+                    let initial_state = GenesisStateCPV1 {
+                        cryptographic_parameters,
+                        identity_providers,
+                        anonymity_revokers,
+                        update_keys,
+                        chain_parameters: params.chain_parameters(foundation_idx),
+                        leadership_election_nonce: parameters.leadership_election_nonce,
+                        accounts,
+                    };
+                    match protocol_version {
+                        ProtocolVersion::P4 => GenesisData::P4 {
+                            core,
+                            initial_state,
+                        },
+                        ProtocolVersion::P5 => GenesisData::P5 {
+                            core,
+                            initial_state,
+                        },
+                        _ => {
+                            unreachable!("Already checked.")
+                        }
+                    }
                 }
-            };
-            let update_keys = updates_v1(config.out.update_keys, config.updates)?;
-            let initial_state = GenesisStateCPV1 {
-                cryptographic_parameters,
-                identity_providers,
-                anonymity_revokers,
-                update_keys,
-                chain_parameters: params.chain_parameters(foundation_idx),
-                leadership_election_nonce: config.parameters.leadership_election_nonce,
-                accounts,
-            };
-            match config.protocol_version {
-                ProtocolVersion::P1
-                | ProtocolVersion::P2
-                | ProtocolVersion::P3
-                | ProtocolVersion::P6 => {
+                _ => {
                     unreachable!("Already checked.")
                 }
-                ProtocolVersion::P4 => GenesisData::P4 {
-                    core,
-                    initial_state,
-                },
-                ProtocolVersion::P5 => GenesisData::P5 {
-                    core,
-                    initial_state,
-                },
-            }
+            };
+            write_genesis(
+                common.out.genesis.as_path(),
+                common.out.genesis_hash.as_path(),
+                &genesis,
+            )?;
         }
-        ProtocolVersion::P6 => {
-            bail!("Protocol version 6 is not supported at present.");
+        Config::P6(ConfigV1 {
+            common, parameters, ..
+        }) => {
+            let cryptographic_parameters = crypto_parameters(
+                common.out.cryptographic_parameters,
+                common.cryptographic_parameters,
+            )?;
+            let identity_providers =
+                identity_providers(common.out.identity_providers, common.identity_providers)?;
+            let anonymity_revokers = anonymity_revokers(
+                common.out.anonymity_revokers,
+                &cryptographic_parameters,
+                common.anonymity_revokers,
+            )?;
+
+            let (foundation_idx, num_bakers, accounts) = accounts(
+                common.out.baker_keys,
+                common.out.account_keys,
+                &cryptographic_parameters,
+                &anonymity_revokers,
+                common.accounts,
+            )?;
+
+            println!(
+                "There are {} accounts in genesis, {} of which are bakers.",
+                accounts.len(),
+                num_bakers
+            );
+
+            let update_keys = updates_v1(common.out.update_keys.as_deref(), common.updates)?;
+
+            let initial_state = GenesisStateCPV2 {
+                cryptographic_parameters,
+                identity_providers,
+                anonymity_revokers,
+                update_keys,
+                chain_parameters: parameters.chain.chain_parameters(foundation_idx)?,
+                leadership_election_nonce: parameters.leadership_election_nonce,
+                accounts,
+            };
+            let genesis = GenesisData::P6 {
+                core: parameters.core.try_into()?,
+                initial_state,
+            };
+
+            write_genesis(
+                common.out.genesis.as_path(),
+                common.out.genesis_hash.as_path(),
+                &genesis,
+            )?;
         }
     };
-    {
-        let mut out = Vec::new();
-        genesis.serial(&mut out);
-        std::fs::write(config.out.genesis, out).context("Unable to write genesis.")?;
-
-        let genesis_hash = genesis.hash();
-        std::fs::write(
-            config.out.genesis_hash,
-            serde_json::to_vec_pretty(&[genesis_hash])
-                .expect("JSON serialization of hashes should not fail."),
-        )
-        .context("Unable to write the genesis hash.")?;
-    }
     println!("DONE");
+    Ok(())
+}
+
+fn write_genesis(data_path: &Path, hash_path: &Path, genesis: &GenesisData) -> anyhow::Result<()> {
+    let mut out = Vec::new();
+    genesis.serial(&mut out);
+    std::fs::write(data_path, out).context("Unable to write genesis.")?;
+
+    let genesis_hash = genesis.hash();
+    std::fs::write(
+        hash_path,
+        serde_json::to_vec_pretty(&[genesis_hash])
+            .expect("JSON serialization of hashes should not fail."),
+    )
+    .context("Unable to write the genesis hash.")?;
     Ok(())
 }
 

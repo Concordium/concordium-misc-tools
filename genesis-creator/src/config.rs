@@ -1,5 +1,5 @@
 //! Input configuration structures and parsing.
-use crate::genesis::GenesisParameters;
+use crate::genesis::{GenesisParametersConfigV0, GenesisParametersConfigV1};
 use anyhow::ensure;
 
 use concordium_rust_sdk::{
@@ -199,16 +199,12 @@ pub struct OutputConfig {
     pub delete_existing:          bool,
 }
 
-/// Struct representing the configuration specified by the input TOML file.
+/// Configuration shared across all of the protocol versions.
 #[derive(SerdeDeserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct Config {
+pub struct ConfigCommon {
     /// Configuration of the output files.
     pub out: OutputConfig,
-    /// Which protocol version to generate genesis for.
-    pub protocol_version: ProtocolVersion,
-    /// The genesis parameters that determine, e.g., genesis time.
-    pub parameters: GenesisParameters,
     /// Configuration of the keys for chain updates. This includes parameter
     /// updates, and authorization updates.
     pub updates: UpdateKeysConfig,
@@ -220,4 +216,65 @@ pub struct Config {
     pub identity_providers: Vec<IdentityProviderConfig>,
     /// Configuration for generating accounts.
     pub accounts: Vec<AccountConfig>,
+}
+
+/// Struct representing the V0 configuration specified by the input TOML file.
+#[derive(SerdeDeserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct ConfigV0 {
+    pub parameters: GenesisParametersConfigV0,
+    #[serde(flatten)]
+    pub common:     ConfigCommon,
+}
+
+/// Struct representing the V1 configuration specified by the input TOML file.
+#[derive(SerdeDeserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct ConfigV1 {
+    pub parameters: GenesisParametersConfigV1,
+    #[serde(flatten)]
+    pub common:     ConfigCommon,
+}
+
+/// Struct representing the configuration specified by the input TOML file for
+/// every protocol version.
+#[derive(SerdeDeserialize, Debug)]
+#[serde(tag = "protocolVersion")]
+pub enum Config {
+    #[serde(rename = "1")]
+    P1(ConfigV0),
+    #[serde(rename = "2")]
+    P2(ConfigV0),
+    #[serde(rename = "3")]
+    P3(ConfigV0),
+    #[serde(rename = "4")]
+    P4(ConfigV0),
+    #[serde(rename = "5")]
+    P5(ConfigV0),
+    #[serde(rename = "6")]
+    P6(ConfigV1),
+}
+
+impl Config {
+    pub fn common(&self) -> &ConfigCommon {
+        match self {
+            Config::P1(config)
+            | Config::P2(config)
+            | Config::P3(config)
+            | Config::P4(config)
+            | Config::P5(config) => &config.common,
+            Config::P6(config) => &config.common,
+        }
+    }
+
+    pub fn protocol_version(&self) -> ProtocolVersion {
+        match self {
+            Config::P1(_) => ProtocolVersion::P1,
+            Config::P2(_) => ProtocolVersion::P2,
+            Config::P3(_) => ProtocolVersion::P3,
+            Config::P4(_) => ProtocolVersion::P4,
+            Config::P5(_) => ProtocolVersion::P5,
+            Config::P6(_) => ProtocolVersion::P6,
+        }
+    }
 }
