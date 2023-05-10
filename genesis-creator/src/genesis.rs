@@ -277,10 +277,10 @@ impl GenesisChainParametersV2 {
     ) -> anyhow::Result<ChainParametersV2> {
         Ok(ChainParametersV2 {
             timeout_parameters: self.timeout_parameters.into(),
-            min_block_time: self.min_block_time,
+            min_block_time: Duration::from_millis(self.min_block_time.millis),
             block_energy_limit: self.block_energy_limit,
             euro_per_energy: self.euro_per_energy,
-            micro_gtu_per_euro: self.micro_ccd_per_euro,
+            micro_ccd_per_euro: self.micro_ccd_per_euro,
             time_parameters: self.time_parameters,
             pool_parameters: self.pool_parameters,
             cooldown_parameters: self.cooldown_parameters,
