@@ -917,59 +917,75 @@ fn handle_assemble(config_path: &Path, verbose: bool) -> anyhow::Result<()> {
         config.genesis_hash_out.display()
     );
 
-    let core = config.parameters.to_core()?;
-    match config.parameters.chain {
-        GenesisChainParameters::V0(params) => {
-            let update_keys = read_json(&make_relative(config_path, &config.governance_keys)?)?;
-            let initial_state = GenesisStateCPV0 {
-                cryptographic_parameters: global.value,
-                identity_providers: idps.value,
-                anonymity_revokers: ars.value,
-                update_keys,
-                chain_parameters: params.chain_parameters(AccountIndex::from(idx)),
-                leadership_election_nonce: config.parameters.leadership_election_nonce,
-                accounts,
-            };
-            let genesis = make_genesis_data_cpv0(config.protocol_version, core, initial_state)
-                .context("P4 does not have CPV0")?;
-            {
-                let mut out = Vec::new();
-                genesis.serial(&mut out);
-                std::fs::write(make_relative(config_path, &config.genesis_out)?, out)
-                    .context("Unable to write genesis.")?;
-            }
-        }
-        GenesisChainParameters::V1(params) => {
-            let update_keys = read_json(&make_relative(config_path, &config.governance_keys)?)?;
-            let initial_state = GenesisStateCPV1 {
-                cryptographic_parameters: global.value,
-                identity_providers: idps.value,
-                anonymity_revokers: ars.value,
-                update_keys,
-                chain_parameters: params.chain_parameters(AccountIndex::from(idx)),
-                leadership_election_nonce: config.parameters.leadership_election_nonce,
-                accounts,
-            };
-            let genesis = GenesisData::P4 {
-                core,
-                initial_state,
-            };
-            {
-                let mut out = Vec::new();
-                genesis.serial(&mut out);
-                std::fs::write(make_relative(config_path, &config.genesis_out)?, out)
-                    .context("Unable to write genesis.")?;
-            }
+    let protocol_version = config.protocol.protocol_version();
 
-            let genesis_hash = genesis.hash();
-            std::fs::write(
-                config.genesis_hash_out,
-                serde_json::to_vec_pretty(&[genesis_hash])
-                    .expect("JSON serialization of hashes should not fail."),
-            )
-            .context("Unable to write the genesis hash.")?;
+    let genesis = match config.protocol {
+        ProtocolConfig::P1 { parameters }
+        | ProtocolConfig::P2 { parameters }
+        | ProtocolConfig::P3 { parameters }
+        | ProtocolConfig::P4 { parameters }
+        | ProtocolConfig::P5 { parameters } => {
+            let core = parameters.to_core()?;
+            match parameters.chain {
+                GenesisChainParameters::V0(params) => {
+                    let update_keys =
+                        read_json(&make_relative(config_path, &config.governance_keys)?)?;
+                    let initial_state = GenesisStateCPV0 {
+                        cryptographic_parameters: global.value,
+                        identity_providers: idps.value,
+                        anonymity_revokers: ars.value,
+                        update_keys,
+                        chain_parameters: params.chain_parameters(AccountIndex::from(idx)),
+                        leadership_election_nonce: parameters.leadership_election_nonce,
+                        accounts,
+                    };
+                    make_genesis_data_cpv0(protocol_version, core, initial_state)
+                        .context("P4 does not have CPV0")?
+                }
+                GenesisChainParameters::V1(params) => {
+                    let update_keys =
+                        read_json(&make_relative(config_path, &config.governance_keys)?)?;
+                    let initial_state = GenesisStateCPV1 {
+                        cryptographic_parameters: global.value,
+                        identity_providers: idps.value,
+                        anonymity_revokers: ars.value,
+                        update_keys,
+                        chain_parameters: params.chain_parameters(AccountIndex::from(idx)),
+                        leadership_election_nonce: parameters.leadership_election_nonce,
+                        accounts,
+                    };
+                    GenesisData::P4 {
+                        core,
+                        initial_state,
+                    }
+                }
+            }
         }
-    }
+        ProtocolConfig::P6 { parameters } => {
+            let update_keys = read_json(&make_relative(config_path, &config.governance_keys)?)?;
+
+            let initial_state = GenesisStateCPV2 {
+                cryptographic_parameters: global.value,
+                identity_providers: idps.value,
+                anonymity_revokers: ars.value,
+                update_keys,
+                chain_parameters: parameters.chain.chain_parameters(AccountIndex::from(idx))?,
+                leadership_election_nonce: parameters.leadership_election_nonce,
+                accounts,
+            };
+            GenesisData::P6 {
+                core: parameters.core.try_into()?,
+                initial_state,
+            }
+        }
+    };
+
+    write_genesis(
+        &make_relative(config_path, &config.genesis_out)?,
+        &make_relative(config_path, &config.genesis_hash_out)?,
+        &genesis,
+    )?;
+
     println!("DONE");
     Ok(())
 }

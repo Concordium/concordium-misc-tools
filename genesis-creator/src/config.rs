@@ -217,11 +217,12 @@ pub struct Config {
     pub identity_providers: Vec<IdentityProviderConfig>,
     /// Configuration for generating accounts.
     pub accounts: Vec<AccountConfig>,
-    /// Protocol specific configuration
+    /// Protocol specific configurations.
     #[serde(flatten)]
     pub protocol: ProtocolConfig,
 }
 
+/// Protocol specific configurations, tagged by the protocol version.
 #[derive(SerdeDeserialize, Debug)]
 #[serde(tag = "protocolVersion")]
 pub enum ProtocolConfig {
