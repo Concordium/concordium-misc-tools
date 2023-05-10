@@ -988,55 +988,53 @@ fn handle_generate(config_path: &Path, verbose: bool) -> anyhow::Result<()> {
         println!("{:#?}", config);
     }
 
-    let common = config.common();
-
-    if common.out.delete_existing {
+    if config.out.delete_existing {
         println!("Deleting any existing directories.")
     }
 
     check_and_create_dir(
-        common.out.delete_existing,
-        &common.out.account_keys,
+        config.out.delete_existing,
+        &config.out.account_keys,
         verbose,
     )?;
-    if let Some(dir) = common.out.update_keys.as_ref() {
-        check_and_create_dir(common.out.delete_existing, dir, verbose)?;
+    if let Some(dir) = config.out.update_keys.as_ref() {
+        check_and_create_dir(config.out.delete_existing, dir, verbose)?;
     }
     check_and_create_dir(
-        common.out.delete_existing,
-        &common.out.identity_providers,
+        config.out.delete_existing,
+        &config.out.identity_providers,
         verbose,
     )?;
     check_and_create_dir(
-        common.out.delete_existing,
-        &common.out.anonymity_revokers,
+        config.out.delete_existing,
+        &config.out.anonymity_revokers,
         verbose,
     )?;
-    check_and_create_dir(common.out.delete_existing, &common.out.baker_keys, verbose)?;
-    if let Some(global) = &common.out.cryptographic_parameters {
-        check_and_create_dir(common.out.delete_existing, global, verbose)?;
+    check_and_create_dir(config.out.delete_existing, &config.out.baker_keys, verbose)?;
+    if let Some(global) = &config.out.cryptographic_parameters {
+        check_and_create_dir(config.out.delete_existing, global, verbose)?;
     }
 
     println!(
         "Account keys will be generated in {}",
-        common.out.account_keys.display()
+        config.out.account_keys.display()
     );
-    if let Some(dir) = common.out.update_keys.as_ref() {
+    if let Some(dir) = config.out.update_keys.as_ref() {
         println!("Chain update keys will be generated in {}", dir.display(),)
     }
     println!(
         "Identity providers will be generated in {}",
-        common.out.identity_providers.display()
+        config.out.identity_providers.display()
     );
     println!(
         "Anonymity revokers will be generated in {}",
-        common.out.anonymity_revokers.display()
+        config.out.anonymity_revokers.display()
     );
     println!(
         "Baker keys will be generated in {}",
-        common.out.baker_keys.display()
+        config.out.baker_keys.display()
     );
-    if let Some(global) = &common.out.cryptographic_parameters {
+    if let Some(global) = &config.out.cryptographic_parameters {
         println!(
             "Cryptographic parameter will be generated in {}",
             global.display()
@@ -1045,31 +1043,47 @@ fn handle_generate(config_path: &Path, verbose: bool) -> anyhow::Result<()> {
 
     println!(
         "The genesis data will be stored in {}",
-        common.out.genesis.display()
+        config.out.genesis.display()
     );
     println!(
         "The genesis hash will be written to {}",
-        common.out.genesis_hash.display()
+        config.out.genesis_hash.display()
     );
 
-    let protocol_version = config.protocol_version();
+    let cryptographic_parameters = crypto_parameters(
+        config.out.cryptographic_parameters,
+        config.cryptographic_parameters,
+    )?;
+    let identity_providers =
+        identity_providers(config.out.identity_providers, config.identity_providers)?;
+    let anonymity_revokers = anonymity_revokers(
+        config.out.anonymity_revokers,
+        &cryptographic_parameters,
+        config.anonymity_revokers,
+    )?;
 
-    match config {
-        Config::P1(ConfigV0 {
-            parameters, common, ..
-        })
-        | Config::P2(ConfigV0 {
-            parameters, common, ..
-        })
-        | Config::P3(ConfigV0 {
-            parameters, common, ..
-        })
-        | Config::P4(ConfigV0 {
-            parameters, common, ..
-        })
-        | Config::P5(ConfigV0 {
-            parameters, common, ..
-        }) => {
+    let (foundation_idx, num_bakers, accounts) = accounts(
+        config.out.baker_keys,
+        config.out.account_keys,
+        &cryptographic_parameters,
+        &anonymity_revokers,
+        config.accounts,
+    )?;
+
+    println!(
+        "There are {} accounts in genesis, {} of which are bakers.",
+        accounts.len(),
+        num_bakers
+    );
+
+    let protocol_version = config.protocol.protocol_version();
+
+    let genesis = match config.protocol {
+        ProtocolConfig::P1 { parameters }
+        | ProtocolConfig::P2 { parameters }
+        | ProtocolConfig::P3 { parameters }
+        | ProtocolConfig::P4 { parameters }
+        | ProtocolConfig::P5 { parameters } => {
             let core = parameters.to_core()?;
             let genesis_time = chrono::DateTime::<chrono::Utc>::from(std::time::UNIX_EPOCH)
                 + chrono::Duration::milliseconds(core.time.millis as i64);
@@ -1082,33 +1096,7 @@ fn handle_generate(config_path: &Path, verbose: bool) -> anyhow::Result<()> {
                 slot_duration / rust_decimal::Decimal::from(elect_diff);
             println!("Average block time is set to {}ms.", average_block_time);
 
-            let cryptographic_parameters = crypto_parameters(
-                common.out.cryptographic_parameters,
-                common.cryptographic_parameters,
-            )?;
-            let identity_providers =
-                identity_providers(common.out.identity_providers, common.identity_providers)?;
-            let anonymity_revokers = anonymity_revokers(
-                common.out.anonymity_revokers,
-                &cryptographic_parameters,
-                common.anonymity_revokers,
-            )?;
-
-            let (foundation_idx, num_bakers, accounts) = accounts(
-                common.out.baker_keys,
-                common.out.account_keys,
-                &cryptographic_parameters,
-                &anonymity_revokers,
-                common.accounts,
-            )?;
-
-            println!(
-                "There are {} accounts in genesis, {} of which are bakers.",
-                accounts.len(),
-                num_bakers
-            );
-
-            let genesis = match protocol_version {
+            match protocol_version {
                 ProtocolVersion::P1 | ProtocolVersion::P2 | ProtocolVersion::P3 => {
                     let params = match parameters.chain {
                         GenesisChainParameters::V0(params) => params,
@@ -1121,7 +1109,7 @@ fn handle_generate(config_path: &Path, verbose: bool) -> anyhow::Result<()> {
                         }
                     };
                     let update_keys =
-                        updates_v0(common.out.update_keys.as_deref(), common.updates)?;
+                        updates_v0(config.out.update_keys.as_deref(), config.updates)?;
                     let initial_state = GenesisStateCPV0 {
                         cryptographic_parameters,
                         identity_providers,
@@ -1138,7 +1126,6 @@ fn handle_generate(config_path: &Path, verbose: bool) -> anyhow::Result<()> {
                 }
 
                 ProtocolVersion::P4 | ProtocolVersion::P5 => {
-                    let core = parameters.to_core()?;
                     let params = match parameters.chain {
                         GenesisChainParameters::V1(params) => params,
                         GenesisChainParameters::V0(_) => {
@@ -1149,7 +1136,7 @@ fn handle_generate(config_path: &Path, verbose: bool) -> anyhow::Result<()> {
                         }
                     };
                     let update_keys =
-                        updates_v1(common.out.update_keys.as_deref(), common.updates)?;
+                        updates_v1(config.out.update_keys.as_deref(), config.updates)?;
                     let initial_state = GenesisStateCPV1 {
                         cryptographic_parameters,
                         identity_providers,
@@ -1176,43 +1163,10 @@ fn handle_generate(config_path: &Path, verbose: bool) -> anyhow::Result<()> {
                 _ => {
                     unreachable!("Already checked.")
                 }
-            };
-            write_genesis(
-                common.out.genesis.as_path(),
-                common.out.genesis_hash.as_path(),
-                &genesis,
-            )?;
+            }
         }
-        Config::P6(ConfigV1 {
-            common, parameters, ..
-        }) => {
-            let cryptographic_parameters = crypto_parameters(
-                common.out.cryptographic_parameters,
-                common.cryptographic_parameters,
-            )?;
-            let identity_providers =
-                identity_providers(common.out.identity_providers, common.identity_providers)?;
-            let anonymity_revokers = anonymity_revokers(
-                common.out.anonymity_revokers,
-                &cryptographic_parameters,
-                common.anonymity_revokers,
-            )?;
-
-            let (foundation_idx, num_bakers, accounts) = accounts(
-                common.out.baker_keys,
-                common.out.account_keys,
-                &cryptographic_parameters,
-                &anonymity_revokers,
-                common.accounts,
-            )?;
-
-            println!(
-                "There are {} accounts in genesis, {} of which are bakers.",
-                accounts.len(),
-                num_bakers
-            );
-
-            let update_keys = updates_v1(common.out.update_keys.as_deref(), common.updates)?;
+        ProtocolConfig::P6 { parameters } => {
+            let update_keys = updates_v1(config.out.update_keys.as_deref(), config.updates)?;
 
             let initial_state = GenesisStateCPV2 {
                 cryptographic_parameters,
@@ -1223,18 +1177,17 @@ fn handle_generate(config_path: &Path, verbose: bool) -> anyhow::Result<()> {
                 leadership_election_nonce: parameters.leadership_election_nonce,
                 accounts,
             };
-            let genesis = GenesisData::P6 {
+            GenesisData::P6 {
                 core: parameters.core.try_into()?,
                 initial_state,
-            };
-
-            write_genesis(
-                common.out.genesis.as_path(),
-                common.out.genesis_hash.as_path(),
-                &genesis,
-            )?;
+            }
         }
     };
+    write_genesis(
+        config.out.genesis.as_path(),
+        config.out.genesis_hash.as_path(),
+        &genesis,
+    )?;
     println!("DONE");
     Ok(())
 }
