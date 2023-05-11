@@ -308,12 +308,8 @@ fn updates_v0(
     update_cfg: UpdateKeysConfig,
 ) -> anyhow::Result<UpdateKeysCollection<ChainParameterVersion0>> {
     let mut csprng = rand::thread_rng();
-    let root_keys = read_or_generate_update_keys(
-        "root",
-        updates_out.as_deref(),
-        &mut csprng,
-        &update_cfg.root.keys,
-    )?;
+    let root_keys =
+        read_or_generate_update_keys("root", updates_out, &mut csprng, &update_cfg.root.keys)?;
     ensure!(
         usize::from(u16::from(update_cfg.root.threshold)) <= root_keys.len(),
         "The number of root keys ({}) is less than the threshold ({}).",
@@ -321,12 +317,8 @@ fn updates_v0(
         update_cfg.root.threshold
     );
 
-    let level1_keys = read_or_generate_update_keys(
-        "level1",
-        updates_out.as_deref(),
-        &mut csprng,
-        &update_cfg.level1.keys,
-    )?;
+    let level1_keys =
+        read_or_generate_update_keys("level1", updates_out, &mut csprng, &update_cfg.level1.keys)?;
     ensure!(
         usize::from(u16::from(update_cfg.level1.threshold)) <= level1_keys.len(),
         "The number of level_1 keys ({}) is less than the threshold ({}).",
@@ -334,12 +326,8 @@ fn updates_v0(
         update_cfg.level1.threshold
     );
 
-    let level2_keys = read_or_generate_update_keys(
-        "level2",
-        updates_out.as_deref(),
-        &mut csprng,
-        &update_cfg.level2.keys,
-    )?;
+    let level2_keys =
+        read_or_generate_update_keys("level2", updates_out, &mut csprng, &update_cfg.level2.keys)?;
     ensure!(
         !level2_keys.is_empty(),
         "There must be at least one level 2 key.",
@@ -418,12 +406,8 @@ fn updates_v1(
     update_cfg: UpdateKeysConfig,
 ) -> anyhow::Result<UpdateKeysCollection<ChainParameterVersion1>> {
     let mut csprng = rand::thread_rng();
-    let root_keys = read_or_generate_update_keys(
-        "root",
-        updates_out.as_deref(),
-        &mut csprng,
-        &update_cfg.root.keys,
-    )?;
+    let root_keys =
+        read_or_generate_update_keys("root", updates_out, &mut csprng, &update_cfg.root.keys)?;
     ensure!(
         usize::from(u16::from(update_cfg.root.threshold)) <= root_keys.len(),
         "The number of root keys ({}) is less than the threshold ({}).",
@@ -431,12 +415,8 @@ fn updates_v1(
         update_cfg.root.threshold
     );
 
-    let level1_keys = read_or_generate_update_keys(
-        "level1",
-        updates_out.as_deref(),
-        &mut csprng,
-        &update_cfg.level1.keys,
-    )?;
+    let level1_keys =
+        read_or_generate_update_keys("level1", updates_out, &mut csprng, &update_cfg.level1.keys)?;
     ensure!(
         usize::from(u16::from(update_cfg.level1.threshold)) <= level1_keys.len(),
         "The number of level_1 keys ({}) is less than the threshold ({}).",
@@ -444,12 +424,8 @@ fn updates_v1(
         update_cfg.level1.threshold
     );
 
-    let level2_keys = read_or_generate_update_keys(
-        "level2",
-        updates_out.as_deref(),
-        &mut csprng,
-        &update_cfg.level2.keys,
-    )?;
+    let level2_keys =
+        read_or_generate_update_keys("level2", updates_out, &mut csprng, &update_cfg.level2.keys)?;
     ensure!(
         !level2_keys.is_empty(),
         "There must be at least one level 2 key.",
