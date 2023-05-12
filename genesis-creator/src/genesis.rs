@@ -2,9 +2,8 @@ use anyhow::{ensure, Context};
 use concordium_rust_sdk::{
     base as concordium_base,
     common::{
-        types::{Amount, CredentialIndex, Timestamp},
-        Buffer, Deserial, Get, ParseResult, ReadBytesExt, SerdeDeserialize, SerdeSerialize, Serial,
-        Serialize, Versioned,
+        types::{Amount, CredentialIndex, Ratio, Timestamp},
+        Buffer, SerdeDeserialize, SerdeSerialize, Serial, Serialize, Versioned,
     },
     id,
     id::{
@@ -14,16 +13,17 @@ use concordium_rust_sdk::{
             ArIdentity, ArInfo, GlobalContext, IpIdentity, IpInfo,
         },
     },
+    smart_contracts::common::Duration,
     types::{
         hashes::{BlockHash, LeadershipElectionNonce},
         AccountIndex, AccountThreshold, BakerAggregationVerifyKey, BakerElectionVerifyKey, BakerId,
         BakerSignatureVerifyKey, BlockHeight, ChainParameterVersion0, ChainParameterVersion1,
-        ChainParameters, ChainParametersV0, ChainParametersV1, CooldownParameters,
-        ElectionDifficulty, Energy, Epoch, ExchangeRate, PoolParameters, ProtocolVersion,
-        RewardParameters, Slot, SlotDuration, TimeParameters, UpdateKeysCollection,
+        ChainParameterVersion2, ChainParameters, ChainParametersV0, ChainParametersV1,
+        ChainParametersV2, CooldownParameters, ElectionDifficulty, Energy, Epoch, ExchangeRate,
+        PartsPerHundredThousands, PoolParameters, ProtocolVersion, RewardParameters, Slot,
+        SlotDuration, TimeParameters, TimeoutParameters, UpdateKeysCollection,
     },
 };
-use gcd::Gcd;
 use serde::de;
 use sha2::Digest;
 use std::collections::BTreeMap;
@@ -89,49 +89,6 @@ fn deserialize_versioned_public_account<'de, D: de::Deserializer<'de>>(
     Ok(versioned.value)
 }
 
-/// A ratio between two `u64` integers.
-#[derive(Debug, SerdeDeserialize, Serial, Clone, Copy)]
-#[serde(try_from = "rust_decimal::Decimal")]
-struct Ratio {
-    numerator:   u64,
-    denominator: u64,
-}
-
-impl Deserial for Ratio {
-    fn deserial<R: ReadBytesExt>(source: &mut R) -> ParseResult<Self> {
-        let numerator: u64 = source.get()?;
-        let denominator = source.get()?;
-        ensure!(denominator != 0, "Denominator cannot be 0.");
-        ensure!(
-            numerator.gcd(denominator) == 1,
-            "Numerator and denominator must be coprime."
-        );
-        Ok(Self {
-            numerator,
-            denominator,
-        })
-    }
-}
-
-impl TryFrom<rust_decimal::Decimal> for Ratio {
-    type Error = anyhow::Error;
-
-    fn try_from(mut value: rust_decimal::Decimal) -> Result<Self, Self::Error> {
-        value.normalize_assign();
-        let mantissa = value.mantissa();
-        let scale = value.scale();
-        let denominator = 10u64.checked_pow(scale).context("Unrepresentable number")?;
-        let numerator: u64 = mantissa.try_into().context("Unrepresentable number")?;
-        let g = numerator.gcd(denominator);
-        let numerator = numerator / g;
-        let denominator = denominator / g;
-        Ok(Self {
-            numerator,
-            denominator,
-        })
-    }
-}
-
 /// The finalization parameters. Corresponds to the Haskell type
 /// `FinalizationParameters` in haskell-src/Concordium/Types/Parameters.hs.
 #[derive(SerdeDeserialize, Serialize, Debug, Clone)]
@@ -163,7 +120,7 @@ pub struct FinalizationParameters {
 }
 
 /// Genesis chain parameters version 0. Contains all version 0 chain paramters
-/// except for the foundation index.
+/// except for the foundation account index.
 #[derive(SerdeDeserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct GenesisChainParametersV0 {
@@ -201,8 +158,8 @@ impl GenesisChainParametersV0 {
     }
 }
 
-/// Genesis chain parameters version 0. Contains all version 1 chain paramters
-/// except for the foundation index.
+/// Genesis chain parameters version 1. Contains all version 1 chain parameters
+/// except for the foundation account index.
 #[derive(SerdeDeserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct GenesisChainParametersV1 {
@@ -243,6 +200,79 @@ impl GenesisChainParametersV1 {
     }
 }
 
+/// Genesis chain parameters version 2.
+#[derive(SerdeDeserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct GenesisChainParametersV2 {
+    /// Consensus protocol version 2 timeout parameters.
+    pub timeout_parameters:                TimeoutParameters,
+    /// Minimum time interval between blocks.
+    pub min_block_time:                    Duration,
+    /// Maximum energy allowed per block.
+    pub block_energy_limit:                Energy,
+    pub euro_per_energy:                   ExchangeRate,
+    #[serde(rename = "microCCDPerEuro")]
+    pub micro_ccd_per_euro:                ExchangeRate,
+    pub account_creation_limit:            u16,
+    pub reward_parameters:                 RewardParameters<ChainParameterVersion2>,
+    pub time_parameters:                   TimeParameters,
+    pub pool_parameters:                   PoolParameters,
+    pub cooldown_parameters:               CooldownParameters,
+    pub finalization_committee_parameters: FinalizationCommitteeParametersConfig,
+}
+
+impl GenesisChainParametersV2 {
+    pub fn chain_parameters(
+        self,
+        foundation_account_index: AccountIndex,
+    ) -> anyhow::Result<ChainParametersV2> {
+        Ok(ChainParametersV2 {
+            timeout_parameters: self.timeout_parameters,
+            min_block_time: self.min_block_time,
+            block_energy_limit: self.block_energy_limit,
+            euro_per_energy: self.euro_per_energy,
+            micro_ccd_per_euro: self.micro_ccd_per_euro,
+            time_parameters: self.time_parameters,
+            pool_parameters: self.pool_parameters,
+            cooldown_parameters: self.cooldown_parameters,
+            account_creation_limit: self.account_creation_limit.into(),
+            reward_parameters: self.reward_parameters,
+            foundation_account_index,
+            finalization_committee_parameters: self.finalization_committee_parameters.try_into()?,
+        })
+    }
+}
+
+#[derive(SerdeDeserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct FinalizationCommitteeParametersConfig {
+    /// Minimum number of bakers to include in the finalization committee before
+    /// the '_fcpFinalizerRelativeStakeThreshold' takes effect.
+    pub min_finalizers: u32,
+    /// Maximum number of bakers to include in the finalization committee.
+    pub max_finalizers: u32,
+    /// Determining the staking threshold required for being eligible the
+    /// finalization committee.
+    pub finalizers_relative_stake_threshold: u32,
+}
+
+impl TryFrom<FinalizationCommitteeParametersConfig>
+    for concordium_rust_sdk::types::FinalizationCommitteeParameters
+{
+    type Error = anyhow::Error;
+
+    fn try_from(config: FinalizationCommitteeParametersConfig) -> Result<Self, Self::Error> {
+        Ok(Self {
+            min_finalizers: config.min_finalizers,
+            max_finalizers: config.max_finalizers,
+            finalizers_relative_stake_threshold: PartsPerHundredThousands::new(
+                config.finalizers_relative_stake_threshold,
+            )
+            .context("Part exceeds 100000")?,
+        })
+    }
+}
+
 /// Genesis chain parameters and the version.
 #[derive(SerdeDeserialize, Debug)]
 #[serde(tag = "version")]
@@ -263,10 +293,12 @@ impl GenesisChainParameters {
 }
 
 /// The core genesis parameters, the leadership election nonce and the chain
-/// parameters (except the foundation index).
+/// parameters (except the foundation account index).
+///
+/// Used to derive parsing for the genesis parameter section of the TOML config.
 #[derive(SerdeDeserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct GenesisParameters {
+pub struct GenesisParametersConfigV0 {
     /// Time at which the genesis will occur. If `None` then the tool will use
     /// "current" time as genesis time.
     pub genesis_time:              Option<chrono::DateTime<chrono::Utc>>,
@@ -283,22 +315,11 @@ pub struct GenesisParameters {
     pub chain:                     GenesisChainParameters,
 }
 
-/// The core genesis parameters. This corresponds to the Haskell type in
-/// haskell-src/Concordium/Genesis/Data/Base.hs in concordium-base.
-#[derive(Debug, Serialize)]
-pub struct CoreGenesisParameters {
-    pub time:                    Timestamp,
-    pub slot_duration:           SlotDuration,
-    pub epoch_length:            u64,
-    pub max_block_energy:        Energy,
-    pub finalization_parameters: FinalizationParameters,
-}
-
-impl GenesisParameters {
+impl GenesisParametersConfigV0 {
     /// Convert genesis parameters to [`CoreGenesisParameters`]. Note that this
     /// function is effectful in that, if the genesis time is not provided it
     /// will use the current time as genesis time.
-    pub fn to_core(&self) -> anyhow::Result<CoreGenesisParameters> {
+    pub fn to_core(&self) -> anyhow::Result<CoreGenesisParametersV0> {
         let time = self.genesis_time.map_or_else(
             || chrono::Utc::now().timestamp_millis(),
             |x| x.timestamp_millis(),
@@ -307,7 +328,7 @@ impl GenesisParameters {
             time >= 0,
             "Genesis time before unix epoch is not supported."
         );
-        Ok(CoreGenesisParameters {
+        Ok(CoreGenesisParametersV0 {
             time:                    Timestamp {
                 millis: time as u64,
             },
@@ -317,6 +338,80 @@ impl GenesisParameters {
             finalization_parameters: self.finalization.clone(),
         })
     }
+}
+
+/// The core genesis parameters. This corresponds to the Haskell type in
+/// haskell-src/Concordium/Genesis/Data/Base.hs in concordium-base.
+#[derive(Debug, Serialize)]
+pub struct CoreGenesisParametersV0 {
+    /// Nominal time of the genesis block.
+    pub time:                    Timestamp,
+    /// The duration of a slot.
+    pub slot_duration:           SlotDuration,
+    /// The epoch length in slots.
+    pub epoch_length:            u64,
+    /// The maximum energy per block.
+    pub max_block_energy:        Energy,
+    /// The finalization parameters.
+    pub finalization_parameters: FinalizationParameters,
+}
+
+/// The core genesis parameters, the leadership election nonce and the chain
+/// parameters (except the foundation account index).
+///
+/// Used to derive parsing for the genesis parameter section of the TOML config.
+#[derive(SerdeDeserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct GenesisParametersConfigV1 {
+    /// Leadership election nonce.
+    pub leadership_election_nonce: LeadershipElectionNonce,
+    #[serde(flatten)]
+    pub core: CoreGenesisParametersConfigV1,
+    pub chain: GenesisChainParametersV2,
+}
+
+/// The core genesis parameters. This corresponds to the Haskell type in
+/// haskell-src/Concordium/Genesis/Data/BaseV1.hs in concordium-base.
+#[derive(Debug, SerdeDeserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CoreGenesisParametersConfigV1 {
+    /// Nominal time of the genesis block.
+    pub genesis_time:   Option<chrono::DateTime<chrono::Utc>>,
+    /// Duration of an epoch.
+    pub epoch_duration: Duration,
+}
+
+impl TryFrom<CoreGenesisParametersConfigV1> for CoreGenesisParametersV1 {
+    type Error = anyhow::Error;
+
+    fn try_from(config: CoreGenesisParametersConfigV1) -> Result<Self, Self::Error> {
+        let time = if let Some(date) = config.genesis_time {
+            date.timestamp_millis()
+        } else {
+            chrono::Utc::now().timestamp_millis()
+        };
+        anyhow::ensure!(
+            time >= 0,
+            "Genesis time before unix epoch is not supported."
+        );
+        let genesis_time = Timestamp {
+            millis: time as u64,
+        };
+        Ok(Self {
+            genesis_time,
+            epoch_duration: config.epoch_duration,
+        })
+    }
+}
+
+/// The core genesis parameters. This corresponds to the Haskell type in
+/// haskell-src/Concordium/Genesis/Data/BaseV1.hs in concordium-base.
+#[derive(Debug, Serialize, SerdeDeserialize)]
+pub struct CoreGenesisParametersV1 {
+    /// Nominal time of the genesis block.
+    pub genesis_time:   Timestamp,
+    /// Duration of an epoch.
+    pub epoch_duration: Duration,
 }
 
 /// The genesis state in chain parameters version 0. This corresponds to the
@@ -397,28 +492,68 @@ impl Serial for GenesisStateCPV1 {
     }
 }
 
+/// The genesis state in chain parameters version 2. This corresponds to the
+/// Haskell type `GenesisState` from haskell-src/Concordium/Genesis/Data/Base.hs
+/// for those protocol versions having chain parameters version 2, currently
+/// only P6.
+#[derive(Debug)]
+pub struct GenesisStateCPV2 {
+    pub cryptographic_parameters:  GlobalContext<ArCurve>,
+    pub identity_providers:        BTreeMap<IpIdentity, IpInfo<IpPairing>>,
+    pub anonymity_revokers:        BTreeMap<ArIdentity, ArInfo<ArCurve>>,
+    pub update_keys:               UpdateKeysCollection<ChainParameterVersion2>,
+    pub chain_parameters:          ChainParameters<ChainParameterVersion2>,
+    pub leadership_election_nonce: LeadershipElectionNonce,
+    pub accounts:                  Vec<GenesisAccountPublic>,
+}
+
+impl Serial for GenesisStateCPV2 {
+    fn serial<B: Buffer>(&self, out: &mut B) {
+        let mut tmp = Vec::new();
+        serialize_with_length_header(&self.cryptographic_parameters, &mut tmp, out);
+        (self.identity_providers.len() as u32).serial(out);
+        for (k, v) in self.identity_providers.iter() {
+            k.serial(out);
+            serialize_with_length_header(v, &mut tmp, out);
+        }
+        (self.anonymity_revokers.len() as u32).serial(out);
+        for (k, v) in self.anonymity_revokers.iter() {
+            k.serial(out);
+            serialize_with_length_header(v, &mut tmp, out);
+        }
+        self.update_keys.serial(out);
+        self.chain_parameters.serial(out);
+        self.leadership_election_nonce.serial(out);
+        self.accounts.serial(out)
+    }
+}
+
 /// The genesis data containing the core genesis parameters and the initial
 /// genesis state.
 pub enum GenesisData {
     P1 {
-        core:          CoreGenesisParameters,
+        core:          CoreGenesisParametersV0,
         initial_state: GenesisStateCPV0,
     },
     P2 {
-        core:          CoreGenesisParameters,
+        core:          CoreGenesisParametersV0,
         initial_state: GenesisStateCPV0,
     },
     P3 {
-        core:          CoreGenesisParameters,
+        core:          CoreGenesisParametersV0,
         initial_state: GenesisStateCPV0,
     },
     P4 {
-        core:          CoreGenesisParameters,
+        core:          CoreGenesisParametersV0,
         initial_state: GenesisStateCPV1,
     },
     P5 {
-        core:          CoreGenesisParameters,
+        core:          CoreGenesisParametersV0,
         initial_state: GenesisStateCPV1,
+    },
+    P6 {
+        core:          CoreGenesisParametersV1,
+        initial_state: GenesisStateCPV2,
     },
 }
 
@@ -477,6 +612,16 @@ impl GenesisData {
                 core.serial(&mut hasher);
                 initial_state.serial(&mut hasher);
             }
+            GenesisData::P6 {
+                core,
+                initial_state,
+            } => {
+                ProtocolVersion::P6.serial(&mut hasher);
+                // tag of initial genesis
+                0u8.serial(&mut hasher);
+                core.serial(&mut hasher);
+                initial_state.serial(&mut hasher);
+            }
         }
         let bytes: [u8; 32] = hasher.finalize().into();
         bytes.into()
@@ -485,7 +630,7 @@ impl GenesisData {
 
 pub fn make_genesis_data_cpv0(
     pv: ProtocolVersion,
-    core: CoreGenesisParameters,
+    core: CoreGenesisParametersV0,
     initial_state: GenesisStateCPV0,
 ) -> Option<GenesisData> {
     match pv {
@@ -556,6 +701,16 @@ impl Serial for GenesisData {
                 initial_state,
             } => {
                 7u8.serial(out);
+                // tag of initial genesis
+                0u8.serial(out);
+                core.serial(out);
+                initial_state.serial(out)
+            }
+            GenesisData::P6 {
+                core,
+                initial_state,
+            } => {
+                8u8.serial(out);
                 // tag of initial genesis
                 0u8.serial(out);
                 core.serial(out);
