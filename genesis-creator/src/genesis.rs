@@ -169,7 +169,7 @@ pub struct FinalizationParameters {
 }
 
 /// Genesis chain parameters version 0. Contains all version 0 chain paramters
-/// except for the foundation index.
+/// except for the foundation account index.
 #[derive(SerdeDeserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct GenesisChainParametersV0 {
@@ -208,7 +208,7 @@ impl GenesisChainParametersV0 {
 }
 
 /// Genesis chain parameters version 1. Contains all version 1 chain parameters
-/// except for the foundation index.
+/// except for the foundation account index.
 #[derive(SerdeDeserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct GenesisChainParametersV1 {
@@ -365,7 +365,7 @@ impl GenesisChainParameters {
 }
 
 /// The core genesis parameters, the leadership election nonce and the chain
-/// parameters (except the foundation index).
+/// parameters (except the foundation account index).
 ///
 /// Used to derive parsing for the genesis parameter section of the TOML config.
 #[derive(SerdeDeserialize, Debug)]
@@ -416,15 +416,20 @@ impl GenesisParametersConfigV0 {
 /// haskell-src/Concordium/Genesis/Data/Base.hs in concordium-base.
 #[derive(Debug, Serialize)]
 pub struct CoreGenesisParametersV0 {
+    /// Nominal time of the genesis block.
     pub time:                    Timestamp,
+    /// The duration of a slot.
     pub slot_duration:           SlotDuration,
+    /// The epoch length in slots.
     pub epoch_length:            u64,
+    /// The maximum energy per block.
     pub max_block_energy:        Energy,
+    /// The finalization parameters.
     pub finalization_parameters: FinalizationParameters,
 }
 
 /// The core genesis parameters, the leadership election nonce and the chain
-/// parameters (except the foundation index).
+/// parameters (except the foundation account index).
 ///
 /// Used to derive parsing for the genesis parameter section of the TOML config.
 #[derive(SerdeDeserialize, Debug)]

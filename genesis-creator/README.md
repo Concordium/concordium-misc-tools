@@ -414,9 +414,9 @@ Protocol version 6 parameters are provided in the following form:
 
 ```toml
 [parameters]
-# genesisTime = "2022-06-24T11:12:43Z" # Fallbacks to current time for genesis time.
+# genesisTime = "2022-06-24T11:12:43Z" # Falls back to current time for genesis time.
 leadershipElectionNonce = "d1bc8d3ba4afc7e109612cb73acbdddac052c93025aa1f82942edabb7deb82a1"
-epochDuration = 40000 # in milliseconds.
+epochDuration = 3_600_000 # in milliseconds.
 
 [parameters.chain]
 minBlockTime = 1000 # in milliseconds
