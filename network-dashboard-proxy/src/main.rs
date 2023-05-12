@@ -209,6 +209,13 @@ async fn block_summary(
                 "gasRewards": cp.gas_rewards
             })
         }
+        v2::ChainParameters::V2(cp) => {
+            serde_json::json!({
+                "mintDistribution": cp.mint_distribution,
+                "transactionFeeDistribution": cp.transaction_fee_distribution,
+                "gasRewards": cp.gas_rewards
+            })
+        }
     };
     Ok(serde_json::json!({
         "finalizationData": finalization_data,

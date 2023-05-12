@@ -2,9 +2,8 @@ use anyhow::{ensure, Context};
 use concordium_rust_sdk::{
     base as concordium_base,
     common::{
-        types::{Amount, CredentialIndex, Timestamp},
-        Buffer, Deserial, Get, ParseResult, ReadBytesExt, SerdeDeserialize, SerdeSerialize, Serial,
-        Serialize, Versioned,
+        types::{Amount, CredentialIndex, Ratio, Timestamp},
+        Buffer, SerdeDeserialize, SerdeSerialize, Serial, Serialize, Versioned,
     },
     id,
     id::{
@@ -25,7 +24,6 @@ use concordium_rust_sdk::{
         SlotDuration, TimeParameters, TimeoutParameters, UpdateKeysCollection,
     },
 };
-use gcd::Gcd;
 use serde::de;
 use sha2::Digest;
 use std::collections::BTreeMap;
@@ -89,53 +87,6 @@ fn deserialize_versioned_public_account<'de, D: de::Deserializer<'de>>(
     let versioned: Versioned<GenesisCredentials> =
         Versioned::<GenesisCredentials>::deserialize(des)?;
     Ok(versioned.value)
-}
-
-/// A ratio between two `u64` integers.
-#[derive(Debug, SerdeDeserialize, Serial, Clone, Copy)]
-#[serde(try_from = "rust_decimal::Decimal")]
-pub struct Ratio {
-    numerator:   u64,
-    denominator: u64,
-}
-
-impl Deserial for Ratio {
-    fn deserial<R: ReadBytesExt>(source: &mut R) -> ParseResult<Self> {
-        let numerator: u64 = source.get()?;
-        let denominator = source.get()?;
-        ensure!(denominator != 0, "Denominator cannot be 0.");
-        ensure!(
-            numerator.gcd(denominator) == 1,
-            "Numerator and denominator must be coprime."
-        );
-        Ok(Self {
-            numerator,
-            denominator,
-        })
-    }
-}
-
-impl TryFrom<rust_decimal::Decimal> for Ratio {
-    type Error = anyhow::Error;
-
-    fn try_from(mut value: rust_decimal::Decimal) -> Result<Self, Self::Error> {
-        value.normalize_assign();
-        let mantissa = value.mantissa();
-        let scale = value.scale();
-        let denominator = 10u64.checked_pow(scale).context("Unrepresentable number")?;
-        let numerator: u64 = mantissa.try_into().context("Unrepresentable number")?;
-        let g = numerator.gcd(denominator);
-        let numerator = numerator / g;
-        let denominator = denominator / g;
-        Ok(Self {
-            numerator,
-            denominator,
-        })
-    }
-}
-
-impl From<Ratio> for num::rational::Ratio<u64> {
-    fn from(ratio: Ratio) -> Self { Self::new_raw(ratio.numerator, ratio.denominator) }
 }
 
 /// The finalization parameters. Corresponds to the Haskell type
@@ -254,9 +205,9 @@ impl GenesisChainParametersV1 {
 #[serde(rename_all = "camelCase")]
 pub struct GenesisChainParametersV2 {
     /// Consensus protocol version 2 timeout parameters.
-    pub timeout_parameters:                TimeoutParametersConfig,
+    pub timeout_parameters:                TimeoutParameters,
     /// Minimum time interval between blocks.
-    pub min_block_time:                    SlotDuration,
+    pub min_block_time:                    Duration,
     /// Maximum energy allowed per block.
     pub block_energy_limit:                Energy,
     pub euro_per_energy:                   ExchangeRate,
@@ -276,8 +227,8 @@ impl GenesisChainParametersV2 {
         foundation_account_index: AccountIndex,
     ) -> anyhow::Result<ChainParametersV2> {
         Ok(ChainParametersV2 {
-            timeout_parameters: self.timeout_parameters.into(),
-            min_block_time: Duration::from_millis(self.min_block_time.millis),
+            timeout_parameters: self.timeout_parameters,
+            min_block_time: self.min_block_time,
             block_energy_limit: self.block_energy_limit,
             euro_per_energy: self.euro_per_energy,
             micro_ccd_per_euro: self.micro_ccd_per_euro,
@@ -289,29 +240,6 @@ impl GenesisChainParametersV2 {
             foundation_account_index,
             finalization_committee_parameters: self.finalization_committee_parameters.try_into()?,
         })
-    }
-}
-
-/// Parameters controlling consensus timeouts for the consensus protocol version
-/// 2.
-#[derive(SerdeDeserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct TimeoutParametersConfig {
-    /// The base value for triggering a timeout.
-    pub base:     SlotDuration,
-    /// Factor for increasing the timeout. Must be greater than 1.
-    pub increase: Ratio,
-    /// Factor for decreasing the timeout. Must be between 0 and 1.
-    pub decrease: Ratio,
-}
-
-impl From<TimeoutParametersConfig> for TimeoutParameters {
-    fn from(config: TimeoutParametersConfig) -> Self {
-        Self {
-            base:     Duration::from_millis(config.base.millis),
-            increase: config.increase.into(),
-            decrease: config.decrease.into(),
-        }
     }
 }
 
@@ -450,7 +378,7 @@ pub struct CoreGenesisParametersConfigV1 {
     /// Nominal time of the genesis block.
     pub genesis_time:   Option<chrono::DateTime<chrono::Utc>>,
     /// Duration of an epoch.
-    pub epoch_duration: SlotDuration,
+    pub epoch_duration: Duration,
 }
 
 impl TryFrom<CoreGenesisParametersConfigV1> for CoreGenesisParametersV1 {
@@ -483,7 +411,7 @@ pub struct CoreGenesisParametersV1 {
     /// Nominal time of the genesis block.
     pub genesis_time:   Timestamp,
     /// Duration of an epoch.
-    pub epoch_duration: SlotDuration,
+    pub epoch_duration: Duration,
 }
 
 /// The genesis state in chain parameters version 0. This corresponds to the

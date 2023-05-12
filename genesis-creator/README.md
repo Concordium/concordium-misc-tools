@@ -414,19 +414,19 @@ Protocol version 6 parameters are provided in the following form:
 
 ```toml
 [parameters]
-# genesisTime = "2022-06-24T11:12:43Z" # Falls back to current time for genesis time.
+# genesisTime = "2022-06-24T11:12:43Z" # Falls back to use the current time for genesis time.
 leadershipElectionNonce = "d1bc8d3ba4afc7e109612cb73acbdddac052c93025aa1f82942edabb7deb82a1"
-epochDuration = 3_600_000 # in milliseconds.
+epochDuration = "1h" # Meaning 1 hour.
 
 [parameters.chain]
-minBlockTime = 1000 # in milliseconds
+minBlockTime = "1s" # Meaning 1 second.
 blockEnergyLimit = 3_000_000
 euroPerEnergy = 0.00002
 microCCDPerEuro = 500_000
 accountCreationLimit = 10
 
 [parameters.chain.timeoutParameters]
-base = 2000 # in milliseconds.
+base = "2s" # Meaning 2 seconds
 increase = 1.5 # Must be greater than 1.
 decrease = 0.8 # Must be between 0 and 1.
 
@@ -453,6 +453,7 @@ leverageBound = {denominator = 1, numerator = 3}
 [parameters.chain.cooldownParameters]
 poolOwnerCooldown = 800 # in seconds
 delegatorCooldown = 1000 # in seconds
+
 [parameters.chain.rewardParameters]
 mintDistribution = { bakingReward = 0.85, finalizationReward = 0.05 }
 transactionFeeDistribution = { baker = 0.45, gasAccount = 0.45 }

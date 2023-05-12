@@ -880,7 +880,6 @@ dependencies = [
  "concordium-rust-sdk",
  "ed25519-dalek",
  "gcd",
- "num",
  "rand 0.7.3",
  "rayon",
  "rust_decimal",
