@@ -1,0 +1,83 @@
+.largeText {
+    color: white;
+    font-size: 26px;
+    font-weight: 300;
+    line-height: 21px;
+    letter-spacing: 0;
+}
+
+.centerLargeText {
+    color: white;
+    font-size: 26px;
+    font-weight: 300;
+    line-height: 21px;
+    letter-spacing: 0;
+    text-align: center;
+}
+
+.loadingText {
+    color: #979797;
+    overflow-wrap: anywhere;
+}
+
+.text {
+    font-size: 15px;
+    margin: 6px 0;
+    text-align: center;
+}
+
+button.buttonInvisible {
+    background: transparent;
+    border: none;
+    font-size: 0;
+    cursor: pointer;
+}
+
+.header {
+    color: white;
+    text-align: center;
+}
+
+.input.input {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.sponsoredTransactions {
+    height: 100%;
+    width: 100%;
+    align-items: center;
+    justify-content: center;
+}
+
+.switch {
+    background: #308274;
+    cursor: pointer;
+    border-radius: 5px;
+}
+
+.link {
+    background: none !important;
+    border: none;
+    padding: 0 !important;
+    color: #308274;
+    text-decoration: underline;
+    cursor: pointer;
+  
+    font-size: 15px;
+    align-items: center;
+    text-align: center;
+}
+
+.containerSpaceBetween {
+    display: flex;
+    column-gap: 20px;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.containerSwitch {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}

@@ -4,6 +4,8 @@
 /genesis-creator/genesis.dat
 /genesis-creator/genesis_hash
 /id-demo/dist/*
+/wallet-connect-test-bench/node_modules
+/wallet-connect-test-bench/.yarn
 
 # dependencies
 node_modules
