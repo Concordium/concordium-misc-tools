@@ -77,6 +77,7 @@ timeParameters = {authorizedKeys = [0,1,2,3,4,5,6], threshold = 7}
 # genesisTime = "2022-06-24T11:12:43Z" # Falls back to use the current time for genesis time.
 leadershipElectionNonce = "d1bc8d3ba4afc7e109612cb73acbdddac052c93025aa1f82942edabb7deb82a1"
 epochDuration = "1h" # Meaning 1 hour.
+signatureThreshold = 0.6666666666666667 # Must be between 2/3 (0.6666666666666667) and 1.
 
 [parameters.chain]
 minBlockTime = "1s" # Meaning 1 second.
