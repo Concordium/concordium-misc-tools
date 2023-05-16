@@ -33,6 +33,7 @@ jobs:
           - network-dashboard-proxy/Cargo.toml
           - chain-prometheus-exporter/Cargo.toml
           - recover-id-object/Cargo.toml
+          - generator/Cargo.toml
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -67,6 +68,7 @@ jobs:
           - network-dashboard-proxy/Cargo.toml
           - chain-prometheus-exporter/Cargo.toml
           - recover-id-object/Cargo.toml
+          - generator/Cargo.toml
     steps:
       - name: Checkout
         uses: actions/checkout@v2
