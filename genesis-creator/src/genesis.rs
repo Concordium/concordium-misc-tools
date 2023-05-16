@@ -376,9 +376,30 @@ pub struct GenesisParametersConfigV1 {
 #[serde(rename_all = "camelCase")]
 pub struct CoreGenesisParametersConfigV1 {
     /// Nominal time of the genesis block.
-    pub genesis_time:   Option<chrono::DateTime<chrono::Utc>>,
+    pub genesis_time:        Option<chrono::DateTime<chrono::Utc>>,
     /// Duration of an epoch.
-    pub epoch_duration: Duration,
+    pub epoch_duration:      Duration,
+    /// Fractional weight of signatures required for a quorum certificate or
+    /// timeout certificate. This must be in the range [2/3, 1], and should
+    /// generally be set to 2/3.
+    pub signature_threshold: RatioNumDenomSerde,
+}
+
+/// Type for deriving serde deserialization for ratio which uses numerator and
+/// denominator instead of decimals.
+#[derive(Debug, SerdeDeserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RatioNumDenomSerde {
+    pub numerator:   u64,
+    pub denominator: u64,
+}
+
+impl TryFrom<RatioNumDenomSerde> for Ratio {
+    type Error = concordium_rust_sdk::common::types::NewRatioError;
+
+    fn try_from(ratio: RatioNumDenomSerde) -> Result<Ratio, Self::Error> {
+        Ratio::new(ratio.numerator, ratio.denominator)
+    }
 }
 
 impl TryFrom<CoreGenesisParametersConfigV1> for CoreGenesisParametersV1 {
@@ -397,9 +418,23 @@ impl TryFrom<CoreGenesisParametersConfigV1> for CoreGenesisParametersV1 {
         let genesis_time = Timestamp {
             millis: time as u64,
         };
+
+        let threshold = Ratio::try_from(config.signature_threshold)?;
+        let threshold_decimal = rust_decimal::Decimal::from(threshold);
+        let min_threshold = rust_decimal::Decimal::from(2) / rust_decimal::Decimal::from(3);
+        anyhow::ensure!(
+            min_threshold <= threshold_decimal,
+            "Signature threshold must be 2/3 or larger."
+        );
+        anyhow::ensure!(
+            threshold.numerator() <= threshold.denominator(),
+            "Signature threshold must be 1 or less."
+        );
+
         Ok(Self {
             genesis_time,
             epoch_duration: config.epoch_duration,
+            signature_threshold: threshold,
         })
     }
 }
@@ -409,9 +444,13 @@ impl TryFrom<CoreGenesisParametersConfigV1> for CoreGenesisParametersV1 {
 #[derive(Debug, Serialize, SerdeDeserialize)]
 pub struct CoreGenesisParametersV1 {
     /// Nominal time of the genesis block.
-    pub genesis_time:   Timestamp,
+    pub genesis_time:        Timestamp,
     /// Duration of an epoch.
-    pub epoch_duration: Duration,
+    pub epoch_duration:      Duration,
+    /// Fractional weight of signatures required for a quorum certificate or
+    /// timeout certificate. This must be in the range [2/3, 1], and should
+    /// generally be set to 2/3.
+    pub signature_threshold: Ratio,
 }
 
 /// The genesis state in chain parameters version 0. This corresponds to the
