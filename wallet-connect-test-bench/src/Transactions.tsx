@@ -21,7 +21,7 @@ import {
     BROWSER_WALLET,
     VIEW_RETURN_VALUE_SCHEMA,
     WALLET_CONNECT,
-
+    SET_OBJECT_PARAMETER_SCHEMA,
     REFRESH_INTERVAL,
 } from './constants';
 
@@ -377,6 +377,11 @@ export default function Transactions(props: WalletConnectionProps) {
         setCCDAmount(target.value);
     };
 
+    const changeMessageHandler = (event: ChangeEvent) => {
+        const target = event.target as HTMLTextAreaElement;
+        setMessage(target.value);
+    };
+
     const changeDropDownHandler = (event: ChangeEvent) => {
         var e = (document.getElementById("function")) as HTMLSelectElement;
         var sel = e.selectedIndex;
@@ -512,12 +517,14 @@ export default function Transactions(props: WalletConnectionProps) {
 
     const [isRegisterPublicKeyPage, setIsRegisterPublicKeyPage] = useState(true);
     const [txHash, setTxHash] = useState('');
+    const [message, setMessage] = useState('');
     const [transactionError, setTransactionError] = useState('');
 
     const [isWaitingForTransaction, setWaitingForUser] = useState(false);
     return (
         <div>
-            <h1 className="header">Wallet Connect / Browser Wallet Testing Bench</h1>
+            <div className="centerLargeText">Version: {version}</div>
+            <h1 className="header">Wallet Connect / Browser Wallet Testing Bench </h1>
             <div className="containerSpaceBetween">
                 <WalletConnectionTypeButton
                     buttonStyle={ButtonStyle}
@@ -838,6 +845,117 @@ export default function Transactions(props: WalletConnectionProps) {
                                 </button>
                                 <br />
                                 <div className="dashedLine"></div>
+                                <div className="centerLargeText">Sign a string message with the wallet:</div>
+                                <label>
+                                    <p className="centerLargeText">Message to be signed:</p>
+                                    <input
+                                        className="input"
+                                        style={InputFieldStyle}
+                                        id="message"
+                                        type="text"
+                                        placeholder="My message"
+                                        onChange={changeMessageHandler}
+                                    />
+                                </label>
+                                <button
+                                    style={ButtonStyle}
+                                    type="button"
+                                    onClick={() => {
+                                        const promise = connection.signMessage(account,
+                                            {
+                                                type: 'StringMessage',
+                                                value: message,
+                                            })
+                                        promise
+                                            .then((permitSignature) => {
+                                                setSignature(permitSignature[0][0]);
+                                            })
+                                            .catch((err: Error) => setSigningError((err as Error).message));
+                                    }}
+                                >
+                                    Sign message
+                                </button>
+                                {signingError && <div style={{ color: 'red' }}>Error: {signingError}.</div>}
+                                {signature !== '' && (
+                                    <>
+                                        <div className="centerLargeText"> Your generated signature is: </div>
+                                        <div className="centerLargeText">{signature}</div>
+                                    </>
+                                )}
+                                <br />
+                                <div className="dashedLine"></div>
+                                <div className="centerLargeText">Sign a byte message with the wallet:</div>
+                                <label>
+                                    <p className="centerLargeText">Message to be signed:</p>
+                                    <input
+                                        className="input"
+                                        style={InputFieldStyle}
+                                        id="message"
+                                        type="text"
+                                        placeholder="My message"
+                                        onChange={changeMessageHandler}
+                                    />
+                                </label>
+                                <button
+                                    style={ButtonStyle}
+                                    type="button"
+                                    onClick={() => {
+
+                                        const signMessage = {
+                                            "account_address_value": "4fUk1a1rjBzoPCCy6p92u5LT5vSw9o8GpjMiRHBbJUfmx51uvt",
+                                            "address_array": [
+                                                {
+                                                    "Account": [
+                                                        "4fUk1a1rjBzoPCCy6p92u5LT5vSw9o8GpjMiRHBbJUfmx51uvt"
+                                                    ]
+                                                }, {
+                                                    "Account": [
+                                                        "4fUk1a1rjBzoPCCy6p92u5LT5vSw9o8GpjMiRHBbJUfmx51uvt"
+                                                    ]
+                                                }],
+                                            "address_value": {
+                                                "Account": [
+                                                    "4fUk1a1rjBzoPCCy6p92u5LT5vSw9o8GpjMiRHBbJUfmx51uvt"
+                                                ]
+                                            },
+                                            "contract_address_value": {
+                                                "index": 3,
+                                                "subindex": 0
+                                            },
+                                            "u16_value": 999,
+                                            "u8_value": 88
+                                        }
+
+                                        const serializedMessage = serializeTypeValue(
+                                            signMessage,
+                                            toBuffer(SET_OBJECT_PARAMETER_SCHEMA, 'base64')
+                                        );
+
+                                        const promise = connection.signMessage(account,
+                                            {
+                                                type: 'BinaryMessage',
+                                                value: serializedMessage,
+                                                schema: {
+                                                    type: 'TypeSchema',
+                                                    value: toBuffer(SET_OBJECT_PARAMETER_SCHEMA, 'base64')
+                                                },
+                                            })
+                                        promise
+                                            .then((permitSignature) => {
+                                                setSignature(permitSignature[0][0]);
+                                            })
+                                            .catch((err: Error) => setSigningError((err as Error).message));
+                                    }}
+                                >
+                                    Sign message
+                                </button>
+                                {signingError && <div style={{ color: 'red' }}>Error: {signingError}.</div>}
+                                {signature !== '' && (
+                                    <>
+                                        <div className="centerLargeText"> Your generated signature is: </div>
+                                        <div className="centerLargeText">{signature}</div>
+                                    </>
+                                )}
                                 <br />
                             </>
                         )}
@@ -1245,11 +1363,6 @@ export default function Transactions(props: WalletConnectionProps) {
                     {publicKeyError && <div style={{ color: 'red' }}>Error: {publicKeyError}.</div>}
                 </p>
             )} */}
-            <div>
-                <br />
-                Version: {version}
-                <br />
-            </div>
         </div>
     );
 }
