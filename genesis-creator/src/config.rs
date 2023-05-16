@@ -1,5 +1,5 @@
 //! Input configuration structures and parsing.
-use crate::genesis::GenesisParameters;
+use crate::genesis::{GenesisParametersConfigV0, GenesisParametersConfigV1};
 use anyhow::ensure;
 
 use concordium_rust_sdk::{
@@ -199,16 +199,13 @@ pub struct OutputConfig {
     pub delete_existing:          bool,
 }
 
-/// Struct representing the configuration specified by the input TOML file.
+/// Struct representing the configuration specified by the input TOML file for
+/// every protocol version.
 #[derive(SerdeDeserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Config {
     /// Configuration of the output files.
     pub out: OutputConfig,
-    /// Which protocol version to generate genesis for.
-    pub protocol_version: ProtocolVersion,
-    /// The genesis parameters that determine, e.g., genesis time.
-    pub parameters: GenesisParameters,
     /// Configuration of the keys for chain updates. This includes parameter
     /// updates, and authorization updates.
     pub updates: UpdateKeysConfig,
@@ -220,4 +217,50 @@ pub struct Config {
     pub identity_providers: Vec<IdentityProviderConfig>,
     /// Configuration for generating accounts.
     pub accounts: Vec<AccountConfig>,
+    /// Protocol specific configurations.
+    #[serde(flatten)]
+    pub protocol: ProtocolConfig,
+}
+
+/// Protocol specific configurations, tagged by the protocol version.
+#[derive(SerdeDeserialize, Debug)]
+#[serde(tag = "protocolVersion")]
+pub enum ProtocolConfig {
+    #[serde(rename = "1")]
+    P1 {
+        parameters: GenesisParametersConfigV0,
+    },
+    #[serde(rename = "2")]
+    P2 {
+        parameters: GenesisParametersConfigV0,
+    },
+    #[serde(rename = "3")]
+    P3 {
+        parameters: GenesisParametersConfigV0,
+    },
+    #[serde(rename = "4")]
+    P4 {
+        parameters: GenesisParametersConfigV0,
+    },
+    #[serde(rename = "5")]
+    P5 {
+        parameters: GenesisParametersConfigV0,
+    },
+    #[serde(rename = "6")]
+    P6 {
+        parameters: GenesisParametersConfigV1,
+    },
+}
+
+impl ProtocolConfig {
+    pub fn protocol_version(&self) -> ProtocolVersion {
+        match self {
+            ProtocolConfig::P1 { .. } => ProtocolVersion::P1,
+            ProtocolConfig::P2 { .. } => ProtocolVersion::P2,
+            ProtocolConfig::P3 { .. } => ProtocolVersion::P3,
+            ProtocolConfig::P4 { .. } => ProtocolVersion::P4,
+            ProtocolConfig::P5 { .. } => ProtocolVersion::P5,
+            ProtocolConfig::P6 { .. } => ProtocolVersion::P6,
+        }
+    }
 }

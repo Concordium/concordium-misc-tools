@@ -1,11 +1,11 @@
-# An example genesis configuration file to construct a protocol 5 genesis.
+# An example genesis configuration file to construct a protocol 6 genesis.
 # This creates a genesis with
 # - 5 bakers
 # - one additional foundation account
 # - genesis time set to the time when the tool runs
 # - average block time set to 5s
 
-protocolVersion = "5"
+protocolVersion = "6"
 
 [out]
 updateKeys = "./update-keys"
@@ -74,45 +74,48 @@ cooldownParameters = {authorizedKeys = [0,1,2,3,4,5,6], threshold = 7}
 timeParameters = {authorizedKeys = [0,1,2,3,4,5,6], threshold = 7}
 
 [parameters]
-# genesisTime = "2022-06-24T11:12:43Z" # use current time for genesis time.
-slotDuration = 250 # in ms
+# genesisTime = "2022-06-24T11:12:43Z" # Falls back to use the current time for genesis time.
 leadershipElectionNonce = "d1bc8d3ba4afc7e109612cb73acbdddac052c93025aa1f82942edabb7deb82a1"
-epochLength = 400 # in slots, so 100s
-maxBlockEnergy = 3_000_000
-
-[parameters.finalization]
-minimumSkip = 0
-committeeMaxSize = 1000
-waitingTime = 100
-skipShrinkFactor = 0.5
-skipGrowFactor = 2
-delayShrinkFactor = 0.5
-delayGrowFactor = 2
-allowZeroDelay = true
+epochDuration = "1h" # Meaning 1 hour.
+signatureThreshold = {numerator = 2, denominator = 3} # Must be between 2/3 and 1.
 
 [parameters.chain]
-version = "v1"
-electionDifficulty = 0.05
+minBlockTime = "1s" # Meaning 1 second.
+blockEnergyLimit = 3_000_000
 euroPerEnergy = 0.00002
 microCCDPerEuro = 500_000
 accountCreationLimit = 10
+
+[parameters.chain.timeoutParameters]
+base = "2s" # Meaning 2 seconds
+increase = 1.5 # Must be greater than 1.
+decrease = 0.8 # Must be between 0 and 1.
+
+[parameters.chain.finalizationCommitteeParameters]
+minFinalizers = 4
+maxFinalizers = 12
+finalizersRelativeStakeThreshold = 200 # parts per hundred thousand (n / 100000).
+
 [parameters.chain.timeParameters]
 rewardPeriodLength = 4 # 4 epochs
 mintPerPayday = 2.61157877e-4
+
 [parameters.chain.poolParameters]
 passiveFinalizationCommission = 1.0
 passiveBakingCommission = 0.12
 passiveTransactionCommission = 0.12
-finalizationCommissionRange = {max = 1.0,min = 1.0}
-bakingCommissionRange = {max = 0.1,min = 0.1}
-transactionCommissionRange = {max = 0.1,min = 0.1}
+finalizationCommissionRange = {max = 1.0, min = 1.0}
+bakingCommissionRange = {max = 0.1, min = 0.1}
+transactionCommissionRange = {max = 0.1, min = 0.1}
 minimumEquityCapital = "1000"
 capitalBound = 0.1
 leverageBound = {denominator = 1, numerator = 3}
+
 [parameters.chain.cooldownParameters]
 poolOwnerCooldown = 800 # in seconds
 delegatorCooldown = 1000 # in seconds
+
 [parameters.chain.rewardParameters]
 mintDistribution = { bakingReward = 0.85, finalizationReward = 0.05 }
 transactionFeeDistribution = { baker = 0.45, gasAccount = 0.45 }
-gASRewards = { baker = 0.25, finalizationProof = 0.005, accountCreation = 0.02, chainUpdate = 0.005 }
+gASRewards = { baker = 0.25, accountCreation = 0.02, chainUpdate = 0.005 }

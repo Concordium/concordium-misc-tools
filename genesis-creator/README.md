@@ -50,7 +50,7 @@ where `genesis-config.toml` is a TOML file specifying the genesis. The TOML conf
 ### Specifying the protocol version
 The line
 ```toml
-protocolVersion = n
+protocolVersion = "n"
 ```
 specifies that the chain should start up in protocol version `n`.
 
@@ -332,6 +332,8 @@ timeParameters = {authorizedKeys = [...], threshold = ...}
 would specify these two additional chain updates.
 
 ### Specifying the genesis parameters
+
+#### Protocol version 1 to 5
 The core genesis parameters, the initial leadership election nonce, the finalization parameters and the initial chain parameters shall be specified.
 
 The core genesis parameters and the initial leadership election nonce is to be specified with lines of the form
@@ -406,12 +408,66 @@ transactionFeeDistribution = { baker = 0.45, gasAccount = 0.45 }
 gASRewards = { baker = 0.25, finalizationProof = 0.005, accountCreation = 0.02, chainUpdate = 0.005 }
 ```
 
+#### Protocol version 6
+
+Protocol version 6 parameters are provided in the following form:
+
+```toml
+[parameters]
+# genesisTime = "2022-06-24T11:12:43Z" # Falls back to use the current time for genesis time.
+leadershipElectionNonce = "d1bc8d3ba4afc7e109612cb73acbdddac052c93025aa1f82942edabb7deb82a1"
+epochDuration = "1h" # Meaning 1 hour.
+
+[parameters.chain]
+minBlockTime = "1s" # Meaning 1 second.
+blockEnergyLimit = 3_000_000
+euroPerEnergy = 0.00002
+microCCDPerEuro = 500_000
+accountCreationLimit = 10
+
+[parameters.chain.timeoutParameters]
+base = "2s" # Meaning 2 seconds
+increase = 1.5 # Must be greater than 1.
+decrease = 0.8 # Must be between 0 and 1.
+
+[parameters.chain.finalizationCommitteeParameters]
+minFinalizers = 4
+maxFinalizers = 12
+finalizersRelativeStakeThreshold = 200 # parts per hundred thousand (n / 100000).
+
+[parameters.chain.timeParameters]
+rewardPeriodLength = 4 # 4 epochs
+mintPerPayday = 2.61157877e-4
+
+[parameters.chain.poolParameters]
+passiveFinalizationCommission = 1.0
+passiveBakingCommission = 0.12
+passiveTransactionCommission = 0.12
+finalizationCommissionRange = {max = 1.0, min = 1.0}
+bakingCommissionRange = {max = 0.1, min = 0.1}
+transactionCommissionRange = {max = 0.1, min = 0.1}
+minimumEquityCapital = "1000"
+capitalBound = 0.1
+leverageBound = {denominator = 1, numerator = 3}
+
+[parameters.chain.cooldownParameters]
+poolOwnerCooldown = 800 # in seconds
+delegatorCooldown = 1000 # in seconds
+
+[parameters.chain.rewardParameters]
+mintDistribution = { bakingReward = 0.85, finalizationReward = 0.05 }
+transactionFeeDistribution = { baker = 0.45, gasAccount = 0.45 }
+gASRewards = { baker = 0.25, accountCreation = 0.02, chainUpdate = 0.005 }
+```
+where the concrete values above are replaced with those desired.
+
+
 ## The `assemble` mode
 To generate a genesis from existing file, run
 ```console
-genesis-creator assemble -- assemble-config.toml
+genesis-creator assemble --config assemble-config.toml
 ```
-where `genesis-config.toml` is a TOML file specifying the genesis. The TOML configuration file should specify
+where `assemble-config.toml` is a TOML file specifying how to assemble genesis. The TOML configuration file should specify
 - the protocol version
 - the foundation account
 - a path to a file with the genesis accounts
@@ -424,15 +480,15 @@ where `genesis-config.toml` is a TOML file specifying the genesis. The TOML conf
 
 The protocol version, the foundation account and the paths are to be specified with the lines
 ```toml
-protocolVersion = n
+protocolVersion = "n"
 foundationAccount = "..."
-accounts = "path//accounts.json"
-idps = "path//identity-providers.json"
+accounts = "path/accounts.json"
+idps = "path/identity-providers.json"
 ars = "path/anonymity-revokers.json"
 governanceKeys = "path/governance-keys.json"
 global = "path/cryptographic-parameters.json"
 genesisOut = "path/genesis.dat"
-genesisHash = ".path/genesis_hash"
+genesisHashOut = ".path/genesis_hash"
 ```
 
 The genesis parameters are specified in the same format as when generating a new genesis, see the section above.

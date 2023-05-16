@@ -1,10 +1,8 @@
 //! Configuration specific to the `assemble` functionality.
-use concordium_rust_sdk::{
-    common::SerdeDeserialize, id::types::AccountAddress, types::ProtocolVersion,
-};
+use concordium_rust_sdk::{common::SerdeDeserialize, id::types::AccountAddress};
 use std::path::PathBuf;
 
-use crate::genesis::GenesisParameters;
+use crate::config::ProtocolConfig;
 
 /// Configuration struct for specifying protocol version, the genesis
 /// parameters, the foundation account and where to find genesis accounts,
@@ -13,8 +11,10 @@ use crate::genesis::GenesisParameters;
 #[derive(SerdeDeserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct AssembleGenesisConfig {
-    pub protocol_version:   ProtocolVersion,
-    pub parameters:         GenesisParameters,
+    /// Protocol specific configurations.
+    #[serde(flatten)]
+    pub protocol:           ProtocolConfig,
+    /// Address of the account to set as the initial foundation account.
     pub foundation_account: AccountAddress,
     /// A file with a list of accounts that should be assembled into
     /// genesis.
