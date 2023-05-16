@@ -3,13 +3,19 @@
 import { createContext } from 'react';
 import { AccountTransactionType, CcdAmount, UpdateContractPayload } from '@concordium/web-sdk';
 import { WalletConnection } from '@concordium/react-components';
-import { typeSchemaFromBase64, moduleSchemaFromBase64 } from '@concordium/wallet-connectors';
+import { typeSchemaFromBase64, moduleSchemaFromBase64, TypedSmartContractParameters } from '@concordium/wallet-connectors';
 import {
     TX_CONTRACT_NAME,
     TX_CONTRACT_INDEX,
     CONTRACT_SUB_INDEX,
     SET_U8_PARAMETER_SCHEMA,
     BASE_64_SCHEMA,
+    SET_OBJECT_PARAMETER_SCHEMA,
+    SET_ADDRESS_ARRAY_PARAMETER_SCHEMA,
+    SET_ACCOUNT_ADDRESS_PARAMETER_SCHEMA,
+    SET_CONTRACT_ADDRESS_PARAMETER_SCHEMA,
+    SET_ADDRESS_PARAMETER_SCHEMA,
+    SET_U16_PARAMETER_SCHEMA,
 } from './constants';
 
 // /**
@@ -190,18 +196,178 @@ import {
 //     );
 // }
 
-export async function set_u8(connection: WalletConnection, account: string, useModuleSchema: boolean, sendCCDFunds: boolean, input: any, cCDAmount: any) {
+export async function set_value(connection: WalletConnection, account: string, useModuleSchema: boolean, isPayable: boolean, dropDown: string, input: string, cCDAmount: string) {
+
+    let receiveName = `${TX_CONTRACT_NAME}.set_u8_payable`;
+
+    switch (dropDown) {
+        case 'u8': receiveName = isPayable ? `${TX_CONTRACT_NAME}.set_u8_payable` : `${TX_CONTRACT_NAME}.set_u8`
+            break
+        case 'u16': receiveName = isPayable ? `${TX_CONTRACT_NAME}.set_u16_payable` : `${TX_CONTRACT_NAME}.set_u16`
+            break
+        case 'Address': receiveName = isPayable ? `${TX_CONTRACT_NAME}.set_address_payable` : `${TX_CONTRACT_NAME}.set_address`
+            break
+        case 'ContractAddress': receiveName = isPayable ? `${TX_CONTRACT_NAME}.set_contract_address_payable` : `${TX_CONTRACT_NAME}.set_contract_address`
+            break
+        case 'AccountAddress': receiveName = isPayable ? `${TX_CONTRACT_NAME}.set_account_address_payable` : `${TX_CONTRACT_NAME}.set_account_address`
+            break;
+    }
+
+    let schema: TypedSmartContractParameters = {
+        parameters: Number(7),
+        schema: moduleSchemaFromBase64(BASE_64_SCHEMA)
+    };
+
+    console.log(schema)
+
+    switch (dropDown) {
+        case 'u8': schema = useModuleSchema ? {
+            parameters: Number(input),
+            schema: moduleSchemaFromBase64(BASE_64_SCHEMA)
+        } :
+            {
+                parameters: Number(input),
+                schema: typeSchemaFromBase64(SET_U8_PARAMETER_SCHEMA)
+            };
+            break
+        case 'u16': schema = useModuleSchema ? {
+            parameters: Number(input),
+            schema: moduleSchemaFromBase64(BASE_64_SCHEMA)
+        } :
+            {
+                parameters: Number(input),
+                schema: typeSchemaFromBase64(SET_U16_PARAMETER_SCHEMA)
+            };
+            break
+        case 'Address': schema = useModuleSchema ? {
+            parameters: JSON.parse(input),
+            schema: moduleSchemaFromBase64(BASE_64_SCHEMA)
+        } :
+            {
+                parameters: JSON.parse(input),
+                schema: typeSchemaFromBase64(SET_ADDRESS_PARAMETER_SCHEMA)
+            };
+            break
+        case 'ContractAddress': schema = useModuleSchema ? {
+            parameters: JSON.parse(input),
+            schema: moduleSchemaFromBase64(BASE_64_SCHEMA)
+        } :
+            {
+                parameters: JSON.parse(input),
+                schema: typeSchemaFromBase64(SET_CONTRACT_ADDRESS_PARAMETER_SCHEMA)
+            };
+            break
+        case 'AccountAddress': schema = useModuleSchema ? {
+            parameters: JSON.parse("\"" + input + "\""),
+            schema: moduleSchemaFromBase64(BASE_64_SCHEMA)
+        } :
+            {
+                parameters: JSON.parse("\"" + input + "\""),
+                schema: typeSchemaFromBase64(SET_ACCOUNT_ADDRESS_PARAMETER_SCHEMA)
+            };
+            break;
+    }
+
+    console.log(schema)
+
+    return connection.signAndSendTransaction(
+        account,
+        AccountTransactionType.Update,
+        {
+            amount: new CcdAmount(BigInt(cCDAmount)),
+            address: {
+                index: TX_CONTRACT_INDEX,
+                subindex: CONTRACT_SUB_INDEX,
+            },
+            receiveName: receiveName,
+            maxContractExecutionEnergy: 30000n,
+        } as UpdateContractPayload,
+        schema
+    );
+}
+
+
+// ["Account": ["4fUk1a1rjBzoPCCy6p92u5LT5vSw9o8GpjMiRHBbJUfmx51uvt"]]
+
+
+export async function set_array(connection: WalletConnection, account: string, useModuleSchema: boolean, isPayable: boolean, cCDAmount: string) {
+
+    const inputParameter = [
+        {
+            "Account": [
+                "4fUk1a1rjBzoPCCy6p92u5LT5vSw9o8GpjMiRHBbJUfmx51uvt"
+            ]
+        }, {
+            "Contract": [{
+                "index": 3,
+                "subindex": 0
+            }]
+        }]
 
     const schema = useModuleSchema ? {
-        parameters: Number(input),
+        parameters: inputParameter,
         schema: moduleSchemaFromBase64(BASE_64_SCHEMA)
     } :
         {
-            parameters: Number(input),
-            schema: typeSchemaFromBase64(SET_U8_PARAMETER_SCHEMA)
+            parameters: inputParameter,
+            schema: typeSchemaFromBase64(SET_ADDRESS_ARRAY_PARAMETER_SCHEMA)
         };
 
-    let receiveName = sendCCDFunds ? `${TX_CONTRACT_NAME}.set_u8_payable` : `${TX_CONTRACT_NAME}.setU8`
+    let receiveName = isPayable ? `${TX_CONTRACT_NAME}.set_address_array_payable` : `${TX_CONTRACT_NAME}.set_address_array`
+
+    return connection.signAndSendTransaction(
+        account,
+        AccountTransactionType.Update,
+        {
+            amount: new CcdAmount(BigInt(cCDAmount)),
+            address: {
+                index: TX_CONTRACT_INDEX,
+                subindex: CONTRACT_SUB_INDEX,
+            },
+            receiveName: receiveName,
+            maxContractExecutionEnergy: 30000n,
+        } as UpdateContractPayload,
+        schema
+    );
+}
+
+export async function set_object(connection: WalletConnection, account: string, useModuleSchema: boolean, isPayable: boolean, cCDAmount: string) {
+
+    const inputParameter = {
+        "account_address_value": "4fUk1a1rjBzoPCCy6p92u5LT5vSw9o8GpjMiRHBbJUfmx51uvt",
+        "address_array": [
+            {
+                "Account": [
+                    "4fUk1a1rjBzoPCCy6p92u5LT5vSw9o8GpjMiRHBbJUfmx51uvt"
+                ]
+            }, {
+                "Account": [
+                    "4fUk1a1rjBzoPCCy6p92u5LT5vSw9o8GpjMiRHBbJUfmx51uvt"
+                ]
+            }],
+        "address_value": {
+            "Account": [
+                "4fUk1a1rjBzoPCCy6p92u5LT5vSw9o8GpjMiRHBbJUfmx51uvt"
+            ]
+        },
+        "contract_address_value": {
+            "index": 3,
+            "subindex": 0
+        },
+        "u16_value": 999,
+        "u8_value": 88
+    }
+
+    const schema = useModuleSchema ? {
+        parameters: inputParameter,
+        schema: moduleSchemaFromBase64(BASE_64_SCHEMA)
+    } :
+        {
+            parameters: inputParameter,
+            schema: typeSchemaFromBase64(SET_OBJECT_PARAMETER_SCHEMA)
+        };
+
+    let receiveName = isPayable ? `${TX_CONTRACT_NAME}.set_object_payable` : `${TX_CONTRACT_NAME}.set_object`
 
     return connection.signAndSendTransaction(
         account,

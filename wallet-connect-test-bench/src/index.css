@@ -15,6 +15,20 @@
     text-align: center;
 }
 
+.centerLargeBlackText {
+    color: black;
+    font-size: 26px;
+    font-weight: 300;
+    line-height: 21px;
+    letter-spacing: 0;
+    text-align: center;
+}
+
+.dashedLine {
+    color: white;
+    border: dashed white 1px;
+}
+
 .loadingText {
     color: #979797;
     overflow-wrap: anywhere;
@@ -63,7 +77,6 @@ button.buttonInvisible {
     color: #308274;
     text-decoration: underline;
     cursor: pointer;
-  
     font-size: 15px;
     align-items: center;
     text-align: center;

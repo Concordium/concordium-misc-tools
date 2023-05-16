@@ -13,7 +13,7 @@ import {
 import { withJsonRpcClient, WalletConnectionProps, useConnection, useConnect } from '@concordium/react-components';
 import { version } from '../package.json';
 
-import { set_u8 } from './utils';
+import { set_value, set_object, set_array } from './utils';
 import {
     TX_CONTRACT_NAME,
     TX_CONTRACT_INDEX,
@@ -341,7 +341,8 @@ export default function Transactions(props: WalletConnectionProps) {
     const [input, setInput] = useState('');
 
     const [useModuleSchema, setUseModuleSchema] = useState(true);
-    const [sendCCDFunds, setSendCCDFunds] = useState(true);
+    const [isPayable, setIsPayable] = useState(true);
+    const [dropDown, setDropDown] = useState('u8');
 
     const [signature, setSignature] = useState('');
     const [signingError, setSigningError] = useState('');
@@ -376,7 +377,14 @@ export default function Transactions(props: WalletConnectionProps) {
         setCCDAmount(target.value);
     };
 
-    // // Refresh view periodically.
+    const changeDropDownHandler = (event: ChangeEvent) => {
+        var e = (document.getElementById("function")) as HTMLSelectElement;
+        var sel = e.selectedIndex;
+        var value = e.options[sel].value;
+        setDropDown(value);
+    };
+
+    // // Refresh account_info periodically.
     // // eslint-disable-next-line consistent-return
     useEffect(() => {
         if (connection && account) {
@@ -400,7 +408,7 @@ export default function Transactions(props: WalletConnectionProps) {
         }
     }, [connection, account]);
 
-    // // Refresh view periodically.
+    // // Refresh smart_contract_info periodically.
     // // eslint-disable-next-line consistent-return
     useEffect(() => {
         if (connection) {
@@ -449,45 +457,42 @@ export default function Transactions(props: WalletConnectionProps) {
     }, [connection, account]);
 
     useEffect(() => {
-        // View publicKey record from smart contract.
         if (connection && account) {
             withJsonRpcClient(connection, (rpcClient) => account_info(rpcClient, account))
-            .then((returnValue) => {
-                if (returnValue !== undefined) {
-                    setAccountBalance(returnValue.accountAmount.toString());
-                }
-                setPublicKeyError('');
-            })
-            .catch((e) => {
-                setPublicKeyError((e as Error).message);
-                setPublicKey('');
-                setNextNonce(0);
-                setNonce('');
-            });
+                .then((returnValue) => {
+                    if (returnValue !== undefined) {
+                        setAccountBalance(returnValue.accountAmount.toString());
+                    }
+                    setPublicKeyError('');
+                })
+                .catch((e) => {
+                    setPublicKeyError((e as Error).message);
+                    setPublicKey('');
+                    setNextNonce(0);
+                    setNonce('');
+                });
         }
     }, [connection]);
 
     useEffect(() => {
-        // View publicKey record from smart contract.
         if (connection && account) {
             withJsonRpcClient(connection, (rpcClient) => smart_contract_info(rpcClient))
-            .then((returnValue) => {
-                if (returnValue !== undefined) {
-                    setSmartContractBalance(returnValue.amount.microCcdAmount.toString());
-                }
-                setPublicKeyError('');
-            })
-            .catch((e) => {
-                setPublicKeyError((e as Error).message);
-                setPublicKey('');
-                setNextNonce(0);
-                setNonce('');
-            });
+                .then((returnValue) => {
+                    if (returnValue !== undefined) {
+                        setSmartContractBalance(returnValue.amount.microCcdAmount.toString());
+                    }
+                    setPublicKeyError('');
+                })
+                .catch((e) => {
+                    setPublicKeyError((e as Error).message);
+                    setPublicKey('');
+                    setNextNonce(0);
+                    setNonce('');
+                });
         }
     }, [connection]);
 
     useEffect(() => {
-        // View publicKey record from smart contract.
         if (connection && account) {
             withJsonRpcClient(connection, (rpcClient) => view(rpcClient))
                 .then((returnValue) => {
@@ -583,6 +588,42 @@ export default function Transactions(props: WalletConnectionProps) {
                         </div>
                         <br />
                         <br />
+                        {true && (
+                            <>
+                                <div className="centerLargeText">Error or Transaction status{txHash === '' ? ':' : ' (May take a moment to finalize):'}</div>    <br />
+                                {!txHash && !transactionError && <div className="centerLargeText">None</div>}
+                                {!txHash && transactionError && (
+                                    <div style={{ color: 'red' }}>Error: {transactionError}.</div>
+                                )}
+                                <div className="containerSwitch">
+                                    {txHash && (
+                                        <>
+                                            <button
+                                                className="link"
+                                                type="button"
+                                                onClick={() => {
+                                                    window.open(
+                                                        `https://testnet.ccdscan.io/?dcount=1&dentity=transaction&dhash=${txHash}`,
+                                                        '_blank',
+                                                        'noopener,noreferrer'
+                                                    );
+                                                }}
+                                            >
+                                                {txHash}
+                                            </button>
+                                            <br />
+                                        </>
+                                    )}
+                                </div>
+                            </>
+                        )}
+                        <br></br>
+                        <div className="centerLargeText"> The smart contract state: </div>
+                        <pre className="centerLargeText">{record}</pre>
+                        <br />
+                        <div className="dashedLine"></div>
+                        <div className="centerLargeText">Testing simple input parameters:</div>
+                        <br />
                         {connection && account !== undefined && !publicKey && (
 
                             <>
@@ -603,20 +644,34 @@ export default function Transactions(props: WalletConnectionProps) {
                                     <div className="centerLargeText">Use parameter schema</div>
                                 </div>
                                 <div className="containerSpaceBetween">
-                                    <div className="centerLargeText">Send CCD funds</div>
+                                    <div className="centerLargeText">Is payable</div>
                                     <Switch
                                         onChange={() => {
-                                            setSendCCDFunds(!sendCCDFunds);
+                                            setIsPayable(!isPayable);
                                         }}
                                         onColor="#308274"
                                         offColor="#308274"
                                         onHandleColor="#174039"
                                         offHandleColor="#174039"
-                                        checked={!sendCCDFunds}
+                                        checked={!isPayable}
                                         checkedIcon={false}
                                         uncheckedIcon={false}
                                     />
-                                    <div className="centerLargeText">Send no CCD funds</div>
+                                    <div className="centerLargeText">Is not payable</div>
+                                </div>
+                                <br></br>
+                                <div className="centerLargeText">Select function:</div>
+                                <br></br>
+                                <div className="containerSpaceBetween">
+                                    <div></div>
+                                    <select className="centerLargeBlackText" name="function" id="function" onChange={changeDropDownHandler}>
+                                        <option value="u8" selected>u8</option>
+                                        <option value="u16">u16</option>
+                                        <option value="Address">Address</option>
+                                        <option value="ContractAddress">ContractAddress</option>
+                                        <option value="AccountAddress">AccountAddress</option>
+                                    </select>
+                                    <div></div>
                                 </div>
                                 <label>
                                     <p className="centerLargeText">CCD Funds:</p>
@@ -630,13 +685,13 @@ export default function Transactions(props: WalletConnectionProps) {
                                     />
                                 </label>
                                 <label>
-                                    <p className="centerLargeText">Number:</p>
+                                    <p className="centerLargeText">Input parameter:</p>
                                     <input
                                         className="input"
                                         style={InputFieldStyle}
                                         id="input"
                                         type="text"
-                                        placeholder="5"
+                                        placeholder='5 | 15 | {"Contract":[{"index":3,"subindex":0}]} or {"Account":["4fUk1a1rjBzoPCCy6p92u5LT5vSw9o8GpjMiRHBbJUfmx51uvt"]} | {"index":3,"subindex":0} | 4fUk1a1rjBzoPCCy6p92u5LT5vSw9o8GpjMiRHBbJUfmx51uvt'
                                         onChange={changeInputHandler}
                                     />
                                 </label>
@@ -647,47 +702,143 @@ export default function Transactions(props: WalletConnectionProps) {
                                         setTxHash('');
                                         setTransactionError('');
                                         setWaitingForUser(true);
-                                        const tx = set_u8(connection, account, useModuleSchema, sendCCDFunds, input, cCDAmount);
+                                        const tx = set_value(connection, account, useModuleSchema, isPayable, dropDown, input, cCDAmount);
                                         tx.then(setTxHash)
                                             .catch((err: Error) => setTransactionError((err as Error).message))
                                             .finally(() => setWaitingForUser(false));
                                     }}
                                 >
-                                    Set u8 value
+                                    Set {dropDown} value
                                 </button>
-                                <div className="centerLargeText"> The smart contract state: </div>
-                                <div className="centerLargeText">{record}</div>
-                                <br></br>
-                                {true && (
-                                    <>
-                                        <div className="centerLargeText">Transaction status{txHash === '' ? '' : ' (May take a moment to finalize)'}</div>
-                                        {!txHash && transactionError && (
-                                            <div style={{ color: 'red' }}>Error: {transactionError}.</div>
-                                        )}
-                                        {!txHash && !transactionError && <div className="centerLargeText">None</div>}
-                                        <div className="containerSwitch">
-                                            {txHash && (
-                                                <>
-                                                    <button
-                                                        className="link"
-                                                        type="button"
-                                                        onClick={() => {
-                                                            window.open(
-                                                                `https://testnet.ccdscan.io/?dcount=1&dentity=transaction&dhash=${txHash}`,
-                                                                '_blank',
-                                                                'noopener,noreferrer'
-                                                            );
-                                                        }}
-                                                    >
-                                                        {txHash}
-                                                    </button>
-                                                    <br />
-                                                </>
-                                            )}
-                                        </div>
-                                    </>
-                                )}
-
+                                <br />
+                                <div className="dashedLine"></div>
+                                <div className="centerLargeText">Testing complex object as input parameter:</div>
+                                <br />
+                                <br />
+                                <div className="containerSpaceBetween">
+                                    <div className="centerLargeText">Use module schema</div>
+                                    <Switch
+                                        onChange={() => {
+                                            setUseModuleSchema(!useModuleSchema);
+                                        }}
+                                        onColor="#308274"
+                                        offColor="#308274"
+                                        onHandleColor="#174039"
+                                        offHandleColor="#174039"
+                                        checked={!useModuleSchema}
+                                        checkedIcon={false}
+                                        uncheckedIcon={false}
+                                    />
+                                    <div className="centerLargeText">Use parameter schema</div>
+                                </div>
+                                <div className="containerSpaceBetween">
+                                    <div className="centerLargeText">Is payable</div>
+                                    <Switch
+                                        onChange={() => {
+                                            setIsPayable(!isPayable);
+                                        }}
+                                        onColor="#308274"
+                                        offColor="#308274"
+                                        onHandleColor="#174039"
+                                        offHandleColor="#174039"
+                                        checked={!isPayable}
+                                        checkedIcon={false}
+                                        uncheckedIcon={false}
+                                    />
+                                    <div className="centerLargeText">Is not payable</div>
+                                </div>
+                                <label>
+                                    <p className="centerLargeText">CCD Funds:</p>
+                                    <input
+                                        className="input"
+                                        style={InputFieldStyle}
+                                        id="CCDAmount"
+                                        type="text"
+                                        placeholder="0"
+                                        onChange={changeCCDAmountHandler}
+                                    />
+                                </label>
+                                <button
+                                    style={ButtonStyle}
+                                    type="button"
+                                    onClick={() => {
+                                        setTxHash('');
+                                        setTransactionError('');
+                                        setWaitingForUser(true);
+                                        const tx = set_object(connection, account, useModuleSchema, isPayable, cCDAmount);
+                                        tx.then(setTxHash)
+                                            .catch((err: Error) => setTransactionError((err as Error).message))
+                                            .finally(() => setWaitingForUser(false));
+                                    }}
+                                >
+                                    Set object
+                                </button>
+                                <br />
+                                <div className="dashedLine"></div>
+                                <div className="centerLargeText">Testing array as input parameter:</div>
+                                <div className="containerSpaceBetween">
+                                    <div className="centerLargeText">Use module schema</div>
+                                    <Switch
+                                        onChange={() => {
+                                            setUseModuleSchema(!useModuleSchema);
+                                        }}
+                                        onColor="#308274"
+                                        offColor="#308274"
+                                        onHandleColor="#174039"
+                                        offHandleColor="#174039"
+                                        checked={!useModuleSchema}
+                                        checkedIcon={false}
+                                        uncheckedIcon={false}
+                                    />
+                                    <div className="centerLargeText">Use parameter schema</div>
+                                </div>
+                                <div className="containerSpaceBetween">
+                                    <div className="centerLargeText">Is payable</div>
+                                    <Switch
+                                        onChange={() => {
+                                            setIsPayable(!isPayable);
+                                        }}
+                                        onColor="#308274"
+                                        offColor="#308274"
+                                        onHandleColor="#174039"
+                                        offHandleColor="#174039"
+                                        checked={!isPayable}
+                                        checkedIcon={false}
+                                        uncheckedIcon={false}
+                                    />
+                                    <div className="centerLargeText">Is not payable</div>
+                                </div>
+                                <br />
+                                <br />
+                                <label>
+                                    <p className="centerLargeText">CCD Funds:</p>
+                                    <input
+                                        className="input"
+                                        style={InputFieldStyle}
+                                        id="CCDAmount"
+                                        type="text"
+                                        placeholder="0"
+                                        onChange={changeCCDAmountHandler}
+                                    />
+                                </label>
+                                <button
+                                    style={ButtonStyle}
+                                    type="button"
+                                    onClick={() => {
+                                        setTxHash('');
+                                        setTransactionError('');
+                                        setWaitingForUser(true);
+                                        const tx = set_array(connection, account, useModuleSchema, isPayable, cCDAmount);
+                                        tx.then(setTxHash)
+                                            .catch((err: Error) => setTransactionError((err as Error).message))
+                                            .finally(() => setWaitingForUser(false));
+                                    }}
+                                >
+                                    Set Array
+                                </button>
+                                <br />
+                                <div className="dashedLine"></div>
+                                <br />
                             </>
                         )}
                         {/* <div className="containerSpaceBetween">
