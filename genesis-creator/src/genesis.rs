@@ -382,7 +382,24 @@ pub struct CoreGenesisParametersConfigV1 {
     /// Fractional weight of signatures required for a quorum certificate or
     /// timeout certificate. This must be in the range [2/3, 1], and should
     /// generally be set to 2/3.
-    pub signature_threshold: Ratio,
+    pub signature_threshold: RatioNumDenomSerde,
+}
+
+/// Type for deriving serde deserialization for ratio which uses numerator and
+/// denominator instead of decimals.
+#[derive(Debug, SerdeDeserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RatioNumDenomSerde {
+    pub numerator:   u64,
+    pub denominator: u64,
+}
+
+impl TryFrom<RatioNumDenomSerde> for Ratio {
+    type Error = concordium_rust_sdk::common::types::NewRatioError;
+
+    fn try_from(ratio: RatioNumDenomSerde) -> Result<Ratio, Self::Error> {
+        Ratio::new(ratio.numerator, ratio.denominator)
+    }
 }
 
 impl TryFrom<CoreGenesisParametersConfigV1> for CoreGenesisParametersV1 {
@@ -402,21 +419,22 @@ impl TryFrom<CoreGenesisParametersConfigV1> for CoreGenesisParametersV1 {
             millis: time as u64,
         };
 
-        let threshold = rust_decimal::Decimal::from(config.signature_threshold);
+        let threshold = Ratio::try_from(config.signature_threshold)?;
+        let threshold_decimal = rust_decimal::Decimal::from(threshold);
         let min_threshold = rust_decimal::Decimal::from(2) / rust_decimal::Decimal::from(3);
         anyhow::ensure!(
-            min_threshold <= threshold,
+            min_threshold <= threshold_decimal,
             "Signature threshold must be 2/3 or larger."
         );
         anyhow::ensure!(
-            config.signature_threshold.numerator() <= config.signature_threshold.denominator(),
+            threshold.numerator() <= threshold.denominator(),
             "Signature threshold must be 1 or less."
         );
 
         Ok(Self {
             genesis_time,
             epoch_duration: config.epoch_duration,
-            signature_threshold: config.signature_threshold,
+            signature_threshold: threshold,
         })
     }
 }
