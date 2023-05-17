@@ -1,7 +1,7 @@
 /* eslint-disable consistent-return */
 /* eslint-disable no-alert */
 import { createContext } from 'react';
-import { AccountTransactionType, CcdAmount, UpdateContractPayload } from '@concordium/web-sdk';
+import { AccountAddress, AccountTransactionType, CcdAmount, UpdateContractPayload } from '@concordium/web-sdk';
 import { WalletConnection } from '@concordium/react-components';
 import { typeSchemaFromBase64, moduleSchemaFromBase64, TypedSmartContractParameters } from '@concordium/wallet-connectors';
 import {
@@ -323,7 +323,32 @@ export async function set_array(connection: WalletConnection, account: string, u
             receiveName: receiveName,
             maxContractExecutionEnergy: 30000n,
         } as UpdateContractPayload,
+         // @ts-ignore: 
         schema
+    );
+}
+
+export async function simple_CCD_transfer(connection: WalletConnection, account: string,toAccount: string,cCDAmount: string) {
+
+    return connection.signAndSendTransaction(
+        account,
+        AccountTransactionType.Transfer,
+        {
+            amount: new CcdAmount(BigInt(cCDAmount)),
+            toAddress: new AccountAddress(toAccount),
+        }
+    );
+}
+
+export async function simple_CCD_transfer_to_non_existing_account_address(connection: WalletConnection, account: string) {
+
+    return connection.signAndSendTransaction(
+        account,
+        AccountTransactionType.Transfer,
+        {
+            amount: new CcdAmount(BigInt(1234n)),
+            toAddress: new AccountAddress("35CJPZohio6Ztii2zy1AYzJKvuxbGG44wrBn7hLHiYLoF2nxnh"),
+        }
     );
 }
 

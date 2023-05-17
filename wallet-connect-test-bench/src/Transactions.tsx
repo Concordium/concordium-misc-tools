@@ -13,7 +13,7 @@ import {
 import { withJsonRpcClient, WalletConnectionProps, useConnection, useConnect } from '@concordium/react-components';
 import { version } from '../package.json';
 
-import { set_value, set_object, set_array, reverts, internal_call_reverts, internal_call_success} from './utils';
+import { set_value, set_object, set_array, reverts, internal_call_reverts, internal_call_success, simple_CCD_transfer, simple_CCD_transfer_to_non_existing_account_address } from './utils';
 import {
     TX_CONTRACT_NAME,
     TX_CONTRACT_INDEX,
@@ -344,6 +344,8 @@ export default function Transactions(props: WalletConnectionProps) {
     const [isPayable, setIsPayable] = useState(true);
     const [dropDown, setDropDown] = useState('u8');
 
+    const [toAccount, setToAccount] = useState('');
+
     const [signature, setSignature] = useState('');
     const [signingError, setSigningError] = useState('');
 
@@ -388,6 +390,12 @@ export default function Transactions(props: WalletConnectionProps) {
         var value = e.options[sel].value;
         setDropDown(value);
     };
+
+    const changeToAccountHandler = (event: ChangeEvent) => {
+        const target = event.target as HTMLTextAreaElement;
+        setToAccount(target.value);
+    };
+
 
     // // Refresh account_info periodically.
     // // eslint-disable-next-line consistent-return
@@ -681,7 +689,7 @@ export default function Transactions(props: WalletConnectionProps) {
                                     <div></div>
                                 </div>
                                 <label>
-                                    <p className="centerLargeText">CCD Funds:</p>
+                                    <p className="centerLargeText">micro CCD:</p>
                                     <input
                                         className="input"
                                         style={InputFieldStyle}
@@ -755,7 +763,7 @@ export default function Transactions(props: WalletConnectionProps) {
                                     <div className="centerLargeText">Is not payable</div>
                                 </div>
                                 <label>
-                                    <p className="centerLargeText">CCD Funds:</p>
+                                    <p className="centerLargeText">micro CCD:</p>
                                     <input
                                         className="input"
                                         style={InputFieldStyle}
@@ -818,7 +826,7 @@ export default function Transactions(props: WalletConnectionProps) {
                                 <br />
                                 <br />
                                 <label>
-                                    <p className="centerLargeText">CCD Funds:</p>
+                                    <p className="centerLargeText">micro CCD:</p>
                                     <input
                                         className="input"
                                         style={InputFieldStyle}
@@ -896,6 +904,64 @@ export default function Transactions(props: WalletConnectionProps) {
                                     }}
                                 >
                                     Revert (internal call reverts)
+                                </button>
+                                <br />
+                                <div className="dashedLine"></div>
+                                <div className="centerLargeText">Testing simple CCD transfer:</div>
+                                <label>
+                                    <p className="centerLargeText">micro CCD:</p>
+                                    <input
+                                        className="input"
+                                        style={InputFieldStyle}
+                                        id="CCDAmount"
+                                        type="text"
+                                        placeholder="0"
+                                        onChange={changeCCDAmountHandler}
+                                    />
+                                </label>
+                                <label>
+                                    <p className="centerLargeText">To account:</p>
+                                    <input
+                                        className="input"
+                                        style={InputFieldStyle}
+                                        id="toAccount"
+                                        type="text"
+                                        placeholder="4fUk1a1rjBzoPCCy6p92u5LT5vSw9o8GpjMiRHBbJUfmx51uvt"
+                                        onChange={changeToAccountHandler}
+                                    />
+                                </label>
+                                <button
+                                    style={ButtonStyle}
+                                    type="button"
+                                    onClick={() => {
+                                        setTxHash('');
+                                        setTransactionError('');
+                                        setWaitingForUser(true);
+                                        const tx = simple_CCD_transfer(connection, account, toAccount, cCDAmount);
+                                        tx.then(setTxHash)
+                                            .catch((err: Error) => setTransactionError((err as Error).message))
+                                            .finally(() => setWaitingForUser(false));
+                                    }}
+                                >
+                                    Send simple CCD transfer
+                                </button>
+                                <br />
+                                <div className="dashedLine"></div>
+                                <div className="centerLargeText">Testing simple CCD transfer to non exising account address:</div>
+                                <button
+                                    style={ButtonStyle}
+                                    type="button"
+                                    onClick={() => {
+                                        setTxHash('');
+                                        setTransactionError('');
+                                        setWaitingForUser(true);
+                                        const tx = simple_CCD_transfer_to_non_existing_account_address(connection, account);
+                                        tx.then(setTxHash)
+                                            .catch((err: Error) => setTransactionError((err as Error).message))
+                                            .finally(() => setWaitingForUser(false));
+                                    }}
+                                >
+                                    Send simple CCD transfer to non existing account address (reverts)
                                 </button>
                                 <br />
                                 <div className="dashedLine"></div>
