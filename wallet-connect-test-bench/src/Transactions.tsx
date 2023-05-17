@@ -13,7 +13,7 @@ import {
 import { withJsonRpcClient, WalletConnectionProps, useConnection, useConnect } from '@concordium/react-components';
 import { version } from '../package.json';
 
-import { set_value, set_object, set_array } from './utils';
+import { set_value, set_object, set_array, reverts, internal_call_reverts, internal_call_success} from './utils';
 import {
     TX_CONTRACT_NAME,
     TX_CONTRACT_INDEX,
@@ -845,7 +845,61 @@ export default function Transactions(props: WalletConnectionProps) {
                                 </button>
                                 <br />
                                 <div className="dashedLine"></div>
-                                <div className="centerLargeText">Sign a string message with the wallet:</div>
+                                <div className="centerLargeText">Testing calling a function that calls another smart contract successfully:</div>
+                                <button
+                                    style={ButtonStyle}
+                                    type="button"
+                                    onClick={() => {
+                                        setTxHash('');
+                                        setTransactionError('');
+                                        setWaitingForUser(true);
+                                        const tx = internal_call_success(connection, account);
+                                        tx.then(setTxHash)
+                                            .catch((err: Error) => setTransactionError((err as Error).message))
+                                            .finally(() => setWaitingForUser(false));
+                                    }}
+                                >
+                                    Success (internal call to smart contract)
+                                </button>
+                                <br />
+                                <div className="dashedLine"></div>
+                                <div className="centerLargeText">Testing calling a function that reverts due to the smart contract logic:</div>
+                                <button
+                                    style={ButtonStyle}
+                                    type="button"
+                                    onClick={() => {
+                                        setTxHash('');
+                                        setTransactionError('');
+                                        setWaitingForUser(true);
+                                        const tx = reverts(connection, account);
+                                        tx.then(setTxHash)
+                                            .catch((err: Error) => setTransactionError((err as Error).message))
+                                            .finally(() => setWaitingForUser(false));
+                                    }}
+                                >
+                                    Revert
+                                </button>
+                                <br />
+                                <div className="dashedLine"></div>
+                                <div className="centerLargeText">Testing calling a function that reverts due to an internal call that reverts:</div>
+                                <button
+                                    style={ButtonStyle}
+                                    type="button"
+                                    onClick={() => {
+                                        setTxHash('');
+                                        setTransactionError('');
+                                        setWaitingForUser(true);
+                                        const tx = internal_call_reverts(connection, account);
+                                        tx.then(setTxHash)
+                                            .catch((err: Error) => setTransactionError((err as Error).message))
+                                            .finally(() => setWaitingForUser(false));
+                                    }}
+                                >
+                                    Revert (internal call reverts)
+                                </button>
+                                <br />
+                                <div className="dashedLine"></div>
+                                <div className="centerLargeText">Testing signing a string message with the wallet:</div>
                                 <label>
                                     <p className="centerLargeText">Message to be signed:</p>
                                     <input
@@ -884,7 +938,7 @@ export default function Transactions(props: WalletConnectionProps) {
                                 )}
                                 <br />
                                 <div className="dashedLine"></div>
-                                <div className="centerLargeText">Sign a byte message with the wallet:</div>
+                                <div className="centerLargeText">Testing signing a byte message with the wallet:</div>
                                 <label>
                                     <p className="centerLargeText">Message to be signed:</p>
                                     <input

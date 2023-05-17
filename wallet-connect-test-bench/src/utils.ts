@@ -286,10 +286,6 @@ export async function set_value(connection: WalletConnection, account: string, u
     );
 }
 
-
-// ["Account": ["4fUk1a1rjBzoPCCy6p92u5LT5vSw9o8GpjMiRHBbJUfmx51uvt"]]
-
-
 export async function set_array(connection: WalletConnection, account: string, useModuleSchema: boolean, isPayable: boolean, cCDAmount: string) {
 
     const inputParameter = [
@@ -328,6 +324,57 @@ export async function set_array(connection: WalletConnection, account: string, u
             maxContractExecutionEnergy: 30000n,
         } as UpdateContractPayload,
         schema
+    );
+}
+
+export async function reverts(connection: WalletConnection, account: string) {
+
+    return connection.signAndSendTransaction(
+        account,
+        AccountTransactionType.Update,
+        {
+            amount: new CcdAmount(BigInt(0)),
+            address: {
+                index: TX_CONTRACT_INDEX,
+                subindex: CONTRACT_SUB_INDEX,
+            },
+            receiveName: `${TX_CONTRACT_NAME}.reverts`,
+            maxContractExecutionEnergy: 30000n,
+        } as UpdateContractPayload
+    );
+}
+
+export async function internal_call_reverts(connection: WalletConnection, account: string) {
+
+    return connection.signAndSendTransaction(
+        account,
+        AccountTransactionType.Update,
+        {
+            amount: new CcdAmount(BigInt(0)),
+            address: {
+                index: TX_CONTRACT_INDEX,
+                subindex: CONTRACT_SUB_INDEX,
+            },
+            receiveName: `${TX_CONTRACT_NAME}.internal_call_reverts`,
+            maxContractExecutionEnergy: 30000n,
+        } as UpdateContractPayload
+    );
+}
+
+export async function internal_call_success(connection: WalletConnection, account: string) {
+
+    return connection.signAndSendTransaction(
+        account,
+        AccountTransactionType.Update,
+        {
+            amount: new CcdAmount(BigInt(0)),
+            address: {
+                index: TX_CONTRACT_INDEX,
+                subindex: CONTRACT_SUB_INDEX,
+            },
+            receiveName: `${TX_CONTRACT_NAME}.internal_call_success`,
+            maxContractExecutionEnergy: 30000n,
+        } as UpdateContractPayload
     );
 }
 
