@@ -1,6 +1,4 @@
 /* eslint-disable no-console */
-/* eslint-disable no-alert */
-
 import React, { useEffect, useState, ChangeEvent } from 'react';
 import Switch from 'react-switch';
 import {
@@ -8,21 +6,27 @@ import {
     JsonRpcClient,
     serializeTypeValue,
     deserializeTypeValue,
-    AccountAddress
+    deserializeReceiveReturnValue
 } from '@concordium/web-sdk';
 import { withJsonRpcClient, WalletConnectionProps, useConnection, useConnect } from '@concordium/react-components';
 import { version } from '../package.json';
 
 import { set_value, set_object, set_array, reverts, internal_call_reverts, internal_call_success, simple_CCD_transfer, simple_CCD_transfer_to_non_existing_account_address } from './utils';
 import {
-    TX_CONTRACT_NAME,
-    TX_CONTRACT_INDEX,
+    CONTRACT_NAME,
+    CONTRACT_INDEX,
     CONTRACT_SUB_INDEX,
     BROWSER_WALLET,
     VIEW_RETURN_VALUE_SCHEMA,
     WALLET_CONNECT,
     SET_OBJECT_PARAMETER_SCHEMA,
     REFRESH_INTERVAL,
+    GET_U8_RETURN_VALUE_SCHEMA,
+    GET_U16_RETURN_VALUE_SCHEMA,
+    GET_CONTRACT_ADDRESS_RETURN_VALUE_SCHEMA,
+    GET_ADDRESS_RETURN_VALUE_SCHEMA,
+    GET_ACCOUNT_ADDRESS_RETURN_VALUE_SCHEMA,
+    BASE_64_SCHEMA
 } from './constants';
 
 import { WalletConnectionTypeButton } from './WalletConnectorTypeButton';
@@ -53,32 +57,6 @@ const ButtonStyleDisabled = {
     fontSize: '14px',
 };
 
-const ButtonStyleSelected = {
-    color: 'white',
-    borderRadius: 10,
-    margin: '7px 0px 7px 0px',
-    padding: '10px',
-    width: '100%',
-    border: '0px solid',
-    backgroundColor: '#174039',
-    cursor: 'pointer',
-    fontWeight: 300,
-    fontSize: '14px',
-};
-
-const ButtonStyleNotSelected = {
-    color: 'white',
-    borderRadius: 10,
-    margin: '7px 0px 7px 0px',
-    padding: '10px',
-    width: '100%',
-    border: '0px solid',
-    backgroundColor: '#308274',
-    cursor: 'pointer',
-    fontWeight: 300,
-    fontSize: '14px',
-};
-
 const InputFieldStyle = {
     backgroundColor: '#181817',
     color: 'white',
@@ -89,168 +67,82 @@ const InputFieldStyle = {
     padding: '10px 20px',
 };
 
-// async function calculateTransferMessage(nonce: string, tokenID: string, from: string, to: string) {
-//     if (nonce === '') {
-//         alert('Insert a nonce.');
-//         return '';
-//     }
+async function get_value(rpcClient: JsonRpcClient, useModuleSchema: boolean, dropDown: string) {
 
-//     // eslint-disable-next-line no-restricted-globals
-//     if (isNaN(Number(nonce))) {
-//         alert('Your nonce needs to be a number.');
-//         return '';
-//     }
+    let entrypointName = `${CONTRACT_NAME}.get_u8`;
 
-//     if (tokenID === '') {
-//         alert('Insert a tokenID.');
-//         return '';
-//     }
+    switch (dropDown) {
+        case 'u8': entrypointName = `${CONTRACT_NAME}.get_u8`;
+            break
+        case 'u16': entrypointName = `${CONTRACT_NAME}.get_u16`;
+            break
+        case 'address': entrypointName = `${CONTRACT_NAME}.get_address`;
+            break
+        case 'contract_address': entrypointName = `${CONTRACT_NAME}.get_contract_address`;
+            break
+        case 'account_address': entrypointName = `${CONTRACT_NAME}.get_account_address`;
+            break;
+    }
 
-//     if (tokenID.length !== 8) {
-//         alert('TokenID needs to have 8 digits.');
-//         return '';
-//     }
 
-//     if (from === '') {
-//         alert('Insert an `from` address.');
-//         return '';
-//     }
-
-//     if (from.length !== 50) {
-//         alert('`From` address needs to have 50 digits.');
-//         return '';
-//     }
-
-//     if (to === '') {
-//         alert('Insert an `to` address.');
-//         return '';
-//     }
-
-//     if (to.length !== 50) {
-//         alert('`To` address needs to have 50 digits.');
-//         return '';
-//     }
-
-//     const transfer =
-//         [
-//             {
-//                 amount: '1',
-//                 data: '',
-//                 from: {
-//                     Account: [from],
-//                 },
-//                 to: {
-//                     Account: [to],
-//                 },
-//                 token_id: tokenID,
-//             },
-//         ]
-
-//     const payload = serializeTypeValue(
-//         transfer,
-//         toBuffer(TRANSFER_SCHEMA, 'base64')
-//     );
-
-//     const message = {
-//         contract_address: {
-//             index: Number(SPONSORED_TX_CONTRACT_INDEX),
-//             subindex: 0,
-//         },
-//         nonce: Number(nonce),
-//         timestamp: EXPIRY_TIME_SIGNATURE,
-//         entry_point: 'transfer',
-//         payload: Array.from(payload),
-//     };
-
-//     const serializedMessage = serializeTypeValue(
-//         message,
-//         toBuffer(SERIALIZATION_HELPER_SCHEMA, 'base64')
-//     );
-
-//     return serializedMessage;
-// }
-
-// async function calculateUpdateOperatorMessage(nonce: string, operator: string, addOperator: boolean) {
-//     if (nonce === '') {
-//         alert('Insert a nonce.');
-//         return '';
-//     }
-
-//     // eslint-disable-next-line no-restricted-globals
-//     if (isNaN(Number(nonce))) {
-//         alert('Your nonce needs to be a number.');
-//         return '';
-//     }
-
-//     if (operator === '') {
-//         alert('Insert an operator address.');
-//         return '';
-//     }
-
-//     if (operator.length !== 50) {
-//         alert('Operator address needs to have 50 digits.');
-//         return '';
-//     }
-
-//     const operatorAction = addOperator
-//         ? {
-//             Add: [],
-//         }
-//         : {
-//             Remove: [],
-//         };
-
-//     const updateOperator =
-//         [
-//             {
-//                 operator: {
-//                     Account: [operator],
-//                 },
-//                 update: operatorAction,
-//             }
-//         ]
-
-//     const payload = serializeTypeValue(
-//         updateOperator,
-//         toBuffer(UPDATE_OPERATOR_SCHEMA, 'base64')
-//     );
-
-//     const message = {
-//         contract_address: {
-//             index: Number(SPONSORED_TX_CONTRACT_INDEX),
-//             subindex: 0,
-//         },
-//         nonce: Number(nonce),
-//         timestamp: EXPIRY_TIME_SIGNATURE,
-//         entry_point: 'updateOperator',
-//         payload: Array.from(payload),
-//     };
-
-//     const serializedMessage = serializeTypeValue(
-//         message,
-//         toBuffer(SERIALIZATION_HELPER_SCHEMA, 'base64')
-//     );
-
-//     return serializedMessage;
-// }
-
-// async function getPublicKey(rpcClient: JsonRpcClient, account: string) {
-//     const res = await rpcClient.getAccountInfo(account);
-//     const publicKey = res?.accountCredentials[0].value.contents.credentialPublicKeys.keys[0].verifyKey;
-
-//     return publicKey;
-// }
-
-async function view(rpcClient: JsonRpcClient) {
 
     const res = await rpcClient.invokeContract({
-        method: `${TX_CONTRACT_NAME}.view`,
-        contract: { index: TX_CONTRACT_INDEX, subindex: CONTRACT_SUB_INDEX },
+        method: entrypointName,
+        contract: { index: CONTRACT_INDEX, subindex: CONTRACT_SUB_INDEX },
     });
 
     if (!res || res.tag === 'failure' || !res.returnValue) {
         throw new Error(
-            `RPC call 'invokeContract' on method '${TX_CONTRACT_NAME}.view' of contract '${TX_CONTRACT_INDEX}' failed`
+            `RPC call 'invokeContract' on method '${CONTRACT_NAME}.view' of contract '${CONTRACT_INDEX}' failed`
+        );
+    }
+
+
+    let schema = BASE_64_SCHEMA;
+
+    switch (dropDown) {
+        case 'u8': schema = useModuleSchema ? BASE_64_SCHEMA : GET_U8_RETURN_VALUE_SCHEMA;
+            break
+        case 'u16': schema = useModuleSchema ? BASE_64_SCHEMA : GET_U16_RETURN_VALUE_SCHEMA;
+            break
+        case 'address': schema = useModuleSchema ? BASE_64_SCHEMA : GET_ADDRESS_RETURN_VALUE_SCHEMA;
+            break
+        case 'contract_address': schema = useModuleSchema ? BASE_64_SCHEMA : GET_CONTRACT_ADDRESS_RETURN_VALUE_SCHEMA;
+            break
+        case 'account_address': schema = useModuleSchema ? BASE_64_SCHEMA : GET_ACCOUNT_ADDRESS_RETURN_VALUE_SCHEMA;
+            break;
+    }
+
+    // @ts-ignore
+    const returnValue = useModuleSchema ?
+        deserializeReceiveReturnValue(toBuffer(res.returnValue, 'hex'), toBuffer(schema, 'base64'), `${CONTRACT_NAME}`, `get_${dropDown}`) :
+        deserializeTypeValue
+            (toBuffer(res.returnValue, 'hex'),
+                toBuffer(schema, 'base64')
+            );
+
+
+    if (returnValue === undefined) {
+        throw new Error(
+            `Deserializing the returnValue from the '${CONTRACT_NAME}.${entrypointName}' method of contract '${CONTRACT_INDEX}' failed`
+        );
+    } else {
+        return returnValue;
+    }
+}
+
+async function view(rpcClient: JsonRpcClient) {
+
+
+
+    const res = await rpcClient.invokeContract({
+        method: `${CONTRACT_NAME}.view`,
+        contract: { index: CONTRACT_INDEX, subindex: CONTRACT_SUB_INDEX },
+    });
+
+    if (!res || res.tag === 'failure' || !res.returnValue) {
+        throw new Error(
+            `RPC call 'invokeContract' on method '${CONTRACT_NAME}.view' of contract '${CONTRACT_INDEX}' failed`
         );
     }
 
@@ -262,7 +154,7 @@ async function view(rpcClient: JsonRpcClient) {
 
     if (state === undefined) {
         throw new Error(
-            `Deserializing the returnValue from the '${TX_CONTRACT_NAME}.view' method of contract '${TX_CONTRACT_INDEX}' failed`
+            `Deserializing the returnValue from the '${CONTRACT_NAME}.view' method of contract '${CONTRACT_INDEX}' failed`
         );
     } else {
         return JSON.stringify(state);
@@ -274,40 +166,8 @@ async function account_info(rpcClient: JsonRpcClient, account: string) {
 }
 
 async function smart_contract_info(rpcClient: JsonRpcClient) {
-    return await rpcClient.getInstanceInfo({ index: TX_CONTRACT_INDEX, subindex: CONTRACT_SUB_INDEX })
+    return await rpcClient.getInstanceInfo({ index: CONTRACT_INDEX, subindex: CONTRACT_SUB_INDEX })
 }
-
-// function clearInputFields() {
-//     const operator = document.getElementById('operator') as HTMLTextAreaElement;
-//     if (operator !== null) {
-//         operator.value = '';
-//     }
-
-//     const from = document.getElementById('from') as HTMLTextAreaElement;
-//     if (from !== null) {
-//         from.value = '';
-//     }
-
-//     const to = document.getElementById('to') as HTMLTextAreaElement;
-//     if (to !== null) {
-//         to.value = '';
-//     }
-
-//     const tokenID = document.getElementById('tokenID') as HTMLTextAreaElement;
-//     if (tokenID !== null) {
-//         tokenID.value = '';
-//     }
-
-//     const nonce = document.getElementById('nonce') as HTMLTextAreaElement;
-//     if (nonce !== null) {
-//         nonce.value = '';
-//     }
-
-//     const signer = document.getElementById('signer') as HTMLTextAreaElement;
-//     if (signer !== null) {
-//         signer.value = '';
-//     }
-// }
 
 export default function Transactions(props: WalletConnectionProps) {
     const { network, activeConnectorType, activeConnector, activeConnectorError, connectedAccounts, genesisHashes } =
@@ -334,6 +194,8 @@ export default function Transactions(props: WalletConnectionProps) {
     const [signer, setSigner] = useState('');
     const [record, setRecord] = useState('');
 
+    const [returnValue, setReturnValue] = useState('');
+
     const [accountBalance, setAccountBalance] = useState('');
     const [smartContractBalance, setSmartContractBalance] = useState('');
 
@@ -343,6 +205,7 @@ export default function Transactions(props: WalletConnectionProps) {
     const [useModuleSchema, setUseModuleSchema] = useState(true);
     const [isPayable, setIsPayable] = useState(true);
     const [dropDown, setDropDown] = useState('u8');
+    const [dropDown2, setDropDown2] = useState('u8');
 
     const [toAccount, setToAccount] = useState('');
 
@@ -389,6 +252,13 @@ export default function Transactions(props: WalletConnectionProps) {
         var sel = e.selectedIndex;
         var value = e.options[sel].value;
         setDropDown(value);
+    };
+
+    const changeDropDown2Handler = (event: ChangeEvent) => {
+        var e = (document.getElementById("function2")) as HTMLSelectElement;
+        var sel = e.selectedIndex;
+        var value = e.options[sel].value;
+        setDropDown2(value);
     };
 
     const changeToAccountHandler = (event: ChangeEvent) => {
@@ -679,12 +549,12 @@ export default function Transactions(props: WalletConnectionProps) {
                                 <br></br>
                                 <div className="containerSpaceBetween">
                                     <div></div>
-                                    <select className="centerLargeBlackText" name="function" id="function" onChange={changeDropDownHandler}>
+                                    <select className="centerLargeBlackText" name="function2" id="function2" onChange={changeDropDown2Handler}>
                                         <option value="u8" selected>u8</option>
                                         <option value="u16">u16</option>
-                                        <option value="Address">Address</option>
-                                        <option value="ContractAddress">ContractAddress</option>
-                                        <option value="AccountAddress">AccountAddress</option>
+                                        <option value="address">Address</option>
+                                        <option value="contract_address">ContractAddress</option>
+                                        <option value="account_address">AccountAddress</option>
                                     </select>
                                     <div></div>
                                 </div>
@@ -717,14 +587,67 @@ export default function Transactions(props: WalletConnectionProps) {
                                         setTxHash('');
                                         setTransactionError('');
                                         setWaitingForUser(true);
-                                        const tx = set_value(connection, account, useModuleSchema, isPayable, dropDown, input, cCDAmount);
+                                        const tx = set_value(connection, account, useModuleSchema, isPayable, dropDown2, input, cCDAmount);
                                         tx.then(setTxHash)
                                             .catch((err: Error) => setTransactionError((err as Error).message))
                                             .finally(() => setWaitingForUser(false));
                                     }}
                                 >
-                                    Set {dropDown} value
+                                    Set {dropDown2} value
                                 </button>
+                                <div className="dashedLine"></div>
+                                <div className="centerLargeText">Testing return value deserialization of functions:</div>
+                                <div className="containerSpaceBetween">
+                                    <div className="centerLargeText">Use module schema</div>
+                                    <Switch
+                                        onChange={() => {
+                                            setUseModuleSchema(!useModuleSchema);
+                                        }}
+                                        onColor="#308274"
+                                        offColor="#308274"
+                                        onHandleColor="#174039"
+                                        offHandleColor="#174039"
+                                        checked={!useModuleSchema}
+                                        checkedIcon={false}
+                                        uncheckedIcon={false}
+                                    />
+                                    <div className="centerLargeText">Use parameter schema</div>
+                                </div>
+                                <br></br>
+                                <div className="centerLargeText">Select function:</div>
+                                <br></br>
+                                <div className="containerSpaceBetween">
+                                    <div></div>
+                                    <select className="centerLargeBlackText" name="function" id="function" onChange={changeDropDownHandler}>
+                                        <option value="u8" selected>u8</option>
+                                        <option value="u16">u16</option>
+                                        <option value="address">Address</option>
+                                        <option value="contract_address">ContractAddress</option>
+                                        <option value="account_address">AccountAddress</option>
+                                    </select>
+                                    <div></div>
+                                </div>
+                                <button
+                                    style={ButtonStyle}
+                                    type="button"
+                                    onClick={() => {
+                                        withJsonRpcClient(connection, (rpcClient) => get_value(rpcClient, useModuleSchema, dropDown))
+                                            .then((value) => {
+                                                if (value !== undefined) {
+                                                    setReturnValue(JSON.stringify(value));
+                                                }
+                                            })
+                                            .catch((e) => {
+                                                setPublicKeyError((e as Error).message);
+                                            });
+                                    }}
+                                >
+                                    Get {dropDown} value
+                                </button>
+                                {returnValue !== '' && (<>
+                                    <div className="centerLargeText">Your return value is:</div>
+                                    <div className="centerLargeText">{returnValue}</div>
+                                </>)}
                                 <br />
                                 <div className="dashedLine"></div>
                                 <div className="centerLargeText">Testing complex object as input parameter:</div>
@@ -1079,410 +1002,9 @@ export default function Transactions(props: WalletConnectionProps) {
                                 <br />
                             </>
                         )}
-                        {/* <div className="containerSpaceBetween">
-                            <button
-                                style={!isRegisterPublicKeyPage ? ButtonStyleNotSelected : ButtonStyleSelected}
-                                type="button"
-                                onClick={() => {
-                                    setIsRegisterPublicKeyPage(true);
-                                    setSignature('');
-                                    setSigningError('');
-                                    setTokenID('');
-                                    setFrom('');
-                                    setTo('');
-                                    setOperator('');
-                                    setNonce('');
-                                    setSigner('');
-                                    setTransactionError('');
-                                    setTxHash('');
-                                    clearInputFields();
-                                }}
-                            >
-                                Register Public Key
-                            </button>
-                            <Switch
-                                onChange={() => {
-                                    setIsRegisterPublicKeyPage(!isRegisterPublicKeyPage);
-                                    setSignature('');
-                                    setSigningError('');
-                                    setTokenID('');
-                                    setFrom('');
-                                    setTo('');
-                                    setOperator('');
-                                    setNonce('');
-                                    setSigner('');
-                                    setTransactionError('');
-                                    setTxHash('');
-                                    clearInputFields();
-                                }}
-                                onColor="#308274"
-                                offColor="#308274"
-                                onHandleColor="#174039"
-                                offHandleColor="#174039"
-                                checked={!isRegisterPublicKeyPage}
-                                checkedIcon={false}
-                                uncheckedIcon={false}
-                            />
-                            <button
-                                style={isRegisterPublicKeyPage ? ButtonStyleNotSelected : ButtonStyleSelected}
-                                type="button"
-                                onClick={() => {
-                                    setIsRegisterPublicKeyPage(false);
-                                    setSignature('');
-                                    setSigningError('');
-                                    setTokenID('');
-                                    setFrom('');
-                                    setTo('');
-                                    setOperator('');
-                                    setNonce('');
-                                    setSigner('');
-                                    setTransactionError('');
-                                    setTxHash('');
-                                    clearInputFields();
-                                }}
-                            >
-                                Submit Sponsored Tx
-                            </button>
-                        </div> */}
                     </>
                 )}
-                {/* {genesisHash && genesisHash !== network.genesisHash && (
-                    <p style={{ color: 'red' }}>
-                        Unexpected genesis hash: Please ensure that your wallet is connected to network{' '}
-                        <code>{network.name}</code>.
-                    </p>
-                )} */}
             </div>
-            {/* {connection && isRegisterPublicKeyPage && account !== undefined && (
-                <>
-                    {!publicKey && (
-                        <>
-                            <button
-                                style={ButtonStyle}
-                                type="button"
-                                onClick={() => {
-                                    setTxHash('');
-                                    setTransactionError('');
-                                    setWaitingForUser(true);
-                                    const tx = register(connection, account, accountInfoPublicKey);
-                                    tx.then(setTxHash)
-                                        .catch((err: Error) => setTransactionError((err as Error).message))
-                                        .finally(() => setWaitingForUser(false));
-                                }}
-                            >
-                                Register Your Public Key
-                            </button>
-                        </>
-                    )}
-                    <br />
-                    {publicKey !== '' && (
-                        <>
-                            <div> Your registered public key is: </div>
-                            <div className="loadingText">{publicKey}</div>
-                            <div> Your next nonce is: </div>
-                            <div className="loadingText">{nextNonce}</div>
-                        </>
-                    )}
-                </>
-            )} */}
-            {/* {connection && !isRegisterPublicKeyPage && account !== undefined && (
-                <>
-                    <div className="containerSpaceBetween">
-                        <p>Update operator via a sponsored transaction</p>
-                        <Switch
-                            onChange={() => {
-                                setPermitUpdateOperator(!isPermitUpdateOperator);
-                                setSignature('');
-                                setSigningError('');
-                                setTxHash('');
-                                setTransactionError('');
-                                setNonce('');
-                                setSigner('');
-                                setTokenID('');
-                                setFrom('');
-                                setTo('');
-                                setOperator('');
-                                clearInputFields();
-                            }}
-                            onColor="#308274"
-                            offColor="#308274"
-                            onHandleColor="#174039"
-                            offHandleColor="#174039"
-                            checked={!isPermitUpdateOperator}
-                            checkedIcon={false}
-                            uncheckedIcon={false}
-                        />
-                        <p>Transfer via a sponsored transaction</p>
-                    </div>
-                    {publicKey === '' && <div style={{ color: 'red' }}>Register a public key first.</div>}
-                    {isPermitUpdateOperator && publicKey !== '' && (
-                        <>
-                            <label>
-                                <p style={{ marginBottom: 0 }}>Operator Address:</p>
-                                <input
-                                    className="input"
-                                    style={InputFieldStyle}
-                                    id="operator"
-                                    type="text"
-                                    placeholder="4HoVMVsj6TwJr6B5krP5fW9qM4pbo6crVyrr7N95t2UQDrv1fq"
-                                    onChange={changeOperatorHandler}
-                                />
-                            </label>
-                            <div className="containerSpaceBetween">
-                                <p>Add operator</p>
-                                <Switch
-                                    onChange={() => {
-                                        setAddOperator(!addOperator);
-                                    }}
-                                    onColor="#308274"
-                                    offColor="#308274"
-                                    onHandleColor="#174039"
-                                    offHandleColor="#174039"
-                                    checked={!addOperator}
-                                    checkedIcon={false}
-                                    uncheckedIcon={false}
-                                />
-                                <p>Remove operator</p>
-                            </div>
-                        </>
-                    )}
-                    {!isPermitUpdateOperator && publicKey !== '' && (
-                        <>
-                            <div>Mint a token to your account first:</div>
-                            <button
-                                style={ButtonStyle}
-                                type="button"
-                                onClick={async () => {
-                                    setTxHash('');
-                                    setTransactionError('');
-                                    setWaitingForUser(true);
-                                    const tx = mint(connection, account);
-                                    tx.then(setTxHash)
-                                        .catch((err: Error) => setTransactionError((err as Error).message))
-                                        .finally(() => setWaitingForUser(false));
-                                }}
-                            >
-                                Mint an NFT token
-                            </button>
-                            <label>
-                                <p style={{ marginBottom: 0 }}>Token ID:</p>
-                                <input
-                                    className="input"
-                                    style={InputFieldStyle}
-                                    id="tokenID"
-                                    type="text"
-                                    placeholder="00000006"
-                                    onChange={changeTokenIDHandler}
-                                />
-                            </label>
-                            <label>
-                                <p style={{ marginBottom: 0 }}>From Address:</p>
-                                <input
-                                    className="input"
-                                    style={InputFieldStyle}
-                                    id="from"
-                                    type="text"
-                                    placeholder="4HoVMVsj6TwJr6B5krP5fW9qM4pbo6crVyrr7N95t2UQDrv1fq"
-                                    onChange={changeFromHandler}
-                                />
-                            </label>
-                            <label>
-                                <p style={{ marginBottom: 0 }}>To Address:</p>
-                                <input
-                                    className="input"
-                                    style={InputFieldStyle}
-                                    id="to"
-                                    type="text"
-                                    placeholder="4HoVMVsj6TwJr6B5krP5fW9qM4pbo6crVyrr7N95t2UQDrv1fq"
-                                    onChange={changeToHandler}
-                                />
-                            </label>
-                        </>
-                    )} */}
-            {/* {publicKey !== '' && (
-                        <>
-                            <label>
-                                <p style={{ marginBottom: 0 }}>Nonce:</p>
-                                <input
-                                    className="input"
-                                    style={InputFieldStyle}
-                                    id="nonce"
-                                    type="text"
-                                    placeholder={nextNonce.toString()}
-                                    onChange={changeNonceHandler}
-                                />
-                            </label>
-                            <button
-                                style={ButtonStyle}
-                                type="button"
-                                onClick={async () => {
-                                    setSigningError('');
-                                    setSignature('');
-                                    const serializedMessage = isPermitUpdateOperator
-                                        ? await calculateUpdateOperatorMessage(nonce, operator, addOperator)
-                                        : await calculateTransferMessage(nonce, tokenID, from, to);
-
-                                    if (serializedMessage !== '') {
-                                        const promise = connection.signMessage(account, {
-                                            data: serializedMessage.toString('hex'),
-                                            schema: SERIALIZATION_HELPER_SCHEMA,
-                                        })
-                                        promise
-                                            .then((permitSignature) => {
-                                                setSignature(permitSignature[0][0]);
-                                            })
-                                            .catch((err: Error) => setSigningError((err as Error).message));
-                                    } else {
-                                        setSigningError('Serialization Error');
-                                    }
-                                }}
-                            >
-                                Generate Signature
-                            </button>
-                            <br />
-                            {signingError && <div style={{ color: 'red' }}>Error: {signingError}.</div>}
-                            {signature !== '' && (
-                                <>
-                                    <div> Your generated signature is: </div>
-                                    <div className="loadingText">{signature}</div>
-                                </>
-                            )}
-                            <br />
-                            {publicKey !== '' && (
-                                <>
-                                    <div> Your registered public key is: </div>
-                                    <div className="loadingText">{publicKey}</div>
-                                    <div> Your next nonce is: </div>
-                                    <div className="loadingText">{nextNonce}</div>
-                                </>
-                            )}
-                            <label>
-                                <p style={{ marginBottom: 0 }}>Signer:</p>
-                                <input
-                                    className="input"
-                                    style={InputFieldStyle}
-                                    id="signer"
-                                    type="text"
-                                    placeholder="4HoVMVsj6TwJr6B5krP5fW9qM4pbo6crVyrr7N95t2UQDrv1fq"
-                                    onChange={changeSignerHandler}
-                                />
-                            </label>
-                            <button
-                                style={signature === '' ? ButtonStyleDisabled : ButtonStyle}
-                                disabled={signature === ''}
-                                type="button"
-                                onClick={async () => {
-                                    setTxHash('');
-                                    setTransactionError('');
-                                    setWaitingForUser(true);
-
-                                    const tx = isPermitUpdateOperator
-                                        ? submitUpdateOperator(VERIFIER_URL,
-                                            signer,
-                                            nonce,
-                                            signature,
-                                            operator,
-                                            addOperator
-                                        )
-                                        : submitTransfer(VERIFIER_URL,
-                                            signer,
-                                            nonce,
-                                            signature,
-                                            tokenID,
-                                            from,
-                                            to
-                                        );
-
-                                    tx.then((txHashReturned) => {
-                                        setTxHash(txHashReturned.tx_hash);
-                                        if (txHashReturned.tx_hash !== '') {
-                                            setSignature('');
-                                            setTokenID('');
-                                            setFrom('');
-                                            setTo('');
-                                            setOperator('');
-                                            setNonce('');
-                                            setSigner('');
-                                            clearInputFields();
-                                        }
-                                    })
-                                        .catch((err: Error) => setTransactionError((err as Error).message))
-                                        .finally(() => {
-                                            setWaitingForUser(false);
-                                        });
-
-                                }}
-                            >
-                                Submit Sponsored Transaction
-                            </button>
-                        </>
-                    )}
-                </>
-            )} */}
-            {/* {!connection && (
-                <button style={ButtonStyleDisabled} type="button" disabled>
-                    Waiting for connection...
-                </button>
-            )} */}
-            {/* {connection && account && (
-                <p>
-                    {isRegisterPublicKeyPage && !publicKey && (
-                        <>
-                            <div>Transaction status{txHash === '' ? '' : ' (May take a moment to finalize)'}</div>
-                            {!txHash && transactionError && (
-                                <div style={{ color: 'red' }}>Error: {transactionError}.</div>
-                            )}
-                            {!txHash && !transactionError && <div className="loadingText">None</div>}
-                            {txHash && (
-                                <>
-                                    <button
-                                        className="link"
-                                        type="button"
-                                        onClick={() => {
-                                            window.open(
-                                                `https://testnet.ccdscan.io/?dcount=1&dentity=transaction&dhash=${txHash}`,
-                                                '_blank',
-                                                'noopener,noreferrer'
-                                            );
-                                        }}
-                                    >
-                                        {txHash}
-                                    </button>
-                                    <br />
-                                </>
-                            )}
-                        </>
-                    )}
-                    {!isRegisterPublicKeyPage && publicKey && (
-                        <>
-                            <div>Transaction status{txHash === '' ? '' : ' (May take a moment to finalize)'}</div>
-                            {!txHash && transactionError && (
-                                <div style={{ color: 'red' }}>Error: {transactionError}.</div>
-                            )}
-                            {!txHash && !transactionError && <div className="loadingText">None</div>}
-                            {txHash && (
-                                <>
-                                    <button
-                                        className="link"
-                                        type="button"
-                                        onClick={() => {
-                                            window.open(
-                                                `https://testnet.ccdscan.io/?dcount=1&dentity=transaction&dhash=${txHash}`,
-                                                '_blank',
-                                                'noopener,noreferrer'
-                                            );
-                                        }}
-                                    >
-                                        {txHash}
-                                    </button>
-                                    <br />
-                                </>
-                            )}
-                        </>
-                    )}
-                    {publicKeyError && <div style={{ color: 'red' }}>Error: {publicKeyError}.</div>}
-                </p>
-            )} */}
         </div>
     );
 }
