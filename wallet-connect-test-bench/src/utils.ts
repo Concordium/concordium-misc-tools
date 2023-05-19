@@ -51,6 +51,9 @@ export async function set_value(connection: WalletConnection, account: string, u
             break;
         case 'option_u8_some': receiveName = isPayable ? `${CONTRACT_NAME}.set_option_u8_payable` : `${CONTRACT_NAME}.set_option_u8`
             break;
+        // We try to call the `set_u8` function but input a string as the input parameter.
+        case 'wrong_schema': receiveName = isPayable ? `${CONTRACT_NAME}.set_u8_payable` : `${CONTRACT_NAME}.set_u8`
+            break;
     }
 
     let schema: TypedSmartContractParameters = {
@@ -165,6 +168,16 @@ export async function set_value(connection: WalletConnection, account: string, u
             {
                 parameters: { "Some": [Number(input)] },
                 schema: typeSchemaFromBase64(SET_OPTION_PARAMETER_SCHEMA)
+            };
+            break;
+        // We called the `set_u8` function but input a string now as the input parameter.
+        case 'wrong_schema': schema = useModuleSchema ? {
+            parameters: "wrong input parameter type",
+            schema: moduleSchemaFromBase64(BASE_64_SCHEMA)
+        } :
+            {
+                parameters: "wrong input parameter type",
+                schema: typeSchemaFromBase64(SET_U8_PARAMETER_SCHEMA)
             };
             break;
     }
