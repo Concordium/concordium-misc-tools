@@ -5,37 +5,20 @@ import {
     toBuffer,
     JsonRpcClient,
     serializeTypeValue,
-    deserializeTypeValue,
-    deserializeReceiveReturnValue
 } from '@concordium/web-sdk';
 import { withJsonRpcClient, WalletConnectionProps, useConnection, useConnect } from '@concordium/react-components';
 import { version } from '../package.json';
+import { WalletConnectionTypeButton } from './WalletConnectorTypeButton';
 
-import { set_value, set_object, set_array, reverts, internal_call_reverts, internal_call_success, simple_CCD_transfer, simple_CCD_transfer_to_non_existing_account_address } from './utils';
+import { smart_contract_info, account_info, view, get_value } from './reading_from_blockchain';
+import { set_value, set_object, set_array, reverts, internal_call_reverts, internal_call_success, not_existing_entrypoint, simple_CCD_transfer, simple_CCD_transfer_to_non_existing_account_address } from './writing_to_blockchain';
+
 import {
-    CONTRACT_NAME,
-    CONTRACT_INDEX,
-    CONTRACT_SUB_INDEX,
     BROWSER_WALLET,
-    VIEW_RETURN_VALUE_SCHEMA,
     WALLET_CONNECT,
     SET_OBJECT_PARAMETER_SCHEMA,
     REFRESH_INTERVAL,
-    GET_U8_RETURN_VALUE_SCHEMA,
-    GET_U16_RETURN_VALUE_SCHEMA,
-    GET_CONTRACT_ADDRESS_RETURN_VALUE_SCHEMA,
-    GET_ADDRESS_RETURN_VALUE_SCHEMA,
-    GET_ACCOUNT_ADDRESS_RETURN_VALUE_SCHEMA,
-    GET_HASH_RETURN_VALUE_SCHEMA,
-    GET_PUBLIC_KEY_RETURN_VALUE_SCHEMA,
-    GET_SIGNATURE_RETURN_VALUE_SCHEMA,
-    GET_TIMESTAMP_RETURN_VALUE_SCHEMA,
-    GET_STRING_RETURN_VALUE_SCHEMA,
-    GET_OPTION_RETURN_VALUE_SCHEMA,
-    BASE_64_SCHEMA
 } from './constants';
-
-import { WalletConnectionTypeButton } from './WalletConnectorTypeButton';
 
 const ButtonStyle = {
     color: 'white',
@@ -72,150 +55,6 @@ const InputFieldStyle = {
     margin: '7px 0px 7px 0px',
     padding: '10px 20px',
 };
-
-async function get_value(rpcClient: JsonRpcClient, useModuleSchema: boolean, dropDown: string) {
-
-    let entrypointName = `${CONTRACT_NAME}.get_u8`;
-
-    switch (dropDown) {
-        case 'u8': entrypointName = `${CONTRACT_NAME}.get_u8`;
-            break
-        case 'u16': entrypointName = `${CONTRACT_NAME}.get_u16`;
-            break
-        case 'address': entrypointName = `${CONTRACT_NAME}.get_address`;
-            break
-        case 'contract_address': entrypointName = `${CONTRACT_NAME}.get_contract_address`;
-            break
-        case 'account_address': entrypointName = `${CONTRACT_NAME}.get_account_address`;
-            break;
-        case 'hash': entrypointName = `${CONTRACT_NAME}.get_hash`;
-            break;
-        case 'public_key': entrypointName = `${CONTRACT_NAME}.get_public_key`;
-            break;
-        case 'signature': entrypointName = `${CONTRACT_NAME}.get_signature`;
-            break;
-        case 'timestamp': entrypointName = `${CONTRACT_NAME}.get_timestamp`;
-            break;
-        case 'string': entrypointName = `${CONTRACT_NAME}.get_string`;
-            break;
-        case 'option_u8': entrypointName = `${CONTRACT_NAME}.get_option_u8`;
-            break;
-        // We call the `get_u8` function but later use the `timestamp` schema trying to deserialize the return value.
-        case 'wrong_schema': entrypointName = `${CONTRACT_NAME}.get_u8`;
-            break;
-    }
-
-    const res = await rpcClient.invokeContract({
-        method: entrypointName,
-        contract: { index: CONTRACT_INDEX, subindex: CONTRACT_SUB_INDEX },
-    });
-
-    if (!res || res.tag === 'failure' || !res.returnValue) {
-        throw new Error(
-            `RPC call 'invokeContract' on method '${CONTRACT_NAME}.view' of contract '${CONTRACT_INDEX}' failed`
-        );
-    }
-
-    let schema = BASE_64_SCHEMA;
-
-    switch (dropDown) {
-        case 'u8': schema = useModuleSchema ? BASE_64_SCHEMA : GET_U8_RETURN_VALUE_SCHEMA;
-            break
-        case 'u16': schema = useModuleSchema ? BASE_64_SCHEMA : GET_U16_RETURN_VALUE_SCHEMA;
-            break
-        case 'address': schema = useModuleSchema ? BASE_64_SCHEMA : GET_ADDRESS_RETURN_VALUE_SCHEMA;
-            break
-        case 'contract_address': schema = useModuleSchema ? BASE_64_SCHEMA : GET_CONTRACT_ADDRESS_RETURN_VALUE_SCHEMA;
-            break
-        case 'account_address': schema = useModuleSchema ? BASE_64_SCHEMA : GET_ACCOUNT_ADDRESS_RETURN_VALUE_SCHEMA;
-            break;
-        case 'hash': schema = useModuleSchema ? BASE_64_SCHEMA : GET_HASH_RETURN_VALUE_SCHEMA;
-            break;
-        case 'public_key': schema = useModuleSchema ? BASE_64_SCHEMA : GET_PUBLIC_KEY_RETURN_VALUE_SCHEMA;
-            break;
-        case 'signature': schema = useModuleSchema ? BASE_64_SCHEMA : GET_SIGNATURE_RETURN_VALUE_SCHEMA;
-            break;
-        case 'timestamp': schema = useModuleSchema ? BASE_64_SCHEMA : GET_TIMESTAMP_RETURN_VALUE_SCHEMA;
-            break;
-        case 'string': schema = useModuleSchema ? BASE_64_SCHEMA : GET_STRING_RETURN_VALUE_SCHEMA;
-            break;
-        case 'option_u8': schema = useModuleSchema ? BASE_64_SCHEMA : GET_OPTION_RETURN_VALUE_SCHEMA;
-            break;
-        // We called the `get_u8` function but now use the `timestamp` schema trying to deserialize the return value.
-        case 'wrong_schema': schema = useModuleSchema ? BASE_64_SCHEMA : GET_TIMESTAMP_RETURN_VALUE_SCHEMA;
-            dropDown = 'timestamp'
-            break;
-    }
-
-    let returnValue = undefined;
-
-    if (useModuleSchema) {
-        try {
-            returnValue = deserializeReceiveReturnValue(toBuffer(res.returnValue, 'hex'), toBuffer(schema, 'base64'), `${CONTRACT_NAME}`, `get_${dropDown}`)
-        }
-        catch (err) {
-            throw new Error(
-                (err as Error).message
-            );
-        }
-    } else {
-        try {
-            returnValue = deserializeTypeValue
-                (toBuffer(res.returnValue, 'hex'),
-                    toBuffer(schema, 'base64')
-                )
-        }
-        catch (err) {
-            throw new Error(
-                err as string
-            );
-        }
-    }
-
-    if (returnValue === undefined) {
-        throw new Error(
-            `Deserializing the returnValue from the '${CONTRACT_NAME}.${entrypointName}' method of contract '${CONTRACT_INDEX}' failed`
-        );
-    } else {
-        return returnValue;
-    }
-}
-
-async function view(rpcClient: JsonRpcClient) {
-
-    const res = await rpcClient.invokeContract({
-        method: `${CONTRACT_NAME}.view`,
-        contract: { index: CONTRACT_INDEX, subindex: CONTRACT_SUB_INDEX },
-    });
-
-    if (!res || res.tag === 'failure' || !res.returnValue) {
-        throw new Error(
-            `RPC call 'invokeContract' on method '${CONTRACT_NAME}.view' of contract '${CONTRACT_INDEX}' failed`
-        );
-    }
-
-    // @ts-ignore
-    const state = deserializeTypeValue
-        (toBuffer(res.returnValue, 'hex'),
-            toBuffer(VIEW_RETURN_VALUE_SCHEMA, 'base64')
-        );
-
-    if (state === undefined) {
-        throw new Error(
-            `Deserializing the returnValue from the '${CONTRACT_NAME}.view' method of contract '${CONTRACT_INDEX}' failed`
-        );
-    } else {
-        return JSON.stringify(state);
-    }
-}
-
-async function account_info(rpcClient: JsonRpcClient, account: string) {
-    return await rpcClient.getAccountInfo(account)
-}
-
-async function smart_contract_info(rpcClient: JsonRpcClient) {
-    return await rpcClient.getInstanceInfo({ index: CONTRACT_INDEX, subindex: CONTRACT_SUB_INDEX })
-}
 
 export default function Transactions(props: WalletConnectionProps) {
 
@@ -580,7 +419,7 @@ export default function Transactions(props: WalletConnectionProps) {
                                         <option value="contract_address">ContractAddress</option>
                                         <option value="account_address">AccountAddress</option>
                                         <option value="hash">Hash</option>
-                                        <option value="public_key">PublicKey</option>
+                                        <option value="public_key">Public key</option>
                                         <option value="signature">Signature</option>
                                         <option value="timestamp">Timestamp</option>
                                         <option value="string">String</option>
@@ -874,6 +713,24 @@ export default function Transactions(props: WalletConnectionProps) {
                                 </button>
                                 <br />
                                 <div className="dashedLine"></div>
+                                <div className="centerLargeText">Testing calling a not existing entrypoint:</div>
+                                <button
+                                    style={ButtonStyle}
+                                    type="button"
+                                    onClick={() => {
+                                        setTxHash('');
+                                        setTransactionError('');
+                                        setWaitingForUser(true);
+                                        const tx = not_existing_entrypoint(connection, account);
+                                        tx.then(setTxHash)
+                                            .catch((err: Error) => setTransactionError((err as Error).message))
+                                            .finally(() => setWaitingForUser(false));
+                                    }}
+                                >
+                                    Not existing entrypoint (tx reverts)
+                                </button>
+                                <br />
+                                <div className="dashedLine"></div>
                                 <div className="centerLargeText">Testing simple CCD transfer:</div>
                                 <label>
                                     <p className="centerLargeText">micro CCD:</p>
@@ -973,17 +830,6 @@ export default function Transactions(props: WalletConnectionProps) {
                                 <br />
                                 <div className="dashedLine"></div>
                                 <div className="centerLargeText">Testing signing a byte message with the wallet:</div>
-                                <label>
-                                    <p className="centerLargeText">Message to be signed:</p>
-                                    <input
-                                        className="input"
-                                        style={InputFieldStyle}
-                                        id="message"
-                                        type="text"
-                                        placeholder="My message"
-                                        onChange={changeMessageHandler}
-                                    />
-                                </label>
                                 <button
                                     style={ButtonStyle}
                                     type="button"

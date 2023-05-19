@@ -240,6 +240,60 @@ export async function set_array(connection: WalletConnection, account: string, u
     );
 }
 
+export async function set_object(connection: WalletConnection, account: string, useModuleSchema: boolean, isPayable: boolean, cCDAmount: string) {
+
+    const inputParameter = {
+        "account_address_value": "4fUk1a1rjBzoPCCy6p92u5LT5vSw9o8GpjMiRHBbJUfmx51uvt",
+        "address_array": [
+            {
+                "Account": [
+                    "4fUk1a1rjBzoPCCy6p92u5LT5vSw9o8GpjMiRHBbJUfmx51uvt"
+                ]
+            }, {
+                "Account": [
+                    "4fUk1a1rjBzoPCCy6p92u5LT5vSw9o8GpjMiRHBbJUfmx51uvt"
+                ]
+            }],
+        "address_value": {
+            "Account": [
+                "4fUk1a1rjBzoPCCy6p92u5LT5vSw9o8GpjMiRHBbJUfmx51uvt"
+            ]
+        },
+        "contract_address_value": {
+            "index": 3,
+            "subindex": 0
+        },
+        "u16_value": 999,
+        "u8_value": 88
+    }
+
+    const schema = useModuleSchema ? {
+        parameters: inputParameter,
+        schema: moduleSchemaFromBase64(BASE_64_SCHEMA)
+    } :
+        {
+            parameters: inputParameter,
+            schema: typeSchemaFromBase64(SET_OBJECT_PARAMETER_SCHEMA)
+        };
+
+    let receiveName = isPayable ? `${CONTRACT_NAME}.set_object_payable` : `${CONTRACT_NAME}.set_object`
+
+    return connection.signAndSendTransaction(
+        account,
+        AccountTransactionType.Update,
+        {
+            amount: new CcdAmount(BigInt(cCDAmount)),
+            address: {
+                index: CONTRACT_INDEX,
+                subindex: CONTRACT_SUB_INDEX,
+            },
+            receiveName: receiveName,
+            maxContractExecutionEnergy: 30000n,
+        } as UpdateContractPayload,
+        schema
+    );
+}
+
 export async function simple_CCD_transfer(connection: WalletConnection, account: string, toAccount: string, cCDAmount: string) {
 
     return connection.signAndSendTransaction(
@@ -315,57 +369,24 @@ export async function internal_call_success(connection: WalletConnection, accoun
     );
 }
 
-export async function set_object(connection: WalletConnection, account: string, useModuleSchema: boolean, isPayable: boolean, cCDAmount: string) {
-
-    const inputParameter = {
-        "account_address_value": "4fUk1a1rjBzoPCCy6p92u5LT5vSw9o8GpjMiRHBbJUfmx51uvt",
-        "address_array": [
-            {
-                "Account": [
-                    "4fUk1a1rjBzoPCCy6p92u5LT5vSw9o8GpjMiRHBbJUfmx51uvt"
-                ]
-            }, {
-                "Account": [
-                    "4fUk1a1rjBzoPCCy6p92u5LT5vSw9o8GpjMiRHBbJUfmx51uvt"
-                ]
-            }],
-        "address_value": {
-            "Account": [
-                "4fUk1a1rjBzoPCCy6p92u5LT5vSw9o8GpjMiRHBbJUfmx51uvt"
-            ]
-        },
-        "contract_address_value": {
-            "index": 3,
-            "subindex": 0
-        },
-        "u16_value": 999,
-        "u8_value": 88
-    }
-
-    const schema = useModuleSchema ? {
-        parameters: inputParameter,
-        schema: moduleSchemaFromBase64(BASE_64_SCHEMA)
-    } :
-        {
-            parameters: inputParameter,
-            schema: typeSchemaFromBase64(SET_OBJECT_PARAMETER_SCHEMA)
-        };
-
-    let receiveName = isPayable ? `${CONTRACT_NAME}.set_object_payable` : `${CONTRACT_NAME}.set_object`
+export async function not_existing_entrypoint(connection: WalletConnection, account: string) {
 
     return connection.signAndSendTransaction(
         account,
         AccountTransactionType.Update,
         {
-            amount: new CcdAmount(BigInt(cCDAmount)),
+            amount: new CcdAmount(BigInt(0)),
             address: {
                 index: CONTRACT_INDEX,
                 subindex: CONTRACT_SUB_INDEX,
             },
-            receiveName: receiveName,
+            receiveName: `${CONTRACT_NAME}.does_not_exist`,
             maxContractExecutionEnergy: 30000n,
         } as UpdateContractPayload,
-        schema
+        {
+            parameters: 3,
+            schema: typeSchemaFromBase64(SET_U8_PARAMETER_SCHEMA)
+        }
     );
 }
 
