@@ -60,7 +60,8 @@ struct App {
     #[clap(
         long = "account",
         help = "List of account addresses to monitor.",
-        env = "CHAIN_PROMETHEUS_EXPORTER_ACCOUNTS"
+        env = "CHAIN_PROMETHEUS_EXPORTER_ACCOUNTS",
+        value_delimiter = ','
     )]
     accounts:        Vec<String>,
 }
