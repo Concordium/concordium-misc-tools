@@ -26,6 +26,12 @@ import {
     GET_CONTRACT_ADDRESS_RETURN_VALUE_SCHEMA,
     GET_ADDRESS_RETURN_VALUE_SCHEMA,
     GET_ACCOUNT_ADDRESS_RETURN_VALUE_SCHEMA,
+    GET_HASH_RETURN_VALUE_SCHEMA,
+    GET_PUBLIC_KEY_RETURN_VALUE_SCHEMA,
+    GET_SIGNATURE_RETURN_VALUE_SCHEMA,
+    GET_TIMESTAMP_RETURN_VALUE_SCHEMA,
+    GET_STRING_RETURN_VALUE_SCHEMA,
+    GET_OPTION_RETURN_VALUE_SCHEMA,
     BASE_64_SCHEMA
 } from './constants';
 
@@ -82,9 +88,19 @@ async function get_value(rpcClient: JsonRpcClient, useModuleSchema: boolean, dro
             break
         case 'account_address': entrypointName = `${CONTRACT_NAME}.get_account_address`;
             break;
+        case 'hash': entrypointName = `${CONTRACT_NAME}.get_hash`;
+            break;
+        case 'public_key': entrypointName = `${CONTRACT_NAME}.get_public_key`;
+            break;
+        case 'signature': entrypointName = `${CONTRACT_NAME}.get_signature`;
+            break;
+        case 'timestamp': entrypointName = `${CONTRACT_NAME}.get_timestamp`;
+            break;
+        case 'string': entrypointName = `${CONTRACT_NAME}.get_string`;
+            break;
+        case 'option_u8': entrypointName = `${CONTRACT_NAME}.get_option_u8`;
+            break;
     }
-
-
 
     const res = await rpcClient.invokeContract({
         method: entrypointName,
@@ -96,7 +112,6 @@ async function get_value(rpcClient: JsonRpcClient, useModuleSchema: boolean, dro
             `RPC call 'invokeContract' on method '${CONTRACT_NAME}.view' of contract '${CONTRACT_INDEX}' failed`
         );
     }
-
 
     let schema = BASE_64_SCHEMA;
 
@@ -111,6 +126,18 @@ async function get_value(rpcClient: JsonRpcClient, useModuleSchema: boolean, dro
             break
         case 'account_address': schema = useModuleSchema ? BASE_64_SCHEMA : GET_ACCOUNT_ADDRESS_RETURN_VALUE_SCHEMA;
             break;
+        case 'hash': schema = useModuleSchema ? BASE_64_SCHEMA : GET_HASH_RETURN_VALUE_SCHEMA;
+            break;
+        case 'public_key': schema = useModuleSchema ? BASE_64_SCHEMA : GET_PUBLIC_KEY_RETURN_VALUE_SCHEMA;
+            break;
+        case 'signature': schema = useModuleSchema ? BASE_64_SCHEMA : GET_SIGNATURE_RETURN_VALUE_SCHEMA;
+            break;
+        case 'timestamp': schema = useModuleSchema ? BASE_64_SCHEMA : GET_TIMESTAMP_RETURN_VALUE_SCHEMA;
+            break;
+        case 'string': schema = useModuleSchema ? BASE_64_SCHEMA : GET_STRING_RETURN_VALUE_SCHEMA;
+            break;
+        case 'option_u8': schema = useModuleSchema ? BASE_64_SCHEMA : GET_OPTION_RETURN_VALUE_SCHEMA;
+            break;
     }
 
     // @ts-ignore
@@ -120,7 +147,6 @@ async function get_value(rpcClient: JsonRpcClient, useModuleSchema: boolean, dro
             (toBuffer(res.returnValue, 'hex'),
                 toBuffer(schema, 'base64')
             );
-
 
     if (returnValue === undefined) {
         throw new Error(
@@ -132,8 +158,6 @@ async function get_value(rpcClient: JsonRpcClient, useModuleSchema: boolean, dro
 }
 
 async function view(rpcClient: JsonRpcClient) {
-
-
 
     const res = await rpcClient.invokeContract({
         method: `${CONTRACT_NAME}.view`,
@@ -179,19 +203,10 @@ export default function Transactions(props: WalletConnectionProps) {
 
     const [publicKeyError, setPublicKeyError] = useState('');
 
-    const [isPermitUpdateOperator, setPermitUpdateOperator] = useState<boolean>(true);
-
     const [publicKey, setPublicKey] = useState('');
     const [nextNonce, setNextNonce] = useState<number>(0);
-
-    const [accountInfoPublicKey, setAccountInfoPublicKey] = useState('');
-    const [operator, setOperator] = useState('');
-    const [addOperator, setAddOperator] = useState<boolean>(true);
-    const [tokenID, setTokenID] = useState('');
-    const [to, setTo] = useState('');
     const [nonce, setNonce] = useState('');
-    const [from, setFrom] = useState('');
-    const [signer, setSigner] = useState('');
+
     const [record, setRecord] = useState('');
 
     const [returnValue, setReturnValue] = useState('');
@@ -211,26 +226,6 @@ export default function Transactions(props: WalletConnectionProps) {
 
     const [signature, setSignature] = useState('');
     const [signingError, setSigningError] = useState('');
-
-    const changeOperatorHandler = (event: ChangeEvent) => {
-        const target = event.target as HTMLTextAreaElement;
-        setOperator(target.value);
-    };
-
-    const changeTokenIDHandler = (event: ChangeEvent) => {
-        const target = event.target as HTMLTextAreaElement;
-        setTokenID(target.value);
-    };
-
-    const changeToHandler = (event: ChangeEvent) => {
-        const target = event.target as HTMLTextAreaElement;
-        setTo(target.value);
-    };
-
-    const changeFromHandler = (event: ChangeEvent) => {
-        const target = event.target as HTMLTextAreaElement;
-        setFrom(target.value);
-    };
 
     const changeInputHandler = (event: ChangeEvent) => {
         const target = event.target as HTMLTextAreaElement;
@@ -281,6 +276,7 @@ export default function Transactions(props: WalletConnectionProps) {
                         setPublicKeyError('');
                     })
                     .catch((e) => {
+                        setAccountBalance('');
                         setPublicKeyError((e as Error).message);
                         setPublicKey('');
                         setNextNonce(0);
@@ -305,6 +301,7 @@ export default function Transactions(props: WalletConnectionProps) {
                         setPublicKeyError('');
                     })
                     .catch((e) => {
+                        setSmartContractBalance('');
                         setPublicKeyError((e as Error).message);
                         setPublicKey('');
                         setNextNonce(0);
@@ -329,6 +326,7 @@ export default function Transactions(props: WalletConnectionProps) {
                         setPublicKeyError('');
                     })
                     .catch((e) => {
+                        setRecord('');
                         setPublicKeyError((e as Error).message);
                         setPublicKey('');
                         setNextNonce(0);
@@ -555,6 +553,13 @@ export default function Transactions(props: WalletConnectionProps) {
                                         <option value="address">Address</option>
                                         <option value="contract_address">ContractAddress</option>
                                         <option value="account_address">AccountAddress</option>
+                                        <option value="hash">Hash</option>
+                                        <option value="public_key">PublicKey</option>
+                                        <option value="signature">Signature</option>
+                                        <option value="timestamp">Timestamp</option>
+                                        <option value="string">String</option>
+                                        <option value="option_u8_none">Option (None)</option>
+                                        <option value="option_u8_some">Option (Some)</option>
                                     </select>
                                     <div></div>
                                 </div>
@@ -576,7 +581,7 @@ export default function Transactions(props: WalletConnectionProps) {
                                         style={InputFieldStyle}
                                         id="input"
                                         type="text"
-                                        placeholder='5 | 15 | {"Contract":[{"index":3,"subindex":0}]} or {"Account":["4fUk1a1rjBzoPCCy6p92u5LT5vSw9o8GpjMiRHBbJUfmx51uvt"]} | {"index":3,"subindex":0} | 4fUk1a1rjBzoPCCy6p92u5LT5vSw9o8GpjMiRHBbJUfmx51uvt'
+                                        placeholder='5 | 15 | {"Contract":[{"index":3,"subindex":0}]} or {"Account":["4fUk1a1rjBzoPCCy6p92u5LT5vSw9o8GpjMiRHBbJUfmx51uvt"]} | {"index":3,"subindex":0} | 4fUk1a1rjBzoPCCy6p92u5LT5vSw9o8GpjMiRHBbJUfmx51uvt | 18ee24150dcb1d96752a4d6dd0f20dfd8ba8c38527e40aa8509b7adecf78f9c6 | 37a2a8e52efad975dbf6580e7734e4f249eaa5ea8a763e934a8671cd7e446499 | 632f567c9321405ce201a0a38615da41efe259ede154ff45ad96cdf860718e79bde07cff72c4d119c644552a8c7f0c413f5cf5390b0ea0458993d6d6374bd904 | 2030-08-08T05:15:00Z | aaa | | 3 |'
                                         onChange={changeInputHandler}
                                     />
                                 </label>
@@ -624,6 +629,12 @@ export default function Transactions(props: WalletConnectionProps) {
                                         <option value="address">Address</option>
                                         <option value="contract_address">ContractAddress</option>
                                         <option value="account_address">AccountAddress</option>
+                                        <option value="hash">Hash</option>
+                                        <option value="public_key">PublicKey</option>
+                                        <option value="signature">Signature</option>
+                                        <option value="timestamp">Timestamp</option>
+                                        <option value="string">String</option>
+                                        <option value="option_u8">Option</option>
                                     </select>
                                     <div></div>
                                 </div>
@@ -631,6 +642,7 @@ export default function Transactions(props: WalletConnectionProps) {
                                     style={ButtonStyle}
                                     type="button"
                                     onClick={() => {
+                                        setReturnValue('');
                                         withJsonRpcClient(connection, (rpcClient) => get_value(rpcClient, useModuleSchema, dropDown))
                                             .then((value) => {
                                                 if (value !== undefined) {
@@ -904,6 +916,7 @@ export default function Transactions(props: WalletConnectionProps) {
                                     style={ButtonStyle}
                                     type="button"
                                     onClick={() => {
+                                        setSignature('');
                                         const promise = connection.signMessage(account,
                                             {
                                                 type: 'StringMessage',
@@ -974,6 +987,7 @@ export default function Transactions(props: WalletConnectionProps) {
                                             toBuffer(SET_OBJECT_PARAMETER_SCHEMA, 'base64')
                                         );
 
+                                        setSignature('');
                                         const promise = connection.signMessage(account,
                                             {
                                                 type: 'BinaryMessage',

@@ -14,6 +14,12 @@ import {
     SET_CONTRACT_ADDRESS_PARAMETER_SCHEMA,
     SET_ADDRESS_PARAMETER_SCHEMA,
     SET_U16_PARAMETER_SCHEMA,
+    SET_HASH_PARAMETER_SCHEMA,
+    SET_PUBLIC_KEY_PARAMETER_SCHEMA,
+    SET_SIGNATURE_PARAMETER_SCHEMA,
+    SET_TIMESTAMP_PARAMETER_SCHEMA,
+    SET_STRING_PARAMETER_SCHEMA,
+    SET_OPTION_PARAMETER_SCHEMA
 } from './constants';
 
 export async function set_value(connection: WalletConnection, account: string, useModuleSchema: boolean, isPayable: boolean, dropDown: string, input: string, cCDAmount: string) {
@@ -30,6 +36,20 @@ export async function set_value(connection: WalletConnection, account: string, u
         case 'contract_address': receiveName = isPayable ? `${CONTRACT_NAME}.set_contract_address_payable` : `${CONTRACT_NAME}.set_contract_address`
             break
         case 'account_address': receiveName = isPayable ? `${CONTRACT_NAME}.set_account_address_payable` : `${CONTRACT_NAME}.set_account_address`
+            break;
+        case 'hash': receiveName = isPayable ? `${CONTRACT_NAME}.set_hash_payable` : `${CONTRACT_NAME}.set_hash`
+            break;
+        case 'public_key': receiveName = isPayable ? `${CONTRACT_NAME}.set_public_key_payable` : `${CONTRACT_NAME}.set_public_key`
+            break;
+        case 'signature': receiveName = isPayable ? `${CONTRACT_NAME}.set_signature_payable` : `${CONTRACT_NAME}.set_signature`
+            break;
+        case 'timestamp': receiveName = isPayable ? `${CONTRACT_NAME}.set_timestamp_payable` : `${CONTRACT_NAME}.set_timestamp`
+            break;
+        case 'string': receiveName = isPayable ? `${CONTRACT_NAME}.set_string_payable` : `${CONTRACT_NAME}.set_string`
+            break;
+        case 'option_u8_none': receiveName = isPayable ? `${CONTRACT_NAME}.set_option_u8_payable` : `${CONTRACT_NAME}.set_option_u8`
+            break;
+        case 'option_u8_some': receiveName = isPayable ? `${CONTRACT_NAME}.set_option_u8_payable` : `${CONTRACT_NAME}.set_option_u8`
             break;
     }
 
@@ -82,6 +102,69 @@ export async function set_value(connection: WalletConnection, account: string, u
             {
                 parameters: JSON.parse("\"" + input + "\""),
                 schema: typeSchemaFromBase64(SET_ACCOUNT_ADDRESS_PARAMETER_SCHEMA)
+            };
+            break;
+        case 'hash': schema = useModuleSchema ? {
+            parameters: JSON.parse("\"" + input + "\""),
+            schema: moduleSchemaFromBase64(BASE_64_SCHEMA)
+        } :
+            {
+                parameters: JSON.parse("\"" + input + "\""),
+                schema: typeSchemaFromBase64(SET_HASH_PARAMETER_SCHEMA)
+            };
+            break;
+        case 'public_key': schema = useModuleSchema ? {
+            parameters: JSON.parse("\"" + input + "\""),
+            schema: moduleSchemaFromBase64(BASE_64_SCHEMA)
+        } :
+            {
+                parameters: JSON.parse("\"" + input + "\""),
+                schema: typeSchemaFromBase64(SET_PUBLIC_KEY_PARAMETER_SCHEMA)
+            };
+            break;
+        case 'signature': schema = useModuleSchema ? {
+            parameters: JSON.parse("\"" + input + "\""),
+            schema: moduleSchemaFromBase64(BASE_64_SCHEMA)
+        } :
+            {
+                parameters: JSON.parse("\"" + input + "\""),
+                schema: typeSchemaFromBase64(SET_SIGNATURE_PARAMETER_SCHEMA)
+            };
+            break;
+        case 'timestamp': schema = useModuleSchema ? {
+            parameters: JSON.parse("\"" + input + "\""),
+            schema: moduleSchemaFromBase64(BASE_64_SCHEMA)
+        } :
+            {
+                parameters: JSON.parse("\"" + input + "\""),
+                schema: typeSchemaFromBase64(SET_TIMESTAMP_PARAMETER_SCHEMA)
+            };
+            break;
+        case 'string': schema = useModuleSchema ? {
+            parameters: JSON.parse("\"" + input + "\""),
+            schema: moduleSchemaFromBase64(BASE_64_SCHEMA)
+        } :
+            {
+                parameters: JSON.parse("\"" + input + "\""),
+                schema: typeSchemaFromBase64(SET_STRING_PARAMETER_SCHEMA)
+            };
+            break;
+        case 'option_u8_none': schema = useModuleSchema ? {
+            parameters: { "None": [] },
+            schema: moduleSchemaFromBase64(BASE_64_SCHEMA)
+        } :
+            {
+                parameters: { "None": [] },
+                schema: typeSchemaFromBase64(SET_OPTION_PARAMETER_SCHEMA)
+            };
+            break;
+        case 'option_u8_some': schema = useModuleSchema ? {
+            parameters: { "Some": [Number(input)] },
+            schema: moduleSchemaFromBase64(BASE_64_SCHEMA)
+        } :
+            {
+                parameters: { "Some": [Number(input)] },
+                schema: typeSchemaFromBase64(SET_OPTION_PARAMETER_SCHEMA)
             };
             break;
     }
