@@ -100,6 +100,9 @@ async function get_value(rpcClient: JsonRpcClient, useModuleSchema: boolean, dro
             break;
         case 'option_u8': entrypointName = `${CONTRACT_NAME}.get_option_u8`;
             break;
+        // We call the `get_u8` function but later use the `timestamp` schema trying to deserialize the return value.
+        case 'wrong_schema': entrypointName = `${CONTRACT_NAME}.get_u8`;
+            break;
     }
 
     const res = await rpcClient.invokeContract({
@@ -138,15 +141,36 @@ async function get_value(rpcClient: JsonRpcClient, useModuleSchema: boolean, dro
             break;
         case 'option_u8': schema = useModuleSchema ? BASE_64_SCHEMA : GET_OPTION_RETURN_VALUE_SCHEMA;
             break;
+        // We called the `get_u8` function but now use the `timestamp` schema trying to deserialize the return value.
+        case 'wrong_schema': schema = useModuleSchema ? BASE_64_SCHEMA : GET_TIMESTAMP_RETURN_VALUE_SCHEMA;
+            dropDown = 'timestamp'
+            break;
     }
 
-    // @ts-ignore
-    const returnValue = useModuleSchema ?
-        deserializeReceiveReturnValue(toBuffer(res.returnValue, 'hex'), toBuffer(schema, 'base64'), `${CONTRACT_NAME}`, `get_${dropDown}`) :
-        deserializeTypeValue
-            (toBuffer(res.returnValue, 'hex'),
-                toBuffer(schema, 'base64')
+    let returnValue = undefined;
+
+    if (useModuleSchema) {
+        try {
+            returnValue = deserializeReceiveReturnValue(toBuffer(res.returnValue, 'hex'), toBuffer(schema, 'base64'), `${CONTRACT_NAME}`, `get_${dropDown}`)
+        }
+        catch (err) {
+            throw new Error(
+                (err as Error).message
             );
+        }
+    } else {
+        try {
+            returnValue = deserializeTypeValue
+                (toBuffer(res.returnValue, 'hex'),
+                    toBuffer(schema, 'base64')
+                )
+        }
+        catch (err) {
+            throw new Error(
+                err as string
+            );
+        }
+    }
 
     if (returnValue === undefined) {
         throw new Error(
@@ -194,6 +218,7 @@ async function smart_contract_info(rpcClient: JsonRpcClient) {
 }
 
 export default function Transactions(props: WalletConnectionProps) {
+
     const { network, activeConnectorType, activeConnector, activeConnectorError, connectedAccounts, genesisHashes } =
         props;
 
@@ -221,6 +246,7 @@ export default function Transactions(props: WalletConnectionProps) {
     const [isPayable, setIsPayable] = useState(true);
     const [dropDown, setDropDown] = useState('u8');
     const [dropDown2, setDropDown2] = useState('u8');
+    const [returnValueError, setReturnValueError] = useState('');
 
     const [toAccount, setToAccount] = useState('');
 
@@ -635,6 +661,7 @@ export default function Transactions(props: WalletConnectionProps) {
                                         <option value="timestamp">Timestamp</option>
                                         <option value="string">String</option>
                                         <option value="option_u8">Option</option>
+                                        <option value="wrong_schema">Wrong schema (error should be returned)</option>
                                     </select>
                                     <div></div>
                                 </div>
@@ -643,6 +670,7 @@ export default function Transactions(props: WalletConnectionProps) {
                                     type="button"
                                     onClick={() => {
                                         setReturnValue('');
+                                        setReturnValueError('');
                                         withJsonRpcClient(connection, (rpcClient) => get_value(rpcClient, useModuleSchema, dropDown))
                                             .then((value) => {
                                                 if (value !== undefined) {
@@ -650,7 +678,7 @@ export default function Transactions(props: WalletConnectionProps) {
                                                 }
                                             })
                                             .catch((e) => {
-                                                setPublicKeyError((e as Error).message);
+                                                setReturnValueError((e as Error).message);
                                             });
                                     }}
                                 >
@@ -660,6 +688,9 @@ export default function Transactions(props: WalletConnectionProps) {
                                     <div className="centerLargeText">Your return value is:</div>
                                     <div className="centerLargeText">{returnValue}</div>
                                 </>)}
+                                {!returnValue && returnValueError && (
+                                    <div style={{ color: 'red' }}>Error: {returnValueError}.</div>
+                                )}
                                 <br />
                                 <div className="dashedLine"></div>
                                 <div className="centerLargeText">Testing complex object as input parameter:</div>
