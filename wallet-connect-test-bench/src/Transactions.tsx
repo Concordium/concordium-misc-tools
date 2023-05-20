@@ -3,7 +3,6 @@ import React, { useEffect, useState, ChangeEvent } from 'react';
 import Switch from 'react-switch';
 import {
     toBuffer,
-    JsonRpcClient,
     serializeTypeValue,
 } from '@concordium/web-sdk';
 import { withJsonRpcClient, WalletConnectionProps, useConnection, useConnect } from '@concordium/react-components';
@@ -46,30 +45,15 @@ const ButtonStyleDisabled = {
     fontSize: '14px',
 };
 
-const InputFieldStyle = {
-    backgroundColor: '#181817',
-    color: 'white',
-    borderRadius: 10,
-    width: '100%',
-    border: '1px solid #308274',
-    margin: '7px 0px 7px 0px',
-    padding: '10px 20px',
-};
-
 export default function Transactions(props: WalletConnectionProps) {
 
-    const { network, activeConnectorType, activeConnector, activeConnectorError, connectedAccounts, genesisHashes } =
+    const { activeConnectorType, activeConnector, activeConnectorError, connectedAccounts, genesisHashes } =
         props;
 
-
-    const { connection, setConnection, account, genesisHash } = useConnection(connectedAccounts, genesisHashes);
+    const { connection, setConnection, account } = useConnection(connectedAccounts, genesisHashes);
     const { connect, isConnecting, connectError } = useConnect(activeConnector, setConnection);
 
-    const [publicKeyError, setPublicKeyError] = useState('');
-
-    const [publicKey, setPublicKey] = useState('');
-    const [nextNonce, setNextNonce] = useState<number>(0);
-    const [nonce, setNonce] = useState('');
+    const [viewError, setViewError] = useState('');
 
     const [record, setRecord] = useState('');
 
@@ -90,7 +74,15 @@ export default function Transactions(props: WalletConnectionProps) {
     const [toAccount, setToAccount] = useState('');
 
     const [signature, setSignature] = useState('');
+    const [byteSignature, setByteSignature] = useState('');
+
     const [signingError, setSigningError] = useState('');
+
+    const [txHash, setTxHash] = useState('');
+    const [message, setMessage] = useState('');
+    const [transactionError, setTransactionError] = useState('');
+
+    const [isWaitingForTransaction, setWaitingForUser] = useState(false);
 
     const changeInputHandler = (event: ChangeEvent) => {
         const target = event.target as HTMLTextAreaElement;
@@ -126,9 +118,8 @@ export default function Transactions(props: WalletConnectionProps) {
         setToAccount(target.value);
     };
 
-
-    // // Refresh account_info periodically.
-    // // eslint-disable-next-line consistent-return
+    // Refresh account_info periodically.
+    // eslint-disable-next-line consistent-return
     useEffect(() => {
         if (connection && account) {
             const interval = setInterval(() => {
@@ -138,22 +129,19 @@ export default function Transactions(props: WalletConnectionProps) {
                         if (returnValue !== undefined) {
                             setAccountBalance(returnValue.accountAmount.toString());
                         }
-                        setPublicKeyError('');
+                        setViewError('');
                     })
                     .catch((e) => {
                         setAccountBalance('');
-                        setPublicKeyError((e as Error).message);
-                        setPublicKey('');
-                        setNextNonce(0);
-                        setNonce('');
+                        setViewError((e as Error).message);
                     });
             }, REFRESH_INTERVAL.asMilliseconds());
             return () => clearInterval(interval);
         }
     }, [connection, account]);
 
-    // // Refresh smart_contract_info periodically.
-    // // eslint-disable-next-line consistent-return
+    // Refresh smart_contract_info periodically.
+    // eslint-disable-next-line consistent-return
     useEffect(() => {
         if (connection) {
             const interval = setInterval(() => {
@@ -163,22 +151,19 @@ export default function Transactions(props: WalletConnectionProps) {
                         if (returnValue !== undefined) {
                             setSmartContractBalance(returnValue.amount.microCcdAmount.toString());
                         }
-                        setPublicKeyError('');
+                        setViewError('');
                     })
                     .catch((e) => {
                         setSmartContractBalance('');
-                        setPublicKeyError((e as Error).message);
-                        setPublicKey('');
-                        setNextNonce(0);
-                        setNonce('');
+                        setViewError((e as Error).message);
                     });
             }, REFRESH_INTERVAL.asMilliseconds());
             return () => clearInterval(interval);
         }
     }, [connection, account]);
 
-    // // Refresh view periodically.
-    // // eslint-disable-next-line consistent-return
+    // Refresh view periodically.
+    // eslint-disable-next-line consistent-return
     useEffect(() => {
         if (connection && account) {
             const interval = setInterval(() => {
@@ -186,16 +171,13 @@ export default function Transactions(props: WalletConnectionProps) {
                 withJsonRpcClient(connection, (rpcClient) => view(rpcClient))
                     .then((returnValue) => {
                         if (returnValue !== undefined) {
-                            setRecord(returnValue);
+                            setRecord(JSON.parse(returnValue));
                         }
-                        setPublicKeyError('');
+                        setViewError('');
                     })
                     .catch((e) => {
                         setRecord('');
-                        setPublicKeyError((e as Error).message);
-                        setPublicKey('');
-                        setNextNonce(0);
-                        setNonce('');
+                        setViewError((e as Error).message);
                     });
             }, REFRESH_INTERVAL.asMilliseconds());
             return () => clearInterval(interval);
@@ -209,13 +191,11 @@ export default function Transactions(props: WalletConnectionProps) {
                     if (returnValue !== undefined) {
                         setAccountBalance(returnValue.accountAmount.toString());
                     }
-                    setPublicKeyError('');
+                    setViewError('');
                 })
                 .catch((e) => {
-                    setPublicKeyError((e as Error).message);
-                    setPublicKey('');
-                    setNextNonce(0);
-                    setNonce('');
+                    setViewError((e as Error).message);
+                    setAccountBalance('');
                 });
         }
     }, [connection]);
@@ -227,13 +207,11 @@ export default function Transactions(props: WalletConnectionProps) {
                     if (returnValue !== undefined) {
                         setSmartContractBalance(returnValue.amount.microCcdAmount.toString());
                     }
-                    setPublicKeyError('');
+                    setViewError('');
                 })
                 .catch((e) => {
-                    setPublicKeyError((e as Error).message);
-                    setPublicKey('');
-                    setNextNonce(0);
-                    setNonce('');
+                    setViewError((e as Error).message);
+                    setSmartContractBalance('');
                 });
         }
     }, [connection]);
@@ -243,29 +221,21 @@ export default function Transactions(props: WalletConnectionProps) {
             withJsonRpcClient(connection, (rpcClient) => view(rpcClient))
                 .then((returnValue) => {
                     if (returnValue !== undefined) {
-                        setRecord(returnValue);
+                        setRecord(JSON.parse(returnValue));
                     }
-                    setPublicKeyError('');
+                    setViewError('');
                 })
                 .catch((e) => {
-                    setPublicKeyError((e as Error).message);
-                    setPublicKey('');
-                    setNextNonce(0);
-                    setNonce('');
+                    setViewError((e as Error).message);
+                    setRecord('');
                 });
         }
     }, [connection]);
 
-    const [isRegisterPublicKeyPage, setIsRegisterPublicKeyPage] = useState(true);
-    const [txHash, setTxHash] = useState('');
-    const [message, setMessage] = useState('');
-    const [transactionError, setTransactionError] = useState('');
-
-    const [isWaitingForTransaction, setWaitingForUser] = useState(false);
     return (
-        <div>
-            <div className="centerLargeText">Version: {version}</div>
-            <h1 className="header">Wallet Connect / Browser Wallet Testing Bench </h1>
+        <div className="centerLargeText">
+            <div >Version: {version}</div>
+            <h1 >Wallet Connect / Browser Wallet Testing Bench </h1>
             <div className="containerSpaceBetween">
                 <WalletConnectionTypeButton
                     buttonStyle={ButtonStyle}
@@ -296,7 +266,7 @@ export default function Transactions(props: WalletConnectionProps) {
                 {connectError && <p style={{ color: 'red' }}>Connect Error: {connectError}.</p>}
                 {!connection && !isWaitingForTransaction && activeConnectorType && activeConnector && (
                     <p>
-                        <button style={ButtonStyle} type="button" onClick={connect}>
+                        <button className="buttonStyle" type="button" onClick={connect}>
                             {isConnecting && 'Connecting...'}
                             {!isConnecting && activeConnectorType === BROWSER_WALLET && 'Connect Browser Wallet'}
                             {!isConnecting && activeConnectorType === WALLET_CONNECT && 'Connect Mobile Wallet'}
@@ -304,10 +274,10 @@ export default function Transactions(props: WalletConnectionProps) {
                     </p>
                 )}
                 {account && (
-                    <>
-                        <div className="centerLargeText">Connected account:</div>
-                        <br></br>
-                        <div className="containerSwitch">
+                    < >
+                        <div >Connected account:</div>
+                        <br />
+                        <div>
                             <button
                                 className="link"
                                 type="button"
@@ -322,61 +292,58 @@ export default function Transactions(props: WalletConnectionProps) {
                                 {account}
                             </button>
                         </div>
-                        <br></br>
-                        <div className="centerLargeText">Your account balance:</div>
-                        <br></br>
-                        <div className="centerLargeText">
-                            {accountBalance} microCCD
-                        </div>
-                        <br></br>
-                        <div className="centerLargeText">Smart contract balance:</div>
-                        <br></br>
-                        <div className="centerLargeText">
-                            {smartContractBalance} microCCD
+                        <br />
+                        <div>Your account balance:</div>
+                        <br />
+                        <div >
+                            {accountBalance} CCD (micro)
                         </div>
                         <br />
+                        <div>Smart contract balance:</div>
                         <br />
-                        {true && (
+                        <div>
+                            {smartContractBalance} CCD (micro)
+                        </div>
+                        <br />
+                        <div > Smart contract state: </div>
+                        <pre className="largeText" >{JSON.stringify(record, null, '\t')}</pre>
+                        <br />
+                        <br />
+                        <div>Error or Transaction status{txHash === '' ? ':' : ' (May take a moment to finalize):'}</div>
+                        <br />
+                        {!txHash && !transactionError && <div >None</div>}
+                        {!txHash && transactionError && (
+                            <div style={{ color: 'red' }}>Error: {transactionError}.</div>
+                        )}
+                        {viewError && (
+                            <div style={{ color: 'red' }}>Error: {viewError}.</div>
+                        )}
+                        {txHash && (
                             <>
-                                <div className="centerLargeText">Error or Transaction status{txHash === '' ? ':' : ' (May take a moment to finalize):'}</div>    <br />
-                                {!txHash && !transactionError && <div className="centerLargeText">None</div>}
-                                {!txHash && transactionError && (
-                                    <div style={{ color: 'red' }}>Error: {transactionError}.</div>
-                                )}
-                                <div className="containerSwitch">
-                                    {txHash && (
-                                        <>
-                                            <button
-                                                className="link"
-                                                type="button"
-                                                onClick={() => {
-                                                    window.open(
-                                                        `https://testnet.ccdscan.io/?dcount=1&dentity=transaction&dhash=${txHash}`,
-                                                        '_blank',
-                                                        'noopener,noreferrer'
-                                                    );
-                                                }}
-                                            >
-                                                {txHash}
-                                            </button>
-                                            <br />
-                                        </>
-                                    )}
-                                </div>
+                                <button
+                                    className="link"
+                                    type="button"
+                                    onClick={() => {
+                                        window.open(
+                                            `https://testnet.ccdscan.io/?dcount=1&dentity=transaction&dhash=${txHash}`,
+                                            '_blank',
+                                            'noopener,noreferrer'
+                                        );
+                                    }}
+                                >
+                                    {txHash}
+                                </button>
+                                <br />
                             </>
                         )}
-                        <br></br>
-                        <div className="centerLargeText"> The smart contract state: </div>
-                        <pre className="centerLargeText">{record}</pre>
                         <br />
                         <div className="dashedLine"></div>
-                        <div className="centerLargeText">Testing simple input parameters:</div>
+                        <div>Testing simple input parameters:</div>
                         <br />
-                        {connection && account !== undefined && !publicKey && (
-
+                        {connection && account !== undefined && (
                             <>
                                 <div className="containerSpaceBetween">
-                                    <div className="centerLargeText">Use module schema</div>
+                                    <div >Use module schema</div>
                                     <Switch
                                         onChange={() => {
                                             setUseModuleSchema(!useModuleSchema);
@@ -389,10 +356,10 @@ export default function Transactions(props: WalletConnectionProps) {
                                         checkedIcon={false}
                                         uncheckedIcon={false}
                                     />
-                                    <div className="centerLargeText">Use parameter schema</div>
+                                    <div >Use parameter schema</div>
                                 </div>
                                 <div className="containerSpaceBetween">
-                                    <div className="centerLargeText">Is payable</div>
+                                    <div >Is payable</div>
                                     <Switch
                                         onChange={() => {
                                             setIsPayable(!isPayable);
@@ -405,14 +372,14 @@ export default function Transactions(props: WalletConnectionProps) {
                                         checkedIcon={false}
                                         uncheckedIcon={false}
                                     />
-                                    <div className="centerLargeText">Is not payable</div>
+                                    <div >Is not payable</div>
                                 </div>
-                                <br></br>
-                                <div className="centerLargeText">Select function:</div>
-                                <br></br>
+                                <br />
+                                <div >Select function:</div>
+                                <br />
                                 <div className="containerSpaceBetween">
                                     <div></div>
-                                    <select className="centerLargeBlackText" name="function2" id="function2" onChange={changeDropDown2Handler}>
+                                    <select className="centerLargeText" name="function2" id="function2" onChange={changeDropDown2Handler}>
                                         <option value="u8" selected>u8</option>
                                         <option value="u16">u16</option>
                                         <option value="address">Address</option>
@@ -430,21 +397,20 @@ export default function Transactions(props: WalletConnectionProps) {
                                     <div></div>
                                 </div>
                                 <label>
-                                    <p className="centerLargeText">micro CCD:</p>
+                                    <p >CCD (micro):</p>
                                     <input
-                                        className="input"
-                                        style={InputFieldStyle}
+                                        className="inputFieldStyle"
                                         id="CCDAmount"
                                         type="text"
                                         placeholder="0"
+
                                         onChange={changeCCDAmountHandler}
                                     />
                                 </label>
                                 <label>
-                                    <p className="centerLargeText">Input parameter:</p>
+                                    <p >Input parameter:</p>
                                     <input
-                                        className="input"
-                                        style={InputFieldStyle}
+                                        className="inputFieldStyle"
                                         id="input"
                                         type="text"
                                         placeholder='5 | 15 | {"Contract":[{"index":3,"subindex":0}]} or {"Account":["4fUk1a1rjBzoPCCy6p92u5LT5vSw9o8GpjMiRHBbJUfmx51uvt"]} | {"index":3,"subindex":0} | 4fUk1a1rjBzoPCCy6p92u5LT5vSw9o8GpjMiRHBbJUfmx51uvt | 18ee24150dcb1d96752a4d6dd0f20dfd8ba8c38527e40aa8509b7adecf78f9c6 | 37a2a8e52efad975dbf6580e7734e4f249eaa5ea8a763e934a8671cd7e446499 | 632f567c9321405ce201a0a38615da41efe259ede154ff45ad96cdf860718e79bde07cff72c4d119c644552a8c7f0c413f5cf5390b0ea0458993d6d6374bd904 | 2030-08-08T05:15:00Z | aaa | | 3 | |'
@@ -452,24 +418,22 @@ export default function Transactions(props: WalletConnectionProps) {
                                     />
                                 </label>
                                 <button
-                                    style={ButtonStyle}
+                                    className="buttonStyle"
                                     type="button"
                                     onClick={() => {
                                         setTxHash('');
                                         setTransactionError('');
-                                        setWaitingForUser(true);
                                         const tx = set_value(connection, account, useModuleSchema, isPayable, dropDown2, input, cCDAmount);
                                         tx.then(setTxHash)
-                                            .catch((err: Error) => setTransactionError((err as Error).message))
-                                            .finally(() => setWaitingForUser(false));
+                                            .catch((err: Error) => setTransactionError((err as Error).message));
                                     }}
                                 >
                                     Set {dropDown2} value
                                 </button>
                                 <div className="dashedLine"></div>
-                                <div className="centerLargeText">Testing return value deserialization of functions:</div>
+                                <div >Testing return value deserialization of functions:</div>
                                 <div className="containerSpaceBetween">
-                                    <div className="centerLargeText">Use module schema</div>
+                                    <div >Use module schema</div>
                                     <Switch
                                         onChange={() => {
                                             setUseModuleSchema(!useModuleSchema);
@@ -482,14 +446,14 @@ export default function Transactions(props: WalletConnectionProps) {
                                         checkedIcon={false}
                                         uncheckedIcon={false}
                                     />
-                                    <div className="centerLargeText">Use parameter schema</div>
+                                    <div >Use parameter schema</div>
                                 </div>
-                                <br></br>
-                                <div className="centerLargeText">Select function:</div>
-                                <br></br>
+                                <br />
+                                <div >Select function:</div>
+                                <br />
                                 <div className="containerSpaceBetween">
                                     <div></div>
-                                    <select className="centerLargeBlackText" name="function" id="function" onChange={changeDropDownHandler}>
+                                    <select className="centerLargeText" name="function" id="function" onChange={changeDropDownHandler}>
                                         <option value="u8" selected>u8</option>
                                         <option value="u16">u16</option>
                                         <option value="address">Address</option>
@@ -506,7 +470,7 @@ export default function Transactions(props: WalletConnectionProps) {
                                     <div></div>
                                 </div>
                                 <button
-                                    style={ButtonStyle}
+                                    className="buttonStyle"
                                     type="button"
                                     onClick={() => {
                                         setReturnValue('');
@@ -525,19 +489,19 @@ export default function Transactions(props: WalletConnectionProps) {
                                     Get {dropDown} value
                                 </button>
                                 {returnValue !== '' && (<>
-                                    <div className="centerLargeText">Your return value is:</div>
-                                    <div className="centerLargeText">{returnValue}</div>
+                                    <div>Your return value is:</div>
+                                    <div>{returnValue}</div>
                                 </>)}
                                 {!returnValue && returnValueError && (
                                     <div style={{ color: 'red' }}>Error: {returnValueError}.</div>
                                 )}
                                 <br />
                                 <div className="dashedLine"></div>
-                                <div className="centerLargeText">Testing complex object as input parameter:</div>
+                                <div>Testing complex object as input parameter:</div>
                                 <br />
                                 <br />
                                 <div className="containerSpaceBetween">
-                                    <div className="centerLargeText">Use module schema</div>
+                                    <div>Use module schema</div>
                                     <Switch
                                         onChange={() => {
                                             setUseModuleSchema(!useModuleSchema);
@@ -550,10 +514,10 @@ export default function Transactions(props: WalletConnectionProps) {
                                         checkedIcon={false}
                                         uncheckedIcon={false}
                                     />
-                                    <div className="centerLargeText">Use parameter schema</div>
+                                    <div>Use parameter schema</div>
                                 </div>
                                 <div className="containerSpaceBetween">
-                                    <div className="centerLargeText">Is payable</div>
+                                    <div >Is payable</div>
                                     <Switch
                                         onChange={() => {
                                             setIsPayable(!isPayable);
@@ -566,13 +530,13 @@ export default function Transactions(props: WalletConnectionProps) {
                                         checkedIcon={false}
                                         uncheckedIcon={false}
                                     />
-                                    <div className="centerLargeText">Is not payable</div>
+                                    <div >Is not payable</div>
                                 </div>
                                 <label>
-                                    <p className="centerLargeText">micro CCD:</p>
+                                    <p >CCD (micro):</p>
                                     <input
-                                        className="input"
-                                        style={InputFieldStyle}
+                                        className="inputFieldStyle"
+
                                         id="CCDAmount"
                                         type="text"
                                         placeholder="0"
@@ -580,25 +544,23 @@ export default function Transactions(props: WalletConnectionProps) {
                                     />
                                 </label>
                                 <button
-                                    style={ButtonStyle}
+                                    className="buttonStyle"
                                     type="button"
                                     onClick={() => {
                                         setTxHash('');
                                         setTransactionError('');
-                                        setWaitingForUser(true);
                                         const tx = set_object(connection, account, useModuleSchema, isPayable, cCDAmount);
                                         tx.then(setTxHash)
-                                            .catch((err: Error) => setTransactionError((err as Error).message))
-                                            .finally(() => setWaitingForUser(false));
+                                            .catch((err: Error) => setTransactionError((err as Error).message));
                                     }}
                                 >
                                     Set object
                                 </button>
                                 <br />
                                 <div className="dashedLine"></div>
-                                <div className="centerLargeText">Testing array as input parameter:</div>
+                                <div>Testing array as input parameter:</div>
                                 <div className="containerSpaceBetween">
-                                    <div className="centerLargeText">Use module schema</div>
+                                    <div >Use module schema</div>
                                     <Switch
                                         onChange={() => {
                                             setUseModuleSchema(!useModuleSchema);
@@ -611,10 +573,10 @@ export default function Transactions(props: WalletConnectionProps) {
                                         checkedIcon={false}
                                         uncheckedIcon={false}
                                     />
-                                    <div className="centerLargeText">Use parameter schema</div>
+                                    <div >Use parameter schema</div>
                                 </div>
                                 <div className="containerSpaceBetween">
-                                    <div className="centerLargeText">Is payable</div>
+                                    <div >Is payable</div>
                                     <Switch
                                         onChange={() => {
                                             setIsPayable(!isPayable);
@@ -627,15 +589,15 @@ export default function Transactions(props: WalletConnectionProps) {
                                         checkedIcon={false}
                                         uncheckedIcon={false}
                                     />
-                                    <div className="centerLargeText">Is not payable</div>
+                                    <div >Is not payable</div>
                                 </div>
                                 <br />
                                 <br />
                                 <label>
-                                    <p className="centerLargeText">micro CCD:</p>
+                                    <p>CCD (micro):</p>
                                     <input
-                                        className="input"
-                                        style={InputFieldStyle}
+                                        className="inputFieldStyle"
+
                                         id="CCDAmount"
                                         type="text"
                                         placeholder="0"
@@ -643,100 +605,89 @@ export default function Transactions(props: WalletConnectionProps) {
                                     />
                                 </label>
                                 <button
-                                    style={ButtonStyle}
+                                    className="buttonStyle"
                                     type="button"
                                     onClick={() => {
                                         setTxHash('');
                                         setTransactionError('');
-                                        setWaitingForUser(true);
                                         const tx = set_array(connection, account, useModuleSchema, isPayable, cCDAmount);
                                         tx.then(setTxHash)
                                             .catch((err: Error) => setTransactionError((err as Error).message))
-                                            .finally(() => setWaitingForUser(false));
                                     }}
                                 >
                                     Set Array
                                 </button>
                                 <br />
                                 <div className="dashedLine"></div>
-                                <div className="centerLargeText">Testing calling a function that calls another smart contract successfully:</div>
+                                <div>Testing calling a function that calls another smart contract successfully:</div>
                                 <button
-                                    style={ButtonStyle}
+                                    className="buttonStyle"
                                     type="button"
                                     onClick={() => {
                                         setTxHash('');
                                         setTransactionError('');
-                                        setWaitingForUser(true);
                                         const tx = internal_call_success(connection, account);
                                         tx.then(setTxHash)
                                             .catch((err: Error) => setTransactionError((err as Error).message))
-                                            .finally(() => setWaitingForUser(false));
                                     }}
                                 >
                                     Success (internal call to smart contract)
                                 </button>
                                 <br />
                                 <div className="dashedLine"></div>
-                                <div className="centerLargeText">Testing calling a function that reverts due to the smart contract logic:</div>
+                                <div >Testing calling a function that reverts due to the smart contract logic:</div>
                                 <button
-                                    style={ButtonStyle}
+                                    className="buttonStyle"
                                     type="button"
                                     onClick={() => {
                                         setTxHash('');
                                         setTransactionError('');
-                                        setWaitingForUser(true);
                                         const tx = reverts(connection, account);
                                         tx.then(setTxHash)
-                                            .catch((err: Error) => setTransactionError((err as Error).message))
-                                            .finally(() => setWaitingForUser(false));
+                                            .catch((err: Error) => setTransactionError((err as Error).message));
                                     }}
                                 >
                                     Revert
                                 </button>
                                 <br />
                                 <div className="dashedLine"></div>
-                                <div className="centerLargeText">Testing calling a function that reverts due to an internal call that reverts:</div>
+                                <div>Testing calling a function that reverts due to an internal call that reverts:</div>
                                 <button
-                                    style={ButtonStyle}
+                                    className="buttonStyle"
                                     type="button"
                                     onClick={() => {
                                         setTxHash('');
                                         setTransactionError('');
-                                        setWaitingForUser(true);
                                         const tx = internal_call_reverts(connection, account);
                                         tx.then(setTxHash)
-                                            .catch((err: Error) => setTransactionError((err as Error).message))
-                                            .finally(() => setWaitingForUser(false));
+                                            .catch((err: Error) => setTransactionError((err as Error).message));
                                     }}
                                 >
                                     Revert (internal call reverts)
                                 </button>
                                 <br />
                                 <div className="dashedLine"></div>
-                                <div className="centerLargeText">Testing calling a not existing entrypoint:</div>
+                                <div >Testing calling a not existing entrypoint:</div>
                                 <button
-                                    style={ButtonStyle}
+                                    className="buttonStyle"
                                     type="button"
                                     onClick={() => {
                                         setTxHash('');
                                         setTransactionError('');
-                                        setWaitingForUser(true);
                                         const tx = not_existing_entrypoint(connection, account);
                                         tx.then(setTxHash)
-                                            .catch((err: Error) => setTransactionError((err as Error).message))
-                                            .finally(() => setWaitingForUser(false));
+                                            .catch((err: Error) => setTransactionError((err as Error).message));
                                     }}
                                 >
                                     Not existing entrypoint (tx reverts)
                                 </button>
                                 <br />
                                 <div className="dashedLine"></div>
-                                <div className="centerLargeText">Testing simple CCD transfer:</div>
+                                <div >Testing simple CCD transfer:</div>
                                 <label>
-                                    <p className="centerLargeText">micro CCD:</p>
+                                    <p >CCD (micro):</p>
                                     <input
-                                        className="input"
-                                        style={InputFieldStyle}
+                                        className="inputFieldStyle"
                                         id="CCDAmount"
                                         type="text"
                                         placeholder="0"
@@ -744,10 +695,9 @@ export default function Transactions(props: WalletConnectionProps) {
                                     />
                                 </label>
                                 <label>
-                                    <p className="centerLargeText">To account:</p>
+                                    <p >To account:</p>
                                     <input
-                                        className="input"
-                                        style={InputFieldStyle}
+                                        className="inputFieldStyle"
                                         id="toAccount"
                                         type="text"
                                         placeholder="4fUk1a1rjBzoPCCy6p92u5LT5vSw9o8GpjMiRHBbJUfmx51uvt"
@@ -755,46 +705,41 @@ export default function Transactions(props: WalletConnectionProps) {
                                     />
                                 </label>
                                 <button
-                                    style={ButtonStyle}
+                                    className="buttonStyle"
                                     type="button"
                                     onClick={() => {
                                         setTxHash('');
                                         setTransactionError('');
-                                        setWaitingForUser(true);
                                         const tx = simple_CCD_transfer(connection, account, toAccount, cCDAmount);
                                         tx.then(setTxHash)
-                                            .catch((err: Error) => setTransactionError((err as Error).message))
-                                            .finally(() => setWaitingForUser(false));
+                                            .catch((err: Error) => setTransactionError((err as Error).message));
                                     }}
                                 >
                                     Send simple CCD transfer
                                 </button>
                                 <br />
                                 <div className="dashedLine"></div>
-                                <div className="centerLargeText">Testing simple CCD transfer to non exising account address:</div>
+                                <div >Testing simple CCD transfer to non exising account address:</div>
                                 <button
-                                    style={ButtonStyle}
+                                    className="buttonStyle"
                                     type="button"
                                     onClick={() => {
                                         setTxHash('');
                                         setTransactionError('');
-                                        setWaitingForUser(true);
                                         const tx = simple_CCD_transfer_to_non_existing_account_address(connection, account);
                                         tx.then(setTxHash)
-                                            .catch((err: Error) => setTransactionError((err as Error).message))
-                                            .finally(() => setWaitingForUser(false));
+                                            .catch((err: Error) => setTransactionError((err as Error).message));
                                     }}
                                 >
                                     Send simple CCD transfer to non existing account address (reverts)
                                 </button>
                                 <br />
                                 <div className="dashedLine"></div>
-                                <div className="centerLargeText">Testing signing a string message with the wallet:</div>
+                                <div >Testing signing a string message with the wallet:</div>
                                 <label>
-                                    <p className="centerLargeText">Message to be signed:</p>
+                                    <p >Message to be signed:</p>
                                     <input
-                                        className="input"
-                                        style={InputFieldStyle}
+                                        className="inputFieldStyle"
                                         id="message"
                                         type="text"
                                         placeholder="My message"
@@ -802,9 +747,10 @@ export default function Transactions(props: WalletConnectionProps) {
                                     />
                                 </label>
                                 <button
-                                    style={ButtonStyle}
+                                    className="buttonStyle"
                                     type="button"
                                     onClick={() => {
+                                        setSigningError('')
                                         setSignature('');
                                         const promise = connection.signMessage(account,
                                             {
@@ -823,15 +769,15 @@ export default function Transactions(props: WalletConnectionProps) {
                                 {signingError && <div style={{ color: 'red' }}>Error: {signingError}.</div>}
                                 {signature !== '' && (
                                     <>
-                                        <div className="centerLargeText"> Your generated signature is: </div>
-                                        <div className="centerLargeText">{signature}</div>
+                                        <div > Your generated signature is: </div>
+                                        <div >{signature}</div>
                                     </>
                                 )}
                                 <br />
                                 <div className="dashedLine"></div>
-                                <div className="centerLargeText">Testing signing a byte message with the wallet:</div>
+                                <div >Testing signing a byte message with the wallet:</div>
                                 <button
-                                    style={ButtonStyle}
+                                    className="buttonStyle"
                                     type="button"
                                     onClick={() => {
 
@@ -864,8 +810,8 @@ export default function Transactions(props: WalletConnectionProps) {
                                             signMessage,
                                             toBuffer(SET_OBJECT_PARAMETER_SCHEMA, 'base64')
                                         );
-
-                                        setSignature('');
+                                        setSigningError('')
+                                        setByteSignature('');
                                         const promise = connection.signMessage(account,
                                             {
                                                 type: 'BinaryMessage',
@@ -877,7 +823,7 @@ export default function Transactions(props: WalletConnectionProps) {
                                             })
                                         promise
                                             .then((permitSignature) => {
-                                                setSignature(permitSignature[0][0]);
+                                                setByteSignature(permitSignature[0][0]);
                                             })
                                             .catch((err: Error) => setSigningError((err as Error).message));
                                     }}
@@ -885,10 +831,10 @@ export default function Transactions(props: WalletConnectionProps) {
                                     Sign message
                                 </button>
                                 {signingError && <div style={{ color: 'red' }}>Error: {signingError}.</div>}
-                                {signature !== '' && (
+                                {byteSignature !== '' && (
                                     <>
-                                        <div className="centerLargeText"> Your generated signature is: </div>
-                                        <div className="centerLargeText">{signature}</div>
+                                        <div > Your generated signature is: </div>
+                                        <div >{byteSignature}</div>
                                     </>
                                 )}
                                 <br />
