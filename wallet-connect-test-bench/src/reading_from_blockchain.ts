@@ -1,9 +1,4 @@
-import {
-    toBuffer,
-    JsonRpcClient,
-    deserializeTypeValue,
-    deserializeReceiveReturnValue
-} from '@concordium/web-sdk';
+import { toBuffer, JsonRpcClient, deserializeTypeValue, deserializeReceiveReturnValue } from '@concordium/web-sdk';
 
 import {
     CONTRACT_NAME,
@@ -21,39 +16,52 @@ import {
     GET_TIMESTAMP_RETURN_VALUE_SCHEMA,
     GET_STRING_RETURN_VALUE_SCHEMA,
     GET_OPTION_RETURN_VALUE_SCHEMA,
-    BASE_64_SCHEMA
+    BASE_64_SCHEMA,
 } from './constants';
 
- export async function get_value(rpcClient: JsonRpcClient, useModuleSchema: boolean, dropDown: string) {
-
+export async function getValue(rpcClient: JsonRpcClient, useModuleSchema: boolean, dropDown: string) {
     let entrypointName = `${CONTRACT_NAME}.get_u8`;
 
     switch (dropDown) {
-        case 'u8': entrypointName = `${CONTRACT_NAME}.get_u8`;
-            break
-        case 'u16': entrypointName = `${CONTRACT_NAME}.get_u16`;
-            break
-        case 'address': entrypointName = `${CONTRACT_NAME}.get_address`;
-            break
-        case 'contract_address': entrypointName = `${CONTRACT_NAME}.get_contract_address`;
-            break
-        case 'account_address': entrypointName = `${CONTRACT_NAME}.get_account_address`;
+        case 'u8':
+            entrypointName = `${CONTRACT_NAME}.get_u8`;
             break;
-        case 'hash': entrypointName = `${CONTRACT_NAME}.get_hash`;
+        case 'u16':
+            entrypointName = `${CONTRACT_NAME}.get_u16`;
             break;
-        case 'public_key': entrypointName = `${CONTRACT_NAME}.get_public_key`;
+        case 'address':
+            entrypointName = `${CONTRACT_NAME}.get_address`;
             break;
-        case 'signature': entrypointName = `${CONTRACT_NAME}.get_signature`;
+        case 'contract_address':
+            entrypointName = `${CONTRACT_NAME}.get_contract_address`;
             break;
-        case 'timestamp': entrypointName = `${CONTRACT_NAME}.get_timestamp`;
+        case 'account_address':
+            entrypointName = `${CONTRACT_NAME}.get_account_address`;
             break;
-        case 'string': entrypointName = `${CONTRACT_NAME}.get_string`;
+        case 'hash':
+            entrypointName = `${CONTRACT_NAME}.get_hash`;
             break;
-        case 'option_u8': entrypointName = `${CONTRACT_NAME}.get_option_u8`;
+        case 'public_key':
+            entrypointName = `${CONTRACT_NAME}.get_public_key`;
+            break;
+        case 'signature':
+            entrypointName = `${CONTRACT_NAME}.get_signature`;
+            break;
+        case 'timestamp':
+            entrypointName = `${CONTRACT_NAME}.get_timestamp`;
+            break;
+        case 'string':
+            entrypointName = `${CONTRACT_NAME}.get_string`;
+            break;
+        case 'option_u8':
+            entrypointName = `${CONTRACT_NAME}.get_option_u8`;
             break;
         // We call the `get_u8` function but later use the `timestamp` schema trying to deserialize the return value.
-        case 'wrong_schema': entrypointName = `${CONTRACT_NAME}.get_u8`;
+        case 'wrong_schema':
+            entrypointName = `${CONTRACT_NAME}.get_u8`;
             break;
+        default:
+            throw new Error(`Dropdown option does not exist`);
     }
 
     const res = await rpcClient.invokeContract({
@@ -70,56 +78,65 @@ import {
     let schema = BASE_64_SCHEMA;
 
     switch (dropDown) {
-        case 'u8': schema = useModuleSchema ? BASE_64_SCHEMA : GET_U8_RETURN_VALUE_SCHEMA;
-            break
-        case 'u16': schema = useModuleSchema ? BASE_64_SCHEMA : GET_U16_RETURN_VALUE_SCHEMA;
-            break
-        case 'address': schema = useModuleSchema ? BASE_64_SCHEMA : GET_ADDRESS_RETURN_VALUE_SCHEMA;
-            break
-        case 'contract_address': schema = useModuleSchema ? BASE_64_SCHEMA : GET_CONTRACT_ADDRESS_RETURN_VALUE_SCHEMA;
-            break
-        case 'account_address': schema = useModuleSchema ? BASE_64_SCHEMA : GET_ACCOUNT_ADDRESS_RETURN_VALUE_SCHEMA;
+        case 'u8':
+            schema = useModuleSchema ? BASE_64_SCHEMA : GET_U8_RETURN_VALUE_SCHEMA;
             break;
-        case 'hash': schema = useModuleSchema ? BASE_64_SCHEMA : GET_HASH_RETURN_VALUE_SCHEMA;
+        case 'u16':
+            schema = useModuleSchema ? BASE_64_SCHEMA : GET_U16_RETURN_VALUE_SCHEMA;
             break;
-        case 'public_key': schema = useModuleSchema ? BASE_64_SCHEMA : GET_PUBLIC_KEY_RETURN_VALUE_SCHEMA;
+        case 'address':
+            schema = useModuleSchema ? BASE_64_SCHEMA : GET_ADDRESS_RETURN_VALUE_SCHEMA;
             break;
-        case 'signature': schema = useModuleSchema ? BASE_64_SCHEMA : GET_SIGNATURE_RETURN_VALUE_SCHEMA;
+        case 'contract_address':
+            schema = useModuleSchema ? BASE_64_SCHEMA : GET_CONTRACT_ADDRESS_RETURN_VALUE_SCHEMA;
             break;
-        case 'timestamp': schema = useModuleSchema ? BASE_64_SCHEMA : GET_TIMESTAMP_RETURN_VALUE_SCHEMA;
+        case 'account_address':
+            schema = useModuleSchema ? BASE_64_SCHEMA : GET_ACCOUNT_ADDRESS_RETURN_VALUE_SCHEMA;
             break;
-        case 'string': schema = useModuleSchema ? BASE_64_SCHEMA : GET_STRING_RETURN_VALUE_SCHEMA;
+        case 'hash':
+            schema = useModuleSchema ? BASE_64_SCHEMA : GET_HASH_RETURN_VALUE_SCHEMA;
             break;
-        case 'option_u8': schema = useModuleSchema ? BASE_64_SCHEMA : GET_OPTION_RETURN_VALUE_SCHEMA;
+        case 'public_key':
+            schema = useModuleSchema ? BASE_64_SCHEMA : GET_PUBLIC_KEY_RETURN_VALUE_SCHEMA;
+            break;
+        case 'signature':
+            schema = useModuleSchema ? BASE_64_SCHEMA : GET_SIGNATURE_RETURN_VALUE_SCHEMA;
+            break;
+        case 'timestamp':
+            schema = useModuleSchema ? BASE_64_SCHEMA : GET_TIMESTAMP_RETURN_VALUE_SCHEMA;
+            break;
+        case 'string':
+            schema = useModuleSchema ? BASE_64_SCHEMA : GET_STRING_RETURN_VALUE_SCHEMA;
+            break;
+        case 'option_u8':
+            schema = useModuleSchema ? BASE_64_SCHEMA : GET_OPTION_RETURN_VALUE_SCHEMA;
             break;
         // We called the `get_u8` function but now use the `timestamp` schema trying to deserialize the return value.
-        case 'wrong_schema': schema = useModuleSchema ? BASE_64_SCHEMA : GET_TIMESTAMP_RETURN_VALUE_SCHEMA;
-            dropDown = 'timestamp'
+        case 'wrong_schema':
+            schema = useModuleSchema ? BASE_64_SCHEMA : GET_TIMESTAMP_RETURN_VALUE_SCHEMA;
             break;
+        default:
+            throw new Error(`Dropdown option does not exist`);
     }
 
-    let returnValue = undefined;
+    let returnValue;
 
     if (useModuleSchema) {
         try {
-            returnValue = deserializeReceiveReturnValue(toBuffer(res.returnValue, 'hex'), toBuffer(schema, 'base64'), `${CONTRACT_NAME}`, `get_${dropDown}`)
-        }
-        catch (err) {
-            throw new Error(
-                (err as Error).message
+            returnValue = deserializeReceiveReturnValue(
+                toBuffer(res.returnValue, 'hex'),
+                toBuffer(schema, 'base64'),
+                `${CONTRACT_NAME}`,
+                `get_${dropDown !== 'wrong_schema' ? dropDown : 'timestamp'}`
             );
+        } catch (err) {
+            throw new Error((err as Error).message);
         }
     } else {
         try {
-            returnValue = deserializeTypeValue
-                (toBuffer(res.returnValue, 'hex'),
-                    toBuffer(schema, 'base64')
-                )
-        }
-        catch (err) {
-            throw new Error(
-                err as string
-            );
+            returnValue = deserializeTypeValue(toBuffer(res.returnValue, 'hex'), toBuffer(schema, 'base64'));
+        } catch (err) {
+            throw new Error(err as string);
         }
     }
 
@@ -133,7 +150,6 @@ import {
 }
 
 export async function view(rpcClient: JsonRpcClient) {
-
     const res = await rpcClient.invokeContract({
         method: `${CONTRACT_NAME}.view`,
         contract: { index: CONTRACT_INDEX, subindex: CONTRACT_SUB_INDEX },
@@ -145,11 +161,7 @@ export async function view(rpcClient: JsonRpcClient) {
         );
     }
 
-    // @ts-ignore
-    const state = deserializeTypeValue
-        (toBuffer(res.returnValue, 'hex'),
-            toBuffer(VIEW_RETURN_VALUE_SCHEMA, 'base64')
-        );
+    const state = deserializeTypeValue(toBuffer(res.returnValue, 'hex'), toBuffer(VIEW_RETURN_VALUE_SCHEMA, 'base64'));
 
     if (state === undefined) {
         throw new Error(
@@ -160,10 +172,10 @@ export async function view(rpcClient: JsonRpcClient) {
     }
 }
 
-export async function account_info(rpcClient: JsonRpcClient, account: string) {
-    return await rpcClient.getAccountInfo(account)
+export async function accountInfo(rpcClient: JsonRpcClient, account: string) {
+    return rpcClient.getAccountInfo(account);
 }
 
-export async function smart_contract_info(rpcClient: JsonRpcClient) {
-    return await rpcClient.getInstanceInfo({ index: CONTRACT_INDEX, subindex: CONTRACT_SUB_INDEX })
+export async function smartContractInfo(rpcClient: JsonRpcClient) {
+    return rpcClient.getInstanceInfo({ index: CONTRACT_INDEX, subindex: CONTRACT_SUB_INDEX });
 }
