@@ -14,3 +14,10 @@ RUN apt-get update && \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=build /build/chain-prometheus-exporter/target/release/chain-prometheus-exporter /usr/local/bin/
 
+WORKDIR /app
+RUN useradd -m -U -d /app appuser
+RUN chown appuser:appuser /app
+USER appuser
+
+ENTRYPOINT ["chain-prometheus-exporter"]
+
