@@ -15,7 +15,7 @@ RUN apt-get update && \
 COPY --from=build /build/chain-prometheus-exporter/target/release/chain-prometheus-exporter /usr/local/bin/
 
 WORKDIR /app
-RUN useradd -m -U -d /app appuser
+RUN useradd -U -d /app appuser
 RUN chown appuser:appuser /app
 USER appuser
 
