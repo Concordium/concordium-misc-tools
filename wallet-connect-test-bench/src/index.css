@@ -38,9 +38,9 @@
 
 .containerSpaceBetween {
     display: flex;
+    justify-content: center;
     column-gap: 20px;
-    align-items: center;
-    justify-content: space-between;
+    align-items: top;
 }
 
 .buttonStyle {
