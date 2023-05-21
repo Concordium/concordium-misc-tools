@@ -830,6 +830,17 @@ export default function Main(props: WalletConnectionProps) {
                                             },
                                             u16_value: 999,
                                             u8_value: 88,
+                                            hash_value:
+                                                '37a2a8e52efad975dbf6580e7734e4f249eaa5ea8a763e934a8671cd7e446499',
+                                            option_value: {
+                                                None: [],
+                                            },
+                                            public_key_value:
+                                                '37a2a8e52efad975dbf6580e7734e4f249eaa5ea8a763e934a8671cd7e446499',
+                                            signature_value:
+                                                '632f567c9321405ce201a0a38615da41efe259ede154ff45ad96cdf860718e79bde07cff72c4d119c644552a8c7f0c413f5cf5390b0ea0458993d6d6374bd904',
+                                            string_value: 'abc',
+                                            timestamp_value: '2030-08-08T05:15:00Z',
                                         };
 
                                         const serializedMessage = serializeTypeValue(
