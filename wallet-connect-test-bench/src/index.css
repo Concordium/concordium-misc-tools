@@ -43,12 +43,6 @@
     justify-content: space-between;
 }
 
-.containerSwitch {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
 .buttonStyle {
     width: 100%;
     box-sizing: border-box;
@@ -59,21 +53,6 @@
     width: 100%;
     border: 1px solid #26685D;
     background-color: #308274;
-    cursor: pointer;
-    font-weight: 300;
-    font-size: 14px;
-}
-
-.buttonStyleDisabled {
-    width: 100%;
-    box-sizing: border-box;
-    color: white;
-    border-radius: 10px;
-    margin: 7px 0px 7px 0px;
-    padding: 10px;
-    width: 100%;
-    border: 1px solid #4B4A4A;
-    background-color: #979797;
     cursor: pointer;
     font-weight: 300;
     font-size: 14px;

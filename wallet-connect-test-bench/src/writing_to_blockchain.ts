@@ -386,7 +386,7 @@ export async function simpleCCDTransfer(
 
 export async function simpleCCDTransferToNonExistingAccountAddress(connection: WalletConnection, account: string) {
     return connection.signAndSendTransaction(account, AccountTransactionType.Transfer, {
-        amount: new CcdAmount(BigInt(1234n)),
+        amount: new CcdAmount(BigInt(1n)),
         toAddress: new AccountAddress('35CJPZohio6Ztii2zy1AYzJKvuxbGG44wrBn7hLHiYLoF2nxnh'),
     });
 }

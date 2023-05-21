@@ -127,6 +127,7 @@ export async function getValue(rpcClient: JsonRpcClient, useModuleSchema: boolea
                 toBuffer(res.returnValue, 'hex'),
                 toBuffer(schema, 'base64'),
                 `${CONTRACT_NAME}`,
+                // If dropDown === 'wrong_schema', we called the `get_u8` function but now use the `timestamp` schema trying to deserialize the return value.
                 `get_${dropDown !== 'wrong_schema' ? dropDown : 'timestamp'}`
             );
         } catch (err) {

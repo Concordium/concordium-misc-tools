@@ -1,10 +1,10 @@
 # Test Bench
 
-A test bench for testing wallet Connect or the browser wallet.
+A test bench for testing mobile wallets (via walletConnect) or the browser wallet.
 
 ## Prerequisites
 
--   Browser wallet extension must be installed in Google Chrome and the Concordium testnet needs to be selected or a mobile wallet needs to be set up that supports wallet connect in order to view smart contract details or submit transactions.
+-   Browser wallet extension must be installed in Google Chrome browser and the Concordium testnet needs to be selected or a mobile wallet needs to be set up that supports walletConnect in order to view smart contract details or submit transactions.
 
 ## Running the test bench front-end
 

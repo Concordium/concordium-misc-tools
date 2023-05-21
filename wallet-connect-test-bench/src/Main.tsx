@@ -47,17 +47,20 @@ const ButtonStyleDisabled = {
     fontSize: '14px',
 };
 
-export default function Transactions(props: WalletConnectionProps) {
+export default function Main(props: WalletConnectionProps) {
     const { activeConnectorType, activeConnector, activeConnectorError, connectedAccounts, genesisHashes } = props;
 
     const { connection, setConnection, account } = useConnection(connectedAccounts, genesisHashes);
     const { connect, isConnecting, connectError } = useConnect(activeConnector, setConnection);
 
     const [viewError, setViewError] = useState('');
+    const [returnValueError, setReturnValueError] = useState('');
+    const [signingError, setSigningError] = useState('');
+    const [transactionError, setTransactionError] = useState('');
 
     const [record, setRecord] = useState('');
-
     const [returnValue, setReturnValue] = useState('');
+    const [isWaitingForTransaction, setWaitingForUser] = useState(false);
 
     const [accountBalance, setAccountBalance] = useState('');
     const [smartContractBalance, setSmartContractBalance] = useState('');
@@ -67,22 +70,14 @@ export default function Transactions(props: WalletConnectionProps) {
 
     const [useModuleSchema, setUseModuleSchema] = useState(true);
     const [isPayable, setIsPayable] = useState(true);
-    const [dropDown, setDropDown] = useState('u8');
-    const [dropDown2, setDropDown2] = useState('u8');
-    const [returnValueError, setReturnValueError] = useState('');
-
+    const [readDropDown, setReadDropDown] = useState('u8');
+    const [writeDropDown, setWriteDropDown] = useState('u8');
     const [toAccount, setToAccount] = useState('');
-
     const [signature, setSignature] = useState('');
     const [byteSignature, setByteSignature] = useState('');
 
-    const [signingError, setSigningError] = useState('');
-
     const [txHash, setTxHash] = useState('');
     const [message, setMessage] = useState('');
-    const [transactionError, setTransactionError] = useState('');
-
-    const [isWaitingForTransaction, setWaitingForUser] = useState(false);
 
     const changeInputHandler = (event: ChangeEvent) => {
         const target = event.target as HTMLTextAreaElement;
@@ -99,18 +94,18 @@ export default function Transactions(props: WalletConnectionProps) {
         setMessage(target.value);
     };
 
-    const changeDropDownHandler = () => {
-        const e = document.getElementById('function') as HTMLSelectElement;
+    const changeReadDropDownHandler = () => {
+        const e = document.getElementById('read') as HTMLSelectElement;
         const sel = e.selectedIndex;
         const { value } = e.options[sel];
-        setDropDown(value);
+        setReadDropDown(value);
     };
 
-    const changeDropDown2Handler = () => {
-        const e = document.getElementById('function2') as HTMLSelectElement;
+    const changeWriteDropDownHandler = () => {
+        const e = document.getElementById('write') as HTMLSelectElement;
         const sel = e.selectedIndex;
         const { value } = e.options[sel];
-        setDropDown2(value);
+        setWriteDropDown(value);
     };
 
     const changeToAccountHandler = (event: ChangeEvent) => {
@@ -301,7 +296,7 @@ export default function Transactions(props: WalletConnectionProps) {
                         <br />
                         <div>{smartContractBalance} CCD (micro)</div>
                         <br />
-                        <div> Smart contract state: </div>
+                        <div>Smart contract state:</div>
                         <pre className="largeText">{JSON.stringify(record, null, '\t')}</pre>
                         <br />
                         <br />
@@ -309,7 +304,12 @@ export default function Transactions(props: WalletConnectionProps) {
                             Error or Transaction status{txHash === '' ? ':' : ' (May take a moment to finalize):'}
                         </div>
                         <br />
-                        {!txHash && !transactionError && <div>None</div>}
+                        {!txHash && !transactionError && (
+                            <div style={{ color: 'red' }}>
+                                IMPORTANT: After pressing a button that should send a transaction, the transaction hash
+                                or error returned by the wallet are displayed HERE.
+                            </div>
+                        )}
                         {!txHash && transactionError && <div style={{ color: 'red' }}>Error: {transactionError}.</div>}
                         {viewError && <div style={{ color: 'red' }}>Error: {viewError}.</div>}
                         {txHash && (
@@ -375,9 +375,9 @@ export default function Transactions(props: WalletConnectionProps) {
                                     <div />
                                     <select
                                         className="centerLargeText"
-                                        name="function2"
-                                        id="function2"
-                                        onChange={changeDropDown2Handler}
+                                        name="write"
+                                        id="write"
+                                        onChange={changeWriteDropDownHandler}
                                     >
                                         <option value="u8" selected>
                                             u8
@@ -428,7 +428,7 @@ export default function Transactions(props: WalletConnectionProps) {
                                             account,
                                             useModuleSchema,
                                             isPayable,
-                                            dropDown2,
+                                            writeDropDown,
                                             input,
                                             cCDAmount
                                         );
@@ -437,7 +437,7 @@ export default function Transactions(props: WalletConnectionProps) {
                                         );
                                     }}
                                 >
-                                    Set {dropDown2} value
+                                    Set {writeDropDown} value
                                 </button>
                                 <div className="dashedLine" />
                                 <div>Testing return value deserialization of functions:</div>
@@ -464,9 +464,9 @@ export default function Transactions(props: WalletConnectionProps) {
                                     <div />
                                     <select
                                         className="centerLargeText"
-                                        name="function"
-                                        id="function"
-                                        onChange={changeDropDownHandler}
+                                        name="read"
+                                        id="read"
+                                        onChange={changeReadDropDownHandler}
                                     >
                                         <option value="u8" selected>
                                             u8
@@ -492,7 +492,7 @@ export default function Transactions(props: WalletConnectionProps) {
                                         setReturnValue('');
                                         setReturnValueError('');
                                         withJsonRpcClient(connection, (rpcClient) =>
-                                            getValue(rpcClient, useModuleSchema, dropDown)
+                                            getValue(rpcClient, useModuleSchema, readDropDown)
                                         )
                                             .then((value) => {
                                                 if (value !== undefined) {
@@ -504,7 +504,7 @@ export default function Transactions(props: WalletConnectionProps) {
                                             });
                                     }}
                                 >
-                                    Get {dropDown} value
+                                    Get {readDropDown} value
                                 </button>
                                 {returnValue !== '' && (
                                     <>

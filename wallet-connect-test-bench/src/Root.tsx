@@ -1,7 +1,7 @@
 import React from 'react';
 
 import { WithWalletConnector } from '@concordium/react-components';
-import Transactions from './Transactions';
+import Main from './Main';
 import { TESTNET } from './constants';
 
 /**
@@ -10,8 +10,8 @@ import { TESTNET } from './constants';
 export default function Root() {
     return (
         <div>
-            <main className="Transactions">
-                <WithWalletConnector network={TESTNET}>{(props) => <Transactions {...props} />}</WithWalletConnector>
+            <main>
+                <WithWalletConnector network={TESTNET}>{(props) => <Main {...props} />}</WithWalletConnector>
             </main>
         </div>
     );
