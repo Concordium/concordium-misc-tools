@@ -1,41 +1,7 @@
 # Test Bench
 
-A test bench for testing mobile wallets (via walletConnect) or the browser wallet.
+A test bench front end for testing various positive/negative scenarios of how the wallets could interact with a smart contract using either a mobile wallet (using wallet connect) or the browser wallet. The front end displays all responses (e.g. error messages returned as well as transaction hashes returned) for further investigation.
 
-## Prerequisites
+The front end uses the [react-components/wallet-connectors libraries](https://github.com/Concordium/concordium-dapp-libraries/tree/main/packages) to create the connection between the wallets and the front end. 
 
--   Browser wallet extension must be installed in Google Chrome browser and the Concordium testnet needs to be selected or a mobile wallet needs to be set up that supports walletConnect in order to view smart contract details or submit transactions.
-
-## Running the test bench front-end
-
-Clone the repo:
-
-```shell
-git clone --recursive-submodules git@github.com:Concordium/concordium-misc-tools
-```
-
-Navigate into ./deps/concordium-dapplibraries and build the dapp libraries packages:
-
-```shell
-cd ./deps/concordium-dapp-libraries/
-yarn
-yarn build
-```
-
-Navigate into this folder:
-```shell
-cd ./wallet-connect-test-bench
-```
-
--   Run `yarn install` in this folder.
--   Run `cp -r ../deps/concordium-dapp-libraries/packages/react-components ./node_modules/@concordium/react-components` in this folder.
--   Run `cp -r ../deps/concordium-dapp-libraries/packages/wallet-connectors ./node_modules/@concordium/wallet-connectors` in this folder.
--   Run `yarn build` in a terminal in this folder.
--   Run `yarn start`.
--   Open URL logged in console (typically http://127.0.0.1:8080).
-
-To have hot-reload (useful for development), do the following instead:
-
--   Run `yarn watch` in a terminal.
--   Run `yarn start` in another terminal.
--   Open URL logged in console (typically http://127.0.0.1:8080).
+The project has two folders (the `smart-contract` folder and the `front end` folder). 
