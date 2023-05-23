@@ -9,7 +9,7 @@ import {
 } from '@concordium/react-components';
 
 function connectorTypeStyle(baseStyle: any, isSelected: boolean, isConnected: boolean) {
-    const style = { ...baseStyle, width: '50%' };
+    const style = { ...baseStyle, width: '960px' };
     if (isConnected) {
         style.backgroundColor = '#823030';
         style.border = '1px solid #520C0C';

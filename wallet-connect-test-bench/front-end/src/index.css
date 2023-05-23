@@ -13,15 +13,12 @@
 
 .largeText {
     font-family: "Verdana" !important;
-    text-align: left;
+    text-align: left  !important;
     font-size: 20px !important;
     font-weight: 300 !important;
     line-height: 21px !important;
     letter-spacing: 0 !important;
-}
-
-.dashedLine {
-    border: dashed 1px;
+    word-wrap: break-word !important;
 }
 
 .link {
@@ -43,14 +40,55 @@
     align-items: top;
 }
 
+.columnBox {
+    background-color: #979797;
+    border-radius: 10px;
+    padding: 10px 10px 10px 10px;
+}
+
+.testBox {
+    background-color: olivedrab;
+    border-radius: 10px;
+    padding: 10px 10px 10px 10px;
+}
+
+.testBoxHeader {
+    background-color: #308274;
+    border-radius: 10px;
+    padding: 10px 10px 10px 10px;
+}
+
+.actionResultBox {
+    background-color: greenyellow;
+    border-radius: 10px;
+    word-wrap: break-word;
+    border: 1px;
+}
+
+.errorBox {
+    background-color: orange;
+    color: red;
+    padding: 10px 10px 10px 10px;
+    border-radius: 10px;
+    word-wrap: break-word;
+    border: 1px;
+}
+
+.inputFormatBox {
+    padding: 10px 10px 10px 10px;
+    border-radius: 10px;
+    word-wrap: break-word;
+    border: 1px;
+    text-align: left;
+}
+
 .buttonStyle {
-    width: 100%;
     box-sizing: border-box;
     color: white;
     border-radius: 10px;
     margin: 7px 0px 7px 0px;
     padding: 10px;
-    width: 100%;
+    width: 500px;
     border: 1px solid #26685D;
     background-color: #308274;
     cursor: pointer;
@@ -59,12 +97,11 @@
 }
 
 .inputFieldStyle {
-    width: 100%;
     box-sizing: border-box;
     background-color: #979797;
     color: white;
     border-radius: 10px;
-    width: 100%;
+    width: 500px;
     border: 1px solid #308274;
     margin: 7px 0px 7px 0px;
     padding: 10px 20px;

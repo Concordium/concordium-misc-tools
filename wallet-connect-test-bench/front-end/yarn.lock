@@ -2447,7 +2447,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"colors@npm:1.4.0":
+"colors@npm:latest":
   version: 1.4.0
   resolution: "colors@npm:1.4.0"
   checksum: 98aa2c2418ad87dedf25d781be69dc5fc5908e279d9d30c34d8b702e586a0474605b3a189511482b9d5ed0d20c867515d22749537f7bc546256c6014f3ebdcec
@@ -5307,12 +5307,12 @@ cors@latest:
   languageName: node
   linkType: hard
 
-"live-server@npm:^1.2.2":
-  version: 1.2.2
-  resolution: "live-server@npm:1.2.2"
+"live-server@npm:=1.2.1":
+  version: 1.2.1
+  resolution: "live-server@npm:1.2.1"
   dependencies:
     chokidar: ^2.0.4
-    colors: 1.4.0
+    colors: latest
     connect: ^3.6.6
     cors: latest
     event-stream: 3.3.4
@@ -5325,8 +5325,8 @@ cors@latest:
     send: latest
     serve-index: ^1.9.1
   bin:
-    live-server: live-server.js
-  checksum: 6758421223a97a602d427fe048bb867ed4743e8ed2299c37ab67e72dd98a24abe6756157795e4f6fa11d164dc97ba3c9a7e9be8c9aff786bf4ec84c807ec2d7b
+    live-server: ./live-server.js
+  checksum: a8d365cb3b6c4227e418442d47a12868da5169f685507ba50ffaa1f84f222413aa4723f9689996602b16124fd383ad2d27bd1f84d8adeb95557d5e8d2b242211
   languageName: node
   linkType: hard
 
@@ -7838,7 +7838,7 @@ send@latest:
     eslint-plugin-react: ^7.29.4
     eslint-plugin-react-hooks: ^4.4.0
     fs: ^0.0.1-security
-    live-server: ^1.2.2
+    live-server: =1.2.1
     moment: ^2.29.4
     prettier: ^2.6.2
     process: ^0.11.10
