@@ -209,10 +209,9 @@ fn handle_web3id_provide_proof(
                     return Err(warp::reject::custom(Web3IdVerifyError::NotActiveCredential));
                 }
                 // And then verify the cryptographic proofs.
-                if web3id::verify(
+                if presentation.verify(
                     &state.global_context,
                     public_data.iter().map(|cm| &cm.commitments),
-                    &presentation,
                 ) {
                     Ok(warp::reply::reply())
                 } else {
