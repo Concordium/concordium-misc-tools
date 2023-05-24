@@ -385,8 +385,8 @@ export default function Main(props: WalletConnectionProps) {
                                                         input,
                                                         cCDAmount
                                                     );
-                                                    tx.then(setTxHash).catch((err: Error) =>
-                                                        setTransactionError((err as Error).message)
+                                                    tx.then(setTxHash).catch((err) =>
+                                                        setTransactionError((err as Error).message || (err as string))
                                                     );
                                                 }}
                                             >
