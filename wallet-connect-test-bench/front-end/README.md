@@ -51,3 +51,31 @@ Use `npm install` instead of `yarn install` in the above command or use an up-to
 
 Additional information can be found [here](https://techtalkbook.com/env-noder-no-such-file-or-directory/).
 
+## Build and run the Docker image
+
+To build the docker image run the following command in this folder:
+
+```
+docker build -t test_bench:$PROJECT_VERSION .
+```
+
+e.g.
+
+```
+docker build -t test_bench:3.0.0 .
+```
+
+To run the docker image run the following command:
+
+```
+docker run -it -d -p 8080:80 --name web test_bench:$PROJECT_VERSION
+```
+
+e.g.
+
+```
+docker run -it -d -p 8080:80 --name web test_bench:3.0.0
+```
+
+Open http://127.0.0.1:8080 in your browser.
+
