@@ -43,7 +43,7 @@ export async function initializeWithoutAmountWithoutParameter(connection: Wallet
         moduleRef: new ModuleReference('ca34210298992899b85a45d8c639a4442df25ebb3c4360da671d766f8fb079e2'),
         initName: 'smart_contract_test_bench',
         param: toBuffer(''),
-        maxContractExecutionEnergy: 300000n,
+        maxContractExecutionEnergy: 30000n,
     } as InitContractPayload);
 }
 
@@ -53,7 +53,7 @@ export async function initializeWithAmount(connection: WalletConnection, account
         moduleRef: new ModuleReference('da913dbdaebac0fc3be60d61adcabb000a22e580a4aecdf70985cff6f4f55360'),
         initName: 'smart_contract_test_bench',
         param: toBuffer(''),
-        maxContractExecutionEnergy: 300000n,
+        maxContractExecutionEnergy: 30000n,
     } as InitContractPayload);
 }
 
@@ -76,7 +76,7 @@ export async function initializeWithParameter(connection: WalletConnection, acco
             moduleRef: new ModuleReference('2f4b068a3550528458bb4de550813cc6e2dc04004b3ff6578c44b79cfe9d15f7'),
             initName: 'smart_contract_test_bench',
             param: toBuffer('5'),
-            maxContractExecutionEnergy: 300000n,
+            maxContractExecutionEnergy: 30000n,
         } as InitContractPayload,
         schema
     );
