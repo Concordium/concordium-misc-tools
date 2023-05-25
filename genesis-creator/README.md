@@ -5,8 +5,8 @@ a node.
 
 ## Building the tool
 
-The tool for creating the genesis is a pure Rust project, but it does depend on the [protobuf compiler](https://github.com/protocolbuffers/protobuf#protocol-compiler-installation) version at least 3.15. The minimum supported
-Rust version is 1.64. You need the Rust toolchain installed for your platform.
+The tool for creating the genesis is a pure Rust project. The minimum supported
+Rust version is 1.65. You need the Rust toolchain installed for your platform.
 The easiest way to do that is to install [rustup](https://rustup.rs/).
 
 To build it
