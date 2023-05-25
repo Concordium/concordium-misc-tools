@@ -1,5 +1,5 @@
 /* eslint-disable no-console */
-import React, { useEffect, useState, ChangeEvent } from 'react';
+import React, { useEffect, useState, ChangeEvent, PropsWithChildren } from 'react';
 import Switch from 'react-switch';
 import { toBuffer, serializeTypeValue } from '@concordium/web-sdk';
 import { withJsonRpcClient, WalletConnectionProps, useConnection, useConnect } from '@concordium/react-components';
@@ -46,6 +46,22 @@ const ConnectionButtonStyleDisabled = {
     fontWeight: 300,
     fontSize: '26px',
 };
+
+type TestBoxProps = PropsWithChildren<{
+    header: string;
+    note: string;
+}>;
+
+function TestBox({ header, children, note }: TestBoxProps) {
+    return (
+        <fieldset className="testBox">
+            <legend>{header}</legend>
+            <div className="testBoxFields">{children}</div>
+            <br />
+            <p className="note">{note}</p>
+        </fieldset>
+    );
+}
 
 export default function Main(props: WalletConnectionProps) {
     const { activeConnectorType, activeConnector, activeConnectorError, connectedAccounts, genesisHashes } = props;
@@ -228,10 +244,12 @@ export default function Main(props: WalletConnectionProps) {
     }, [connection]);
 
     return (
-        <div className="centerLargeText">
-            <div>Version: {version}</div>
-            <h1>Wallet Connect / Browser Wallet Testing Bench </h1>
-            <div className="containerSpaceBetween">
+        <>
+            <div className="textCenter">
+                Version: {version}
+                <h1>Wallet Connect / Browser Wallet Testing Bench </h1>
+            </div>
+            <div className="columns">
                 <WalletConnectionTypeButton
                     buttonStyle={ConnectionButtonStyle}
                     disabledButtonStyle={ConnectionButtonStyleDisabled}
@@ -252,784 +270,742 @@ export default function Main(props: WalletConnectionProps) {
                 />
             </div>
             <div>
-                {activeConnectorError && <p className="errorBox">Connector Error: {activeConnectorError}.</p>}
-                {!activeConnectorError && !isWaitingForTransaction && activeConnectorType && !activeConnector && (
-                    <p>
-                        <i>Loading connector...</i>
-                    </p>
-                )}
-                {connectError && <p className="errorBox">Connect Error: {connectError}.</p>}
-                {!connection && !isWaitingForTransaction && activeConnectorType && activeConnector && (
-                    <p>
-                        <button style={ConnectionButtonStyle} type="button" onClick={connect}>
-                            {isConnecting && 'Connecting...'}
-                            {!isConnecting && activeConnectorType === BROWSER_WALLET && 'Connect Browser Wallet'}
-                            {!isConnecting && activeConnectorType === WALLET_CONNECT && 'Connect Mobile Wallet'}
-                        </button>
-                    </p>
-                )}
+                <div className="textCenter">
+                    {activeConnectorError && <p className="errorBox">Connector Error: {activeConnectorError}.</p>}
+                    {!activeConnectorError && !isWaitingForTransaction && activeConnectorType && !activeConnector && (
+                        <p>
+                            <i>Loading connector...</i>
+                        </p>
+                    )}
+                    {connectError && <p className="errorBox">Connect Error: {connectError}.</p>}
+                    {!connection && !isWaitingForTransaction && activeConnectorType && activeConnector && (
+                        <p>
+                            <button style={ConnectionButtonStyle} type="button" onClick={connect}>
+                                {isConnecting && 'Connecting...'}
+                                {!isConnecting && activeConnectorType === BROWSER_WALLET && 'Connect Browser Wallet'}
+                                {!isConnecting && activeConnectorType === WALLET_CONNECT && 'Connect Mobile Wallet'}
+                            </button>
+                        </p>
+                    )}
+                </div>
                 {account && (
-                    <div className="containerSpaceBetween">
+                    <div className="columns">
                         <div className="columnBox" style={{ width: '960px', float: 'left' }}>
                             {connection && account !== undefined && (
                                 <>
-                                    <div>This column includes various test scenarios that can be executed: </div>
-                                    <div>
-                                        (IP) input parameter tests, (RV) return value tests, (TE) transaction execution
-                                        tests, (ST) simple CCD transfer tests, and (SG) signature tests.
+                                    <h2>This column includes various test scenarios that can be executed: </h2>
+                                    <ul>
+                                        <li>(IP) input parameter tests</li>
+                                        <li>(RV) return value tests</li>
+                                        <li>(TE) transaction execution tests</li>
+                                        <li>(ST) simple CCD transfer tests</li>
+                                        <li>(SG) signature tests</li>
+                                    </ul>
+                                    <div className="inputFormatBox">
+                                        <h3>Expected input parameter format:</h3>
+                                        <ul>
+                                            <li>
+                                                <b>u8</b> (e.g. 5)
+                                            </li>
+                                            <li>
+                                                <b>u16</b> (e.g. 15)
+                                            </li>
+                                            <li>
+                                                <b>Address</b> (e.g
+                                                &#123;&#34;Contract&#34;:[&#123;&#34;index&#34;:3,&#34;subindex&#34;:0&#125;]&#125;
+                                                or
+                                                &#123;&#34;Account&#34;:[&#34;4fUk1a1rjBzoPCCy6p92u5LT5vSw9o8GpjMiRHBbJUfmx51uvt&#34;]&#125;
+                                                )
+                                            </li>
+                                            <li>
+                                                <b>ContractAddress</b> (e.g.
+                                                &#123;&#34;index&#34;:3,&#34;subindex&#34;:0&#125;)
+                                            </li>
+                                            <li>
+                                                <b>AccountAddress</b> (e.g.
+                                                4fUk1a1rjBzoPCCy6p92u5LT5vSw9o8GpjMiRHBbJUfmx51uvt)
+                                            </li>
+                                            <li>
+                                                <b>Hash</b> (e.g.
+                                                18ee24150dcb1d96752a4d6dd0f20dfd8ba8c38527e40aa8509b7adecf78f9c6)
+                                            </li>
+                                            <li>
+                                                <b>Public key</b> (e.g.
+                                                37a2a8e52efad975dbf6580e7734e4f249eaa5ea8a763e934a8671cd7e446499)
+                                            </li>
+                                            <li>
+                                                <b>Signature</b> (e.g.
+                                                632f567c9321405ce201a0a38615da41efe259ede154ff45ad96cdf860718e79bde07cff72c4d119c644552a8c7f0c413f5cf5390b0ea0458993d6d6374bd904)
+                                            </li>
+                                            <li>
+                                                <b>Timestamp</b> (e.g. 2030-08-08T05:15:00Z)
+                                            </li>
+                                            <li>
+                                                <b>String</b> (e.g. aaa)
+                                            </li>
+                                            <li>
+                                                <b>Option (None)</b> (e.g. no input required)
+                                            </li>
+                                            <li>
+                                                <b>Option (Some)</b> (e.g. 3)
+                                            </li>
+                                            <li>
+                                                <b>Wrong schema</b> (e.g. 5)
+                                            </li>
+                                        </ul>
                                     </div>
-                                    <br />
-                                    <div className="testBoxHeader">
-                                        <div>
-                                            (IP) Testing simple input parameters (at the bottom of this column is an
-                                            overview of the input parameter format):
-                                        </div>
-                                        <br />
-                                        <div className="testBox">
-                                            <div className="containerSpaceBetween">
-                                                <div>Use module schema</div>
-                                                <Switch
-                                                    onChange={() => {
-                                                        setUseModuleSchema(!useModuleSchema);
-                                                    }}
-                                                    onColor="#308274"
-                                                    offColor="#308274"
-                                                    onHandleColor="#174039"
-                                                    offHandleColor="#174039"
-                                                    checked={!useModuleSchema}
-                                                    checkedIcon={false}
-                                                    uncheckedIcon={false}
-                                                />
-                                                <div>Use parameter schema</div>
-                                            </div>
-                                            <div className="containerSpaceBetween">
-                                                <div>Is payable</div>
-                                                <Switch
-                                                    onChange={() => {
-                                                        setIsPayable(!isPayable);
-                                                    }}
-                                                    onColor="#308274"
-                                                    offColor="#308274"
-                                                    onHandleColor="#174039"
-                                                    offHandleColor="#174039"
-                                                    checked={!isPayable}
-                                                    checkedIcon={false}
-                                                    uncheckedIcon={false}
-                                                />
-                                                <div>Is not payable</div>
-                                            </div>
-                                            <br />
-                                            <div>Select function:</div>
-                                            <br />
-                                            <div className="containerSpaceBetween">
-                                                <div />
-                                                <select
-                                                    className="centerLargeText"
-                                                    name="write"
-                                                    id="write"
-                                                    onChange={changeWriteDropDownHandler}
-                                                >
-                                                    <option value="u8" selected>
-                                                        u8
-                                                    </option>
-                                                    <option value="u16">u16</option>
-                                                    <option value="address">Address</option>
-                                                    <option value="contract_address">ContractAddress</option>
-                                                    <option value="account_address">AccountAddress</option>
-                                                    <option value="hash">Hash</option>
-                                                    <option value="public_key">Public key</option>
-                                                    <option value="signature">Signature</option>
-                                                    <option value="timestamp">Timestamp</option>
-                                                    <option value="string">String</option>
-                                                    <option value="option_u8_none">Option (None)</option>
-                                                    <option value="option_u8_some">Option (Some)</option>
-                                                    <option value="wrong_schema">
-                                                        Wrong schema (error should be returned)
-                                                    </option>
-                                                </select>
-                                                <div />
-                                            </div>
-                                            <label>
-                                                <p>CCD (micro):</p>
-                                                <input
-                                                    className="inputFieldStyle"
-                                                    id="CCDAmount"
-                                                    type="text"
-                                                    placeholder="0"
-                                                    onChange={changeCCDAmountHandler}
-                                                />
-                                            </label>
-                                            <label>
-                                                <p>Input parameter:</p>
-                                                <input
-                                                    className="inputFieldStyle"
-                                                    id="input"
-                                                    type="text"
-                                                    placeholder='5 | 15 | {"Contract":[{"index":3,"subindex":0}]} or {"Account":["4fUk1a1rjBzoPCCy6p92u5LT5vSw9o8GpjMiRHBbJUfmx51uvt"]} | {"index":3,"subindex":0} | 4fUk1a1rjBzoPCCy6p92u5LT5vSw9o8GpjMiRHBbJUfmx51uvt | 18ee24150dcb1d96752a4d6dd0f20dfd8ba8c38527e40aa8509b7adecf78f9c6 | 37a2a8e52efad975dbf6580e7734e4f249eaa5ea8a763e934a8671cd7e446499 | 632f567c9321405ce201a0a38615da41efe259ede154ff45ad96cdf860718e79bde07cff72c4d119c644552a8c7f0c413f5cf5390b0ea0458993d6d6374bd904 | 2030-08-08T05:15:00Z | aaa | | 3 | |'
-                                                    onChange={changeInputHandler}
-                                                />
-                                            </label>
-                                            <br />
-                                            <button
-                                                className="buttonStyle"
-                                                type="button"
-                                                onClick={() => {
-                                                    setTxHash('');
-                                                    setTransactionError('');
-                                                    const tx = setValue(
-                                                        connection,
-                                                        account,
-                                                        useModuleSchema,
-                                                        isPayable,
-                                                        writeDropDown,
-                                                        input,
-                                                        cCDAmount
-                                                    );
-                                                    tx.then(setTxHash).catch((err) =>
-                                                        setTransactionError((err as Error).message || (err as string))
-                                                    );
+                                    <TestBox
+                                        header="(IP) Testing simple input parameters"
+                                        note="Expected result after pressing the button and confirming in wallet: The
+                                        transaction hash or an error message should appear in the right column."
+                                    >
+                                        <div className="switch-wrapper">
+                                            <div>Use module schema</div>
+                                            <Switch
+                                                onChange={() => {
+                                                    setUseModuleSchema(!useModuleSchema);
                                                 }}
-                                            >
-                                                Set {writeDropDown} value
-                                            </button>
+                                                onColor="#308274"
+                                                offColor="#308274"
+                                                onHandleColor="#174039"
+                                                offHandleColor="#174039"
+                                                checked={!useModuleSchema}
+                                                checkedIcon={false}
+                                                uncheckedIcon={false}
+                                            />
+                                            <div>Use parameter schema</div>
                                         </div>
-                                        <br />
-                                        Expected result after pressing the button and confirming in wallet: The
-                                        transaction hash or an error message should appear in the right column.
-                                    </div>
-                                    <br />
-                                    <div className="testBoxHeader">
-                                        <div>(RV) Testing return value deserialization of functions:</div>
-                                        <br />
-                                        <div className="testBox">
-                                            <div className="containerSpaceBetween">
-                                                <div>Use module schema</div>
-                                                <Switch
-                                                    onChange={() => {
-                                                        setUseModuleSchema(!useModuleSchema);
-                                                    }}
-                                                    onColor="#308274"
-                                                    offColor="#308274"
-                                                    onHandleColor="#174039"
-                                                    offHandleColor="#174039"
-                                                    checked={!useModuleSchema}
-                                                    checkedIcon={false}
-                                                    uncheckedIcon={false}
-                                                />
-                                                <div>Use parameter schema</div>
-                                            </div>
-                                            <br />
-                                            <div>Select function:</div>
-                                            <br />
-                                            <div className="containerSpaceBetween">
-                                                <div />
-                                                <select
-                                                    className="centerLargeText"
-                                                    name="read"
-                                                    id="read"
-                                                    onChange={changeReadDropDownHandler}
-                                                >
-                                                    <option value="u8" selected>
-                                                        u8
-                                                    </option>
-                                                    <option value="u16">u16</option>
-                                                    <option value="address">Address</option>
-                                                    <option value="contract_address">ContractAddress</option>
-                                                    <option value="account_address">AccountAddress</option>
-                                                    <option value="hash">Hash</option>
-                                                    <option value="public_key">PublicKey</option>
-                                                    <option value="signature">Signature</option>
-                                                    <option value="timestamp">Timestamp</option>
-                                                    <option value="string">String</option>
-                                                    <option value="option_u8">Option</option>
-                                                    <option value="wrong_schema">
-                                                        Wrong schema (error should be returned)
-                                                    </option>
-                                                </select>
-                                                <div />
-                                            </div>
-                                            <button
-                                                className="buttonStyle"
-                                                type="button"
-                                                onClick={() => {
-                                                    setReturnValue('');
-                                                    setReturnValueError('');
-                                                    withJsonRpcClient(connection, (rpcClient) =>
-                                                        getValue(rpcClient, useModuleSchema, readDropDown)
-                                                    )
-                                                        .then((value) => {
-                                                            if (value !== undefined) {
-                                                                setReturnValue(JSON.stringify(value));
-                                                            }
-                                                        })
-                                                        .catch((e) => {
-                                                            setReturnValueError((e as Error).message);
-                                                        });
+                                        <div className="switch-wrapper">
+                                            <div>Is payable</div>
+                                            <Switch
+                                                onChange={() => {
+                                                    setIsPayable(!isPayable);
                                                 }}
-                                            >
-                                                Get {readDropDown} value
-                                            </button>
-                                            {returnValue !== '' && (
-                                                <div className="actionResultBox">
-                                                    <div>Your return value is:</div>
-                                                    <br />
-                                                    <div>{returnValue}</div>
-                                                </div>
-                                            )}
-                                            {!returnValue && returnValueError && (
-                                                <div className="errorBox">Error: {returnValueError}.</div>
-                                            )}
-                                            <br />
+                                                onColor="#308274"
+                                                offColor="#308274"
+                                                onHandleColor="#174039"
+                                                offHandleColor="#174039"
+                                                checked={!isPayable}
+                                                checkedIcon={false}
+                                                uncheckedIcon={false}
+                                            />
+                                            <div>Is not payable</div>
                                         </div>
-                                        <br />
-                                        Expected result after pressing the button: The return value or an error message
-                                        should appear in the above test unit.
-                                    </div>
-                                    <br />
-                                    <div className="testBoxHeader">
-                                        <div>(IP) Testing complex object as input parameter:</div>
-                                        <br />
-                                        <div className="testBox">
+                                        <label className="field">
+                                            Select function:
                                             <br />
-                                            <div className="containerSpaceBetween">
-                                                <div>Use module schema</div>
-                                                <Switch
-                                                    onChange={() => {
-                                                        setUseModuleSchema(!useModuleSchema);
-                                                    }}
-                                                    onColor="#308274"
-                                                    offColor="#308274"
-                                                    onHandleColor="#174039"
-                                                    offHandleColor="#174039"
-                                                    checked={!useModuleSchema}
-                                                    checkedIcon={false}
-                                                    uncheckedIcon={false}
-                                                />
-                                                <div>Use parameter schema</div>
-                                            </div>
-                                            <div className="containerSpaceBetween">
-                                                <div>Is payable</div>
-                                                <Switch
-                                                    onChange={() => {
-                                                        setIsPayable(!isPayable);
-                                                    }}
-                                                    onColor="#308274"
-                                                    offColor="#308274"
-                                                    onHandleColor="#174039"
-                                                    offHandleColor="#174039"
-                                                    checked={!isPayable}
-                                                    checkedIcon={false}
-                                                    uncheckedIcon={false}
-                                                />
-                                                <div>Is not payable</div>
-                                            </div>
-                                            <label>
-                                                <p>CCD (micro):</p>
-                                                <input
-                                                    className="inputFieldStyle"
-                                                    id="CCDAmount"
-                                                    type="text"
-                                                    placeholder="0"
-                                                    onChange={changeCCDAmountHandler}
-                                                />
-                                            </label>
+                                            <select
+                                                className="centerLargeText"
+                                                name="write"
+                                                id="write"
+                                                onChange={changeWriteDropDownHandler}
+                                            >
+                                                <option value="u8" selected>
+                                                    u8
+                                                </option>
+                                                <option value="u16">u16</option>
+                                                <option value="address">Address</option>
+                                                <option value="contract_address">ContractAddress</option>
+                                                <option value="account_address">AccountAddress</option>
+                                                <option value="hash">Hash</option>
+                                                <option value="public_key">Public key</option>
+                                                <option value="signature">Signature</option>
+                                                <option value="timestamp">Timestamp</option>
+                                                <option value="string">String</option>
+                                                <option value="option_u8_none">Option (None)</option>
+                                                <option value="option_u8_some">Option (Some)</option>
+                                                <option value="wrong_schema">
+                                                    Wrong schema (error should be returned)
+                                                </option>
+                                            </select>
+                                        </label>
+                                        <label className="field">
+                                            CCD (micro):
                                             <br />
-                                            <button
-                                                className="buttonStyle"
-                                                type="button"
-                                                onClick={() => {
-                                                    setTxHash('');
-                                                    setTransactionError('');
-                                                    const tx = setObject(
-                                                        connection,
-                                                        account,
-                                                        useModuleSchema,
-                                                        isPayable,
-                                                        cCDAmount
-                                                    );
-                                                    tx.then(setTxHash).catch((err: Error) =>
-                                                        setTransactionError((err as Error).message)
-                                                    );
+                                            <input
+                                                className="inputFieldStyle"
+                                                id="CCDAmount"
+                                                type="text"
+                                                placeholder="0"
+                                                onChange={changeCCDAmountHandler}
+                                            />
+                                        </label>
+                                        <label className="field">
+                                            Input parameter:
+                                            <br />
+                                            <input
+                                                className="inputFieldStyle"
+                                                id="input"
+                                                type="text"
+                                                placeholder='5 | 15 | {"Contract":[{"index":3,"subindex":0}]} or {"Account":["4fUk1a1rjBzoPCCy6p92u5LT5vSw9o8GpjMiRHBbJUfmx51uvt"]} | {"index":3,"subindex":0} | 4fUk1a1rjBzoPCCy6p92u5LT5vSw9o8GpjMiRHBbJUfmx51uvt | 18ee24150dcb1d96752a4d6dd0f20dfd8ba8c38527e40aa8509b7adecf78f9c6 | 37a2a8e52efad975dbf6580e7734e4f249eaa5ea8a763e934a8671cd7e446499 | 632f567c9321405ce201a0a38615da41efe259ede154ff45ad96cdf860718e79bde07cff72c4d119c644552a8c7f0c413f5cf5390b0ea0458993d6d6374bd904 | 2030-08-08T05:15:00Z | aaa | | 3 | |'
+                                                onChange={changeInputHandler}
+                                            />
+                                        </label>
+                                        <br />
+                                        <button
+                                            className="buttonStyle"
+                                            type="button"
+                                            onClick={() => {
+                                                setTxHash('');
+                                                setTransactionError('');
+                                                const tx = setValue(
+                                                    connection,
+                                                    account,
+                                                    useModuleSchema,
+                                                    isPayable,
+                                                    writeDropDown,
+                                                    input,
+                                                    cCDAmount
+                                                );
+                                                tx.then(setTxHash).catch((err) =>
+                                                    setTransactionError((err as Error).message || (err as string))
+                                                );
+                                            }}
+                                        >
+                                            Set {writeDropDown} value
+                                        </button>
+                                    </TestBox>
+                                    <TestBox
+                                        header="(RV) Testing return value deserialization of functions"
+                                        note="Expected result after pressing the button: The return value or an error message
+                                        should appear in the above test unit."
+                                    >
+                                        <div className="switch-wrapper">
+                                            <div>Use module schema</div>
+                                            <Switch
+                                                onChange={() => {
+                                                    setUseModuleSchema(!useModuleSchema);
                                                 }}
-                                            >
-                                                Set object
-                                            </button>
+                                                onColor="#308274"
+                                                offColor="#308274"
+                                                onHandleColor="#174039"
+                                                offHandleColor="#174039"
+                                                checked={!useModuleSchema}
+                                                checkedIcon={false}
+                                                uncheckedIcon={false}
+                                            />
+                                            <div>Use parameter schema</div>
+                                        </div>
+                                        <label className="field">
+                                            Select function:
                                             <br />
-                                        </div>
-                                        <br />
-                                        Expected result after pressing the button and confirming in wallet: The
-                                        transaction hash or an error message should appear in the right column.
-                                    </div>
-                                    <br />
-                                    <div className="testBoxHeader">
-                                        <div>(IP) Testing array as input parameter:</div>
-                                        <br />
-                                        <div className="testBox">
-                                            <div className="containerSpaceBetween">
-                                                <div>Use module schema</div>
-                                                <Switch
-                                                    onChange={() => {
-                                                        setUseModuleSchema(!useModuleSchema);
-                                                    }}
-                                                    onColor="#308274"
-                                                    offColor="#308274"
-                                                    onHandleColor="#174039"
-                                                    offHandleColor="#174039"
-                                                    checked={!useModuleSchema}
-                                                    checkedIcon={false}
-                                                    uncheckedIcon={false}
-                                                />
-                                                <div>Use parameter schema</div>
-                                            </div>
-                                            <div className="containerSpaceBetween">
-                                                <div>Is payable</div>
-                                                <Switch
-                                                    onChange={() => {
-                                                        setIsPayable(!isPayable);
-                                                    }}
-                                                    onColor="#308274"
-                                                    offColor="#308274"
-                                                    onHandleColor="#174039"
-                                                    offHandleColor="#174039"
-                                                    checked={!isPayable}
-                                                    checkedIcon={false}
-                                                    uncheckedIcon={false}
-                                                />
-                                                <div>Is not payable</div>
-                                            </div>
-                                            <br />
-                                            <br />
-                                            <label>
-                                                <p>CCD (micro):</p>
-                                                <input
-                                                    className="inputFieldStyle"
-                                                    id="CCDAmount"
-                                                    type="text"
-                                                    placeholder="0"
-                                                    onChange={changeCCDAmountHandler}
-                                                />
-                                            </label>
-                                            <br />
-                                            <button
-                                                className="buttonStyle"
-                                                type="button"
-                                                onClick={() => {
-                                                    setTxHash('');
-                                                    setTransactionError('');
-                                                    const tx = setArray(
-                                                        connection,
-                                                        account,
-                                                        useModuleSchema,
-                                                        isPayable,
-                                                        cCDAmount
-                                                    );
-                                                    tx.then(setTxHash).catch((err: Error) =>
-                                                        setTransactionError((err as Error).message)
-                                                    );
-                                                }}
+                                            <select
+                                                className="centerLargeText"
+                                                name="read"
+                                                id="read"
+                                                onChange={changeReadDropDownHandler}
                                             >
-                                                Set Array
-                                            </button>
-                                        </div>
+                                                <option value="u8" selected>
+                                                    u8
+                                                </option>
+                                                <option value="u16">u16</option>
+                                                <option value="address">Address</option>
+                                                <option value="contract_address">ContractAddress</option>
+                                                <option value="account_address">AccountAddress</option>
+                                                <option value="hash">Hash</option>
+                                                <option value="public_key">PublicKey</option>
+                                                <option value="signature">Signature</option>
+                                                <option value="timestamp">Timestamp</option>
+                                                <option value="string">String</option>
+                                                <option value="option_u8">Option</option>
+                                                <option value="wrong_schema">
+                                                    Wrong schema (error should be returned)
+                                                </option>
+                                            </select>
+                                        </label>
                                         <br />
-                                        Expected result after pressing the button and confirming in wallet: The
-                                        transaction hash or an error message should appear in the right column.
-                                    </div>
-                                    <br />
-                                    <div className="testBoxHeader">
-                                        <div>
-                                            (TE) Testing calling a function that calls another smart contract
-                                            successfully:
-                                        </div>
-                                        <br />
-                                        <div className="testBox">
-                                            <button
-                                                className="buttonStyle"
-                                                type="button"
-                                                onClick={() => {
-                                                    setTxHash('');
-                                                    setTransactionError('');
-                                                    const tx = internalCallSuccess(connection, account);
-                                                    tx.then(setTxHash).catch((err: Error) =>
-                                                        setTransactionError((err as Error).message)
-                                                    );
-                                                }}
-                                            >
-                                                Success (internal call to smart contract)
-                                            </button>
-                                        </div>
-                                        <br />
-                                        Expected result after pressing the button and confirming in wallet: The
-                                        transaction hash or an error message should appear in the right column.
-                                    </div>
-                                    <br />
-                                    <div className="testBoxHeader">
-                                        <div>
-                                            (TE) Testing calling a function that reverts due to the smart contract
-                                            logic:
-                                        </div>
-                                        <br />
-                                        <div className="testBox">
-                                            <button
-                                                className="buttonStyle"
-                                                type="button"
-                                                onClick={() => {
-                                                    setTxHash('');
-                                                    setTransactionError('');
-                                                    const tx = reverts(connection, account);
-                                                    tx.then(setTxHash).catch((err: Error) =>
-                                                        setTransactionError((err as Error).message)
-                                                    );
-                                                }}
-                                            >
-                                                Revert
-                                            </button>
-                                        </div>
-                                        <br />
-                                        Expected result after pressing the button and confirming in wallet: The
-                                        transaction hash or an error message should appear in the right column.
-                                    </div>
-                                    <br />
-                                    <div className="testBoxHeader">
-                                        <div>
-                                            (TE) Testing calling a function that reverts due to an internal call that
-                                            reverts:{' '}
-                                        </div>
-                                        <br />
-                                        <div className="testBox">
-                                            <button
-                                                className="buttonStyle"
-                                                type="button"
-                                                onClick={() => {
-                                                    setTxHash('');
-                                                    setTransactionError('');
-                                                    const tx = internalCallReverts(connection, account);
-                                                    tx.then(setTxHash).catch((err: Error) =>
-                                                        setTransactionError((err as Error).message)
-                                                    );
-                                                }}
-                                            >
-                                                Revert (internal call reverts)
-                                            </button>
-                                            <br />
-                                        </div>
-                                        <br />
-                                        Expected result after pressing the button and confirming in wallet: The
-                                        transaction hash or an error message should appear in the right column.
-                                    </div>
-                                    <br />
-                                    <div className="testBoxHeader">
-                                        <div>(TE) Testing calling a not existing entrypoint:</div>
-                                        <br />
-                                        <div className="testBox">
-                                            <button
-                                                className="buttonStyle"
-                                                type="button"
-                                                onClick={() => {
-                                                    setTxHash('');
-                                                    setTransactionError('');
-                                                    const tx = notExistingEntrypoint(connection, account);
-                                                    tx.then(setTxHash).catch((err: Error) =>
-                                                        setTransactionError((err as Error).message)
-                                                    );
-                                                }}
-                                            >
-                                                Not existing entrypoint (tx reverts)
-                                            </button>
-                                        </div>
-                                        <br />
-                                        Expected result after pressing the button and confirming in wallet: The
-                                        transaction hash or an error message should appear in the right column.
-                                    </div>
-                                    <br />
-                                    <div className="testBoxHeader">
-                                        <div>(ST) Testing simple CCD transfer:</div>
-                                        <br />
-                                        <div className="testBox">
-                                            <label>
-                                                <p>CCD (micro):</p>
-                                                <input
-                                                    className="inputFieldStyle"
-                                                    id="CCDAmount"
-                                                    type="text"
-                                                    placeholder="0"
-                                                    onChange={changeCCDAmountHandler}
-                                                />
-                                            </label>
-                                            <label>
-                                                <p>To account:</p>
-                                                <input
-                                                    className="inputFieldStyle"
-                                                    id="toAccount"
-                                                    type="text"
-                                                    placeholder="4fUk1a1rjBzoPCCy6p92u5LT5vSw9o8GpjMiRHBbJUfmx51uvt"
-                                                    onChange={changeToAccountHandler}
-                                                />
-                                            </label>
-                                            <br />
-                                            <button
-                                                className="buttonStyle"
-                                                type="button"
-                                                onClick={() => {
-                                                    setTxHash('');
-                                                    setTransactionError('');
-                                                    const tx = simpleCCDTransfer(
-                                                        connection,
-                                                        account,
-                                                        toAccount,
-                                                        cCDAmount
-                                                    );
-                                                    tx.then(setTxHash).catch((err: Error) =>
-                                                        setTransactionError((err as Error).message)
-                                                    );
-                                                }}
-                                            >
-                                                Send simple CCD transfer
-                                            </button>
-                                        </div>
-                                        <br />
-                                        Expected result after pressing the button and confirming in wallet: The
-                                        transaction hash or an error message should appear in the right column.
-                                    </div>
-                                    <br />
-                                    <div className="testBoxHeader">
-                                        <div>(ST) Testing simple CCD transfer to non exising account address:</div>
-                                        <br />
-                                        <div />
-                                        <div className="testBox">
-                                            <button
-                                                className="buttonStyle"
-                                                type="button"
-                                                onClick={() => {
-                                                    setTxHash('');
-                                                    setTransactionError('');
-                                                    const tx = simpleCCDTransferToNonExistingAccountAddress(
-                                                        connection,
-                                                        account
-                                                    );
-                                                    tx.then(setTxHash).catch((err: Error) =>
-                                                        setTransactionError((err as Error).message)
-                                                    );
-                                                }}
-                                            >
-                                                Send simple CCD transfer to non existing account address (reverts)
-                                            </button>
-                                        </div>
-                                        <br />
-                                        Expected result after pressing the button and confirming in wallet: The
-                                        transaction hash or an error message should appear in the right column.
-                                    </div>
-                                    <br />
-                                    <div className="testBoxHeader">
-                                        <div>(SG) Testing signing a string message with the wallet:</div>
-                                        <br />
-                                        <div className="testBox">
-                                            <label>
-                                                <p>Message to be signed:</p>
-                                                <input
-                                                    className="inputFieldStyle"
-                                                    id="message"
-                                                    type="text"
-                                                    placeholder="My message"
-                                                    onChange={changeMessageHandler}
-                                                />
-                                            </label>
-                                            <br />
-                                            <button
-                                                className="buttonStyle"
-                                                type="button"
-                                                onClick={() => {
-                                                    setSigningError('');
-                                                    setSignature('');
-                                                    const promise = connection.signMessage(account, {
-                                                        type: 'StringMessage',
-                                                        value: message,
+                                        <button
+                                            className="buttonStyle"
+                                            type="button"
+                                            onClick={() => {
+                                                setReturnValue('');
+                                                setReturnValueError('');
+                                                withJsonRpcClient(connection, (rpcClient) =>
+                                                    getValue(rpcClient, useModuleSchema, readDropDown)
+                                                )
+                                                    .then((value) => {
+                                                        if (value !== undefined) {
+                                                            setReturnValue(JSON.stringify(value));
+                                                        }
+                                                    })
+                                                    .catch((e) => {
+                                                        setReturnValueError((e as Error).message);
                                                     });
-                                                    promise
-                                                        .then((permitSignature) => {
-                                                            setSignature(permitSignature[0][0]);
-                                                        })
-                                                        .catch((err: Error) => setSigningError((err as Error).message));
+                                            }}
+                                        >
+                                            Get {readDropDown} value
+                                        </button>
+                                        {returnValue !== '' && (
+                                            <div className="actionResultBox">
+                                                <div>Your return value is:</div>
+                                                <br />
+                                                <div>{returnValue}</div>
+                                            </div>
+                                        )}
+                                        {!returnValue && returnValueError && (
+                                            <div className="errorBox">Error: {returnValueError}.</div>
+                                        )}
+                                    </TestBox>
+                                    <TestBox
+                                        header="(IP) Testing complex object as input parameter"
+                                        note="Expected result after pressing the button and confirming in wallet: The
+                                        transaction hash or an error message should appear in the right column."
+                                    >
+                                        <div className="switch-wrapper">
+                                            <div>Use module schema</div>
+                                            <Switch
+                                                onChange={() => {
+                                                    setUseModuleSchema(!useModuleSchema);
                                                 }}
-                                            >
-                                                Sign message
-                                            </button>
-                                            {signingError && <div className="errorBox">Error: {signingError}.</div>}
-                                            {signature !== '' && (
-                                                <div className="actionResultBox">
-                                                    <div> Your generated signature is: </div>
-                                                    <br />
-                                                    <div>{signature}</div>
-                                                </div>
-                                            )}
+                                                onColor="#308274"
+                                                offColor="#308274"
+                                                onHandleColor="#174039"
+                                                offHandleColor="#174039"
+                                                checked={!useModuleSchema}
+                                                checkedIcon={false}
+                                                uncheckedIcon={false}
+                                            />
+                                            <div>Use parameter schema</div>
                                         </div>
+                                        <div className="switch-wrapper">
+                                            <div>Is payable</div>
+                                            <Switch
+                                                onChange={() => {
+                                                    setIsPayable(!isPayable);
+                                                }}
+                                                onColor="#308274"
+                                                offColor="#308274"
+                                                onHandleColor="#174039"
+                                                offHandleColor="#174039"
+                                                checked={!isPayable}
+                                                checkedIcon={false}
+                                                uncheckedIcon={false}
+                                            />
+                                            <div>Is not payable</div>
+                                        </div>
+                                        <label className="field">
+                                            <p>CCD (micro):</p>
+                                            <input
+                                                className="inputFieldStyle"
+                                                id="CCDAmount"
+                                                type="text"
+                                                placeholder="0"
+                                                onChange={changeCCDAmountHandler}
+                                            />
+                                        </label>
                                         <br />
+                                        <button
+                                            className="buttonStyle"
+                                            type="button"
+                                            onClick={() => {
+                                                setTxHash('');
+                                                setTransactionError('');
+                                                const tx = setObject(
+                                                    connection,
+                                                    account,
+                                                    useModuleSchema,
+                                                    isPayable,
+                                                    cCDAmount
+                                                );
+                                                tx.then(setTxHash).catch((err: Error) =>
+                                                    setTransactionError((err as Error).message)
+                                                );
+                                            }}
+                                        >
+                                            Set object
+                                        </button>
+                                    </TestBox>
+                                    <TestBox
+                                        header="(IP) Testing array as input parameter"
+                                        note="
+                                                                                Expected result after pressing the button and confirming in wallet: The
+                                        transaction hash or an error message should appear in the right column.
+                                        "
+                                    >
+                                        <div className="switch-wrapper">
+                                            <div>Use module schema</div>
+                                            <Switch
+                                                onChange={() => {
+                                                    setUseModuleSchema(!useModuleSchema);
+                                                }}
+                                                onColor="#308274"
+                                                offColor="#308274"
+                                                onHandleColor="#174039"
+                                                offHandleColor="#174039"
+                                                checked={!useModuleSchema}
+                                                checkedIcon={false}
+                                                uncheckedIcon={false}
+                                            />
+                                            <div>Use parameter schema</div>
+                                        </div>
+                                        <div className="switch-wrapper">
+                                            <div>Is payable</div>
+                                            <Switch
+                                                onChange={() => {
+                                                    setIsPayable(!isPayable);
+                                                }}
+                                                onColor="#308274"
+                                                offColor="#308274"
+                                                onHandleColor="#174039"
+                                                offHandleColor="#174039"
+                                                checked={!isPayable}
+                                                checkedIcon={false}
+                                                uncheckedIcon={false}
+                                            />
+                                            <div>Is not payable</div>
+                                        </div>
+                                        <label className="field">
+                                            <p>CCD (micro):</p>
+                                            <input
+                                                className="inputFieldStyle"
+                                                id="CCDAmount"
+                                                type="text"
+                                                placeholder="0"
+                                                onChange={changeCCDAmountHandler}
+                                            />
+                                        </label>
+                                        <br />
+                                        <button
+                                            className="buttonStyle"
+                                            type="button"
+                                            onClick={() => {
+                                                setTxHash('');
+                                                setTransactionError('');
+                                                const tx = setArray(
+                                                    connection,
+                                                    account,
+                                                    useModuleSchema,
+                                                    isPayable,
+                                                    cCDAmount
+                                                );
+                                                tx.then(setTxHash).catch((err: Error) =>
+                                                    setTransactionError((err as Error).message)
+                                                );
+                                            }}
+                                        >
+                                            Set Array
+                                        </button>
+                                    </TestBox>
+                                    <TestBox
+                                        header="
+                                                                                    (TE) Testing calling a function that calls another smart contract
+                                            successfully
+                                        "
+                                        note="
+                                        Expected result after pressing the button and confirming in wallet: The
+                                        transaction hash or an error message should appear in the right column.
+                                        "
+                                    >
+                                        <button
+                                            className="buttonStyle"
+                                            type="button"
+                                            onClick={() => {
+                                                setTxHash('');
+                                                setTransactionError('');
+                                                const tx = internalCallSuccess(connection, account);
+                                                tx.then(setTxHash).catch((err: Error) =>
+                                                    setTransactionError((err as Error).message)
+                                                );
+                                            }}
+                                        >
+                                            Success (internal call to smart contract)
+                                        </button>
+                                    </TestBox>
+                                    <TestBox
+                                        header="
+                                            (TE) Testing calling a function that reverts due to the smart contract
+                                            logic
+                                        "
+                                        note="
+                                        Expected result after pressing the button and confirming in wallet: The
+                                        transaction hash or an error message should appear in the right column.
+                                        "
+                                    >
+                                        <button
+                                            className="buttonStyle"
+                                            type="button"
+                                            onClick={() => {
+                                                setTxHash('');
+                                                setTransactionError('');
+                                                const tx = reverts(connection, account);
+                                                tx.then(setTxHash).catch((err: Error) =>
+                                                    setTransactionError((err as Error).message)
+                                                );
+                                            }}
+                                        >
+                                            Revert
+                                        </button>
+                                    </TestBox>
+                                    <TestBox
+                                        header="
+                                            (TE) Testing calling a function that reverts due to an internal call that
+                                            reverts
+                                        "
+                                        note="
+                                        Expected result after pressing the button and confirming in wallet: The
+                                        transaction hash or an error message should appear in the right column.
+                                        "
+                                    >
+                                        <button
+                                            className="buttonStyle"
+                                            type="button"
+                                            onClick={() => {
+                                                setTxHash('');
+                                                setTransactionError('');
+                                                const tx = internalCallReverts(connection, account);
+                                                tx.then(setTxHash).catch((err: Error) =>
+                                                    setTransactionError((err as Error).message)
+                                                );
+                                            }}
+                                        >
+                                            Revert (internal call reverts)
+                                        </button>
+                                    </TestBox>
+                                    <TestBox
+                                        header="(TE) Testing calling a not existing entrypoint"
+                                        note="
+                                        Expected result after pressing the button and confirming in wallet: The
+                                        transaction hash or an error message should appear in the right column.
+                                        "
+                                    >
+                                        <button
+                                            className="buttonStyle"
+                                            type="button"
+                                            onClick={() => {
+                                                setTxHash('');
+                                                setTransactionError('');
+                                                const tx = notExistingEntrypoint(connection, account);
+                                                tx.then(setTxHash).catch((err: Error) =>
+                                                    setTransactionError((err as Error).message)
+                                                );
+                                            }}
+                                        >
+                                            Not existing entrypoint (tx reverts)
+                                        </button>
+                                    </TestBox>
+                                    <TestBox
+                                        header="(ST) Testing simple CCD transfer"
+                                        note="
+                                        Expected result after pressing the button and confirming in wallet: The
+                                        transaction hash or an error message should appear in the right column.
+                                        "
+                                    >
+                                        <label className="field">
+                                            <p>CCD (micro):</p>
+                                            <input
+                                                className="inputFieldStyle"
+                                                id="CCDAmount"
+                                                type="text"
+                                                placeholder="0"
+                                                onChange={changeCCDAmountHandler}
+                                            />
+                                        </label>
+                                        <label className="field">
+                                            <p>To account:</p>
+                                            <input
+                                                className="inputFieldStyle"
+                                                id="toAccount"
+                                                type="text"
+                                                placeholder="4fUk1a1rjBzoPCCy6p92u5LT5vSw9o8GpjMiRHBbJUfmx51uvt"
+                                                onChange={changeToAccountHandler}
+                                            />
+                                        </label>
+                                        <br />
+                                        <button
+                                            className="buttonStyle"
+                                            type="button"
+                                            onClick={() => {
+                                                setTxHash('');
+                                                setTransactionError('');
+                                                const tx = simpleCCDTransfer(connection, account, toAccount, cCDAmount);
+                                                tx.then(setTxHash).catch((err: Error) =>
+                                                    setTransactionError((err as Error).message)
+                                                );
+                                            }}
+                                        >
+                                            Send simple CCD transfer
+                                        </button>
+                                    </TestBox>
+                                    <TestBox
+                                        header="(ST) Testing simple CCD transfer to non exising account address"
+                                        note="
+                                        Expected result after pressing the button and confirming in wallet: The
+                                        transaction hash or an error message should appear in the right column.
+                                        "
+                                    >
+                                        <button
+                                            className="buttonStyle"
+                                            type="button"
+                                            onClick={() => {
+                                                setTxHash('');
+                                                setTransactionError('');
+                                                const tx = simpleCCDTransferToNonExistingAccountAddress(
+                                                    connection,
+                                                    account
+                                                );
+                                                tx.then(setTxHash).catch((err: Error) =>
+                                                    setTransactionError((err as Error).message)
+                                                );
+                                            }}
+                                        >
+                                            Send simple CCD transfer to non existing account address (reverts)
+                                        </button>
+                                    </TestBox>
+                                    <TestBox
+                                        header="(SG) Testing signing a string message with the wallet"
+                                        note="
                                         Expected result after pressing button and confirming in wallet: A signature or
                                         an error message should appear in the above test unit.
-                                    </div>
-                                    <br />
-                                    <div className="testBoxHeader">
-                                        <div>(SG) Testing signing a byte message with the wallet:</div>
+                                        "
+                                    >
+                                        <label className="field">
+                                            <p>Message to be signed:</p>
+                                            <input
+                                                className="inputFieldStyle"
+                                                id="message"
+                                                type="text"
+                                                placeholder="My message"
+                                                onChange={changeMessageHandler}
+                                            />
+                                        </label>
                                         <br />
-                                        <div className="testBox">
-                                            <button
-                                                className="buttonStyle"
-                                                type="button"
-                                                onClick={() => {
-                                                    const signMessage = {
-                                                        account_address_value:
-                                                            '4fUk1a1rjBzoPCCy6p92u5LT5vSw9o8GpjMiRHBbJUfmx51uvt',
-                                                        address_array: [
-                                                            {
-                                                                Account: [
-                                                                    '4fUk1a1rjBzoPCCy6p92u5LT5vSw9o8GpjMiRHBbJUfmx51uvt',
-                                                                ],
-                                                            },
-                                                            {
-                                                                Account: [
-                                                                    '4fUk1a1rjBzoPCCy6p92u5LT5vSw9o8GpjMiRHBbJUfmx51uvt',
-                                                                ],
-                                                            },
-                                                        ],
-                                                        address_value: {
+                                        <button
+                                            className="buttonStyle"
+                                            type="button"
+                                            onClick={() => {
+                                                setSigningError('');
+                                                setSignature('');
+                                                const promise = connection.signMessage(account, {
+                                                    type: 'StringMessage',
+                                                    value: message,
+                                                });
+                                                promise
+                                                    .then((permitSignature) => {
+                                                        setSignature(permitSignature[0][0]);
+                                                    })
+                                                    .catch((err: Error) => setSigningError((err as Error).message));
+                                            }}
+                                        >
+                                            Sign message
+                                        </button>
+                                        {signingError && <div className="errorBox">Error: {signingError}.</div>}
+                                        {signature !== '' && (
+                                            <div className="actionResultBox">
+                                                <div> Your generated signature is: </div>
+                                                <br />
+                                                <div>{signature}</div>
+                                            </div>
+                                        )}
+                                    </TestBox>
+                                    <TestBox
+                                        header="(SG) Testing signing a byte message with the wallet"
+                                        note="
+                                        Expected result after pressing button and confirming in wallet: A signature or
+                                        an error message should appear in the above test unit.
+                                        "
+                                    >
+                                        <button
+                                            className="buttonStyle"
+                                            type="button"
+                                            onClick={() => {
+                                                const signMessage = {
+                                                    account_address_value:
+                                                        '4fUk1a1rjBzoPCCy6p92u5LT5vSw9o8GpjMiRHBbJUfmx51uvt',
+                                                    address_array: [
+                                                        {
                                                             Account: [
                                                                 '4fUk1a1rjBzoPCCy6p92u5LT5vSw9o8GpjMiRHBbJUfmx51uvt',
                                                             ],
                                                         },
-                                                        contract_address_value: {
-                                                            index: 3,
-                                                            subindex: 0,
+                                                        {
+                                                            Account: [
+                                                                '4fUk1a1rjBzoPCCy6p92u5LT5vSw9o8GpjMiRHBbJUfmx51uvt',
+                                                            ],
                                                         },
-                                                        u16_value: 999,
-                                                        u8_value: 88,
-                                                        hash_value:
-                                                            '37a2a8e52efad975dbf6580e7734e4f249eaa5ea8a763e934a8671cd7e446499',
-                                                        option_value: {
-                                                            None: [],
-                                                        },
-                                                        public_key_value:
-                                                            '37a2a8e52efad975dbf6580e7734e4f249eaa5ea8a763e934a8671cd7e446499',
-                                                        signature_value:
-                                                            '632f567c9321405ce201a0a38615da41efe259ede154ff45ad96cdf860718e79bde07cff72c4d119c644552a8c7f0c413f5cf5390b0ea0458993d6d6374bd904',
-                                                        string_value: 'abc',
-                                                        timestamp_value: '2030-08-08T05:15:00Z',
-                                                    };
+                                                    ],
+                                                    address_value: {
+                                                        Account: ['4fUk1a1rjBzoPCCy6p92u5LT5vSw9o8GpjMiRHBbJUfmx51uvt'],
+                                                    },
+                                                    contract_address_value: {
+                                                        index: 3,
+                                                        subindex: 0,
+                                                    },
+                                                    u16_value: 999,
+                                                    u8_value: 88,
+                                                    hash_value:
+                                                        '37a2a8e52efad975dbf6580e7734e4f249eaa5ea8a763e934a8671cd7e446499',
+                                                    option_value: {
+                                                        None: [],
+                                                    },
+                                                    public_key_value:
+                                                        '37a2a8e52efad975dbf6580e7734e4f249eaa5ea8a763e934a8671cd7e446499',
+                                                    signature_value:
+                                                        '632f567c9321405ce201a0a38615da41efe259ede154ff45ad96cdf860718e79bde07cff72c4d119c644552a8c7f0c413f5cf5390b0ea0458993d6d6374bd904',
+                                                    string_value: 'abc',
+                                                    timestamp_value: '2030-08-08T05:15:00Z',
+                                                };
 
-                                                    const serializedMessage = serializeTypeValue(
-                                                        signMessage,
-                                                        toBuffer(SET_OBJECT_PARAMETER_SCHEMA, 'base64')
-                                                    );
-                                                    setSigningError('');
-                                                    setByteSignature('');
-                                                    const promise = connection.signMessage(account, {
-                                                        type: 'BinaryMessage',
-                                                        value: serializedMessage,
-                                                        schema: {
-                                                            type: 'TypeSchema',
-                                                            value: toBuffer(SET_OBJECT_PARAMETER_SCHEMA, 'base64'),
-                                                        },
-                                                    });
-                                                    promise
-                                                        .then((permitSignature) => {
-                                                            setByteSignature(permitSignature[0][0]);
-                                                        })
-                                                        .catch((err: Error) => setSigningError((err as Error).message));
-                                                }}
-                                            >
-                                                Sign message
-                                            </button>
-                                            {signingError && <div className="errorBox">Error: {signingError}.</div>}
-                                            {byteSignature !== '' && (
-                                                <div className="actionResultBox">
-                                                    <div> Your generated signature is: </div>
-                                                    <br />
-                                                    <div>{byteSignature}</div>
-                                                </div>
-                                            )}
-                                            <br />
-                                        </div>
-                                        <br />
-                                        Expected result after pressing button and confirming in wallet: A signature or
-                                        an error message should appear in the above test unit.
-                                    </div>
-                                    <div className="inputFormatBox">
-                                        <br />
-                                        Expected input parameter format:
-                                        <br />
-                                        <br />
-                                        <b>u8</b> (e.g. 5),
-                                        <br />
-                                        <b>u16</b> (e.g. 15),
-                                        <br />
-                                        <b>Address </b> (e.g
-                                        &#123;&#34;Contract&#34;:[&#123;&#34;index&#34;:3,&#34;subindex&#34;:0&#125;]&#125;
-                                        or
-                                        &#123;&#34;Account&#34;:[&#34;4fUk1a1rjBzoPCCy6p92u5LT5vSw9o8GpjMiRHBbJUfmx51uvt&#34;]&#125;
-                                        ),
-                                        <br />
-                                        <b>ContractAddress</b> (e.g.
-                                        &#123;&#34;index&#34;:3,&#34;subindex&#34;:0&#125;),
-                                        <br />
-                                        <b>AccountAddress</b> (e.g. 4fUk1a1rjBzoPCCy6p92u5LT5vSw9o8GpjMiRHBbJUfmx51uvt),
-                                        <br />
-                                        <b>Hash</b> (e.g.
-                                        18ee24150dcb1d96752a4d6dd0f20dfd8ba8c38527e40aa8509b7adecf78f9c6),
-                                        <br />
-                                        <b>Public key</b> (e.g.
-                                        37a2a8e52efad975dbf6580e7734e4f249eaa5ea8a763e934a8671cd7e446499),
-                                        <br />
-                                        <b>Signature</b> (e.g.
-                                        632f567c9321405ce201a0a38615da41efe259ede154ff45ad96cdf860718e79bde07cff72c4d119c644552a8c7f0c413f5cf5390b0ea0458993d6d6374bd904),
-                                        <br />
-                                        <b>Timestamp</b> (e.g. 2030-08-08T05:15:00Z),
-                                        <br />
-                                        <b>String</b> (e.g. aaa),
-                                        <br />
-                                        <b>Option (None)</b> (e.g. no input required),
-                                        <br />
-                                        <b>Option (Some)</b> (e.g. 3),
-                                        <br />
-                                        <b>Wrong schema</b> (e.g. 5)
-                                    </div>
+                                                const serializedMessage = serializeTypeValue(
+                                                    signMessage,
+                                                    toBuffer(SET_OBJECT_PARAMETER_SCHEMA, 'base64')
+                                                );
+                                                setSigningError('');
+                                                setByteSignature('');
+                                                const promise = connection.signMessage(account, {
+                                                    type: 'BinaryMessage',
+                                                    value: serializedMessage,
+                                                    schema: {
+                                                        type: 'TypeSchema',
+                                                        value: toBuffer(SET_OBJECT_PARAMETER_SCHEMA, 'base64'),
+                                                    },
+                                                });
+                                                promise
+                                                    .then((permitSignature) => {
+                                                        setByteSignature(permitSignature[0][0]);
+                                                    })
+                                                    .catch((err: Error) => setSigningError((err as Error).message));
+                                            }}
+                                        >
+                                            Sign message
+                                        </button>
+                                        {signingError && <div className="errorBox">Error: {signingError}.</div>}
+                                        {byteSignature !== '' && (
+                                            <div className="actionResultBox">
+                                                <div> Your generated signature is: </div>
+                                                <br />
+                                                <div>{byteSignature}</div>
+                                            </div>
+                                        )}
+                                    </TestBox>
                                 </>
                             )}
                         </div>
                         <div>
                             <div className="columnBox" style={{ width: '960px', float: 'right' }}>
-                                <div>
+                                <h2>
                                     This column refreshes every few seconds and displays balances, smart contract state,
                                     transaction hashes, and error messages.
-                                </div>
-                                <br />
-                                <br />
-                                <div>Connected account:</div>
-                                <br />
+                                </h2>
+                                <div className="label">Connected account:</div>
                                 <div>
-                                    <button
+                                    <a
                                         className="link"
-                                        type="button"
-                                        onClick={() => {
-                                            window.open(
-                                                `https://testnet.ccdscan.io/?dcount=1&dentity=account&daddress=${account}`,
-                                                '_blank',
-                                                'noopener,noreferrer'
-                                            );
-                                        }}
+                                        href={`https://testnet.ccdscan.io/?dcount=1&dentity=account&daddress=${account}`}
+                                        target="_blank"
+                                        rel="noreferrer"
                                     >
                                         {account}
-                                    </button>
+                                    </a>
                                 </div>
                                 <br />
-                                <div>Your account balance:</div>
-                                <br />
+                                <div className="label">Your account balance:</div>
                                 <div>{accountBalance.replace(/(\d)(?=(\d\d\d\d\d\d)+(?!\d))/g, '$1.')} CCD</div>
                                 <br />
-                                <div>Smart contract balance:</div>
-                                <br />
+                                <div className="label">Smart contract balance:</div>
                                 <div>{smartContractBalance.replace(/(\d)(?=(\d\d\d\d\d\d)+(?!\d))/g, '$1.')} CCD</div>
                                 <br />
                                 <br />
-                                <div>
+                                <div className="label">
                                     Error or Transaction status
                                     {txHash === '' ? ':' : ' (May take a moment to finalize):'}
                                 </div>
@@ -1046,32 +1022,24 @@ export default function Main(props: WalletConnectionProps) {
                                 )}
                                 {viewError && <div className="errorBox">Error: {viewError}.</div>}
                                 {txHash && (
-                                    <>
-                                        <button
-                                            className="link"
-                                            type="button"
-                                            onClick={() => {
-                                                window.open(
-                                                    `https://testnet.ccdscan.io/?dcount=1&dentity=transaction&dhash=${txHash}`,
-                                                    '_blank',
-                                                    'noopener,noreferrer'
-                                                );
-                                            }}
-                                        >
-                                            {txHash}
-                                        </button>
-                                        <br />
-                                    </>
+                                    <a
+                                        className="link"
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        href={`https://testnet.ccdscan.io/?dcount=1&dentity=transaction&dhash=${txHash}`}
+                                    >
+                                        {txHash}
+                                    </a>
                                 )}
                                 <br />
                                 <br />
-                                <div>Smart contract state:</div>
+                                <div className="label">Smart contract state:</div>
                                 <pre className="largeText">{JSON.stringify(record, null, '\t')}</pre>
                             </div>
                         </div>
                     </div>
                 )}
             </div>
-        </div>
+        </>
     );
 }
