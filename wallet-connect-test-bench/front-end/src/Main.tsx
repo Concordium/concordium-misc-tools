@@ -15,11 +15,21 @@ import {
     internalCallReverts,
     internalCallSuccess,
     notExistingEntrypoint,
+    initializeWithoutAmountWithoutParameter,
+    initializeWithAmount,
+    initializeWithParameter,
+    deploy,
     simpleCCDTransfer,
     simpleCCDTransferToNonExistingAccountAddress,
 } from './writing_to_blockchain';
 
-import { BROWSER_WALLET, WALLET_CONNECT, SET_OBJECT_PARAMETER_SCHEMA, REFRESH_INTERVAL } from './constants';
+import {
+    CONTRACT_INDEX,
+    BROWSER_WALLET,
+    WALLET_CONNECT,
+    SET_OBJECT_PARAMETER_SCHEMA,
+    REFRESH_INTERVAL,
+} from './constants';
 
 type TestBoxProps = PropsWithChildren<{
     header: string;
@@ -268,6 +278,7 @@ export default function Main(props: WalletConnectionProps) {
                                         <li>(IP) input parameter tests</li>
                                         <li>(RV) return value tests</li>
                                         <li>(TE) transaction execution tests</li>
+                                        <li>(DI) deploying and initializing tests</li>
                                         <li>(ST) simple CCD transfer tests</li>
                                         <li>(SG) signature tests</li>
                                     </ul>
@@ -757,6 +768,114 @@ export default function Main(props: WalletConnectionProps) {
                                         </button>
                                     </TestBox>
                                     <TestBox
+                                        header="(DI) Testing deploying a smart contract module"
+                                        note="
+                                        Expected result after pressing the button and confirming in wallet: The
+                                        transaction hash or an error message should appear in the right column.
+                                        "
+                                    >
+                                        <button
+                                            className="buttonStyle"
+                                            type="button"
+                                            onClick={() => {
+                                                setTxHash('');
+                                                setTransactionError('');
+                                                const tx = deploy(connection, account);
+                                                tx.then(setTxHash).catch((err: Error) =>
+                                                    setTransactionError((err as Error).message)
+                                                );
+                                            }}
+                                        >
+                                            Deploy smart contract module
+                                        </button>
+                                    </TestBox>
+                                    <TestBox
+                                        header="(DI) Testing initializing a smart contract instance"
+                                        note="
+                                        Expected result after pressing the button and confirming in wallet: The
+                                        transaction hash or an error message should appear in the right column.
+                                        "
+                                    >
+                                        <button
+                                            className="buttonStyle"
+                                            type="button"
+                                            onClick={() => {
+                                                setTxHash('');
+                                                setTransactionError('');
+                                                const tx = initializeWithoutAmountWithoutParameter(connection, account);
+                                                tx.then(setTxHash).catch((err: Error) =>
+                                                    setTransactionError((err as Error).message)
+                                                );
+                                            }}
+                                        >
+                                            Initialize smart contract instance (without parameter; without amount)
+                                        </button>
+                                    </TestBox>
+                                    <TestBox
+                                        header="(DI) Testing initializing a smart contract instance with parameter"
+                                        note="
+                                        Expected result after pressing the button and confirming in wallet: The
+                                        transaction hash or an error message should appear in the right column.
+                                        "
+                                    >
+                                        <div className="switch-wrapper">
+                                            <div>Use module schema</div>
+                                            <Switch
+                                                onChange={() => {
+                                                    setUseModuleSchema(!useModuleSchema);
+                                                }}
+                                                onColor="#308274"
+                                                offColor="#308274"
+                                                onHandleColor="#174039"
+                                                offHandleColor="#174039"
+                                                checked={!useModuleSchema}
+                                                checkedIcon={false}
+                                                uncheckedIcon={false}
+                                            />
+                                            <div>Use parameter schema</div>
+                                        </div>
+                                        <button
+                                            className="buttonStyle"
+                                            type="button"
+                                            onClick={() => {
+                                                setTxHash('');
+                                                setTransactionError('');
+                                                const tx = initializeWithParameter(
+                                                    connection,
+                                                    account,
+                                                    useModuleSchema
+                                                );
+                                                tx.then(setTxHash).catch((err: Error) =>
+                                                    setTransactionError((err as Error).message)
+                                                );
+                                            }}
+                                        >
+                                            Initialize smart contract instance with parameter
+                                        </button>
+                                    </TestBox>
+                                    <TestBox
+                                        header="(DI) Testing initializing a smart contract instance with some CCD amount"
+                                        note="
+                                        Expected result after pressing the button and confirming in wallet: The
+                                        transaction hash or an error message should appear in the right column.
+                                        "
+                                    >
+                                        <button
+                                            className="buttonStyle"
+                                            type="button"
+                                            onClick={() => {
+                                                setTxHash('');
+                                                setTransactionError('');
+                                                const tx = initializeWithAmount(connection, account);
+                                                tx.then(setTxHash).catch((err: Error) =>
+                                                    setTransactionError((err as Error).message)
+                                                );
+                                            }}
+                                        >
+                                            Initialize smart contract instance with some CCD amount
+                                        </button>
+                                    </TestBox>
+                                    <TestBox
                                         header="(ST) Testing simple CCD transfer"
                                         note="
                                         Expected result after pressing the button and confirming in wallet: The
@@ -974,7 +1093,9 @@ export default function Main(props: WalletConnectionProps) {
                                 <div className="label">Your account balance:</div>
                                 <div>{accountBalance.replace(/(\d)(?=(\d\d\d\d\d\d)+(?!\d))/g, '$1.')} CCD</div>
                                 <br />
-                                <div className="label">Smart contract balance:</div>
+                                <div className="label">
+                                    Smart contract balance (index: {CONTRACT_INDEX.toString()}, subindex: 0):
+                                </div>
                                 <div>{smartContractBalance.replace(/(\d)(?=(\d\d\d\d\d\d)+(?!\d))/g, '$1.')} CCD</div>
                                 <br />
                                 <br />

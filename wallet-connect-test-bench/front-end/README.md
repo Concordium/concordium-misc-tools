@@ -39,6 +39,7 @@ To have hot-reload (useful for development), do the following instead:
 -   Open URL logged in console (typically http://127.0.0.1:8080).
 
 ## Using yarn (on unix/macOS systems)
+
 Some of the node modules have Windows-type line endings (\r\n), instead of unix line endings (\n), which causes problems when using an old yarn package manager.
 
 If you see an error message similar to this when executing `yarn start`, then you've run into the problem:
@@ -46,7 +47,7 @@ If you see an error message similar to this when executing `yarn start`, then yo
 env: node\r: No such file or directory
 ```
 
-Use `npm install` instead of `yarn install` in the above command or use an up-to-date `yarn` version. `npm` (newer `yarn` version) will correct the line ending.
+Use `npm install` instead of `yarn install` in the above command or use an up-to-date `yarn` version (non-classic yarn version). `npm` (newer non-classic `yarn` versions) will correct the line ending.
 
 Additional information can be found [here](https://techtalkbook.com/env-noder-no-such-file-or-directory/).
 

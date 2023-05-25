@@ -53,7 +53,7 @@
         "typescript": "^4.7.2"
     },
     "scripts": {
-        "preinstall": "cd ../../deps/concordium-dapp-libraries && yarn install && yarn build",
+        "preinstall": "cp -r ../../deps/concordium-dapp-libraries/packages/react-components ./node_modules/@concordium/react-components; cp -r ../../deps/concordium-dapp-libraries/packages/wallet-connectors ./node_modules/@concordium/wallet-connectors",
         "lint": "eslint . --cache --max-warnings 0 --ext .ts,.tsx",
         "type:check": "yarn run tsc --noEmit",
         "build": "node --loader ts-node/esm ./esbuild.config.ts; cp ./src/assets/* ./dist",
