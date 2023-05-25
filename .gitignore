@@ -1,9 +1,10 @@
 
 **/target
-*.json
 /genesis-creator/genesis.dat
 /genesis-creator/genesis_hash
 /id-demo/dist/*
+/wallet-connect-test-bench/front-end/node_modules
+/wallet-connect-test-bench/front-end/.yarn
 
 # dependencies
 node_modules
