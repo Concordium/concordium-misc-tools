@@ -34,6 +34,7 @@ jobs:
           - chain-prometheus-exporter/Cargo.toml
           - recover-id-object/Cargo.toml
           - generator/Cargo.toml
+          - wallet-connect-test-bench/smart-contract/Cargo.toml
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -69,6 +70,7 @@ jobs:
           - chain-prometheus-exporter/Cargo.toml
           - recover-id-object/Cargo.toml
           - generator/Cargo.toml
+          - wallet-connect-test-bench/smart-contract/Cargo.toml
     steps:
       - name: Checkout
         uses: actions/checkout@v2
