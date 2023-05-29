@@ -118,7 +118,7 @@ async fn main() -> anyhow::Result<()> {
     // 3. Provide Web3Id presentation. The statement is not checked here.
     let web3id_provide_presentation = warp::post()
         .and(warp::filters::body::content_length_limit(50 * 1024))
-        .and(warp::path!("web3id/prove"))
+        .and(warp::path!("web3id" / "prove"))
         .and(handle_web3id_provide_proof(client, web3id_prove_state));
 
     info!("Starting up HTTP server. Listening on port {}.", app.port);
@@ -139,6 +139,7 @@ async fn main() -> anyhow::Result<()> {
     } else {
         let server = inject_statement
             .or(provide_proof)
+            .or(web3id_provide_presentation)
             .recover(handle_rejection)
             .with(cors)
             .with(warp::trace::request());
@@ -195,12 +196,16 @@ fn handle_web3id_provide_proof(
             let state = state.clone();
             async move {
                 info!("Validating Web3ID proof");
-                let public_data =
-                    web3id::get_public_data(&mut client, state.network, &presentation)
-                        .await
-                        .map_err(|e| {
-                            warp::reject::custom(Web3IdVerifyError::UnableToRetrievePublicData(e))
-                        })?;
+                let public_data = web3id::get_public_data(
+                    &mut client,
+                    state.network,
+                    &presentation,
+                    BlockIdentifier::LastFinal,
+                )
+                .await
+                .map_err(|e| {
+                    warp::reject::custom(Web3IdVerifyError::UnableToRetrievePublicData(e))
+                })?;
                 // Check that all credentials are active at the time of the query.
                 if !public_data
                     .iter()
@@ -209,14 +214,15 @@ fn handle_web3id_provide_proof(
                     return Err(warp::reject::custom(Web3IdVerifyError::NotActiveCredential));
                 }
                 // And then verify the cryptographic proofs.
-                if presentation.verify(
+                match presentation.verify(
                     &state.global_context,
                     public_data.iter().map(|cm| &cm.commitments),
                 ) {
-                    Ok(warp::reply::reply())
-                } else {
-                    log::debug!("The proof is invalid.");
-                    Err(warp::reject::custom(Web3IdVerifyError::InvalidProof))
+                    Ok(statement) => Ok(warp::reply::json(&statement)),
+                    Err(e) => {
+                        log::debug!("The proof is invalid: {e}.");
+                        Err(warp::reject::custom(Web3IdVerifyError::InvalidProof))
+                    }
                 }
             }
         },
