@@ -28,7 +28,6 @@ cd ../wallet-connect-test-bench/front-end
 ```
 
 -   Run `yarn install` in this folder.
--   Run `yarn preinstall` in this folder.
 -   Run `yarn build` in a terminal in this folder.
 -   Run `yarn start`.
 -   Open URL logged in console (typically http://127.0.0.1:8080).
