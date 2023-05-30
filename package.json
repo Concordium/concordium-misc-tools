@@ -1,0 +1,12 @@
+{
+  "name": "concordium-misc-tools",
+  "packageManager": "yarn@3.5.1",
+  "workspaces": [
+    "./deps/concordium-dapp-libraries/packages/*",
+    "./wallet-connect-test-bench/front-end"
+  ],
+  "scripts": {
+    "build-dapp-libraries": "cd ./deps/concordium-dapp-libraries && yarn && yarn build && rm -rf node_modules",
+    "preinstall": "yarn build-dapp-libraries"
+  }
+}
