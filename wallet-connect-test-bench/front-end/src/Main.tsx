@@ -21,32 +21,6 @@ import {
 
 import { BROWSER_WALLET, WALLET_CONNECT, SET_OBJECT_PARAMETER_SCHEMA, REFRESH_INTERVAL } from './constants';
 
-const ConnectionButtonStyle = {
-    color: 'white',
-    borderRadius: 10,
-    margin: '7px 10px 7px 10px',
-    padding: '10px',
-    width: '960px',
-    border: '1px solid #26685D',
-    backgroundColor: '#308274',
-    cursor: 'pointer',
-    fontWeight: 300,
-    fontSize: '26px',
-};
-
-const ConnectionButtonStyleDisabled = {
-    color: 'white',
-    borderRadius: 10,
-    margin: '7px 10px 7px 10px',
-    padding: '10px',
-    width: '960px',
-    border: '1px solid #4B4A4A',
-    backgroundColor: '#979797',
-    cursor: 'pointer',
-    fontWeight: 300,
-    fontSize: '26px',
-};
-
 type TestBoxProps = PropsWithChildren<{
     header: string;
     note: string;
@@ -245,14 +219,12 @@ export default function Main(props: WalletConnectionProps) {
 
     return (
         <>
+            <main className="container">
             <div className="textCenter">
                 Version: {version}
                 <h1>Wallet Connect / Browser Wallet Testing Bench </h1>
-            </div>
-            <div className="columns">
+
                 <WalletConnectionTypeButton
-                    buttonStyle={ConnectionButtonStyle}
-                    disabledButtonStyle={ConnectionButtonStyleDisabled}
                     connectorType={BROWSER_WALLET}
                     connectorName="Browser Wallet"
                     setWaitingForUser={setWaitingForUser}
@@ -260,40 +232,38 @@ export default function Main(props: WalletConnectionProps) {
                     {...props}
                 />
                 <WalletConnectionTypeButton
-                    buttonStyle={ConnectionButtonStyle}
-                    disabledButtonStyle={ConnectionButtonStyleDisabled}
                     connectorType={WALLET_CONNECT}
                     connectorName="Wallet Connect"
                     setWaitingForUser={setWaitingForUser}
                     connection={connection}
                     {...props}
                 />
-            </div>
-            <div>
-                <div className="textCenter">
-                    {activeConnectorError && <p className="errorBox">Connector Error: {activeConnectorError}.</p>}
+
+                    {activeConnectorError && <p className="alert alert-danger" role="alert">Connector Error: {activeConnectorError}.</p>}
                     {!activeConnectorError && !isWaitingForTransaction && activeConnectorType && !activeConnector && (
                         <p>
                             <i>Loading connector...</i>
                         </p>
                     )}
-                    {connectError && <p className="errorBox">Connect Error: {connectError}.</p>}
+                    {connectError && <p className="alert alert-danger" role="alert">Connect Error: {connectError}.</p>}
                     {!connection && !isWaitingForTransaction && activeConnectorType && activeConnector && (
                         <p>
-                            <button style={ConnectionButtonStyle} type="button" onClick={connect}>
+                            <button class="btn btn-primary me-1" type="button" onClick={connect}>
                                 {isConnecting && 'Connecting...'}
                                 {!isConnecting && activeConnectorType === BROWSER_WALLET && 'Connect Browser Wallet'}
                                 {!isConnecting && activeConnectorType === WALLET_CONNECT && 'Connect Mobile Wallet'}
                             </button>
                         </p>
                     )}
-                </div>
+              </div>
+
                 {account && (
-                    <div className="columns">
-                        <div className="columnBox" style={{ width: '960px', float: 'left' }}>
+                    <div className="row">
                             {connection && account !== undefined && (
                                 <>
-                                    <h2>This column includes various test scenarios that can be executed: </h2>
+                                  <div className="col-lg-4">
+                                    <div className="sticky-top">
+                                    <h5>This column includes various test scenarios that can be executed: </h5>
                                     <ul>
                                         <li>(IP) input parameter tests</li>
                                         <li>(RV) return value tests</li>
@@ -354,6 +324,9 @@ export default function Main(props: WalletConnectionProps) {
                                             </li>
                                         </ul>
                                     </div>
+                                    </div>
+                                  </div>
+                                  <div className="col-lg-4">
                                     <TestBox
                                         header="(IP) Testing simple input parameters"
                                         note="Expected result after pressing the button and confirming in wallet: The
@@ -443,7 +416,7 @@ export default function Main(props: WalletConnectionProps) {
                                         </label>
                                         <br />
                                         <button
-                                            className="buttonStyle"
+                                            className="btn btn-primary"
                                             type="button"
                                             onClick={() => {
                                                 setTxHash('');
@@ -515,7 +488,7 @@ export default function Main(props: WalletConnectionProps) {
                                         </label>
                                         <br />
                                         <button
-                                            className="buttonStyle"
+                                            className="btn btn-primary"
                                             type="button"
                                             onClick={() => {
                                                 setReturnValue('');
@@ -543,7 +516,7 @@ export default function Main(props: WalletConnectionProps) {
                                             </div>
                                         )}
                                         {!returnValue && returnValueError && (
-                                            <div className="errorBox">Error: {returnValueError}.</div>
+                                            <div className="alert alert-danger" role="alert">Error: {returnValueError}.</div>
                                         )}
                                     </TestBox>
                                     <TestBox
@@ -595,7 +568,7 @@ export default function Main(props: WalletConnectionProps) {
                                         </label>
                                         <br />
                                         <button
-                                            className="buttonStyle"
+                                            className="btn btn-primary"
                                             type="button"
                                             onClick={() => {
                                                 setTxHash('');
@@ -666,7 +639,7 @@ export default function Main(props: WalletConnectionProps) {
                                         </label>
                                         <br />
                                         <button
-                                            className="buttonStyle"
+                                            className="btn btn-primary"
                                             type="button"
                                             onClick={() => {
                                                 setTxHash('');
@@ -697,7 +670,7 @@ export default function Main(props: WalletConnectionProps) {
                                         "
                                     >
                                         <button
-                                            className="buttonStyle"
+                                            className="btn btn-primary"
                                             type="button"
                                             onClick={() => {
                                                 setTxHash('');
@@ -722,7 +695,7 @@ export default function Main(props: WalletConnectionProps) {
                                         "
                                     >
                                         <button
-                                            className="buttonStyle"
+                                            className="btn btn-primary"
                                             type="button"
                                             onClick={() => {
                                                 setTxHash('');
@@ -747,7 +720,7 @@ export default function Main(props: WalletConnectionProps) {
                                         "
                                     >
                                         <button
-                                            className="buttonStyle"
+                                            className="btn btn-primary"
                                             type="button"
                                             onClick={() => {
                                                 setTxHash('');
@@ -769,7 +742,7 @@ export default function Main(props: WalletConnectionProps) {
                                         "
                                     >
                                         <button
-                                            className="buttonStyle"
+                                            className="btn btn-primary"
                                             type="button"
                                             onClick={() => {
                                                 setTxHash('');
@@ -812,7 +785,7 @@ export default function Main(props: WalletConnectionProps) {
                                         </label>
                                         <br />
                                         <button
-                                            className="buttonStyle"
+                                            className="btn btn-primary"
                                             type="button"
                                             onClick={() => {
                                                 setTxHash('');
@@ -834,7 +807,7 @@ export default function Main(props: WalletConnectionProps) {
                                         "
                                     >
                                         <button
-                                            className="buttonStyle"
+                                            className="btn btn-primary"
                                             type="button"
                                             onClick={() => {
                                                 setTxHash('');
@@ -870,7 +843,7 @@ export default function Main(props: WalletConnectionProps) {
                                         </label>
                                         <br />
                                         <button
-                                            className="buttonStyle"
+                                            className="btn btn-primary"
                                             type="button"
                                             onClick={() => {
                                                 setSigningError('');
@@ -888,7 +861,7 @@ export default function Main(props: WalletConnectionProps) {
                                         >
                                             Sign message
                                         </button>
-                                        {signingError && <div className="errorBox">Error: {signingError}.</div>}
+                                        {signingError && <div className="alert alert-danger" role="alert">Error: {signingError}.</div>}
                                         {signature !== '' && (
                                             <div className="actionResultBox">
                                                 <div> Your generated signature is: </div>
@@ -905,7 +878,7 @@ export default function Main(props: WalletConnectionProps) {
                                         "
                                     >
                                         <button
-                                            className="buttonStyle"
+                                            className="btn btn-primary"
                                             type="button"
                                             onClick={() => {
                                                 const signMessage = {
@@ -968,7 +941,7 @@ export default function Main(props: WalletConnectionProps) {
                                         >
                                             Sign message
                                         </button>
-                                        {signingError && <div className="errorBox">Error: {signingError}.</div>}
+                                        {signingError && <div className="alert alert-danger" role="alert">Error: {signingError}.</div>}
                                         {byteSignature !== '' && (
                                             <div className="actionResultBox">
                                                 <div> Your generated signature is: </div>
@@ -977,15 +950,15 @@ export default function Main(props: WalletConnectionProps) {
                                             </div>
                                         )}
                                     </TestBox>
+                                  </div>
                                 </>
                             )}
-                        </div>
-                        <div>
-                            <div className="columnBox" style={{ width: '960px', float: 'right' }}>
-                                <h2>
+                        <div className="col-lg-4">
+                          <div className="sticky-top">
+                                <h5>
                                     This column refreshes every few seconds and displays balances, smart contract state,
                                     transaction hashes, and error messages.
-                                </h2>
+                                </h5>
                                 <div className="label">Connected account:</div>
                                 <div>
                                     <a
@@ -1011,16 +984,16 @@ export default function Main(props: WalletConnectionProps) {
                                 </div>
                                 <br />
                                 {!txHash && !transactionError && (
-                                    <div className="errorBox">
+                                    <div className="alert alert-danger" role="alert">
                                         IMPORTANT: After pressing a button on the left side that should send a
                                         transaction, the transaction hash or error returned by the wallet are displayed
                                         HERE.
                                     </div>
                                 )}
                                 {!txHash && transactionError && (
-                                    <div className="errorBox">Error: {transactionError}.</div>
+                                    <div className="alert alert-danger" role="alert">Error: {transactionError}.</div>
                                 )}
-                                {viewError && <div className="errorBox">Error: {viewError}.</div>}
+                                {viewError && <div className="alert alert-danger" role="alert">Error: {viewError}.</div>}
                                 {txHash && (
                                     <a
                                         className="link"
@@ -1035,11 +1008,11 @@ export default function Main(props: WalletConnectionProps) {
                                 <br />
                                 <div className="label">Smart contract state:</div>
                                 <pre className="largeText">{JSON.stringify(record, null, '\t')}</pre>
-                            </div>
+                          </div>
                         </div>
                     </div>
                 )}
-            </div>
+            </main>
         </>
     );
 }
