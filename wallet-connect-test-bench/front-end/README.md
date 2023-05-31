@@ -28,7 +28,6 @@ cd ../wallet-connect-test-bench/front-end
 ```
 
 -   Run `yarn install` in this folder.
--   Run `preinstall` in this folder.
 -   Run `yarn build` in a terminal in this folder.
 -   Run `yarn start`.
 -   Open URL logged in console (typically http://127.0.0.1:8080).
@@ -53,16 +52,16 @@ Additional information can be found [here](https://techtalkbook.com/env-noder-no
 
 ## Build and run the Docker image
 
-To build the docker image run the following command in this folder:
+To build the docker image run the following command **from the root of the repository**:
 
 ```
-docker build -t test_bench:$PROJECT_VERSION .
+docker build -f wallet-connect-test-bench/front-end/Dockerfile -t test_bench:$PROJECT_VERSION .
 ```
 
 e.g.
 
 ```
-docker build -t test_bench:3.0.0 .
+docker build -f wallet-connect-test-bench/front-end/Dockerfile -t test_bench:3.0.0 .
 ```
 
 To run the docker image run the following command:

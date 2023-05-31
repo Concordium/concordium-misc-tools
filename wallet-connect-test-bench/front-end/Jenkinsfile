@@ -25,8 +25,8 @@ pipeline {
                       --build-arg build_image="${build_image}" \
                       --label build_image="${build_image}" \
                       --tag="${image_name}" \
-                      --pull \
-                      ./wallet-connect-test-bench
+                      -f ./wallet-connect-test-bench/front-end/Dockerfile \
+                      .
                     docker push "${image_name}"
                 '''.stripIndent()
             }

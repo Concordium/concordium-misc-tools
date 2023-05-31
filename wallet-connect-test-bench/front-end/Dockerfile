@@ -1,36 +1,23 @@
-ARG base_image=node:16-slim
+# This dockerfile is meant to be run from the **root of the repository**.
 
-FROM ${base_image} AS build
+ARG build_image=node:16-slim
+
+FROM ${build_image} AS build
+
+RUN yarn set version 3.2.0
 
 # Copy front end files
 WORKDIR /app
-COPY ./package.json ./front-end/
-COPY ./tsconfig.json ./front-end/
-COPY ./esbuild.config.ts ./front-end/
-COPY ./src ./front-end/src
-COPY ./yarn.lock ./front-end/
-
-# Remove local preinstall command in `package.json` file which causes errors since the patch does not exist in the container
-RUN cd ./front-end/ && sed -i '/preinstall/d' package.json
-
-# Install git
-RUN apt-get update && \
-    apt-get upgrade -y && \
-    apt-get install -y git
-
-# Build dapp libraries
-RUN git clone https://github.com/Concordium/concordium-dapp-libraries.git
-RUN cd ./concordium-dapp-libraries/ && yarn && yarn build
+COPY ./wallet-connect-test-bench/front-end ./wallet-connect-test-bench/front-end/
+COPY ./deps/concordium-dapp-libraries ./deps/concordium-dapp-libraries
 
 # Install front end dependencies
-RUN cd ./front-end/ && yarn && yarn cache clean
+WORKDIR /app/deps/concordium-dapp-libraries
+RUN yarn install && yarn build
 
-# Copy dapp libaries into front end `node_modules` folder
-RUN cp -r ./concordium-dapp-libraries/packages/react-components ./front-end/node_modules/@concordium/react-components; cp -r ./concordium-dapp-libraries/packages/wallet-connectors ./front-end/node_modules/@concordium/wallet-connectors
-
-# Build front end
-RUN cd ./front-end/ && yarn build
+WORKDIR /app/wallet-connect-test-bench/front-end
+RUN yarn install && yarn build
 
 # Serve front end
 FROM nginx
-COPY --from=build ./app/front-end/dist ./usr/share/nginx/html
+COPY --from=build ./app/wallet-connect-test-bench/front-end/dist ./usr/share/nginx/html
