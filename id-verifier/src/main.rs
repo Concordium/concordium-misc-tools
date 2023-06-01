@@ -1,3 +1,4 @@
+use anyhow::Context;
 use clap::Parser;
 use concordium_rust_sdk::{
     base as concordium_base,
@@ -10,7 +11,7 @@ use concordium_rust_sdk::{
         types::{AccountCredentialWithoutProofs, GlobalContext},
     },
     types::CredentialRegistrationID,
-    v2::BlockIdentifier,
+    v2::{BlockIdentifier, Scheme},
     web3id,
 };
 use log::{error, info, warn};
@@ -21,6 +22,7 @@ use std::{
     path::PathBuf,
     sync::{Arc, Mutex},
 };
+use tonic::transport::ClientTlsConfig;
 use warp::{http::StatusCode, Filter, Rejection, Reply};
 
 /// Structure used to receive the correct command line arguments.
@@ -83,9 +85,22 @@ async fn main() -> anyhow::Result<()> {
     log_builder.filter_level(app.log_level);
     log_builder.init();
 
-    // TODO: Support HTTPS
+    let endpoint = if app
+        .endpoint
+        .uri()
+        .scheme()
+        .map_or(false, |x| x == &Scheme::HTTPS)
+    {
+        app.endpoint
+            .tls_config(ClientTlsConfig::new())
+            .context("Unable to construct TLS configuration for Concordium API.")?
+    } else {
+        app.endpoint
+    }
+    .connect_timeout(std::time::Duration::from_secs(10))
+    .timeout(std::time::Duration::from_secs(5));
 
-    let mut client = concordium_rust_sdk::v2::Client::new(app.endpoint).await?;
+    let mut client = concordium_rust_sdk::v2::Client::new(endpoint).await?;
     let global_context = client
         .get_cryptographic_parameters(BlockIdentifier::LastFinal)
         .await?
