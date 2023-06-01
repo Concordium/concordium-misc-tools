@@ -1,6 +1,8 @@
+use anyhow::Context;
 use clap::Parser;
 use concordium_rust_sdk::{
     base as concordium_base,
+    cis4::CredentialStatus,
     common::{SerdeBase16Serialize, Serial, Serialize, Versioned},
     endpoints::{QueryError, RPCError},
     id::{
@@ -9,7 +11,8 @@ use concordium_rust_sdk::{
         types::{AccountCredentialWithoutProofs, GlobalContext},
     },
     types::CredentialRegistrationID,
-    v2::BlockIdentifier,
+    v2::{BlockIdentifier, Scheme},
+    web3id,
 };
 use log::{error, info, warn};
 use rand::Rng;
@@ -19,6 +22,7 @@ use std::{
     path::PathBuf,
     sync::{Arc, Mutex},
 };
+use tonic::transport::ClientTlsConfig;
 use warp::{http::StatusCode, Filter, Rejection, Reply};
 
 /// Structure used to receive the correct command line arguments.
@@ -53,6 +57,13 @@ struct IdVerifierConfig {
         help = "Maximum log level."
     )]
     log_level: log::LevelFilter,
+    #[structopt(
+        long = "network",
+        default_value = "testnet",
+        env = "NETWORK",
+        help = "The supported network to which the node belongs."
+    )]
+    network:   web3id::did::Network,
 }
 
 #[derive(
@@ -64,6 +75,7 @@ struct Challenge([u8; 32]);
 struct Server {
     statement_map:  Arc<Mutex<HashMap<Challenge, Statement<ArCurve, AttributeKind>>>>,
     global_context: Arc<GlobalContext<ArCurve>>,
+    network:        web3id::did::Network,
 }
 
 #[tokio::main]
@@ -73,7 +85,22 @@ async fn main() -> anyhow::Result<()> {
     log_builder.filter_level(app.log_level);
     log_builder.init();
 
-    let mut client = concordium_rust_sdk::v2::Client::new(app.endpoint).await?;
+    let endpoint = if app
+        .endpoint
+        .uri()
+        .scheme()
+        .map_or(false, |x| x == &Scheme::HTTPS)
+    {
+        app.endpoint
+            .tls_config(ClientTlsConfig::new())
+            .context("Unable to construct TLS configuration for Concordium API.")?
+    } else {
+        app.endpoint
+    }
+    .connect_timeout(std::time::Duration::from_secs(10))
+    .timeout(std::time::Duration::from_secs(5));
+
+    let mut client = concordium_rust_sdk::v2::Client::new(endpoint).await?;
     let global_context = client
         .get_cryptographic_parameters(BlockIdentifier::LastFinal)
         .await?
@@ -84,6 +111,7 @@ async fn main() -> anyhow::Result<()> {
     let state = Server {
         statement_map:  Arc::new(Mutex::new(HashMap::new())),
         global_context: Arc::new(global_context),
+        network:        app.network,
     };
     let add_state = state.clone();
     let prove_state = state.clone();
@@ -98,7 +126,15 @@ async fn main() -> anyhow::Result<()> {
     let provide_proof = warp::post()
         .and(warp::filters::body::content_length_limit(50 * 1024))
         .and(warp::path!("prove"))
-        .and(handle_provide_proof(client, prove_state));
+        .and(handle_provide_proof(client.clone(), prove_state));
+
+    let web3id_prove_state = state.clone();
+
+    // 3. Provide Web3Id presentation. The statement is not checked here.
+    let web3id_provide_presentation = warp::post()
+        .and(warp::filters::body::content_length_limit(50 * 1024))
+        .and(warp::path!("web3id" / "prove"))
+        .and(handle_web3id_provide_proof(client, web3id_prove_state));
 
     info!("Starting up HTTP server. Listening on port {}.", app.port);
     let cors = warp::cors()
@@ -109,6 +145,7 @@ async fn main() -> anyhow::Result<()> {
     if let Some(dir) = app.dir {
         let server = inject_statement
             .or(provide_proof)
+            .or(web3id_provide_presentation)
             .or(warp::fs::dir(dir))
             .recover(handle_rejection)
             .with(cors)
@@ -117,6 +154,7 @@ async fn main() -> anyhow::Result<()> {
     } else {
         let server = inject_statement
             .or(provide_proof)
+            .or(web3id_provide_presentation)
             .recover(handle_rejection)
             .with(cors)
             .with(warp::trace::request());
@@ -162,6 +200,63 @@ fn handle_provide_proof(
         }
     })
 }
+
+fn handle_web3id_provide_proof(
+    client: concordium_rust_sdk::v2::Client,
+    state: Server,
+) -> impl Filter<Extract = (impl Reply,), Error = Rejection> + Clone {
+    warp::body::json().and_then(
+        move |presentation: web3id::Presentation<ArCurve, web3id::Web3IdAttribute>| {
+            let mut client = client.clone();
+            let state = state.clone();
+            async move {
+                info!("Validating Web3ID proof");
+                let public_data = web3id::get_public_data(
+                    &mut client,
+                    state.network,
+                    &presentation,
+                    BlockIdentifier::LastFinal,
+                )
+                .await
+                .map_err(|e| {
+                    warp::reject::custom(Web3IdVerifyError::UnableToRetrievePublicData(e))
+                })?;
+                // Check that all credentials are active at the time of the query.
+                if !public_data
+                    .iter()
+                    .all(|cm| matches!(cm.status, CredentialStatus::Active))
+                {
+                    return Err(warp::reject::custom(Web3IdVerifyError::NotActiveCredential));
+                }
+                // And then verify the cryptographic proofs.
+                match presentation.verify(
+                    &state.global_context,
+                    public_data.iter().map(|cm| &cm.commitments),
+                ) {
+                    Ok(statement) => Ok(warp::reply::json(&statement)),
+                    Err(e) => {
+                        log::debug!("The proof is invalid: {e}.");
+                        Err(warp::reject::custom(Web3IdVerifyError::InvalidProof))
+                    }
+                }
+            }
+        },
+    )
+}
+
+#[derive(Debug)]
+/// An internal error type used by this server to manage error handling.
+#[derive(thiserror::Error)]
+enum Web3IdVerifyError {
+    #[error("One of the credentials is not active")]
+    NotActiveCredential,
+    #[error("Invalid proof")]
+    InvalidProof,
+    #[error("Cannot get data: {0}")]
+    UnableToRetrievePublicData(#[from] web3id::CredentialLookupError),
+}
+
+impl warp::reject::Reject for Web3IdVerifyError {}
 
 #[derive(Debug)]
 /// An internal error type used by this server to manage error handling.
@@ -231,6 +326,9 @@ async fn handle_rejection(err: Rejection) -> Result<impl warp::Reply, Infallible
         let code = StatusCode::NOT_FOUND;
         let message = "Session not found.".into();
         Ok(mk_reply(message, code))
+    } else if let Some(err) = err.find::<Web3IdVerifyError>() {
+        let code = StatusCode::BAD_REQUEST;
+        Ok(mk_reply(err.to_string(), code))
     } else if err
         .find::<warp::filters::body::BodyDeserializeError>()
         .is_some()
