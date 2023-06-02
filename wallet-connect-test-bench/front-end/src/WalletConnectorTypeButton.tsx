@@ -8,8 +8,8 @@ import {
     WalletConnectionProps,
 } from '@concordium/react-components';
 
-function connectorTypeStyle(baseStyle: any, isSelected: boolean, isConnected: boolean) {
-    const style = { ...baseStyle, width: '960px' };
+function connectorTypeStyle(isSelected: boolean, isConnected: boolean) {
+    const style = {};
     if (isConnected) {
         style.backgroundColor = '#823030';
         style.border = '1px solid #520C0C';
@@ -21,8 +21,6 @@ function connectorTypeStyle(baseStyle: any, isSelected: boolean, isConnected: bo
 }
 
 interface Props extends WalletConnectionProps {
-    buttonStyle: any;
-    disabledButtonStyle: any;
     connectorType: ConnectorType;
     connectorName: string;
     setWaitingForUser: (v: boolean) => void;
@@ -30,7 +28,7 @@ interface Props extends WalletConnectionProps {
 }
 
 export function WalletConnectionTypeButton(props: Props) {
-    const { buttonStyle, disabledButtonStyle, connectorType, connectorName, setWaitingForUser, connection } = props;
+    const { connectorType, connectorName, setWaitingForUser, connection } = props;
     const { isSelected, isConnected, isDisabled, select } = useWalletConnectorSelector(
         connectorType,
         connection,
@@ -42,7 +40,8 @@ export function WalletConnectionTypeButton(props: Props) {
     }, [select]);
     return (
         <button
-            style={connectorTypeStyle(isDisabled ? disabledButtonStyle : buttonStyle, isSelected, isConnected)}
+            className="btn btn-primary"
+            style={connectorTypeStyle(isSelected, isConnected)}
             disabled={isDisabled}
             type="button"
             onClick={onClick}

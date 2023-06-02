@@ -28,10 +28,6 @@ label, .label {
     font-weight: bold;
 }
 
-.field {
-    display: block;
-}
-
 .field:not(:first-child) {
     margin-top: 20px;
 }
@@ -44,23 +40,11 @@ label, .label {
     color: #308274;
 }
 
-.columns {
-    display: flex;
-    justify-content: center;
-    column-gap: 20px;
-    margin: 5px 0;
-}
-
 .switch-wrapper {
-    display: flex;
     justify-content: center;
     column-gap: 20px;
     margin: 5px 0;
     align-items: center;
-}
-
-.columnBox {
-    padding: 10px 10px 10px 10px;
 }
 
 .testBoxFields {
@@ -75,8 +59,6 @@ label, .label {
     margin-top: 20px;
     border-top: 1px solid black;
     padding: 30px 20px 10px;
-    display: flex;
-    flex-direction: column;
 }
 
 .note {
@@ -92,16 +74,6 @@ label, .label {
     border: 1px;
 }
 
-.errorBox {
-    background-color: darkred;
-    color: white;
-    font-weight: bold;
-    padding: 10px 10px 10px 10px;
-    border-radius: 10px;
-    word-wrap: break-word;
-    border: 1px;
-}
-
 .inputFormatBox {
     padding: 10px 10px 10px 10px;
     border-radius: 10px;
@@ -110,24 +82,9 @@ label, .label {
     text-align: left;
 }
 
-.buttonStyle {
-    box-sizing: border-box;
-    color: white;
-    border-radius: 10px;
-    margin: 7px 0px 7px 0px;
-    padding: 10px;
-    width: 500px;
-    border: 1px solid #26685D;
-    background-color: #308274;
-    cursor: pointer;
-    font-weight: 300;
-    font-size: 14px;
-}
-
 .inputFieldStyle {
     box-sizing: border-box;
     border-radius: 10px;
-    width: 500px;
     border: 1px solid #308274;
     margin: 7px 0px 7px 0px;
     padding: 10px 20px;
