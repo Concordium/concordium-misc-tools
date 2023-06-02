@@ -848,11 +848,11 @@ export default function Main(props: WalletConnectionProps) {
                                                 );
                                             }}
                                         >
-                                            Initialize smart contract instance with parameter
+                                            Initialize smart contract instance with parameter set to '5'
                                         </button>
                                     </TestBox>
                                     <TestBox
-                                        header="(DI) Testing initializing a smart contract instance with some CCD amount"
+                                        header="(DI) Testing initializing a smart contract instance with `amount` set to 1 CCD"
                                         note="
                                         Expected result after pressing the button and confirming in wallet: The
                                         transaction hash or an error message should appear in the right column.
@@ -870,7 +870,7 @@ export default function Main(props: WalletConnectionProps) {
                                                 );
                                             }}
                                         >
-                                            Initialize smart contract instance with some CCD amount
+                                            Initialize smart contract instance with `amount` set to 1 CCD
                                         </button>
                                     </TestBox>
                                     <TestBox

@@ -55,7 +55,7 @@ struct State {
 }
 
 /// Init function that creates this smart_contract_test_bench.
-#[init(contract = "smart_contract_test_bench", parameter = "u8", payable)]
+#[init(contract = "smart_contract_test_bench", parameter = "u16", payable)]
 fn contract_init<S: HasStateApi>(
     ctx: &impl HasInitContext,
     _state_builder: &mut StateBuilder<S>,

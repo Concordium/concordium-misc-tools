@@ -39,7 +39,7 @@ import {
 export async function initializeWithoutAmountWithoutParameter(connection: WalletConnection, account: string) {
     return connection.signAndSendTransaction(account, AccountTransactionType.InitContract, {
         amount: new CcdAmount(BigInt(0)),
-        moduleRef: new ModuleReference('58f29020513517f40c79dc398e15e80ee6b0547c8270cb07654298d5be4bdad4'),
+        moduleRef: new ModuleReference('4f013778fc2ab2136d12ae994303bcc941619a16f6c80f22e189231781c087c7'),
         initName: 'smart_contract_test_bench',
         param: toBuffer(''),
         maxContractExecutionEnergy: 30000n,
@@ -49,7 +49,7 @@ export async function initializeWithoutAmountWithoutParameter(connection: Wallet
 export async function initializeWithAmount(connection: WalletConnection, account: string) {
     return connection.signAndSendTransaction(account, AccountTransactionType.InitContract, {
         amount: new CcdAmount(BigInt(1000000)),
-        moduleRef: new ModuleReference('58f29020513517f40c79dc398e15e80ee6b0547c8270cb07654298d5be4bdad4'),
+        moduleRef: new ModuleReference('4f013778fc2ab2136d12ae994303bcc941619a16f6c80f22e189231781c087c7'),
         initName: 'smart_contract_test_bench',
         param: toBuffer(''),
         maxContractExecutionEnergy: 30000n,
@@ -72,7 +72,7 @@ export async function initializeWithParameter(connection: WalletConnection, acco
         AccountTransactionType.InitContract,
         {
             amount: new CcdAmount(BigInt(0)),
-            moduleRef: new ModuleReference('58f29020513517f40c79dc398e15e80ee6b0547c8270cb07654298d5be4bdad4'),
+            moduleRef: new ModuleReference('4f013778fc2ab2136d12ae994303bcc941619a16f6c80f22e189231781c087c7'),
             initName: 'smart_contract_test_bench',
             param: toBuffer(''),
             maxContractExecutionEnergy: 30000n,
