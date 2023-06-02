@@ -33,14 +33,13 @@ import {
     SET_TIMESTAMP_PARAMETER_SCHEMA,
     SET_STRING_PARAMETER_SCHEMA,
     SET_OPTION_PARAMETER_SCHEMA,
-    BASE_64_TEST_BENCH_SMART_CONTRACT_MODULE,
-    BASE_64_SCHEMA_WITH_INIT_U8_PARAMETER,
+    BASE_64_TEST_BENCH_SMART_CONTRACT_MODULE
 } from './constants';
 
 export async function initializeWithoutAmountWithoutParameter(connection: WalletConnection, account: string) {
     return connection.signAndSendTransaction(account, AccountTransactionType.InitContract, {
         amount: new CcdAmount(BigInt(0)),
-        moduleRef: new ModuleReference('ca34210298992899b85a45d8c639a4442df25ebb3c4360da671d766f8fb079e2'),
+        moduleRef: new ModuleReference('58f29020513517f40c79dc398e15e80ee6b0547c8270cb07654298d5be4bdad4'),
         initName: 'smart_contract_test_bench',
         param: toBuffer(''),
         maxContractExecutionEnergy: 30000n,
@@ -50,7 +49,7 @@ export async function initializeWithoutAmountWithoutParameter(connection: Wallet
 export async function initializeWithAmount(connection: WalletConnection, account: string) {
     return connection.signAndSendTransaction(account, AccountTransactionType.InitContract, {
         amount: new CcdAmount(BigInt(1000000)),
-        moduleRef: new ModuleReference('da913dbdaebac0fc3be60d61adcabb000a22e580a4aecdf70985cff6f4f55360'),
+        moduleRef: new ModuleReference('58f29020513517f40c79dc398e15e80ee6b0547c8270cb07654298d5be4bdad4'),
         initName: 'smart_contract_test_bench',
         param: toBuffer(''),
         maxContractExecutionEnergy: 30000n,
@@ -60,12 +59,12 @@ export async function initializeWithAmount(connection: WalletConnection, account
 export async function initializeWithParameter(connection: WalletConnection, account: string, useModuleSchema: boolean) {
     const schema = useModuleSchema
         ? {
-              parameters: 5,
-              schema: moduleSchemaFromBase64(BASE_64_SCHEMA_WITH_INIT_U8_PARAMETER),
+              parameters: Number(5),
+              schema: moduleSchemaFromBase64(BASE_64_SCHEMA),
           }
         : {
-              parameters: 5,
-              schema: typeSchemaFromBase64(SET_U8_PARAMETER_SCHEMA),
+              parameters: Number(5),
+              schema: typeSchemaFromBase64(SET_U16_PARAMETER_SCHEMA),
           };
 
     return connection.signAndSendTransaction(
@@ -73,9 +72,9 @@ export async function initializeWithParameter(connection: WalletConnection, acco
         AccountTransactionType.InitContract,
         {
             amount: new CcdAmount(BigInt(0)),
-            moduleRef: new ModuleReference('2f4b068a3550528458bb4de550813cc6e2dc04004b3ff6578c44b79cfe9d15f7'),
+            moduleRef: new ModuleReference('58f29020513517f40c79dc398e15e80ee6b0547c8270cb07654298d5be4bdad4'),
             initName: 'smart_contract_test_bench',
-            param: toBuffer('5'),
+            param: toBuffer(''),
             maxContractExecutionEnergy: 30000n,
         } as InitContractPayload,
         schema

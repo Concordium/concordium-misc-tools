@@ -230,24 +230,24 @@ export default function Main(props: WalletConnectionProps) {
     return (
         <>
             <main className="container">
-            <div className="textCenter">
-                Version: {version}
-                <h1>Wallet Connect / Browser Wallet Testing Bench </h1>
+                <div className="textCenter">
+                    Version: {version}
+                    <h1>Wallet Connect / Browser Wallet Testing Bench </h1>
 
-                <WalletConnectionTypeButton
-                    connectorType={BROWSER_WALLET}
-                    connectorName="Browser Wallet"
-                    setWaitingForUser={setWaitingForUser}
-                    connection={connection}
-                    {...props}
-                />
-                <WalletConnectionTypeButton
-                    connectorType={WALLET_CONNECT}
-                    connectorName="Wallet Connect"
-                    setWaitingForUser={setWaitingForUser}
-                    connection={connection}
-                    {...props}
-                />
+                    <WalletConnectionTypeButton
+                        connectorType={BROWSER_WALLET}
+                        connectorName="Browser Wallet"
+                        setWaitingForUser={setWaitingForUser}
+                        connection={connection}
+                        {...props}
+                    />
+                    <WalletConnectionTypeButton
+                        connectorType={WALLET_CONNECT}
+                        connectorName="Wallet Connect"
+                        setWaitingForUser={setWaitingForUser}
+                        connection={connection}
+                        {...props}
+                    />
 
                     {activeConnectorError && <p className="alert alert-danger" role="alert">Connector Error: {activeConnectorError}.</p>}
                     {!activeConnectorError && !isWaitingForTransaction && activeConnectorType && !activeConnector && (
@@ -265,79 +265,79 @@ export default function Main(props: WalletConnectionProps) {
                             </button>
                         </p>
                     )}
-              </div>
+                </div>
 
                 {account && (
                     <div className="row">
-                            {connection && account !== undefined && (
-                                <>
-                                  <div className="col-lg-4">
+                        {connection && account !== undefined && (
+                            <>
+                                <div className="col-lg-4">
                                     <div className="sticky-top">
-                                    <h5>This column includes various test scenarios that can be executed: </h5>
-                                    <ul>
-                                        <li>(IP) input parameter tests</li>
-                                        <li>(RV) return value tests</li>
-                                        <li>(TE) transaction execution tests</li>
-                                        <li>(DI) deploying and initializing tests</li>
-                                        <li>(ST) simple CCD transfer tests</li>
-                                        <li>(SG) signature tests</li>
-                                    </ul>
-                                    <div className="inputFormatBox">
-                                        <h3>Expected input parameter format:</h3>
+                                        <h5>This column includes various test scenarios that can be executed: </h5>
                                         <ul>
-                                            <li>
-                                                <b>u8</b> (e.g. 5)
-                                            </li>
-                                            <li>
-                                                <b>u16</b> (e.g. 15)
-                                            </li>
-                                            <li>
-                                                <b>Address</b> (e.g
-                                                &#123;&#34;Contract&#34;:[&#123;&#34;index&#34;:3,&#34;subindex&#34;:0&#125;]&#125;
-                                                or
-                                                &#123;&#34;Account&#34;:[&#34;4fUk1a1rjBzoPCCy6p92u5LT5vSw9o8GpjMiRHBbJUfmx51uvt&#34;]&#125;
-                                                )
-                                            </li>
-                                            <li>
-                                                <b>ContractAddress</b> (e.g.
-                                                &#123;&#34;index&#34;:3,&#34;subindex&#34;:0&#125;)
-                                            </li>
-                                            <li>
-                                                <b>AccountAddress</b> (e.g.
-                                                4fUk1a1rjBzoPCCy6p92u5LT5vSw9o8GpjMiRHBbJUfmx51uvt)
-                                            </li>
-                                            <li>
-                                                <b>Hash</b> (e.g.
-                                                18ee24150dcb1d96752a4d6dd0f20dfd8ba8c38527e40aa8509b7adecf78f9c6)
-                                            </li>
-                                            <li>
-                                                <b>Public key</b> (e.g.
-                                                37a2a8e52efad975dbf6580e7734e4f249eaa5ea8a763e934a8671cd7e446499)
-                                            </li>
-                                            <li>
-                                                <b>Signature</b> (e.g.
-                                                632f567c9321405ce201a0a38615da41efe259ede154ff45ad96cdf860718e79bde07cff72c4d119c644552a8c7f0c413f5cf5390b0ea0458993d6d6374bd904)
-                                            </li>
-                                            <li>
-                                                <b>Timestamp</b> (e.g. 2030-08-08T05:15:00Z)
-                                            </li>
-                                            <li>
-                                                <b>String</b> (e.g. aaa)
-                                            </li>
-                                            <li>
-                                                <b>Option (None)</b> (e.g. no input required)
-                                            </li>
-                                            <li>
-                                                <b>Option (Some)</b> (e.g. 3)
-                                            </li>
-                                            <li>
-                                                <b>Wrong schema</b> (e.g. 5)
-                                            </li>
+                                            <li>(IP) input parameter tests</li>
+                                            <li>(RV) return value tests</li>
+                                            <li>(TE) transaction execution tests</li>
+                                            <li>(DI) deploying and initializing tests</li>
+                                            <li>(ST) simple CCD transfer tests</li>
+                                            <li>(SG) signature tests</li>
                                         </ul>
+                                        <div className="inputFormatBox">
+                                            <h3>Expected input parameter format:</h3>
+                                            <ul>
+                                                <li>
+                                                    <b>u8</b> (e.g. 5)
+                                                </li>
+                                                <li>
+                                                    <b>u16</b> (e.g. 15)
+                                                </li>
+                                                <li>
+                                                    <b>Address</b> (e.g
+                                                    &#123;&#34;Contract&#34;:[&#123;&#34;index&#34;:3,&#34;subindex&#34;:0&#125;]&#125;
+                                                    or
+                                                    &#123;&#34;Account&#34;:[&#34;4fUk1a1rjBzoPCCy6p92u5LT5vSw9o8GpjMiRHBbJUfmx51uvt&#34;]&#125;
+                                                    )
+                                                </li>
+                                                <li>
+                                                    <b>ContractAddress</b> (e.g.
+                                                    &#123;&#34;index&#34;:3,&#34;subindex&#34;:0&#125;)
+                                                </li>
+                                                <li>
+                                                    <b>AccountAddress</b> (e.g.
+                                                    4fUk1a1rjBzoPCCy6p92u5LT5vSw9o8GpjMiRHBbJUfmx51uvt)
+                                                </li>
+                                                <li>
+                                                    <b>Hash</b> (e.g.
+                                                    18ee24150dcb1d96752a4d6dd0f20dfd8ba8c38527e40aa8509b7adecf78f9c6)
+                                                </li>
+                                                <li>
+                                                    <b>Public key</b> (e.g.
+                                                    37a2a8e52efad975dbf6580e7734e4f249eaa5ea8a763e934a8671cd7e446499)
+                                                </li>
+                                                <li>
+                                                    <b>Signature</b> (e.g.
+                                                    632f567c9321405ce201a0a38615da41efe259ede154ff45ad96cdf860718e79bde07cff72c4d119c644552a8c7f0c413f5cf5390b0ea0458993d6d6374bd904)
+                                                </li>
+                                                <li>
+                                                    <b>Timestamp</b> (e.g. 2030-08-08T05:15:00Z)
+                                                </li>
+                                                <li>
+                                                    <b>String</b> (e.g. aaa)
+                                                </li>
+                                                <li>
+                                                    <b>Option (None)</b> (e.g. no input required)
+                                                </li>
+                                                <li>
+                                                    <b>Option (Some)</b> (e.g. 3)
+                                                </li>
+                                                <li>
+                                                    <b>Wrong schema</b> (e.g. 5)
+                                                </li>
+                                            </ul>
+                                        </div>
                                     </div>
-                                    </div>
-                                  </div>
-                                  <div className="col-lg-4">
+                                </div>
+                                <div className="col-lg-4">
                                     <TestBox
                                         header="(IP) Testing simple input parameters"
                                         note="Expected result after pressing the button and confirming in wallet: The
@@ -379,7 +379,6 @@ export default function Main(props: WalletConnectionProps) {
                                             Select function:
                                             <br />
                                             <select
-                                                className="centerLargeText"
                                                 name="write"
                                                 id="write"
                                                 onChange={changeWriteDropDownHandler}
@@ -474,7 +473,6 @@ export default function Main(props: WalletConnectionProps) {
                                             Select function:
                                             <br />
                                             <select
-                                                className="centerLargeText"
                                                 name="read"
                                                 id="read"
                                                 onChange={changeReadDropDownHandler}
@@ -775,7 +773,7 @@ export default function Main(props: WalletConnectionProps) {
                                         "
                                     >
                                         <button
-                                            className="buttonStyle"
+                                            className="btn btn-primary"
                                             type="button"
                                             onClick={() => {
                                                 setTxHash('');
@@ -797,7 +795,7 @@ export default function Main(props: WalletConnectionProps) {
                                         "
                                     >
                                         <button
-                                            className="buttonStyle"
+                                            className="btn btn-primary"
                                             type="button"
                                             onClick={() => {
                                                 setTxHash('');
@@ -835,7 +833,7 @@ export default function Main(props: WalletConnectionProps) {
                                             <div>Use parameter schema</div>
                                         </div>
                                         <button
-                                            className="buttonStyle"
+                                            className="btn btn-primary"
                                             type="button"
                                             onClick={() => {
                                                 setTxHash('');
@@ -861,7 +859,7 @@ export default function Main(props: WalletConnectionProps) {
                                         "
                                     >
                                         <button
-                                            className="buttonStyle"
+                                            className="btn btn-primary"
                                             type="button"
                                             onClick={() => {
                                                 setTxHash('');
@@ -1069,11 +1067,11 @@ export default function Main(props: WalletConnectionProps) {
                                             </div>
                                         )}
                                     </TestBox>
-                                  </div>
-                                </>
-                            )}
+                                </div>
+                            </>
+                        )}
                         <div className="col-lg-4">
-                          <div className="sticky-top">
+                            <div className="sticky-top">
                                 <h5>
                                     This column refreshes every few seconds and displays balances, smart contract state,
                                     transaction hashes, and error messages.
@@ -1129,7 +1127,7 @@ export default function Main(props: WalletConnectionProps) {
                                 <br />
                                 <div className="label">Smart contract state:</div>
                                 <pre className="largeText">{JSON.stringify(record, null, '\t')}</pre>
-                          </div>
+                            </div>
                         </div>
                     </div>
                 )}

@@ -55,27 +55,35 @@ struct State {
 }
 
 /// Init function that creates this smart_contract_test_bench.
-#[init(contract = "smart_contract_test_bench")]
+#[init(contract = "smart_contract_test_bench", parameter = "u8", payable)]
 fn contract_init<S: HasStateApi>(
-    _ctx: &impl HasInitContext,
+    ctx: &impl HasInitContext,
     _state_builder: &mut StateBuilder<S>,
+    _amount: Amount,
 ) -> InitResult<State> {
+    let size = ctx.parameter_cursor().size();
+    let mut u16_value: u16 = 0u16;
+
+    if size > 0 {
+        u16_value = ctx.parameter_cursor().get()?;
+    }
+
     Ok(State {
-        u8_value:               0u8,
-        u16_value:              0u16,
-        address_array:          vec![],
-        address_value:          Address::Account(AccountAddress([0u8; 32])),
-        account_address_value:  AccountAddress([0u8; 32]),
+        u8_value: 0u8,
+        u16_value,
+        address_array: vec![],
+        address_value: Address::Account(AccountAddress([0u8; 32])),
+        account_address_value: AccountAddress([0u8; 32]),
         contract_address_value: ContractAddress {
             index:    0,
             subindex: 0,
         },
-        hash_value:             HASH,
-        signature_value:        SIGNATURE,
-        public_key_value:       PUBLIC_KEY,
-        timestamp_value:        Timestamp::from_timestamp_millis(11),
-        option_value:           None,
-        string_value:           STRING.to_string(),
+        hash_value: HASH,
+        signature_value: SIGNATURE,
+        public_key_value: PUBLIC_KEY,
+        timestamp_value: Timestamp::from_timestamp_millis(11),
+        option_value: None,
+        string_value: STRING.to_string(),
     })
 }
 
@@ -829,4 +837,46 @@ fn view<S: HasStateApi>(
     host: &impl HasHost<State, StateApiType = S>,
 ) -> ReceiveResult<State> {
     Ok(host.state().clone())
+}
+
+#[concordium_cfg_test]
+mod tests {
+    use super::*;
+    use test_infrastructure::*;
+
+    const VALUE: u16 = 34u16;
+    const AMOUNT: concordium_std::Amount = Amount::from_micro_ccd(0);
+
+    #[concordium_test]
+    /// Test that the smart-contract initialization sets the state correctly
+    /// without parameter.
+    fn test_init_without_parameter() {
+        let mut ctx = TestInitContext::empty();
+
+        ctx.set_parameter(&[]);
+        let mut state_builder = TestStateBuilder::new();
+
+        let state_result = contract_init(&ctx, &mut state_builder, AMOUNT);
+        let state = state_result.expect_report("Contract initialization results in error");
+
+        claim_eq!(0u16, state.u16_value, "u16 value should not be set");
+    }
+
+    #[concordium_test]
+    /// Test that the smart-contract initialization sets the state correctly
+    /// with parameter.
+    fn test_init_with_parameter() {
+        let mut ctx = TestInitContext::empty();
+
+        let parameter_bytes = to_bytes(&VALUE);
+
+        ctx.set_parameter(&parameter_bytes);
+
+        let mut state_builder = TestStateBuilder::new();
+
+        let state_result = contract_init(&ctx, &mut state_builder, AMOUNT);
+        let state = state_result.expect_report("Contract initialization results in error");
+
+        claim_eq!(VALUE, state.u16_value, "u16 value should be set");
+    }
 }
