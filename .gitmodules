@@ -1,6 +1,3 @@
 [submodule "deps/concordium-rust-sdk"]
 	path = deps/concordium-rust-sdk
 	url = ../concordium-rust-sdk.git
-[submodule "deps/concordium-dapp-libraries"]
-	path = deps/concordium-dapp-libraries
-	url = git@github.com:Concordium/concordium-dapp-libraries.git
