@@ -3,7 +3,7 @@
 # - 5 bakers
 # - one additional foundation account
 # - genesis time set to the time when the tool runs
-# - average block time set to 5s
+# - average block time set to 1s
 
 protocolVersion = "6"
 
@@ -88,7 +88,7 @@ accountCreationLimit = 10
 
 [parameters.chain.timeoutParameters]
 base = "2s" # Meaning 2 seconds
-increase = 1.5 # Must be greater than 1.
+increase = 1.25 # Must be greater than 1.
 decrease = 0.8 # Must be between 0 and 1.
 
 [parameters.chain.finalizationCommitteeParameters]
