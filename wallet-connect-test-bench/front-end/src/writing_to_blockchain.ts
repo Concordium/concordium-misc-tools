@@ -1,6 +1,15 @@
 import { createContext } from 'react';
 import { SmartContractParameters } from '@concordium/browser-wallet-api-helpers';
-import { AccountAddress, AccountTransactionType, CcdAmount, UpdateContractPayload } from '@concordium/web-sdk';
+import {
+    AccountAddress,
+    AccountTransactionType,
+    CcdAmount,
+    DeployModulePayload,
+    InitContractPayload,
+    ModuleReference,
+    UpdateContractPayload,
+    toBuffer,
+} from '@concordium/web-sdk';
 import { WalletConnection } from '@concordium/react-components';
 import {
     typeSchemaFromBase64,
@@ -25,7 +34,64 @@ import {
     SET_TIMESTAMP_PARAMETER_SCHEMA,
     SET_STRING_PARAMETER_SCHEMA,
     SET_OPTION_PARAMETER_SCHEMA,
+    BASE_64_TEST_BENCH_SMART_CONTRACT_MODULE,
 } from './constants';
+
+export async function initializeWithoutAmountWithoutParameter(connection: WalletConnection, account: string) {
+    return connection.signAndSendTransaction(account, AccountTransactionType.InitContract, {
+        amount: new CcdAmount(BigInt(0)),
+        moduleRef: new ModuleReference('4f013778fc2ab2136d12ae994303bcc941619a16f6c80f22e189231781c087c7'),
+        initName: 'smart_contract_test_bench',
+        param: toBuffer(''),
+        maxContractExecutionEnergy: 30000n,
+    } as InitContractPayload);
+}
+
+export async function initializeWithAmount(connection: WalletConnection, account: string, cCDAmount: string) {
+    return connection.signAndSendTransaction(account, AccountTransactionType.InitContract, {
+        amount: new CcdAmount(BigInt(cCDAmount)),
+        moduleRef: new ModuleReference('4f013778fc2ab2136d12ae994303bcc941619a16f6c80f22e189231781c087c7'),
+        initName: 'smart_contract_test_bench',
+        param: toBuffer(''),
+        maxContractExecutionEnergy: 30000n,
+    } as InitContractPayload);
+}
+
+export async function initializeWithParameter(
+    connection: WalletConnection,
+    account: string,
+    useModuleSchema: boolean,
+    input: string
+) {
+    const schema = useModuleSchema
+        ? {
+              parameters: Number(input),
+              schema: moduleSchemaFromBase64(BASE_64_SCHEMA),
+          }
+        : {
+              parameters: Number(input),
+              schema: typeSchemaFromBase64(SET_U16_PARAMETER_SCHEMA),
+          };
+
+    return connection.signAndSendTransaction(
+        account,
+        AccountTransactionType.InitContract,
+        {
+            amount: new CcdAmount(BigInt(0)),
+            moduleRef: new ModuleReference('4f013778fc2ab2136d12ae994303bcc941619a16f6c80f22e189231781c087c7'),
+            initName: 'smart_contract_test_bench',
+            param: toBuffer(''),
+            maxContractExecutionEnergy: 30000n,
+        } as InitContractPayload,
+        schema
+    );
+}
+
+export async function deploy(connection: WalletConnection, account: string) {
+    return connection.signAndSendTransaction(account, AccountTransactionType.DeployModule, {
+        source: toBuffer(BASE_64_TEST_BENCH_SMART_CONTRACT_MODULE, 'base64'),
+    } as DeployModulePayload);
+}
 
 export async function setValue(
     connection: WalletConnection,
