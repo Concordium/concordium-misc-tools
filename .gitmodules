@@ -3,4 +3,4 @@
 	url = ../concordium-rust-sdk.git
 [submodule "deps/concordium-dapp-libraries"]
 	path = deps/concordium-dapp-libraries
-	url = git@github.com:Concordium/concordium-dapp-libraries.git
+	url = ../concordium-dapp-libraries.git
