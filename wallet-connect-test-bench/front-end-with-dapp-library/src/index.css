@@ -1,0 +1,91 @@
+body {
+    line-height: 1;
+    letter-spacing: 0;
+}
+
+h3 {
+    margin: 0;
+}
+
+.textCenter {
+    text-align: center;
+}
+
+pre {
+    font-family: "Verdana" !important;
+    text-align: left  !important;
+    font-weight: 300 !important;
+    white-space: pre-wrap;
+}
+
+legend {
+    font-weight: bold;
+    text-align: left;
+    font-size: 20px;
+}
+
+label, .label {
+    font-weight: bold;
+}
+
+.field:not(:first-child) {
+    margin-top: 20px;
+}
+
+.field p {
+    margin: 0;
+}
+
+.link {
+    color: #308274;
+}
+
+.switch-wrapper {
+    justify-content: center;
+    column-gap: 20px;
+    margin: 5px 0;
+    align-items: center;
+}
+
+.testBoxFields {
+    padding: 10px 10px 10px 10px;
+    text-align: center;
+}
+
+.testBox {
+    border: 1px solid grey;
+    background-color: #f2f2f2;
+    border-radius: 10px;
+    margin-top: 20px;
+    border-top: 1px solid black;
+    padding: 30px 20px 10px;
+}
+
+.note {
+    margin: 0;
+    color: #666666;
+
+}
+
+.actionResultBox {
+    background-color: greenyellow;
+    border-radius: 10px;
+    word-wrap: break-word;
+    border: 1px;
+}
+
+.inputFormatBox {
+    padding: 10px 10px 10px 10px;
+    border-radius: 10px;
+    word-wrap: break-word;
+    border: 1px;
+    text-align: left;
+}
+
+.inputFieldStyle {
+    box-sizing: border-box;
+    border-radius: 10px;
+    border: 1px solid #308274;
+    margin: 7px 0px 7px 0px;
+    padding: 10px 20px;
+}

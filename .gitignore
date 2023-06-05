@@ -5,6 +5,8 @@
 /id-demo/dist/*
 /wallet-connect-test-bench/front-end/node_modules
 /wallet-connect-test-bench/front-end/.yarn
+/wallet-connect-test-bench/front-end-with-dapp-library/node_modules
+/wallet-connect-test-bench/front-end-with-dapp-library/.yarn
 
 # dependencies
 node_modules
