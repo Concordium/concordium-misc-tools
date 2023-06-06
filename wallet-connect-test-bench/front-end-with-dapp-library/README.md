@@ -1,12 +1,12 @@
 # Test Bench
 
-A test bench for testing mobile wallets (via walletConnect) or the browser wallet.
+A test bench for testing mobile wallets (via walletConnect) or the browser wallet with dApp libraries..
 
 ## Prerequisites
 
 -   Browser wallet extension must be installed in Chrome browser and the Concordium testnet needs to be selected or a mobile wallet needs to be set up that supports walletConnect in order to view smart contract details or submit transactions.
 
-## Running the test bench front-end
+## Running the test bench front end
 
 Clone the repo:
 
@@ -16,7 +16,7 @@ git clone --recursive-submodules git@github.com:Concordium/concordium-misc-tools
 
 Navigate into this folder:
 ```shell
-cd ../wallet-connect-test-bench/front-end
+cd ../wallet-connect-test-bench/front-end-with-dapp-library
 ```
 
 -   Run `yarn install` in this folder.
@@ -53,13 +53,13 @@ Additional information can be found [here](https://techtalkbook.com/env-noder-no
 To build the docker image run the following command **from the root of the repository**:
 
 ```
-docker build -f wallet-connect-test-bench/front-end/Dockerfile -t test_bench:$PROJECT_VERSION .
+docker build -f wallet-connect-test-bench/front-end-with-dapp-library/Dockerfile -t test_bench:$PROJECT_VERSION .
 ```
 
 e.g.
 
 ```
-docker build -f wallet-connect-test-bench/front-end/Dockerfile -t test_bench:3.0.0 .
+docker build -f wallet-connect-test-bench/front-end-with-dapp-library/Dockerfile -t test_bench:3.0.0 .
 ```
 
 To run the docker image run the following command:

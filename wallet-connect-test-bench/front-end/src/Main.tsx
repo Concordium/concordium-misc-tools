@@ -4,7 +4,6 @@ import Switch from 'react-switch';
 import { toBuffer, serializeTypeValue, AccountAddress } from '@concordium/web-sdk';
 import { WalletApi, detectConcordiumProvider } from '@concordium/browser-wallet-api-helpers';
 
-import { WalletConnectionProps } from '@concordium/react-components';
 import { version } from '../package.json';
 
 import { smartContractInfo, accountInfo, view, getValue } from './reading_from_blockchain';
@@ -52,7 +51,7 @@ function connectorTypeStyle(isWaitingForUser: boolean, isSelected: boolean) {
     return {};
 }
 
-export default function Main(props: WalletConnectionProps) {
+export default function Main() {
     // const { activeConnectorType, activeConnector, activeConnectorError, connectedAccounts, genesisHashes } = props;
 
     // const { connection, setConnection, account } = useConnection(connectedAccounts, genesisHashes);

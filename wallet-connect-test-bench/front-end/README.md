@@ -1,6 +1,6 @@
 # Test Bench
 
-A test bench for testing mobile wallets (via walletConnect) or the browser wallet.
+A test bench for testing mobile wallets (via walletConnect) or the browser wallet without dApp libraries.
 
 ## Prerequisites
 
@@ -19,8 +19,6 @@ Navigate into this folder:
 cd ../wallet-connect-test-bench/front-end
 ```
 
--   Run `yarn install` in this folder.
--   Run `yarn preinstall` in this folder.
 -   Run `yarn install` in this folder.
 
 To start the front end locally, do the following:
