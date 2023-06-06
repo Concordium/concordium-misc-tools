@@ -251,7 +251,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@concordium/browser-wallet-api-helpers@npm:^2.4.0":
+"@concordium/browser-wallet-api-helpers@npm:^2.4.0, @concordium/browser-wallet-api-helpers@npm:^2.5.0":
   version: 2.5.0
   resolution: "@concordium/browser-wallet-api-helpers@npm:2.5.0"
   dependencies:
@@ -7816,6 +7816,7 @@ send@latest:
   version: 0.0.0-use.local
   resolution: "test-bench-for-wallets@workspace:."
   dependencies:
+    "@concordium/browser-wallet-api-helpers": ^2.5.0
     "@concordium/react-components": ../../deps/concordium-dapp-libraries/packages/react-components
     "@concordium/wallet-connectors": ../../deps/concordium-dapp-libraries/packages/wallet-connectors
     "@concordium/web-sdk": ^3.4.0

@@ -151,9 +151,7 @@ export async function getValue(rpcClient: JsonRpcClient, useModuleSchema: boolea
     }
 }
 
-export async function view_plain_browser_wallet(client: WalletApi) {
-    console.log(client.getGrpcClient());
-
+export async function view(client: WalletApi) {
     const res = await client.getGrpcClient().invokeContract({
         method: `${CONTRACT_NAME}.view`,
         contract: { index: CONTRACT_INDEX, subindex: CONTRACT_SUB_INDEX },
@@ -176,28 +174,28 @@ export async function view_plain_browser_wallet(client: WalletApi) {
     }
 }
 
-export async function view(rpcClient: JsonRpcClient) {
-    const res = await rpcClient.invokeContract({
-        method: `${CONTRACT_NAME}.view`,
-        contract: { index: CONTRACT_INDEX, subindex: CONTRACT_SUB_INDEX },
-    });
+// export async function view(rpcClient: JsonRpcClient) {
+//     const res = await rpcClient.invokeContract({
+//         method: `${CONTRACT_NAME}.view`,
+//         contract: { index: CONTRACT_INDEX, subindex: CONTRACT_SUB_INDEX },
+//     });
 
-    if (!res || res.tag === 'failure' || !res.returnValue) {
-        throw new Error(
-            `RPC call 'invokeContract' on method '${CONTRACT_NAME}.view' of contract '${CONTRACT_INDEX}' failed`
-        );
-    }
+//     if (!res || res.tag === 'failure' || !res.returnValue) {
+//         throw new Error(
+//             `RPC call 'invokeContract' on method '${CONTRACT_NAME}.view' of contract '${CONTRACT_INDEX}' failed`
+//         );
+//     }
 
-    const state = deserializeTypeValue(toBuffer(res.returnValue, 'hex'), toBuffer(VIEW_RETURN_VALUE_SCHEMA, 'base64'));
+//     const state = deserializeTypeValue(toBuffer(res.returnValue, 'hex'), toBuffer(VIEW_RETURN_VALUE_SCHEMA, 'base64'));
 
-    if (state === undefined) {
-        throw new Error(
-            `Deserializing the returnValue from the '${CONTRACT_NAME}.view' method of contract '${CONTRACT_INDEX}' failed`
-        );
-    } else {
-        return JSON.stringify(state);
-    }
-}
+//     if (state === undefined) {
+//         throw new Error(
+//             `Deserializing the returnValue from the '${CONTRACT_NAME}.view' method of contract '${CONTRACT_INDEX}' failed`
+//         );
+//     } else {
+//         return JSON.stringify(state);
+//     }
+// }
 
 export async function accountInfo(rpcClient: JsonRpcClient, account: string) {
     return rpcClient.getAccountInfo(account);

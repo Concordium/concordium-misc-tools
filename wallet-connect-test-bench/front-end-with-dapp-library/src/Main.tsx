@@ -231,7 +231,7 @@ export default function Main(props: WalletConnectionProps) {
         <main className="container">
             <div className="textCenter">
                 Version: {version}
-                <h1>Wallet Connect / Browser Wallet Testing Bench </h1>
+                <h1>Wallet Connect / Browser Wallet Testing Bench (With dApp Libraries)</h1>
                 <WalletConnectionTypeButton
                     connectorType={BROWSER_WALLET}
                     connectorName="Browser Wallet"

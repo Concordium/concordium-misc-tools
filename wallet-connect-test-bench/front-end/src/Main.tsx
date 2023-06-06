@@ -4,11 +4,10 @@ import Switch from 'react-switch';
 import { toBuffer, serializeTypeValue, AccountAddress } from '@concordium/web-sdk';
 import { WalletApi, detectConcordiumProvider } from '@concordium/browser-wallet-api-helpers';
 
-import { withJsonRpcClient, WalletConnectionProps, useConnection, useConnect } from '@concordium/react-components';
+import { WalletConnectionProps } from '@concordium/react-components';
 import { version } from '../package.json';
-import { WalletConnectionTypeButton } from './WalletConnectorTypeButton';
 
-import { smartContractInfo, accountInfo, view, getValue, view_plain_browser_wallet } from './reading_from_blockchain';
+import { smartContractInfo, accountInfo, view, getValue } from './reading_from_blockchain';
 import {
     setValue,
     setObject,
@@ -25,13 +24,7 @@ import {
     simpleCCDTransferToNonExistingAccountAddress,
 } from './writing_to_blockchain';
 
-import {
-    CONTRACT_INDEX,
-    BROWSER_WALLET,
-    WALLET_CONNECT,
-    SET_OBJECT_PARAMETER_SCHEMA,
-    REFRESH_INTERVAL,
-} from './constants';
+import { CONTRACT_INDEX, SET_OBJECT_PARAMETER_SCHEMA, REFRESH_INTERVAL } from './constants';
 
 type TestBoxProps = PropsWithChildren<{
     header: string;
@@ -49,13 +42,25 @@ function TestBox({ header, children, note }: TestBoxProps) {
     );
 }
 
+function connectorTypeStyle(isWaitingForUser: boolean, isSelected: boolean) {
+    if (!isWaitingForUser && isSelected) {
+        return { backgroundColor: '#823030', border: '1px solid #520C0C' };
+    }
+    if (!isWaitingForUser && !isSelected) {
+        return { backgroundColor: '#174039', border: '1px solid #0c221f' };
+    }
+    return {};
+}
+
 export default function Main(props: WalletConnectionProps) {
-    const { activeConnectorType, activeConnector, activeConnectorError, connectedAccounts, genesisHashes } = props;
+    // const { activeConnectorType, activeConnector, activeConnectorError, connectedAccounts, genesisHashes } = props;
 
-    const { connection, setConnection, account } = useConnection(connectedAccounts, genesisHashes);
-    const { connect, isConnecting, connectError } = useConnect(activeConnector, setConnection);
+    // const { connection, setConnection, account } = useConnection(connectedAccounts, genesisHashes);
+    // const { connect, isConnecting, connectError } = useConnect(activeConnector, setConnection);
 
-    const [client2, setClient2] = useState<WalletApi>();
+    const [connection, setconnection] = useState<WalletApi>();
+    const [isWaitingForUser, setIsWaitingForUser] = useState(true);
+    const [isBrowserWalletConnected, setIsBrowserWalletConnected] = useState(true);
 
     const [viewError, setViewError] = useState('');
     const [returnValueError, setReturnValueError] = useState('');
@@ -64,7 +69,7 @@ export default function Main(props: WalletConnectionProps) {
 
     const [record, setRecord] = useState('');
     const [returnValue, setReturnValue] = useState('');
-    const [isWaitingForTransaction, setWaitingForUser] = useState(false);
+    // const [isWaitingForTransaction, setWaitingForUser] = useState(false);
 
     const [accountBalance, setAccountBalance] = useState('');
     const [smartContractBalance, setSmartContractBalance] = useState('');
@@ -72,7 +77,7 @@ export default function Main(props: WalletConnectionProps) {
     const [cCDAmount, setCCDAmount] = useState('');
     const [input, setInput] = useState('');
 
-    const [account2, setAccount2] = useState('');
+    const [account, setAccount] = useState('');
 
     const [useModuleSchema, setUseModuleSchema] = useState(true);
     const [isPayable, setIsPayable] = useState(true);
@@ -120,13 +125,16 @@ export default function Main(props: WalletConnectionProps) {
     };
 
     const connectPlainBrowserWallet = () => {
+        setIsWaitingForUser(false);
+        setIsBrowserWalletConnected(true);
+
         detectConcordiumProvider()
             .then((c) => {
-                setClient2(c);
+                setconnection(c);
                 c.connect()
                     .then((accountAddress) => {
                         if (accountAddress) {
-                            setAccount2(accountAddress);
+                            setAccount(accountAddress);
                         }
                     })
                     .catch(alert);
@@ -134,32 +142,54 @@ export default function Main(props: WalletConnectionProps) {
             .catch(alert);
     };
 
+    const disConnectPlainBrowserWallet = () => {
+        setIsWaitingForUser(true);
+
+        setAccount('');
+        setconnection(undefined);
+    };
+
+    const connectPlainMobileWallet = () => {
+        setIsWaitingForUser(false);
+        setIsBrowserWalletConnected(false);
+
+        // TODO
+        alert('Mobile wallet connection needs to be implemented');
+    };
+
+    const disConnectPlainMobileWallet = () => {
+        setIsWaitingForUser(true);
+
+        // TODO
+        alert('Mobile wallet connection needs to be implemented');
+    };
+
     // Refresh accountInfo periodically.
     // eslint-disable-next-line consistent-return
     useEffect(() => {
-        if (connection && account) {
+        // if (connection && account) {
+        //     const interval = setInterval(() => {
+        //         console.log('refreshing1');
+        //         withJsonRpcClient(connection, (rpcClient) => accountInfo(rpcClient, account))
+        //             .then((value) => {
+        //                 if (value !== undefined) {
+        //                     setAccountBalance(value.accountAmount.toString());
+        //                 }
+        //                 setViewError('');
+        //             })
+        //             .catch((e) => {
+        //                 setAccountBalance('');
+        //                 setViewError((e as Error).message);
+        //             });
+        //     }, REFRESH_INTERVAL.asMilliseconds());
+        //     return () => clearInterval(interval);
+        // }
+        if (connection && account !== '') {
             const interval = setInterval(() => {
                 console.log('refreshing1');
-                withJsonRpcClient(connection, (rpcClient) => accountInfo(rpcClient, account))
-                    .then((value) => {
-                        if (value !== undefined) {
-                            setAccountBalance(value.accountAmount.toString());
-                        }
-                        setViewError('');
-                    })
-                    .catch((e) => {
-                        setAccountBalance('');
-                        setViewError((e as Error).message);
-                    });
-            }, REFRESH_INTERVAL.asMilliseconds());
-            return () => clearInterval(interval);
-        }
-        if (client2 && account2 !== '') {
-            const interval = setInterval(() => {
-                console.log('refreshing1');
-                client2
+                connection
                     .getGrpcClient()
-                    .getAccountInfo(new AccountAddress(account2))
+                    .getAccountInfo(new AccountAddress(account))
                     .then((value) => {
                         if (value !== undefined) {
                             setAccountBalance(value.accountAmount.toString());
@@ -173,32 +203,32 @@ export default function Main(props: WalletConnectionProps) {
             }, REFRESH_INTERVAL.asMilliseconds());
             return () => clearInterval(interval);
         }
-    }, [connection, account, client2, account2]);
+    }, [connection, account]);
 
     // Refresh smartContractInfo periodically.
     // eslint-disable-next-line consistent-return
     useEffect(() => {
-        if (connection) {
+        // if (connection) {
+        //     const interval = setInterval(() => {
+        //         console.log('refreshing2');
+        //         withJsonRpcClient(connection, (rpcClient) => smartContractInfo(rpcClient))
+        //             .then((value) => {
+        //                 if (value !== undefined) {
+        //                     setSmartContractBalance(value.amount.microCcdAmount.toString());
+        //                 }
+        //                 setViewError('');
+        //             })
+        //             .catch((e) => {
+        //                 setSmartContractBalance('');
+        //                 setViewError((e as Error).message);
+        //             });
+        //     }, REFRESH_INTERVAL.asMilliseconds());
+        //     return () => clearInterval(interval);
+        // }
+        if (connection && account !== '') {
             const interval = setInterval(() => {
                 console.log('refreshing2');
-                withJsonRpcClient(connection, (rpcClient) => smartContractInfo(rpcClient))
-                    .then((value) => {
-                        if (value !== undefined) {
-                            setSmartContractBalance(value.amount.microCcdAmount.toString());
-                        }
-                        setViewError('');
-                    })
-                    .catch((e) => {
-                        setSmartContractBalance('');
-                        setViewError((e as Error).message);
-                    });
-            }, REFRESH_INTERVAL.asMilliseconds());
-            return () => clearInterval(interval);
-        }
-        if (client2 && account2 !== '') {
-            const interval = setInterval(() => {
-                console.log('refreshing2');
-                client2
+                connection
                     .getGrpcClient()
                     .getInstanceInfo({ index: CONTRACT_INDEX, subindex: BigInt(0) })
                     .then((value) => {
@@ -214,32 +244,32 @@ export default function Main(props: WalletConnectionProps) {
             }, REFRESH_INTERVAL.asMilliseconds());
             return () => clearInterval(interval);
         }
-    }, [connection, account, client2, account2]);
+    }, [connection, account]);
 
     // Refresh view periodically.
     // eslint-disable-next-line consistent-return
     useEffect(() => {
-        if (connection && account) {
-            const interval = setInterval(() => {
-                console.log('refreshing3');
-                withJsonRpcClient(connection, (rpcClient) => view(rpcClient))
-                    .then((value) => {
-                        if (value !== undefined) {
-                            setRecord(JSON.parse(value));
-                        }
-                        setViewError('');
-                    })
-                    .catch((e) => {
-                        setRecord('');
-                        setViewError((e as Error).message);
-                    });
-            }, REFRESH_INTERVAL.asMilliseconds());
-            return () => clearInterval(interval);
-        }
-        if (client2 && account2 !== '') {
+        // if (connection && account) {
+        //     const interval = setInterval(() => {
+        //         console.log('refreshing3');
+        //         withJsonRpcClient(connection, (rpcClient) => view(rpcClient))
+        //             .then((value) => {
+        //                 if (value !== undefined) {
+        //                     setRecord(JSON.parse(value));
+        //                 }
+        //                 setViewError('');
+        //             })
+        //             .catch((e) => {
+        //                 setRecord('');
+        //                 setViewError((e as Error).message);
+        //             });
+        //     }, REFRESH_INTERVAL.asMilliseconds());
+        //     return () => clearInterval(interval);
+        // }
+        if (connection && account !== '') {
             const interval = setInterval(async () => {
                 console.log('refreshing3');
-                view_plain_browser_wallet(client2)
+                view(connection)
                     .then((value) => {
                         if (value !== undefined) {
                             setRecord(JSON.parse(value));
@@ -253,62 +283,63 @@ export default function Main(props: WalletConnectionProps) {
             }, REFRESH_INTERVAL.asMilliseconds());
             return () => clearInterval(interval);
         }
-    }, [connection, account, client2, account2]);
+    }, [connection, account]);
 
-    useEffect(() => {
-        if (connection && account) {
-            withJsonRpcClient(connection, (rpcClient) => accountInfo(rpcClient, account))
-                .then((value) => {
-                    if (value !== undefined) {
-                        setAccountBalance(value.accountAmount.toString());
-                    }
-                    setViewError('');
-                })
-                .catch((e) => {
-                    setViewError((e as Error).message);
-                    setAccountBalance('');
-                });
-        }
-    }, [connection]);
+    // useEffect(() => {
+    //     if (connection && account) {
+    //         withJsonRpcClient(connection, (rpcClient) => accountInfo(rpcClient, account))
+    //             .then((value) => {
+    //                 if (value !== undefined) {
+    //                     setAccountBalance(value.accountAmount.toString());
+    //                 }
+    //                 setViewError('');
+    //             })
+    //             .catch((e) => {
+    //                 setViewError((e as Error).message);
+    //                 setAccountBalance('');
+    //             });
+    //     }
+    // }, [connection]);
 
-    useEffect(() => {
-        if (connection && account) {
-            withJsonRpcClient(connection, (rpcClient) => smartContractInfo(rpcClient))
-                .then((value) => {
-                    if (value !== undefined) {
-                        setSmartContractBalance(value.amount.microCcdAmount.toString());
-                    }
-                    setViewError('');
-                })
-                .catch((e) => {
-                    setViewError((e as Error).message);
-                    setSmartContractBalance('');
-                });
-        }
-    }, [connection]);
+    // useEffect(() => {
+    //     if (connection && account) {
+    //         withJsonRpcClient(connection, (rpcClient) => smartContractInfo(rpcClient))
+    //             .then((value) => {
+    //                 if (value !== undefined) {
+    //                     setSmartContractBalance(value.amount.microCcdAmount.toString());
+    //                 }
+    //                 setViewError('');
+    //             })
+    //             .catch((e) => {
+    //                 setViewError((e as Error).message);
+    //                 setSmartContractBalance('');
+    //             });
+    //     }
+    // }, [connection]);
 
-    useEffect(() => {
-        if (connection && account) {
-            withJsonRpcClient(connection, (rpcClient) => view(rpcClient))
-                .then((value) => {
-                    if (value !== undefined) {
-                        setRecord(JSON.parse(value));
-                    }
-                    setViewError('');
-                })
-                .catch((e) => {
-                    setViewError((e as Error).message);
-                    setRecord('');
-                });
-        }
-    }, [connection]);
+    // useEffect(() => {
+    //     if (connection && account) {
+    //         withJsonRpcClient(connection, (rpcClient) => view(rpcClient))
+    //             .then((value) => {
+    //                 if (value !== undefined) {
+    //                     setRecord(JSON.parse(value));
+    //                 }
+    //                 setViewError('');
+    //             })
+    //             .catch((e) => {
+    //                 setViewError((e as Error).message);
+    //                 setRecord('');
+    //             });
+    //     }
+    // }, [connection]);
 
     return (
         <main className="container">
             <div className="textCenter">
                 Version: {version}
-                <h1>Wallet Connect / Browser Wallet Testing Bench </h1>
-                <WalletConnectionTypeButton
+                <h1>Wallet Connect / Browser Wallet Testing Bench</h1>
+                <h1>(Without dApp Libraries)</h1>
+                {/* <WalletConnectionTypeButton
                     connectorType={BROWSER_WALLET}
                     connectorName="Browser Wallet"
                     setWaitingForUser={setWaitingForUser}
@@ -321,17 +352,34 @@ export default function Main(props: WalletConnectionProps) {
                     setWaitingForUser={setWaitingForUser}
                     connection={connection}
                     {...props}
-                />
+                /> */}
                 <button
                     className="btn btn-primary"
-                    style={{}}
-                    disabled={false}
+                    style={connectorTypeStyle(isWaitingForUser, isBrowserWalletConnected)}
+                    disabled={!isWaitingForUser && !isBrowserWalletConnected}
                     type="button"
-                    onClick={connectPlainBrowserWallet}
+                    onClick={isWaitingForUser ? connectPlainBrowserWallet : disConnectPlainBrowserWallet}
                 >
-                    {true ? `Disconnect plain browser wallet` : `Use plain browser wallet`}
+                    {isWaitingForUser
+                        ? `Connect plain browser wallet`
+                        : isBrowserWalletConnected
+                        ? `Disconnect plain browser wallet`
+                        : `Connect plain browser wallet`}
                 </button>
-                {activeConnectorError && (
+                <button
+                    className="btn btn-primary"
+                    style={connectorTypeStyle(isWaitingForUser, !isBrowserWalletConnected)}
+                    disabled={!isWaitingForUser && isBrowserWalletConnected}
+                    type="button"
+                    onClick={isWaitingForUser ? connectPlainMobileWallet : disConnectPlainMobileWallet}
+                >
+                    {isWaitingForUser
+                        ? `Connect plain mobile wallet`
+                        : isBrowserWalletConnected
+                        ? `Connect plain mobile wallet`
+                        : `Disconnect plain mobile wallet`}
+                </button>
+                {/* {activeConnectorError && (
                     <p className="alert alert-danger" role="alert">
                         Connector Error: {activeConnectorError}.
                     </p>
@@ -354,12 +402,12 @@ export default function Main(props: WalletConnectionProps) {
                             {!isConnecting && activeConnectorType === WALLET_CONNECT && 'Connect Mobile Wallet'}
                         </button>
                     </p>
-                )}
+                )} */}
             </div>
 
-            {(account || account2) && (
+            {account && (
                 <div className="row">
-                    {((connection && account !== undefined) || account2) && (
+                    {connection && account && (
                         <>
                             <div className="col-lg-4">
                                 <div className="sticky-top">
@@ -584,17 +632,17 @@ export default function Main(props: WalletConnectionProps) {
                                         onClick={() => {
                                             setReturnValue('');
                                             setReturnValueError('');
-                                            withJsonRpcClient(connection, (rpcClient) =>
-                                                getValue(rpcClient, useModuleSchema, readDropDown)
-                                            )
-                                                .then((value) => {
-                                                    if (value !== undefined) {
-                                                        setReturnValue(JSON.stringify(value));
-                                                    }
-                                                })
-                                                .catch((e) => {
-                                                    setReturnValueError((e as Error).message);
-                                                });
+                                            // withJsonRpcClient(connection, (rpcClient) =>
+                                            //     getValue(rpcClient, useModuleSchema, readDropDown)
+                                            // )
+                                            //     .then((value) => {
+                                            //         if (value !== undefined) {
+                                            //             setReturnValue(JSON.stringify(value));
+                                            //         }
+                                            //     })
+                                            //     .catch((e) => {
+                                            //         setReturnValueError((e as Error).message);
+                                            //     });
                                         }}
                                     >
                                         Get {readDropDown} value
@@ -1072,10 +1120,7 @@ export default function Main(props: WalletConnectionProps) {
                                         onClick={() => {
                                             setSigningError('');
                                             setSignature('');
-                                            const promise = connection.signMessage(account, {
-                                                type: 'StringMessage',
-                                                value: message,
-                                            });
+                                            const promise = connection.signMessage(account, message);
                                             promise
                                                 .then((permitSignature) => {
                                                     setSignature(permitSignature[0][0]);
@@ -1149,12 +1194,8 @@ export default function Main(props: WalletConnectionProps) {
                                             setSigningError('');
                                             setByteSignature('');
                                             const promise = connection.signMessage(account, {
-                                                type: 'BinaryMessage',
-                                                value: serializedMessage,
-                                                schema: {
-                                                    type: 'TypeSchema',
-                                                    value: toBuffer(SET_OBJECT_PARAMETER_SCHEMA, 'base64'),
-                                                },
+                                                data: serializedMessage.toString('hex'),
+                                                schema: SET_OBJECT_PARAMETER_SCHEMA.toString(),
                                             });
                                             promise
                                                 .then((permitSignature) => {
@@ -1191,13 +1232,11 @@ export default function Main(props: WalletConnectionProps) {
                             <div>
                                 <a
                                     className="link"
-                                    href={`https://testnet.ccdscan.io/?dcount=1&dentity=account&daddress=${
-                                        account || account2
-                                    }`}
+                                    href={`https://testnet.ccdscan.io/?dcount=1&dentity=account&daddress=${account}`}
                                     target="_blank"
                                     rel="noreferrer"
                                 >
-                                    {account || account2}
+                                    {account}
                                 </a>
                             </div>
                             <br />
