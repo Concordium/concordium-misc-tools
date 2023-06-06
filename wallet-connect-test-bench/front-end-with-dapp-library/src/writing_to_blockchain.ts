@@ -1,10 +1,5 @@
 import { createContext } from 'react';
-import {
-    SchemaType,
-    SchemaWithContext,
-    SmartContractParameters,
-    WalletApi,
-} from '@concordium/browser-wallet-api-helpers';
+import { SmartContractParameters } from '@concordium/browser-wallet-api-helpers';
 import {
     AccountAddress,
     AccountTransactionType,
@@ -15,6 +10,12 @@ import {
     UpdateContractPayload,
     toBuffer,
 } from '@concordium/web-sdk';
+import { WalletConnection } from '@concordium/react-components';
+import {
+    typeSchemaFromBase64,
+    moduleSchemaFromBase64,
+    TypedSmartContractParameters,
+} from '@concordium/wallet-connectors';
 import {
     CONTRACT_NAME,
     CONTRACT_INDEX,
@@ -36,8 +37,8 @@ import {
     BASE_64_TEST_BENCH_SMART_CONTRACT_MODULE,
 } from './constants';
 
-export async function initializeWithoutAmountWithoutParameter(connection: WalletApi, account: string) {
-    return connection.sendTransaction(account, AccountTransactionType.InitContract, {
+export async function initializeWithoutAmountWithoutParameter(connection: WalletConnection, account: string) {
+    return connection.signAndSendTransaction(account, AccountTransactionType.InitContract, {
         amount: new CcdAmount(BigInt(0)),
         moduleRef: new ModuleReference('4f013778fc2ab2136d12ae994303bcc941619a16f6c80f22e189231781c087c7'),
         initName: 'smart_contract_test_bench',
@@ -46,8 +47,8 @@ export async function initializeWithoutAmountWithoutParameter(connection: Wallet
     } as InitContractPayload);
 }
 
-export async function initializeWithAmount(connection: WalletApi, account: string, cCDAmount: string) {
-    return connection.sendTransaction(account, AccountTransactionType.InitContract, {
+export async function initializeWithAmount(connection: WalletConnection, account: string, cCDAmount: string) {
+    return connection.signAndSendTransaction(account, AccountTransactionType.InitContract, {
         amount: new CcdAmount(BigInt(cCDAmount)),
         moduleRef: new ModuleReference('4f013778fc2ab2136d12ae994303bcc941619a16f6c80f22e189231781c087c7'),
         initName: 'smart_contract_test_bench',
@@ -57,22 +58,22 @@ export async function initializeWithAmount(connection: WalletApi, account: strin
 }
 
 export async function initializeWithParameter(
-    connection: WalletApi,
+    connection: WalletConnection,
     account: string,
     useModuleSchema: boolean,
     input: string
 ) {
     const schema = useModuleSchema
         ? {
-              type: SchemaType.Module,
-              value: BASE_64_SCHEMA.toString(),
+              parameters: Number(input),
+              schema: moduleSchemaFromBase64(BASE_64_SCHEMA),
           }
         : {
-              type: SchemaType.Parameter,
-              value: SET_U16_PARAMETER_SCHEMA.toString(),
+              parameters: Number(input),
+              schema: typeSchemaFromBase64(SET_U16_PARAMETER_SCHEMA),
           };
 
-    return connection.sendTransaction(
+    return connection.signAndSendTransaction(
         account,
         AccountTransactionType.InitContract,
         {
@@ -82,19 +83,18 @@ export async function initializeWithParameter(
             param: toBuffer(''),
             maxContractExecutionEnergy: 30000n,
         } as InitContractPayload,
-        Number(input),
         schema
     );
 }
 
-export async function deploy(connection: WalletApi, account: string) {
-    return connection.sendTransaction(account, AccountTransactionType.DeployModule, {
+export async function deploy(connection: WalletConnection, account: string) {
+    return connection.signAndSendTransaction(account, AccountTransactionType.DeployModule, {
         source: toBuffer(BASE_64_TEST_BENCH_SMART_CONTRACT_MODULE, 'base64'),
     } as DeployModulePayload);
 }
 
 export async function setValue(
-    connection: WalletApi,
+    connection: WalletConnection,
     account: string,
     useModuleSchema: boolean,
     isPayable: boolean,
@@ -153,216 +153,161 @@ export async function setValue(
             throw new Error(`Dropdown option does not exist`);
     }
 
-    let schema: SchemaWithContext = {
-        type: SchemaType.Module,
-        value: BASE_64_SCHEMA.toString(),
+    let schema: TypedSmartContractParameters = {
+        parameters: Number(7),
+        schema: moduleSchemaFromBase64(BASE_64_SCHEMA),
     };
 
     switch (dropDown) {
         case 'u8':
             schema = useModuleSchema
                 ? {
-                      type: SchemaType.Module,
-                      value: BASE_64_SCHEMA.toString(),
+                      parameters: Number(input),
+                      schema: moduleSchemaFromBase64(BASE_64_SCHEMA),
                   }
                 : {
-                      type: SchemaType.Parameter,
-                      value: SET_U8_PARAMETER_SCHEMA.toString(),
+                      parameters: Number(input),
+                      schema: typeSchemaFromBase64(SET_U8_PARAMETER_SCHEMA),
                   };
             break;
         case 'u16':
             schema = useModuleSchema
                 ? {
-                      type: SchemaType.Module,
-                      value: BASE_64_SCHEMA.toString(),
+                      parameters: Number(input),
+                      schema: moduleSchemaFromBase64(BASE_64_SCHEMA),
                   }
                 : {
-                      type: SchemaType.Parameter,
-                      value: SET_U16_PARAMETER_SCHEMA.toString(),
+                      parameters: Number(input),
+                      schema: typeSchemaFromBase64(SET_U16_PARAMETER_SCHEMA),
                   };
             break;
         case 'address':
             schema = useModuleSchema
                 ? {
-                      type: SchemaType.Module,
-                      value: BASE_64_SCHEMA.toString(),
+                      parameters: JSON.parse(input),
+                      schema: moduleSchemaFromBase64(BASE_64_SCHEMA),
                   }
                 : {
-                      type: SchemaType.Parameter,
-                      value: SET_ADDRESS_PARAMETER_SCHEMA.toString(),
+                      parameters: JSON.parse(input),
+                      schema: typeSchemaFromBase64(SET_ADDRESS_PARAMETER_SCHEMA),
                   };
-
             break;
         case 'contract_address':
             schema = useModuleSchema
                 ? {
-                      type: SchemaType.Module,
-                      value: BASE_64_SCHEMA.toString(),
+                      parameters: JSON.parse(input),
+                      schema: moduleSchemaFromBase64(BASE_64_SCHEMA),
                   }
                 : {
-                      type: SchemaType.Parameter,
-                      value: SET_CONTRACT_ADDRESS_PARAMETER_SCHEMA.toString(),
+                      parameters: JSON.parse(input),
+                      schema: typeSchemaFromBase64(SET_CONTRACT_ADDRESS_PARAMETER_SCHEMA),
                   };
             break;
         case 'account_address':
             schema = useModuleSchema
                 ? {
-                      type: SchemaType.Module,
-                      value: BASE_64_SCHEMA.toString(),
+                      parameters: JSON.parse(`"${input}"`),
+                      schema: moduleSchemaFromBase64(BASE_64_SCHEMA),
                   }
                 : {
-                      type: SchemaType.Parameter,
-                      value: SET_ACCOUNT_ADDRESS_PARAMETER_SCHEMA.toString(),
+                      parameters: JSON.parse(`"${input}"`),
+                      schema: typeSchemaFromBase64(SET_ACCOUNT_ADDRESS_PARAMETER_SCHEMA),
                   };
             break;
         case 'hash':
             schema = useModuleSchema
                 ? {
-                      type: SchemaType.Module,
-                      value: BASE_64_SCHEMA.toString(),
+                      parameters: JSON.parse(`"${input}"`),
+                      schema: moduleSchemaFromBase64(BASE_64_SCHEMA),
                   }
                 : {
-                      type: SchemaType.Parameter,
-                      value: SET_HASH_PARAMETER_SCHEMA.toString(),
+                      parameters: JSON.parse(`"${input}"`),
+                      schema: typeSchemaFromBase64(SET_HASH_PARAMETER_SCHEMA),
                   };
-
             break;
         case 'public_key':
             schema = useModuleSchema
                 ? {
-                      type: SchemaType.Module,
-                      value: BASE_64_SCHEMA.toString(),
+                      parameters: JSON.parse(`"${input}"`),
+                      schema: moduleSchemaFromBase64(BASE_64_SCHEMA),
                   }
                 : {
-                      type: SchemaType.Parameter,
-                      value: SET_PUBLIC_KEY_PARAMETER_SCHEMA.toString(),
+                      parameters: JSON.parse(`"${input}"`),
+                      schema: typeSchemaFromBase64(SET_PUBLIC_KEY_PARAMETER_SCHEMA),
                   };
-
             break;
         case 'signature':
             schema = useModuleSchema
                 ? {
-                      type: SchemaType.Module,
-                      value: BASE_64_SCHEMA.toString(),
+                      parameters: JSON.parse(`"${input}"`),
+                      schema: moduleSchemaFromBase64(BASE_64_SCHEMA),
                   }
                 : {
-                      type: SchemaType.Parameter,
-                      value: SET_SIGNATURE_PARAMETER_SCHEMA.toString(),
+                      parameters: JSON.parse(`"${input}"`),
+                      schema: typeSchemaFromBase64(SET_SIGNATURE_PARAMETER_SCHEMA),
                   };
             break;
         case 'timestamp':
             schema = useModuleSchema
                 ? {
-                      type: SchemaType.Module,
-                      value: BASE_64_SCHEMA.toString(),
+                      parameters: JSON.parse(`"${input}"`),
+                      schema: moduleSchemaFromBase64(BASE_64_SCHEMA),
                   }
                 : {
-                      type: SchemaType.Parameter,
-                      value: SET_TIMESTAMP_PARAMETER_SCHEMA.toString(),
+                      parameters: JSON.parse(`"${input}"`),
+                      schema: typeSchemaFromBase64(SET_TIMESTAMP_PARAMETER_SCHEMA),
                   };
-
             break;
         case 'string':
             schema = useModuleSchema
                 ? {
-                      type: SchemaType.Module,
-                      value: BASE_64_SCHEMA.toString(),
+                      parameters: JSON.parse(`"${input}"`),
+                      schema: moduleSchemaFromBase64(BASE_64_SCHEMA),
                   }
                 : {
-                      type: SchemaType.Parameter,
-                      value: SET_STRING_PARAMETER_SCHEMA.toString(),
+                      parameters: JSON.parse(`"${input}"`),
+                      schema: typeSchemaFromBase64(SET_STRING_PARAMETER_SCHEMA),
                   };
-
             break;
         case 'option_u8_none':
             schema = useModuleSchema
                 ? {
-                      type: SchemaType.Module,
-                      value: BASE_64_SCHEMA.toString(),
+                      parameters: { None: [] },
+                      schema: moduleSchemaFromBase64(BASE_64_SCHEMA),
                   }
                 : {
-                      type: SchemaType.Parameter,
-                      value: SET_OPTION_PARAMETER_SCHEMA.toString(),
+                      parameters: { None: [] },
+                      schema: typeSchemaFromBase64(SET_OPTION_PARAMETER_SCHEMA),
                   };
-
             break;
         case 'option_u8_some':
             schema = useModuleSchema
                 ? {
-                      type: SchemaType.Module,
-                      value: BASE_64_SCHEMA.toString(),
+                      parameters: { Some: [Number(input)] },
+                      schema: moduleSchemaFromBase64(BASE_64_SCHEMA),
                   }
                 : {
-                      type: SchemaType.Parameter,
-                      value: SET_OPTION_PARAMETER_SCHEMA.toString(),
+                      parameters: { Some: [Number(input)] },
+                      schema: typeSchemaFromBase64(SET_OPTION_PARAMETER_SCHEMA),
                   };
-
             break;
         // We called the `set_u8` function but input a string now as the input parameter.
         case 'wrong_schema':
             schema = useModuleSchema
                 ? {
-                      type: SchemaType.Module,
-                      value: BASE_64_SCHEMA.toString(),
+                      parameters: 'wrong input parameter type',
+                      schema: moduleSchemaFromBase64(BASE_64_SCHEMA),
                   }
                 : {
-                      type: SchemaType.Parameter,
-                      value: SET_U8_PARAMETER_SCHEMA.toString(),
+                      parameters: 'wrong input parameter type',
+                      schema: typeSchemaFromBase64(SET_U8_PARAMETER_SCHEMA),
                   };
-
             break;
         default:
             throw new Error(`Dropdown option does not exist`);
     }
 
-    let parameters;
-
-    switch (dropDown) {
-        case 'u8':
-            parameters = Number(input);
-            break;
-        case 'u16':
-            parameters = Number(input);
-            break;
-        case 'address':
-            parameters = JSON.parse(input);
-            break;
-        case 'contract_address':
-            parameters = JSON.parse(input);
-            break;
-        case 'account_address':
-            parameters = JSON.parse(`"${input}"`);
-            break;
-        case 'hash':
-            parameters = JSON.parse(`"${input}"`);
-            break;
-        case 'public_key':
-            parameters = JSON.parse(`"${input}"`);
-            break;
-        case 'signature':
-            parameters = JSON.parse(`"${input}"`);
-            break;
-        case 'timestamp':
-            parameters = JSON.parse(`"${input}"`);
-            break;
-        case 'string':
-            parameters = JSON.parse(`"${input}"`);
-            break;
-        case 'option_u8_none':
-            parameters = { None: [] };
-            break;
-        case 'option_u8_some':
-            parameters = { Some: [Number(input)] };
-            break;
-        // We called the `set_u8` function but input a string now as the input parameter.
-        case 'wrong_schema':
-            parameters = 'wrong input parameter type';
-            break;
-        default:
-            throw new Error(`Dropdown option does not exist`);
-    }
-
-    return connection.sendTransaction(
+    return connection.signAndSendTransaction(
         account,
         AccountTransactionType.Update,
         {
@@ -373,14 +318,13 @@ export async function setValue(
             },
             receiveName,
             maxContractExecutionEnergy: 30000n,
-        },
-        parameters,
+        } as UpdateContractPayload,
         schema
     );
 }
 
 export async function setArray(
-    connection: WalletApi,
+    connection: WalletConnection,
     account: string,
     useModuleSchema: boolean,
     isPayable: boolean,
@@ -402,17 +346,17 @@ export async function setArray(
 
     const schema = useModuleSchema
         ? {
-              type: SchemaType.Module,
-              value: BASE_64_SCHEMA.toString(),
+              parameters: inputParameter,
+              schema: moduleSchemaFromBase64(BASE_64_SCHEMA),
           }
         : {
-              type: SchemaType.Parameter,
-              value: SET_ADDRESS_ARRAY_PARAMETER_SCHEMA.toString(),
+              parameters: inputParameter,
+              schema: typeSchemaFromBase64(SET_ADDRESS_ARRAY_PARAMETER_SCHEMA),
           };
 
     const receiveName = isPayable ? `${CONTRACT_NAME}.set_address_array_payable` : `${CONTRACT_NAME}.set_address_array`;
 
-    return connection.sendTransaction(
+    return connection.signAndSendTransaction(
         account,
         AccountTransactionType.Update,
         {
@@ -424,13 +368,12 @@ export async function setArray(
             receiveName,
             maxContractExecutionEnergy: 30000n,
         } as UpdateContractPayload,
-        inputParameter,
         schema
     );
 }
 
 export async function setObject(
-    connection: WalletApi,
+    connection: WalletConnection,
     account: string,
     useModuleSchema: boolean,
     isPayable: boolean,
@@ -468,17 +411,17 @@ export async function setObject(
 
     const schema = useModuleSchema
         ? {
-              type: SchemaType.Module,
-              value: BASE_64_SCHEMA.toString(),
+              parameters: inputParameter,
+              schema: moduleSchemaFromBase64(BASE_64_SCHEMA),
           }
         : {
-              type: SchemaType.Parameter,
-              value: SET_OBJECT_PARAMETER_SCHEMA.toString(),
+              parameters: inputParameter,
+              schema: typeSchemaFromBase64(SET_OBJECT_PARAMETER_SCHEMA),
           };
 
     const receiveName = isPayable ? `${CONTRACT_NAME}.set_object_payable` : `${CONTRACT_NAME}.set_object`;
 
-    return connection.sendTransaction(
+    return connection.signAndSendTransaction(
         account,
         AccountTransactionType.Update,
         {
@@ -490,27 +433,31 @@ export async function setObject(
             receiveName,
             maxContractExecutionEnergy: 30000n,
         } as UpdateContractPayload,
-        inputParameter,
         schema
     );
 }
 
-export async function simpleCCDTransfer(connection: WalletApi, account: string, toAccount: string, cCDAmount: string) {
-    return connection.sendTransaction(account, AccountTransactionType.Transfer, {
+export async function simpleCCDTransfer(
+    connection: WalletConnection,
+    account: string,
+    toAccount: string,
+    cCDAmount: string
+) {
+    return connection.signAndSendTransaction(account, AccountTransactionType.Transfer, {
         amount: new CcdAmount(BigInt(cCDAmount)),
         toAddress: new AccountAddress(toAccount),
     });
 }
 
-export async function simpleCCDTransferToNonExistingAccountAddress(connection: WalletApi, account: string) {
-    return connection.sendTransaction(account, AccountTransactionType.Transfer, {
+export async function simpleCCDTransferToNonExistingAccountAddress(connection: WalletConnection, account: string) {
+    return connection.signAndSendTransaction(account, AccountTransactionType.Transfer, {
         amount: new CcdAmount(BigInt(1n)),
         toAddress: new AccountAddress('35CJPZohio6Ztii2zy1AYzJKvuxbGG44wrBn7hLHiYLoF2nxnh'),
     });
 }
 
-export async function reverts(connection: WalletApi, account: string) {
-    return connection.sendTransaction(account, AccountTransactionType.Update, {
+export async function reverts(connection: WalletConnection, account: string) {
+    return connection.signAndSendTransaction(account, AccountTransactionType.Update, {
         amount: new CcdAmount(BigInt(0)),
         address: {
             index: CONTRACT_INDEX,
@@ -521,8 +468,8 @@ export async function reverts(connection: WalletApi, account: string) {
     } as UpdateContractPayload);
 }
 
-export async function internalCallReverts(connection: WalletApi, account: string) {
-    return connection.sendTransaction(account, AccountTransactionType.Update, {
+export async function internalCallReverts(connection: WalletConnection, account: string) {
+    return connection.signAndSendTransaction(account, AccountTransactionType.Update, {
         amount: new CcdAmount(BigInt(0)),
         address: {
             index: CONTRACT_INDEX,
@@ -533,8 +480,8 @@ export async function internalCallReverts(connection: WalletApi, account: string
     } as UpdateContractPayload);
 }
 
-export async function internalCallSuccess(connection: WalletApi, account: string) {
-    return connection.sendTransaction(account, AccountTransactionType.Update, {
+export async function internalCallSuccess(connection: WalletConnection, account: string) {
+    return connection.signAndSendTransaction(account, AccountTransactionType.Update, {
         amount: new CcdAmount(BigInt(0)),
         address: {
             index: CONTRACT_INDEX,
@@ -545,8 +492,8 @@ export async function internalCallSuccess(connection: WalletApi, account: string
     } as UpdateContractPayload);
 }
 
-export async function notExistingEntrypoint(connection: WalletApi, account: string) {
-    return connection.sendTransaction(
+export async function notExistingEntrypoint(connection: WalletConnection, account: string) {
+    return connection.signAndSendTransaction(
         account,
         AccountTransactionType.Update,
         {
@@ -558,10 +505,9 @@ export async function notExistingEntrypoint(connection: WalletApi, account: stri
             receiveName: `${CONTRACT_NAME}.does_not_exist`,
             maxContractExecutionEnergy: 30000n,
         } as UpdateContractPayload,
-        3,
         {
-            type: SchemaType.Parameter,
-            value: SET_U8_PARAMETER_SCHEMA.toString(),
+            parameters: 3,
+            schema: typeSchemaFromBase64(SET_U8_PARAMETER_SCHEMA),
         }
     );
 }

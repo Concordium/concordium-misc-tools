@@ -1,3 +1,11 @@
+import {
+    BrowserWalletConnector,
+    ephemeralConnectorType,
+    Network,
+    WalletConnectConnector,
+    CONCORDIUM_WALLET_CONNECT_PROJECT_ID,
+} from '@concordium/react-components';
+import { SignClientTypes } from '@walletconnect/types';
 import moment from 'moment';
 
 export const REFRESH_INTERVAL = moment.duration(10, 'seconds');
@@ -80,23 +88,23 @@ export const CONTRACT_INDEX = 4726n;
 
 export const CONTRACT_SUB_INDEX = 0n;
 
-// const WALLET_CONNECT_OPTS: SignClientTypes.Options = {
-//     projectId: CONCORDIUM_WALLET_CONNECT_PROJECT_ID,
-//     metadata: {
-//         name: 'Test_Bench',
-//         description: 'Example dApp for testing.',
-//         url: '#',
-//         icons: ['https://walletconnect.com/walletconnect-logo.png'],
-//     },
-// };
-// export const TESTNET: Network = {
-//     name: 'testnet',
-//     genesisHash: TESTNET_GENESIS_BLOCK_HASH,
-//     jsonRpcUrl: 'https://json-rpc.testnet.concordium.com',
-//     ccdScanBaseUrl: 'https://testnet.ccdscan.io',
-// };
+const WALLET_CONNECT_OPTS: SignClientTypes.Options = {
+    projectId: CONCORDIUM_WALLET_CONNECT_PROJECT_ID,
+    metadata: {
+        name: 'Test_Bench',
+        description: 'Example dApp for testing.',
+        url: '#',
+        icons: ['https://walletconnect.com/walletconnect-logo.png'],
+    },
+};
+export const TESTNET: Network = {
+    name: 'testnet',
+    genesisHash: TESTNET_GENESIS_BLOCK_HASH,
+    jsonRpcUrl: 'https://json-rpc.testnet.concordium.com',
+    ccdScanBaseUrl: 'https://testnet.ccdscan.io',
+};
 
-// export const BROWSER_WALLET = ephemeralConnectorType(BrowserWalletConnector.create);
-// export const WALLET_CONNECT = ephemeralConnectorType(
-//     WalletConnectConnector.create.bind(undefined, WALLET_CONNECT_OPTS)
-// );
+export const BROWSER_WALLET = ephemeralConnectorType(BrowserWalletConnector.create);
+export const WALLET_CONNECT = ephemeralConnectorType(
+    WalletConnectConnector.create.bind(undefined, WALLET_CONNECT_OPTS)
+);
