@@ -3,7 +3,7 @@
 # - 5 bakers
 # - one additional foundation account
 # - genesis time set to the time when the tool runs
-# - average block time set to 1s
+# - minimum block time set to 1s
 
 protocolVersion = "6"
 
