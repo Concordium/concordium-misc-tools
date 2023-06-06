@@ -1,4 +1,5 @@
 import { createContext } from 'react';
+import { SmartContractParameters } from '@concordium/browser-wallet-api-helpers';
 import {
     AccountAddress,
     AccountTransactionType,
@@ -341,7 +342,7 @@ export async function setArray(
                 },
             ],
         },
-    ];
+    ] as SmartContractParameters;
 
     const schema = useModuleSchema
         ? {
@@ -366,9 +367,7 @@ export async function setArray(
             },
             receiveName,
             maxContractExecutionEnergy: 30000n,
-        } as UpdateContractPayload,
-        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-        // @ts-ignore:
+        },
         schema
     );
 }
