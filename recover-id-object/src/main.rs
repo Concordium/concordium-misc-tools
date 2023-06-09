@@ -5,7 +5,9 @@ use concordium::{
     id::{
         account_holder::generate_id_recovery_request,
         constants::{ArCurve, AttributeKind, IpPairing},
-        types::{IdRecoveryRequest, IdentityObjectV1, IpInfo},
+        types::{
+            account_address_from_registration_id, IdRecoveryRequest, IdentityObjectV1, IpInfo,
+        },
     },
     v2::BlockIdentifier,
 };
@@ -34,7 +36,11 @@ struct Api {
     #[clap(long, help = "Path to the seed phrase file.")]
     concordium_wallet: std::path::PathBuf,
     /// Recovery URL start.
-    #[clap(long = "ip-info-url", help = "Identity recovery URL")]
+    #[clap(
+        long = "ip-info-url",
+        help = "Identity recovery URL",
+        default_value = "http://wallet-proxy.testnet.concordium.com/v1/ip_info"
+    )]
     wp_url: url::Url,
     #[clap(long = "ip-index", help = "Identity of the identity provider.")]
     ip_index: u32,
@@ -126,6 +132,25 @@ async fn main() -> anyhow::Result<()> {
                 }))?,
             )?;
             println!("Got identity object for index {idx}.");
+            let mut acc_fail_count = 0;
+            for acc_idx in 0u8..=255 {
+                let prf_key = wallet.get_prf_key(app.ip_index, idx)?;
+                let reg_id = prf_key.prf(crypto_params.elgamal_generator(), acc_idx)?;
+                let address = account_address_from_registration_id(&reg_id);
+                match concordium_client
+                    .get_account_info(&address.into(), BlockIdentifier::LastFinal)
+                    .await
+                {
+                    Ok(_) => println!("Account with address {address} found."),
+                    Err(e) if e.is_not_found() => {
+                        acc_fail_count += 1;
+                        if acc_fail_count > 5 {
+                            break;
+                        }
+                    }
+                    Err(e) => anyhow::bail!("Cannot query the node: {e}"),
+                }
+            }
             failure_count = 0;
         } else {
             failure_count += 1;
