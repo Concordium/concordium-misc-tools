@@ -143,7 +143,7 @@ async fn main() -> anyhow::Result<()> {
     found_diff |=
         compare_passive_delegators(&mut client, &mut client2, block1, block2, pv1, pv2).await?;
 
-    found_diff |= compare_active_bakers(&mut client, &mut client2, block1, block2).await?;
+    found_diff |= compare_active_bakers(&mut client, &mut client2, block1, block2, pv2).await?;
 
     found_diff |= compare_baker_pools(&mut client, &mut client2, block1, block2, pv1, pv2).await?;
 
@@ -534,6 +534,7 @@ async fn compare_active_bakers(
     client2: &mut v2::Client,
     block1: BlockHash,
     block2: BlockHash,
+    pv2: ProtocolVersion,
 ) -> anyhow::Result<bool> {
     println!("Checking active bakers.");
     let mut found_diff = false;
@@ -541,7 +542,10 @@ async fn compare_active_bakers(
         client1.get_election_info(block1),
         client2.get_election_info(block2)
     )?;
-    if ei1.response.election_difficulty != ei2.response.election_difficulty {
+    // Election difficulty does not exist from P6 onwards.
+    if pv2 < ProtocolVersion::P6
+        && ei1.response.election_difficulty != ei2.response.election_difficulty
+    {
         diff!("Election difficulty differs.");
         found_diff = true;
     }
