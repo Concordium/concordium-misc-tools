@@ -3,7 +3,7 @@ protocolVersion = "1"
 [out]
 updateKeys = "./update-keys"
 accountKeys = "./accounts-out"
-bakerKeys = "./bakers-out"
+bakerKeys = "./bakers"
 identityProviders = "./idps-out"
 anonymityRevokers = "./ars-out"
 genesis = "./genesis.dat"
@@ -27,8 +27,8 @@ repeat = 3
 
 [[accounts]]
 kind = "fresh"
-balance = "1000000000"
-stake = "500000000"
+balance = "1000000000000000"
+stake = "1000000000000000"
 template = "baker"
 identityProvider = 0
 numKeys = 1
@@ -42,7 +42,7 @@ template = "foundation"
 identityProvider = 0
 numKeys = 1
 threshold = 1
-repeat = 10000
+repeat = 100
 foundation = true
 
 [updates]
@@ -65,7 +65,7 @@ addAnonymityRevoker = {authorizedKeys = [0,1,2,3,4,5,6], threshold = 7}
 addIdentityProvider = {authorizedKeys = [0,1,2,3,4,5,6], threshold = 7}
 
 [parameters]
-genesisTime = "2022-06-24T11:12:43Z"
+genesisTime = "2023-06-19T19:01:00Z"
 slotDuration = 250
 leadershipElectionNonce = "d1bc8d3ba4afc7e109612cb73acbdddac052c93025aa1f82942edabb7deb82a1"
 epochLength = 400
@@ -83,7 +83,7 @@ allowZeroDelay = true
 
 [parameters.chain]
 version = "v0"
-electionDifficulty = 0.025
+electionDifficulty = 0.25
 euroPerEnergy = 0.00002
 microCCDPerEuro = 500_000
 accountCreationLimit = 10

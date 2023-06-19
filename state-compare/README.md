@@ -45,6 +45,7 @@ The following checks are performed.
   tool checks that the pools are the same, and have the same capital. It also
   checks that the delegators for each pool are the same, which includes checking
   that the staked amounts are the same, as well as any pending change.
+- Update sequence numbers are migrated correctly.
 
 ## Example
 
