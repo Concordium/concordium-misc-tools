@@ -143,9 +143,12 @@ async fn main() -> anyhow::Result<()> {
     found_diff |=
         compare_passive_delegators(&mut client, &mut client2, block1, block2, pv1, pv2).await?;
 
-    found_diff |= compare_active_bakers(&mut client, &mut client2, block1, block2).await?;
+    found_diff |=
+        compare_active_bakers(&mut client, &mut client2, block1, block2, pv1, pv2).await?;
 
     found_diff |= compare_baker_pools(&mut client, &mut client2, block1, block2, pv1, pv2).await?;
+
+    found_diff |= compare_update_queues(&mut client, &mut client2, block1, block2).await?;
 
     if found_diff {
         anyhow::bail!(format!("States in the two blocks {} and {} differ.", block1, block2).red());
@@ -153,6 +156,41 @@ async fn main() -> anyhow::Result<()> {
         println!("{}", "No changes in the state detected.".green());
     }
     Ok(())
+}
+
+async fn compare_update_queues(
+    client1: &mut v2::Client,
+    client2: &mut v2::Client,
+    block1: BlockHash,
+    block2: BlockHash,
+) -> anyhow::Result<bool> {
+    let s1 = client1
+        .get_next_update_sequence_numbers(block1)
+        .await?
+        .response;
+    let s2 = client2
+        .get_next_update_sequence_numbers(block2)
+        .await?
+        .response;
+    if s1 != s2 {
+        diff!("    Sequence numbers differ: {s1:#?} {s2:#?}")
+    }
+    let q1 = client1
+        .get_block_pending_updates(block1)
+        .await?
+        .response
+        .try_collect::<Vec<_>>()
+        .await?;
+    let q2 = client2
+        .get_block_pending_updates(block2)
+        .await?
+        .response
+        .try_collect::<Vec<_>>()
+        .await?;
+    if q1.len() != q2.len() {
+        return Ok(false);
+    }
+    Ok(s1 != s2)
 }
 
 async fn compare_account_lists(
@@ -534,6 +572,8 @@ async fn compare_active_bakers(
     client2: &mut v2::Client,
     block1: BlockHash,
     block2: BlockHash,
+    pv1: ProtocolVersion,
+    pv2: ProtocolVersion,
 ) -> anyhow::Result<bool> {
     println!("Checking active bakers.");
     let mut found_diff = false;
@@ -541,7 +581,10 @@ async fn compare_active_bakers(
         client1.get_election_info(block1),
         client2.get_election_info(block2)
     )?;
-    if ei1.response.election_difficulty != ei2.response.election_difficulty {
+    if pv1 < ProtocolVersion::P6
+        && pv2 < ProtocolVersion::P6
+        && ei1.response.election_difficulty != ei2.response.election_difficulty
+    {
         diff!("Election difficulty differs.");
         found_diff = true;
     }
