@@ -46,6 +46,7 @@ The following checks are performed.
   checks that the delegators for each pool are the same, which includes checking
   that the staked amounts are the same, as well as any pending change.
 - Update sequence numbers are migrated correctly.
+- Election difficulty only checked for protocols before P6.
 
 ## Example
 
