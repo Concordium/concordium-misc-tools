@@ -47,6 +47,34 @@ function TestBox({ header, children, note }: TestBoxProps) {
     );
 }
 
+type SwitchBoxProps = PropsWithChildren<{
+    upText: string;
+    downText: string;
+    hookValue: boolean;
+    hookSetter: (c: boolean) => void;
+}>;
+
+function SwitchBox({ upText, downText, hookValue, hookSetter }: SwitchBoxProps) {
+    return (
+        <div className="switch-wrapper">
+            <div style={{ fontWeight: hookValue ? 'bold' : 'normal' }}>{upText}</div>
+            <Switch
+                onChange={() => {
+                    hookSetter(!hookValue);
+                }}
+                onColor="#308274"
+                offColor="#308274"
+                onHandleColor="#174039"
+                offHandleColor="#174039"
+                checked={!hookValue}
+                checkedIcon={false}
+                uncheckedIcon={false}
+            />
+            <div style={{ fontWeight: hookValue ? 'normal' : 'bold' }}>{downText}</div>
+        </div>
+    );
+}
+
 export default function Main(props: WalletConnectionProps) {
     const { activeConnectorType, activeConnector, activeConnectorError, connectedAccounts, genesisHashes } = props;
 
@@ -348,38 +376,18 @@ export default function Main(props: WalletConnectionProps) {
                                     note="Expected result after pressing the button and confirming in wallet: The
                                         transaction hash or an error message should appear in the right column."
                                 >
-                                    <div className="switch-wrapper">
-                                        <div>Use module schema</div>
-                                        <Switch
-                                            onChange={() => {
-                                                setUseModuleSchema(!useModuleSchema);
-                                            }}
-                                            onColor="#308274"
-                                            offColor="#308274"
-                                            onHandleColor="#174039"
-                                            offHandleColor="#174039"
-                                            checked={!useModuleSchema}
-                                            checkedIcon={false}
-                                            uncheckedIcon={false}
-                                        />
-                                        <div>Use parameter schema</div>
-                                    </div>
-                                    <div className="switch-wrapper">
-                                        <div>Is payable</div>
-                                        <Switch
-                                            onChange={() => {
-                                                setIsPayable(!isPayable);
-                                            }}
-                                            onColor="#308274"
-                                            offColor="#308274"
-                                            onHandleColor="#174039"
-                                            offHandleColor="#174039"
-                                            checked={!isPayable}
-                                            checkedIcon={false}
-                                            uncheckedIcon={false}
-                                        />
-                                        <div>Is not payable</div>
-                                    </div>
+                                    <SwitchBox
+                                        upText="Use module schema"
+                                        downText="Use parameter schema"
+                                        hookValue={useModuleSchema}
+                                        hookSetter={setUseModuleSchema}
+                                    />
+                                    <SwitchBox
+                                        upText="Is payable"
+                                        downText="Is not payable"
+                                        hookValue={isPayable}
+                                        hookSetter={setIsPayable}
+                                    />
                                     <label className="field">
                                         Select function:
                                         <br />
@@ -454,22 +462,12 @@ export default function Main(props: WalletConnectionProps) {
                                     note="Expected result after pressing the button: The return value or an error message
                                         should appear in the above test unit."
                                 >
-                                    <div className="switch-wrapper">
-                                        <div>Use module schema</div>
-                                        <Switch
-                                            onChange={() => {
-                                                setUseModuleSchema(!useModuleSchema);
-                                            }}
-                                            onColor="#308274"
-                                            offColor="#308274"
-                                            onHandleColor="#174039"
-                                            offHandleColor="#174039"
-                                            checked={!useModuleSchema}
-                                            checkedIcon={false}
-                                            uncheckedIcon={false}
-                                        />
-                                        <div>Use parameter schema</div>
-                                    </div>
+                                    <SwitchBox
+                                        upText="Use module schema"
+                                        downText="Use parameter schema"
+                                        hookValue={useModuleSchema}
+                                        hookSetter={setUseModuleSchema}
+                                    />
                                     <label className="field">
                                         Select function:
                                         <br />
@@ -532,38 +530,18 @@ export default function Main(props: WalletConnectionProps) {
                                     note="Expected result after pressing the button and confirming in wallet: The
                                         transaction hash or an error message should appear in the right column."
                                 >
-                                    <div className="switch-wrapper">
-                                        <div>Use module schema</div>
-                                        <Switch
-                                            onChange={() => {
-                                                setUseModuleSchema(!useModuleSchema);
-                                            }}
-                                            onColor="#308274"
-                                            offColor="#308274"
-                                            onHandleColor="#174039"
-                                            offHandleColor="#174039"
-                                            checked={!useModuleSchema}
-                                            checkedIcon={false}
-                                            uncheckedIcon={false}
-                                        />
-                                        <div>Use parameter schema</div>
-                                    </div>
-                                    <div className="switch-wrapper">
-                                        <div>Is payable</div>
-                                        <Switch
-                                            onChange={() => {
-                                                setIsPayable(!isPayable);
-                                            }}
-                                            onColor="#308274"
-                                            offColor="#308274"
-                                            onHandleColor="#174039"
-                                            offHandleColor="#174039"
-                                            checked={!isPayable}
-                                            checkedIcon={false}
-                                            uncheckedIcon={false}
-                                        />
-                                        <div>Is not payable</div>
-                                    </div>
+                                    <SwitchBox
+                                        upText="Use module schema"
+                                        downText="Use parameter schema"
+                                        hookValue={useModuleSchema}
+                                        hookSetter={setUseModuleSchema}
+                                    />
+                                    <SwitchBox
+                                        upText="Is payable"
+                                        downText="Is not payable"
+                                        hookValue={isPayable}
+                                        hookSetter={setIsPayable}
+                                    />
                                     <label className="field">
                                         <p>CCD (micro):</p>
                                         <input
@@ -603,38 +581,18 @@ export default function Main(props: WalletConnectionProps) {
                                         transaction hash or an error message should appear in the right column.
                                         "
                                 >
-                                    <div className="switch-wrapper">
-                                        <div>Use module schema</div>
-                                        <Switch
-                                            onChange={() => {
-                                                setUseModuleSchema(!useModuleSchema);
-                                            }}
-                                            onColor="#308274"
-                                            offColor="#308274"
-                                            onHandleColor="#174039"
-                                            offHandleColor="#174039"
-                                            checked={!useModuleSchema}
-                                            checkedIcon={false}
-                                            uncheckedIcon={false}
-                                        />
-                                        <div>Use parameter schema</div>
-                                    </div>
-                                    <div className="switch-wrapper">
-                                        <div>Is payable</div>
-                                        <Switch
-                                            onChange={() => {
-                                                setIsPayable(!isPayable);
-                                            }}
-                                            onColor="#308274"
-                                            offColor="#308274"
-                                            onHandleColor="#174039"
-                                            offHandleColor="#174039"
-                                            checked={!isPayable}
-                                            checkedIcon={false}
-                                            uncheckedIcon={false}
-                                        />
-                                        <div>Is not payable</div>
-                                    </div>
+                                    <SwitchBox
+                                        upText="Use module schema"
+                                        downText="Use parameter schema"
+                                        hookValue={useModuleSchema}
+                                        hookSetter={setUseModuleSchema}
+                                    />
+                                    <SwitchBox
+                                        upText="Is payable"
+                                        downText="Is not payable"
+                                        hookValue={isPayable}
+                                        hookSetter={setIsPayable}
+                                    />
                                     <label className="field">
                                         <p>CCD (micro):</p>
                                         <input
@@ -815,22 +773,12 @@ export default function Main(props: WalletConnectionProps) {
                                         transaction hash or an error message should appear in the right column.
                                         "
                                 >
-                                    <div className="switch-wrapper">
-                                        <div>Use module schema</div>
-                                        <Switch
-                                            onChange={() => {
-                                                setUseModuleSchema(!useModuleSchema);
-                                            }}
-                                            onColor="#308274"
-                                            offColor="#308274"
-                                            onHandleColor="#174039"
-                                            offHandleColor="#174039"
-                                            checked={!useModuleSchema}
-                                            checkedIcon={false}
-                                            uncheckedIcon={false}
-                                        />
-                                        <div>Use parameter schema</div>
-                                    </div>
+                                    <SwitchBox
+                                        upText="Use module schema"
+                                        downText="Use parameter schema"
+                                        hookValue={useModuleSchema}
+                                        hookSetter={setUseModuleSchema}
+                                    />
                                     <label className="field">
                                         Input parameter:
                                         <br />
