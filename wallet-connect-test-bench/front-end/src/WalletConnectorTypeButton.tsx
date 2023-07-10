@@ -9,15 +9,13 @@ import {
 } from '@concordium/react-components';
 
 function connectorTypeStyle(isSelected: boolean, isConnected: boolean) {
-    const style = {};
     if (isConnected) {
-        style.backgroundColor = '#823030';
-        style.border = '1px solid #520C0C';
-    } else if (isSelected) {
-        style.backgroundColor = '#174039';
-        style.border = '1px solid #0c221f';
+        return { backgroundColor: '#823030', border: '1px solid #520C0C' };
     }
-    return style;
+    if (isSelected) {
+        return { backgroundColor: '#174039', border: '1px solid #0c221f' };
+    }
+    return {};
 }
 
 interface Props extends WalletConnectionProps {
