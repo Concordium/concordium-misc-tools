@@ -1041,6 +1041,19 @@ export default function Main(props: WalletConnectionProps) {
                                         </div>
                                     )}
                                 </TestBox>
+                                <br />
+                                <br />
+                                <div className="textCenter">
+                                    <a
+                                        href="https://github.com/Concordium/concordium-misc-tools/tree/main/wallet-connect-test-bench"
+                                        target="_blank"
+                                        rel="noreferrer"
+                                    >
+                                        Source code
+                                    </a>
+                                    <br />
+                                    <br />
+                                </div>
                             </div>
                         </>
                     )}
