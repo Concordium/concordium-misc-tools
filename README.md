@@ -6,10 +6,6 @@ have its own repository. This is the place for short scripts.
 
 The tools are
 
-- [node-liveness-checker](./node-liveness-checker)
-  A tool that determines whether a node is up and running, and whether it is
-  sufficiently up to date. The purpose of this tool is to help automate node
-  management.
 - [wallet-proxy-load-simulator](./wallet-proxy-load-simulator)
   A tool to simulate the load on the wallet-proxy similar to what mobile wallets
   are expected to do.
