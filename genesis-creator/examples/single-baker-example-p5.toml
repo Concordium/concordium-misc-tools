@@ -32,7 +32,7 @@ kind = "fresh"
 id = 0
 repeat = 3
 
-# 5 baker accounts
+# the baker account
 [[accounts]]
 kind = "fresh"
 balance = "3500000000000000"
