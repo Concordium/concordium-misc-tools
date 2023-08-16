@@ -526,6 +526,8 @@ export default function Main(props: WalletConnectionProps) {
                                                     .catch((e) => {
                                                         setReturnValueError((e as Error).message);
                                                     });
+                                            } else {
+                                                setReturnValueError('`grpcClient` is undefined');
                                             }
                                         }}
                                     >
