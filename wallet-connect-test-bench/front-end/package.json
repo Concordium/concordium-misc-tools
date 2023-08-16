@@ -10,7 +10,7 @@
         "@concordium/browser-wallet-api-helpers": "^2.4.0",
         "@concordium/react-components": "../../deps/concordium-dapp-libraries/packages/react-components",
         "@concordium/wallet-connectors": "../../deps/concordium-dapp-libraries/packages/wallet-connectors",
-        "@concordium/web-sdk": "^3.4.0",
+        "@concordium/web-sdk": "^6.0.0",
         "@walletconnect/types": "^2.1.4",
         "eslint": "^8.37.0",
         "moment": "^2.29.4",
@@ -20,7 +20,8 @@
     },
     "resolutions": {
         "@concordium/wallet-connectors": "../../deps/concordium-dapp-libraries/packages/wallet-connectors",
-        "@concordium/react-components": "../../deps/concordium-dapp-libraries/packages/react-components"
+        "@concordium/react-components": "../../deps/concordium-dapp-libraries/packages/react-components",
+        "@concordium/web-sdk": "^6.0.0"
     },
     "devDependencies": {
         "@craftamap/esbuild-plugin-html": "^0.4.0",
