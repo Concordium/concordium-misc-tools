@@ -100,7 +100,8 @@ export async function setValue(
     isPayable: boolean,
     dropDown: string,
     input: string,
-    cCDAmount: string
+    cCDAmount: string,
+    maxEnergy: string
 ) {
     let receiveName = `${CONTRACT_NAME}.set_u8_payable`;
 
@@ -317,7 +318,7 @@ export async function setValue(
                 subindex: CONTRACT_SUB_INDEX,
             },
             receiveName,
-            maxContractExecutionEnergy: 30000n,
+            maxContractExecutionEnergy: BigInt(maxEnergy),
         } as UpdateContractPayload,
         schema
     );

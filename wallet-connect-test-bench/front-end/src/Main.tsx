@@ -95,6 +95,7 @@ export default function Main(props: WalletConnectionProps) {
 
     const [cCDAmount, setCCDAmount] = useState('');
     const [input, setInput] = useState('');
+    const [maxEnergy, setMaxEnergy] = useState('30000');
 
     const [useModuleSchema, setUseModuleSchema] = useState(true);
     const [isPayable, setIsPayable] = useState(true);
@@ -110,6 +111,11 @@ export default function Main(props: WalletConnectionProps) {
     const changeInputHandler = (event: ChangeEvent) => {
         const target = event.target as HTMLTextAreaElement;
         setInput(target.value);
+    };
+
+    const changeMaxEnergyHandler = (event: ChangeEvent) => {
+        const target = event.target as HTMLTextAreaElement;
+        setMaxEnergy(target.value);
     };
 
     const changeCCDAmountHandler = (event: ChangeEvent) => {
@@ -423,6 +429,17 @@ export default function Main(props: WalletConnectionProps) {
                                         />
                                     </label>
                                     <label className="field">
+                                        maxEnergy:
+                                        <br />
+                                        <input
+                                            className="inputFieldStyle"
+                                            id="maxEnergy"
+                                            type="text"
+                                            placeholder="30000"
+                                            onChange={changeMaxEnergyHandler}
+                                        />
+                                    </label>
+                                    <label className="field">
                                         Input parameter:
                                         <br />
                                         <input
@@ -447,7 +464,8 @@ export default function Main(props: WalletConnectionProps) {
                                                 isPayable,
                                                 writeDropDown,
                                                 input,
-                                                cCDAmount
+                                                cCDAmount,
+                                                maxEnergy
                                             );
                                             tx.then(setTxHash).catch((err) =>
                                                 setTransactionError((err as Error).message || (err as string))
