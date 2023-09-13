@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import { createContext } from 'react';
 import { SmartContractParameters } from '@concordium/browser-wallet-api-helpers';
 import {
@@ -38,23 +39,49 @@ import {
 } from './constants';
 
 export async function initializeWithoutAmountWithoutParameter(connection: WalletConnection, account: string) {
-    return connection.signAndSendTransaction(account, AccountTransactionType.InitContract, {
+    const payload = {
         amount: new CcdAmount(BigInt(0)),
         moduleRef: new ModuleReference('4f013778fc2ab2136d12ae994303bcc941619a16f6c80f22e189231781c087c7'),
         initName: 'smart_contract_test_bench',
         param: toBuffer(''),
         maxContractExecutionEnergy: 30000n,
-    } as InitContractPayload);
+    };
+
+    console.debug('Sending init transaction:');
+    console.debug('Payload:');
+    console.debug(payload);
+    console.debug('Account:');
+    console.debug(account);
+    console.debug('');
+
+    return connection.signAndSendTransaction(
+        account,
+        AccountTransactionType.InitContract,
+        payload as InitContractPayload
+    );
 }
 
 export async function initializeWithAmount(connection: WalletConnection, account: string, cCDAmount: string) {
-    return connection.signAndSendTransaction(account, AccountTransactionType.InitContract, {
+    const payload = {
         amount: new CcdAmount(BigInt(cCDAmount)),
         moduleRef: new ModuleReference('4f013778fc2ab2136d12ae994303bcc941619a16f6c80f22e189231781c087c7'),
         initName: 'smart_contract_test_bench',
         param: toBuffer(''),
         maxContractExecutionEnergy: 30000n,
-    } as InitContractPayload);
+    };
+
+    console.debug('Sending init transaction:');
+    console.debug('Payload:');
+    console.debug(payload);
+    console.debug('Account:');
+    console.debug(account);
+    console.debug('');
+
+    return connection.signAndSendTransaction(
+        account,
+        AccountTransactionType.InitContract,
+        payload as InitContractPayload
+    );
 }
 
 export async function initializeWithParameter(
@@ -73,24 +100,48 @@ export async function initializeWithParameter(
               schema: typeSchemaFromBase64(SET_U16_PARAMETER_SCHEMA),
           };
 
+    const payload = {
+        amount: new CcdAmount(BigInt(0)),
+        moduleRef: new ModuleReference('4f013778fc2ab2136d12ae994303bcc941619a16f6c80f22e189231781c087c7'),
+        initName: 'smart_contract_test_bench',
+        param: toBuffer(''),
+        maxContractExecutionEnergy: 30000n,
+    };
+
+    console.debug('Sending init transaction:');
+    console.debug('Schema:');
+    console.debug(schema);
+    console.debug('Payload:');
+    console.debug(payload);
+    console.debug('Account:');
+    console.debug(account);
+    console.debug('');
+
     return connection.signAndSendTransaction(
         account,
         AccountTransactionType.InitContract,
-        {
-            amount: new CcdAmount(BigInt(0)),
-            moduleRef: new ModuleReference('4f013778fc2ab2136d12ae994303bcc941619a16f6c80f22e189231781c087c7'),
-            initName: 'smart_contract_test_bench',
-            param: toBuffer(''),
-            maxContractExecutionEnergy: 30000n,
-        } as InitContractPayload,
+        payload as InitContractPayload,
         schema
     );
 }
 
 export async function deploy(connection: WalletConnection, account: string) {
-    return connection.signAndSendTransaction(account, AccountTransactionType.DeployModule, {
+    const payload = {
         source: toBuffer(BASE_64_TEST_BENCH_SMART_CONTRACT_MODULE, 'base64'),
-    } as DeployModulePayload);
+    };
+
+    console.debug('Sending deploy transaction:');
+    console.debug('Payload:');
+    console.debug(payload);
+    console.debug('Account:');
+    console.debug(account);
+    console.debug('');
+
+    return connection.signAndSendTransaction(
+        account,
+        AccountTransactionType.DeployModule,
+        payload as DeployModulePayload
+    );
 }
 
 export async function setValue(
@@ -308,18 +359,29 @@ export async function setValue(
             throw new Error(`Dropdown option does not exist`);
     }
 
+    const payload = {
+        amount: new CcdAmount(BigInt(cCDAmount)),
+        address: {
+            index: CONTRACT_INDEX,
+            subindex: CONTRACT_SUB_INDEX,
+        },
+        receiveName,
+        maxContractExecutionEnergy: BigInt(maxEnergy),
+    };
+
+    console.debug('Sending update transaction:');
+    console.debug('Schema:');
+    console.debug(schema);
+    console.debug('Payload:');
+    console.debug(payload);
+    console.debug('Account:');
+    console.debug(account);
+    console.debug('');
+
     return connection.signAndSendTransaction(
         account,
         AccountTransactionType.Update,
-        {
-            amount: new CcdAmount(BigInt(cCDAmount)),
-            address: {
-                index: CONTRACT_INDEX,
-                subindex: CONTRACT_SUB_INDEX,
-            },
-            receiveName,
-            maxContractExecutionEnergy: BigInt(maxEnergy),
-        } as UpdateContractPayload,
+        payload as UpdateContractPayload,
         schema
     );
 }
@@ -357,20 +419,26 @@ export async function setArray(
 
     const receiveName = isPayable ? `${CONTRACT_NAME}.set_address_array_payable` : `${CONTRACT_NAME}.set_address_array`;
 
-    return connection.signAndSendTransaction(
-        account,
-        AccountTransactionType.Update,
-        {
-            amount: new CcdAmount(BigInt(cCDAmount)),
-            address: {
-                index: CONTRACT_INDEX,
-                subindex: CONTRACT_SUB_INDEX,
-            },
-            receiveName,
-            maxContractExecutionEnergy: 30000n,
+    const payload = {
+        amount: new CcdAmount(BigInt(cCDAmount)),
+        address: {
+            index: CONTRACT_INDEX,
+            subindex: CONTRACT_SUB_INDEX,
         },
-        schema
-    );
+        receiveName,
+        maxContractExecutionEnergy: 30000n,
+    };
+
+    console.debug('Sending update transaction:');
+    console.debug('Schema:');
+    console.debug(schema);
+    console.debug('Payload:');
+    console.debug(payload);
+    console.debug('Account:');
+    console.debug(account);
+    console.debug('');
+
+    return connection.signAndSendTransaction(account, AccountTransactionType.Update, payload, schema);
 }
 
 export async function setObject(
@@ -422,18 +490,29 @@ export async function setObject(
 
     const receiveName = isPayable ? `${CONTRACT_NAME}.set_object_payable` : `${CONTRACT_NAME}.set_object`;
 
+    const payload = {
+        amount: new CcdAmount(BigInt(cCDAmount)),
+        address: {
+            index: CONTRACT_INDEX,
+            subindex: CONTRACT_SUB_INDEX,
+        },
+        receiveName,
+        maxContractExecutionEnergy: 30000n,
+    };
+
+    console.debug('Sending update transaction:');
+    console.debug('Schema:');
+    console.debug(schema);
+    console.debug('Payload:');
+    console.debug(payload);
+    console.debug('Account:');
+    console.debug(account);
+    console.debug('');
+
     return connection.signAndSendTransaction(
         account,
         AccountTransactionType.Update,
-        {
-            amount: new CcdAmount(BigInt(cCDAmount)),
-            address: {
-                index: CONTRACT_INDEX,
-                subindex: CONTRACT_SUB_INDEX,
-            },
-            receiveName,
-            maxContractExecutionEnergy: 30000n,
-        } as UpdateContractPayload,
+        payload as UpdateContractPayload,
         schema
     );
 }
@@ -444,21 +523,39 @@ export async function simpleCCDTransfer(
     toAccount: string,
     cCDAmount: string
 ) {
-    return connection.signAndSendTransaction(account, AccountTransactionType.Transfer, {
+    const payload = {
         amount: new CcdAmount(BigInt(cCDAmount)),
         toAddress: new AccountAddress(toAccount),
-    });
+    };
+
+    console.debug('Sending simple ccd transfer transaction:');
+    console.debug('Payload:');
+    console.debug(payload);
+    console.debug('Account:');
+    console.debug(account);
+    console.debug('');
+
+    return connection.signAndSendTransaction(account, AccountTransactionType.Transfer, payload);
 }
 
 export async function simpleCCDTransferToNonExistingAccountAddress(connection: WalletConnection, account: string) {
-    return connection.signAndSendTransaction(account, AccountTransactionType.Transfer, {
+    const payload = {
         amount: new CcdAmount(BigInt(1n)),
         toAddress: new AccountAddress('35CJPZohio6Ztii2zy1AYzJKvuxbGG44wrBn7hLHiYLoF2nxnh'),
-    });
+    };
+
+    console.debug('Sending simple ccd transfer transaction:');
+    console.debug('Payload:');
+    console.debug(payload);
+    console.debug('Account:');
+    console.debug(account);
+    console.debug('');
+
+    return connection.signAndSendTransaction(account, AccountTransactionType.Transfer, payload);
 }
 
 export async function reverts(connection: WalletConnection, account: string) {
-    return connection.signAndSendTransaction(account, AccountTransactionType.Update, {
+    const payload = {
         amount: new CcdAmount(BigInt(0)),
         address: {
             index: CONTRACT_INDEX,
@@ -466,11 +563,20 @@ export async function reverts(connection: WalletConnection, account: string) {
         },
         receiveName: `${CONTRACT_NAME}.reverts`,
         maxContractExecutionEnergy: 30000n,
-    } as UpdateContractPayload);
+    };
+
+    console.debug('Sending update transaction:');
+    console.debug('Payload:');
+    console.debug(payload);
+    console.debug('Account:');
+    console.debug(account);
+    console.debug('');
+
+    return connection.signAndSendTransaction(account, AccountTransactionType.Update, payload as UpdateContractPayload);
 }
 
 export async function internalCallReverts(connection: WalletConnection, account: string) {
-    return connection.signAndSendTransaction(account, AccountTransactionType.Update, {
+    const payload = {
         amount: new CcdAmount(BigInt(0)),
         address: {
             index: CONTRACT_INDEX,
@@ -478,11 +584,20 @@ export async function internalCallReverts(connection: WalletConnection, account:
         },
         receiveName: `${CONTRACT_NAME}.internal_call_reverts`,
         maxContractExecutionEnergy: 30000n,
-    } as UpdateContractPayload);
+    };
+
+    console.debug('Sending update transaction:');
+    console.debug('Payload:');
+    console.debug(payload);
+    console.debug('Account:');
+    console.debug(account);
+    console.debug('');
+
+    return connection.signAndSendTransaction(account, AccountTransactionType.Update, payload as UpdateContractPayload);
 }
 
 export async function internalCallSuccess(connection: WalletConnection, account: string) {
-    return connection.signAndSendTransaction(account, AccountTransactionType.Update, {
+    const payload = {
         amount: new CcdAmount(BigInt(0)),
         address: {
             index: CONTRACT_INDEX,
@@ -490,26 +605,48 @@ export async function internalCallSuccess(connection: WalletConnection, account:
         },
         receiveName: `${CONTRACT_NAME}.internal_call_success`,
         maxContractExecutionEnergy: 30000n,
-    } as UpdateContractPayload);
+    };
+
+    console.debug('Sending update transaction:');
+    console.debug('Payload:');
+    console.debug(payload);
+    console.debug('Account:');
+    console.debug(account);
+    console.debug('');
+
+    return connection.signAndSendTransaction(account, AccountTransactionType.Update, payload as UpdateContractPayload);
 }
 
 export async function notExistingEntrypoint(connection: WalletConnection, account: string) {
+    const schema = {
+        parameters: 3,
+        schema: typeSchemaFromBase64(SET_U8_PARAMETER_SCHEMA),
+    };
+
+    const payload = {
+        amount: new CcdAmount(BigInt(0)),
+        address: {
+            index: CONTRACT_INDEX,
+            subindex: CONTRACT_SUB_INDEX,
+        },
+        receiveName: `${CONTRACT_NAME}.does_not_exist`,
+        maxContractExecutionEnergy: 30000n,
+    };
+
+    console.debug('Sending update transaction:');
+    console.debug('Schema:');
+    console.debug(schema);
+    console.debug('Payload:');
+    console.debug(payload);
+    console.debug('Account:');
+    console.debug(account);
+    console.debug('');
+
     return connection.signAndSendTransaction(
         account,
         AccountTransactionType.Update,
-        {
-            amount: new CcdAmount(BigInt(0)),
-            address: {
-                index: CONTRACT_INDEX,
-                subindex: CONTRACT_SUB_INDEX,
-            },
-            receiveName: `${CONTRACT_NAME}.does_not_exist`,
-            maxContractExecutionEnergy: 30000n,
-        } as UpdateContractPayload,
-        {
-            parameters: 3,
-            schema: typeSchemaFromBase64(SET_U8_PARAMETER_SCHEMA),
-        }
+        payload as UpdateContractPayload,
+        schema
     );
 }
 
