@@ -1,11 +1,12 @@
 use anyhow::Context;
 use clap::{Args, Parser, Subcommand};
 use concordium_rust_sdk::{
-    cis2::TokenId,
+    cis2::{AdditionalData, Receiver, TokenAmount, TokenId, Transfer, TransferParams},
     common::{
         types::{Amount, TransactionTime},
         Deserial,
     },
+    contract_client::MetadataUrl,
     endpoints::Endpoint,
     id::types::AccountAddress,
     smart_contracts::common as concordium_std,
@@ -21,7 +22,10 @@ use concordium_rust_sdk::{
 };
 use futures::TryStreamExt;
 use rand::{rngs::StdRng, Rng, SeedableRng};
-use std::{collections, io::Cursor, path::PathBuf, str::FromStr, sync::Arc};
+use std::{collections, collections::BTreeMap, io::Cursor, path::PathBuf, str::FromStr, sync::Arc};
+
+const MINT_CIS2_MODULE: &'static [u8] = include_bytes!("../resources/cis2_nft.wasm.v1");
+const TRANSFER_CIS2_MODULE: &'static [u8] = include_bytes!("../resources/cis2_multi.wasm.v1");
 
 #[derive(Debug, Clone, Copy)]
 enum Mode {
@@ -38,6 +42,41 @@ impl FromStr for Mode {
             s => Ok(Self::Every(s.parse()?)),
         }
     }
+}
+
+#[derive(Debug, Subcommand)]
+enum Command {
+    /// Send CCD to a list of receivers.
+    Ccd(CcdArgs),
+    /// Mint CIS-2 NFT tokens.
+    MintNfts,
+    /// Transfer CIS-2 tokens to a list of receivers.
+    TransferCis2(TransferCis2Args),
+}
+
+#[derive(Debug, Args)]
+struct CcdArgs {
+    #[arg(long = "receivers")]
+    receivers: Option<PathBuf>,
+    #[clap(
+        long = "amount",
+        help = "CCD amount to send in each transaction",
+        default_value = "0"
+    )]
+    amount:    Amount,
+    #[clap(
+        long = "mode",
+        help = "If set this provides the mode when selecting accounts. It can either be `random` \
+                or a non-negative integer. If it is an integer then the set of receivers is \
+                partitioned based on baker id into the given amount of chunks."
+    )]
+    mode:      Option<Mode>,
+}
+
+#[derive(Debug, Args)]
+struct TransferCis2Args {
+    #[arg(long = "receivers")]
+    receivers: Option<PathBuf>,
 }
 
 #[derive(clap::Parser, Debug)]
@@ -65,33 +104,6 @@ struct App {
     command: Command,
 }
 
-#[derive(Debug, Subcommand)]
-enum Command {
-    /// Send CCD to a list of receivers.
-    Ccd(CcdArgs),
-    /// Mint CIS-2 tokens
-    MintCis2,
-}
-
-#[derive(Debug, Args)]
-struct CcdArgs {
-    #[arg(long = "receivers")]
-    receivers: Option<PathBuf>,
-    #[clap(
-        long = "amount",
-        help = "CCD amount to send in each transaction",
-        default_value = "0"
-    )]
-    amount:    Amount,
-    #[clap(
-        long = "mode",
-        help = "If set this provides the mode when selecting accounts. It can either be `random` \
-                or a non-negative integer. If it is an integer then the set of receivers is \
-                partitioned based on baker id into the given amount of chunks."
-    )]
-    mode:      Option<Mode>,
-}
-
 #[derive(Clone)]
 struct CommonArgs {
     client: v2::Client,
@@ -100,8 +112,58 @@ struct CommonArgs {
     expiry: u32,
 }
 
+impl CommonArgs {
+    async fn deploy_and_init_contract(
+        &mut self,
+        module: &[u8],
+        contract_name: &str,
+        nonce: &mut Nonce,
+    ) -> anyhow::Result<ContractAddress> {
+        println!("Deploying and initializing contract...");
+
+        let expiry: TransactionTime = TransactionTime::seconds_after(self.expiry);
+        let module = WasmModule::deserial(&mut Cursor::new(module))?;
+        let mod_ref = module.get_module_ref();
+        let deploy_tx = send::deploy_module(&*self.keys, self.keys.address, *nonce, expiry, module);
+        nonce.next_mut();
+
+        let item = BlockItem::AccountTransaction(deploy_tx);
+        self.client.send_block_item(&item).await?;
+
+        let payload = InitContractPayload {
+            amount: Amount::zero(),
+            mod_ref,
+            init_name: OwnedContractName::new(contract_name.into())?,
+            param: OwnedParameter::empty(),
+        };
+        let init_tx = send::init_contract(
+            &*self.keys,
+            self.keys.address,
+            *nonce,
+            expiry,
+            payload,
+            Energy::from(2397),
+        );
+        nonce.next_mut();
+
+        let item = BlockItem::AccountTransaction(init_tx);
+        let transaction_hash = self.client.send_block_item(&item).await?;
+        let (_, summary) = self.client.wait_until_finalized(&transaction_hash).await?;
+        anyhow::ensure!(summary.is_success(), "Contract init transaction failed.");
+        println!(
+            "Contract init transaction finalized (hash = {transaction_hash}, energy = {}).",
+            summary.energy_cost,
+        );
+
+        summary
+            .contract_init()
+            .context("Transaction was not a contract init")
+            .map(|init| init.address)
+    }
+}
+
 trait Generate {
-    fn generate(&mut self) -> AccountTransaction<EncodedPayload>;
+    fn generate(&mut self) -> anyhow::Result<AccountTransaction<EncodedPayload>>;
 }
 
 async fn generate_transactions(
@@ -126,7 +188,7 @@ async fn generate_transactions(
     ));
     loop {
         interval.tick().await;
-        if let Some(tx) = rx.recv().await {
+        if let Some(tx) = rx.recv().await.transpose()? {
             let nonce = tx.header.nonce;
             let energy = tx.header.energy_amount;
             let item = BlockItem::AccountTransaction(tx);
@@ -199,11 +261,9 @@ impl CcdGenerator {
             .client
             .get_next_account_sequence_number(&args.keys.address)
             .await?;
-
         anyhow::ensure!(nonce.all_final, "Not all transactions are finalized.");
 
         let rng = StdRng::from_entropy();
-
         Ok(Self {
             args,
             amount: ccd_args.amount,
@@ -217,7 +277,7 @@ impl CcdGenerator {
 }
 
 impl Generate for CcdGenerator {
-    fn generate(&mut self) -> AccountTransaction<EncodedPayload> {
+    fn generate(&mut self) -> anyhow::Result<AccountTransaction<EncodedPayload>> {
         let next_account = if self.random {
             let n = self.rng.gen_range(0, self.accounts.len());
             self.accounts[n]
@@ -238,11 +298,9 @@ impl Generate for CcdGenerator {
         self.nonce.next_mut();
         self.count += 1;
 
-        tx
+        Ok(tx)
     }
 }
-
-const MINT_CIS2_MODULE: &'static [u8] = include_bytes!("../resources/cis2_nft.wasm.v1");
 
 struct MintCis2Generator {
     args:             CommonArgs,
@@ -252,7 +310,7 @@ struct MintCis2Generator {
 }
 
 #[derive(concordium_std::Serial)]
-struct MintCis2Params {
+struct MintCis2NftParams {
     owner:  concordium_std::Address,
     #[concordium(size_length = 1)]
     tokens: collections::BTreeSet<TokenId>,
@@ -266,46 +324,10 @@ impl MintCis2Generator {
             .get_next_account_sequence_number(&args.keys.address)
             .await?;
 
-        let expiry: TransactionTime = TransactionTime::seconds_after(args.expiry);
-
-        let module = WasmModule::deserial(&mut Cursor::new(MINT_CIS2_MODULE))?;
-        let mod_ref = module.get_module_ref();
-        let deploy_tx =
-            send::deploy_module(&*args.keys, args.keys.address, nonce.nonce, expiry, module);
-        nonce.nonce.next_mut();
-
-        let item = BlockItem::AccountTransaction(deploy_tx);
-        args.client.send_block_item(&item).await?;
-
-        let payload = InitContractPayload {
-            amount: Amount::zero(),
-            mod_ref,
-            init_name: OwnedContractName::new("init_cis2_nft".into())?,
-            param: OwnedParameter::empty(),
-        };
-        let init_tx = send::init_contract(
-            &*args.keys,
-            args.keys.address,
-            nonce.nonce,
-            expiry,
-            payload,
-            Energy::from(2397),
-        );
-        nonce.nonce.next_mut();
-
-        let item = BlockItem::AccountTransaction(init_tx);
-        let transaction_hash = args.client.send_block_item(&item).await?;
-        let (_, summary) = args.client.wait_until_finalized(&transaction_hash).await?;
-        anyhow::ensure!(summary.is_success(), "Contract init transaction failed.");
-        println!(
-            "Contract init transaction finalized (hash = {transaction_hash}, energy = {}).",
-            summary.energy_cost,
-        );
-
-        let contract_address = summary
-            .contract_init()
-            .context("Transaction was not a contract init")?
-            .address;
+        let contract_address = args
+            .deploy_and_init_contract(MINT_CIS2_MODULE, "init_cis2_nft", &mut nonce.nonce)
+            .await
+            .context("Could not deploy/init the contract.")?;
 
         Ok(Self {
             args,
@@ -317,16 +339,14 @@ impl MintCis2Generator {
 }
 
 impl Generate for MintCis2Generator {
-    fn generate(&mut self) -> AccountTransaction<EncodedPayload> {
-        let params = MintCis2Params {
+    fn generate(&mut self) -> anyhow::Result<AccountTransaction<EncodedPayload>> {
+        let params = MintCis2NftParams {
             owner:  Address::Account(self.args.keys.address),
             tokens: [TokenId::new_u32(self.next_id)].into(),
         };
 
-        let message =
-            OwnedParameter::from_serial(&params).expect("parameters do not exceed maximum size");
-        let receive_name =
-            OwnedReceiveName::new("cis2_nft.mint".into()).expect("name is correctly formatted");
+        let message = OwnedParameter::from_serial(&params)?;
+        let receive_name = OwnedReceiveName::new("cis2_nft.mint".into())?;
         let payload = UpdateContractPayload {
             amount: Amount::zero(),
             address: self.contract_address,
@@ -341,12 +361,162 @@ impl Generate for MintCis2Generator {
             self.nonce,
             expiry,
             payload,
+            // TODO: What to do when the number of accounts in the contract increases?
             Energy::from(3500),
         );
         self.nonce.next_mut();
         self.next_id += 1;
 
-        tx
+        Ok(tx)
+    }
+}
+
+struct TransferCis2Generator {
+    args:             CommonArgs,
+    contract_address: ContractAddress,
+    accounts:         Vec<AccountAddress>,
+    nonce:            Nonce,
+    count:            usize,
+}
+
+#[derive(concordium_std::Serial)]
+struct MintCis2TokenParam {
+    token_amount: TokenAmount,
+    metadata_url: MetadataUrl,
+}
+
+#[derive(concordium_std::Serial)]
+struct MintCis2TokenParams {
+    owner:  Address,
+    tokens: BTreeMap<TokenId, MintCis2TokenParam>,
+}
+
+impl TransferCis2Generator {
+    async fn instantiate(
+        mut args: CommonArgs,
+        transfer_cis2_args: TransferCis2Args,
+    ) -> anyhow::Result<Self> {
+        let accounts: Vec<AccountAddress> = match transfer_cis2_args.receivers {
+            None => {
+                args.client
+                    .get_account_list(BlockIdentifier::LastFinal)
+                    .await
+                    .context("Could not obtain a list of accounts.")?
+                    .response
+                    .try_collect()
+                    .await?
+            }
+            Some(receivers) => serde_json::from_str(
+                &std::fs::read_to_string(receivers)
+                    .context("Could not read the receivers file.")?,
+            )
+            .context("Could not parse the receivers file.")?,
+        };
+        anyhow::ensure!(!accounts.is_empty(), "List of receivers must not be empty.");
+
+        // Get the initial nonce.
+        let mut nonce = args
+            .client
+            .get_next_account_sequence_number(&args.keys.address)
+            .await?;
+
+        let contract_address = args
+            .deploy_and_init_contract(TRANSFER_CIS2_MODULE, "init_cis2_multi", &mut nonce.nonce)
+            .await
+            .context("Could not deploy/init the contract.")?;
+
+        // The rest of the function mints u64::MAX tokens for the sender.
+        println!("Minting u64::MAX tokens for ourselves...");
+
+        let param = MintCis2TokenParam {
+            token_amount: TokenAmount::from(u64::MAX),
+            metadata_url: MetadataUrl::new("https://example.com".into(), None)?,
+        };
+        let params = MintCis2TokenParams {
+            owner:  Address::Account(args.keys.address),
+            tokens: [(TokenId::new_u8(0), param)].into(),
+        };
+
+        let message =
+            OwnedParameter::from_serial(&params).context("Parameters exceeded maximum size.")?;
+        let receive_name = OwnedReceiveName::new("cis2_multi.mint".into())
+            .context("Name was not correctly formatted.")?;
+        let payload = UpdateContractPayload {
+            amount: Amount::zero(),
+            address: contract_address,
+            receive_name,
+            message,
+        };
+
+        let expiry = TransactionTime::seconds_after(args.expiry);
+        let mint_tx = send::update_contract(
+            &*args.keys,
+            args.keys.address,
+            nonce.nonce,
+            expiry,
+            payload,
+            Energy::from(100_000),
+        );
+        nonce.nonce.next_mut();
+
+        let item = BlockItem::AccountTransaction(mint_tx);
+        let transaction_hash = args.client.send_block_item(&item).await?;
+        let (_, summary) = args.client.wait_until_finalized(&transaction_hash).await?;
+        anyhow::ensure!(
+            summary.is_success(),
+            "Mint transaction failed (hash = {transaction_hash})."
+        );
+        println!(
+            "Minted u64::MAX tokens (hash = {transaction_hash}, energy = {}).",
+            summary.energy_cost,
+        );
+
+        Ok(Self {
+            args,
+            contract_address,
+            accounts,
+            nonce: nonce.nonce,
+            count: 0,
+        })
+    }
+}
+
+impl Generate for TransferCis2Generator {
+    fn generate(&mut self) -> anyhow::Result<AccountTransaction<EncodedPayload>> {
+        let next_account = self.accounts[self.count % self.accounts.len()];
+        let params = TransferParams::new(
+            [Transfer {
+                token_id: TokenId::new_u8(0),
+                amount:   TokenAmount::from(1u32),
+                from:     Address::Account(self.args.keys.address),
+                to:       Receiver::Account(next_account),
+                data:     AdditionalData::new(vec![])?,
+            }]
+            .to_vec(),
+        )?;
+
+        let message = OwnedParameter::from_serial(&params)?;
+        let receive_name = OwnedReceiveName::new("cis2_multi.transfer".into())?;
+        let payload = UpdateContractPayload {
+            amount: Amount::zero(),
+            address: self.contract_address,
+            receive_name,
+            message,
+        };
+
+        let expiry = TransactionTime::seconds_after(self.args.expiry);
+        let tx = send::update_contract(
+            &*self.args.keys,
+            self.args.keys.address,
+            self.nonce,
+            expiry,
+            payload,
+            Energy::from(100_000),
+        );
+        self.nonce.next_mut();
+        self.count += 1;
+
+        Ok(tx)
     }
 }
 
@@ -390,8 +560,13 @@ async fn main() -> anyhow::Result<()> {
             let generator = CcdGenerator::instantiate(args.clone(), ccd_args).await?;
             generate_transactions(args, generator).await
         }
-        Command::MintCis2 => {
+        Command::MintNfts => {
             let generator = MintCis2Generator::instantiate(args.clone()).await?;
+            generate_transactions(args, generator).await
+        }
+        Command::TransferCis2(transfer_cis2_args) => {
+            let generator =
+                TransferCis2Generator::instantiate(args.clone(), transfer_cis2_args).await?;
             generate_transactions(args, generator).await
         }
     }
