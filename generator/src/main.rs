@@ -112,17 +112,22 @@ struct CommonArgs {
     expiry: u32,
 }
 
+struct ContractDeploymentInfo {
+    module:      &'static [u8],
+    name:        &'static str,
+    init_energy: Energy,
+}
+
 impl CommonArgs {
     async fn deploy_and_init_contract(
         &mut self,
-        module: &[u8],
-        contract_name: &str,
+        info: ContractDeploymentInfo,
         nonce: &mut Nonce,
     ) -> anyhow::Result<ContractAddress> {
         println!("Deploying and initializing contract...");
 
         let expiry: TransactionTime = TransactionTime::seconds_after(self.expiry);
-        let module = WasmModule::deserial(&mut Cursor::new(module))?;
+        let module = WasmModule::deserial(&mut Cursor::new(info.module))?;
         let mod_ref = module.get_module_ref();
         let deploy_tx = send::deploy_module(&*self.keys, self.keys.address, *nonce, expiry, module);
         nonce.next_mut();
@@ -133,7 +138,7 @@ impl CommonArgs {
         let payload = InitContractPayload {
             amount: Amount::zero(),
             mod_ref,
-            init_name: OwnedContractName::new(contract_name.into())?,
+            init_name: OwnedContractName::new(info.name.into())?,
             param: OwnedParameter::empty(),
         };
         let init_tx = send::init_contract(
@@ -142,7 +147,7 @@ impl CommonArgs {
             *nonce,
             expiry,
             payload,
-            Energy::from(2397),
+            info.init_energy,
         );
         nonce.next_mut();
 
@@ -324,8 +329,13 @@ impl MintCis2Generator {
             .get_next_account_sequence_number(&args.keys.address)
             .await?;
 
+        let info = ContractDeploymentInfo {
+            module:      MINT_CIS2_MODULE,
+            name:        "init_cis2_nft",
+            init_energy: Energy::from(2397),
+        };
         let contract_address = args
-            .deploy_and_init_contract(MINT_CIS2_MODULE, "init_cis2_nft", &mut nonce.nonce)
+            .deploy_and_init_contract(info, &mut nonce.nonce)
             .await
             .context("Could not deploy/init the contract.")?;
 
@@ -420,8 +430,13 @@ impl TransferCis2Generator {
             .get_next_account_sequence_number(&args.keys.address)
             .await?;
 
+        let info = ContractDeploymentInfo {
+            module:      TRANSFER_CIS2_MODULE,
+            name:        "init_cis2_multi",
+            init_energy: Energy::from(2353),
+        };
         let contract_address = args
-            .deploy_and_init_contract(TRANSFER_CIS2_MODULE, "init_cis2_multi", &mut nonce.nonce)
+            .deploy_and_init_contract(info, &mut nonce.nonce)
             .await
             .context("Could not deploy/init the contract.")?;
 
@@ -455,7 +470,7 @@ impl TransferCis2Generator {
             nonce.nonce,
             expiry,
             payload,
-            Energy::from(100_000),
+            Energy::from(2740),
         );
         nonce.nonce.next_mut();
 
@@ -511,7 +526,8 @@ impl Generate for TransferCis2Generator {
             self.nonce,
             expiry,
             payload,
-            Energy::from(100_000),
+            // TODO: What to do when the number of accounts in the contract increases?
+            Energy::from(3500),
         );
         self.nonce.next_mut();
         self.count += 1;
