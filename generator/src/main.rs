@@ -291,7 +291,7 @@ async fn send_mint_cis2_transactions(mut args: CommonArgs) -> anyhow::Result<()>
                 nonce,
                 expiry,
                 payload,
-                Energy::from(100_000),
+                Energy::from(3500),
             );
             nonce.next_mut();
             sender.send(tx).await?;
