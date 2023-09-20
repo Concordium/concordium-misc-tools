@@ -26,6 +26,7 @@ use crate::{CcdArgs, Mode, TransferCis2Args};
 
 const MINT_CIS2_MODULE: &'static [u8] = include_bytes!("../resources/cis2_nft.wasm.v1");
 const TRANSFER_CIS2_MODULE: &'static [u8] = include_bytes!("../resources/cis2_multi.wasm.v1");
+const WCCD_MODULE: &'static [u8] = include_bytes!("../resources/cis2_wccd.wasm.v1");
 
 struct ContractDeploymentInfo {
     module:      &'static [u8],
@@ -50,6 +51,7 @@ impl CommonArgs {
         &mut self,
         info: ContractDeploymentInfo,
         nonce: &mut Nonce,
+        param: OwnedParameter,
     ) -> anyhow::Result<ContractAddress> {
         println!("Deploying and initializing contract...");
 
@@ -66,7 +68,7 @@ impl CommonArgs {
             amount: Amount::zero(),
             mod_ref,
             init_name: OwnedContractName::new(info.name.into())?,
-            param: OwnedParameter::empty(),
+            param,
         };
         let init_tx = send::init_contract(
             &*self.keys,
@@ -81,7 +83,10 @@ impl CommonArgs {
         let item = BlockItem::AccountTransaction(init_tx);
         let transaction_hash = self.client.send_block_item(&item).await?;
         let (_, summary) = self.client.wait_until_finalized(&transaction_hash).await?;
-        anyhow::ensure!(summary.is_success(), "Contract init transaction failed.");
+        anyhow::ensure!(
+            summary.is_success(),
+            "Contract init transaction failed (hash = {transaction_hash})."
+        );
         println!(
             "Contract init transaction finalized (hash = {transaction_hash}, energy = {}).",
             summary.energy_cost,
@@ -91,6 +96,25 @@ impl CommonArgs {
             .contract_init()
             .context("Transaction was not a contract init")
             .map(|init| init.address)
+    }
+
+    fn make_update_contract_transaction(
+        &self,
+        payload: UpdateContractPayload,
+        energy: Energy,
+        nonce: &mut Nonce,
+    ) -> anyhow::Result<AccountTransaction<EncodedPayload>> {
+        let expiry = TransactionTime::seconds_after(self.expiry);
+        let tx = send::update_contract(
+            &*self.keys,
+            self.keys.address,
+            *nonce,
+            expiry,
+            payload,
+            energy,
+        );
+        nonce.next_mut();
+        Ok(tx)
     }
 }
 
@@ -258,7 +282,7 @@ impl MintCis2Generator {
             init_energy: Energy::from(2397),
         };
         let contract_address = args
-            .deploy_and_init_contract(info, &mut nonce.nonce)
+            .deploy_and_init_contract(info, &mut nonce.nonce, OwnedParameter::empty())
             .await
             .context("Could not deploy/init the contract.")?;
 
@@ -278,26 +302,17 @@ impl Generate for MintCis2Generator {
             tokens: [TokenId::new_u32(self.next_id)].into(),
         };
 
-        let message = OwnedParameter::from_serial(&params)?;
-        let receive_name = OwnedReceiveName::new("cis2_nft.mint".into())?;
         let payload = UpdateContractPayload {
-            amount: Amount::zero(),
-            address: self.contract_address,
-            receive_name,
-            message,
+            amount:       Amount::zero(),
+            address:      self.contract_address,
+            receive_name: OwnedReceiveName::new("cis2_nft.mint".into())?,
+            message:      OwnedParameter::from_serial(&params)?,
         };
-
-        let expiry = TransactionTime::seconds_after(self.args.expiry);
-        let tx = send::update_contract(
-            &*self.args.keys,
-            self.args.keys.address,
-            self.nonce,
-            expiry,
-            payload,
-            // TODO: What to do when the number of accounts in the contract increases?
-            Energy::from(3500),
-        );
-        self.nonce.next_mut();
+        // TODO: What to do when the number of accounts in the contract increases?
+        let energy = Energy::from(3500);
+        let tx = self
+            .args
+            .make_update_contract_transaction(payload, energy, &mut self.nonce)?;
         self.next_id += 1;
 
         Ok(tx)
@@ -359,7 +374,7 @@ impl TransferCis2Generator {
             init_energy: Energy::from(2353),
         };
         let contract_address = args
-            .deploy_and_init_contract(info, &mut nonce.nonce)
+            .deploy_and_init_contract(info, &mut nonce.nonce, OwnedParameter::empty())
             .await
             .context("Could not deploy/init the contract.")?;
 
@@ -375,30 +390,18 @@ impl TransferCis2Generator {
             tokens: [(TokenId::new_u8(0), param)].into(),
         };
 
-        let message =
-            OwnedParameter::from_serial(&params).context("Parameters exceeded maximum size.")?;
-        let receive_name = OwnedReceiveName::new("cis2_multi.mint".into())
-            .context("Name was not correctly formatted.")?;
         let payload = UpdateContractPayload {
-            amount: Amount::zero(),
-            address: contract_address,
-            receive_name,
-            message,
+            amount:       Amount::zero(),
+            address:      contract_address,
+            receive_name: OwnedReceiveName::new("cis2_multi.mint".into())?,
+            message:      OwnedParameter::from_serial(&params)?,
         };
 
-        let expiry = TransactionTime::seconds_after(args.expiry);
-        let mint_tx = send::update_contract(
-            &*args.keys,
-            args.keys.address,
-            nonce.nonce,
-            expiry,
-            payload,
-            Energy::from(2740),
-        );
-        nonce.nonce.next_mut();
+        let mint_tx =
+            args.make_update_contract_transaction(payload, Energy::from(2740), &mut nonce.nonce)?;
+        let block_item = BlockItem::AccountTransaction(mint_tx);
+        let transaction_hash = args.client.send_block_item(&block_item).await?;
 
-        let item = BlockItem::AccountTransaction(mint_tx);
-        let transaction_hash = args.client.send_block_item(&item).await?;
         let (_, summary) = args.client.wait_until_finalized(&transaction_hash).await?;
         anyhow::ensure!(
             summary.is_success(),
@@ -433,26 +436,189 @@ impl Generate for TransferCis2Generator {
             .to_vec(),
         )?;
 
-        let message = OwnedParameter::from_serial(&params)?;
-        let receive_name = OwnedReceiveName::new("cis2_multi.transfer".into())?;
         let payload = UpdateContractPayload {
-            amount: Amount::zero(),
-            address: self.contract_address,
-            receive_name,
-            message,
+            amount:       Amount::zero(),
+            address:      self.contract_address,
+            receive_name: OwnedReceiveName::new("cis2_multi.transfer".into())?,
+            message:      OwnedParameter::from_serial(&params)?,
         };
 
-        let expiry = TransactionTime::seconds_after(self.args.expiry);
-        let tx = send::update_contract(
-            &*self.args.keys,
-            self.args.keys.address,
-            self.nonce,
-            expiry,
+        // TODO: What to do when the number of accounts in the contract increases?
+        let energy = Energy::from(3500);
+        let tx = self
+            .args
+            .make_update_contract_transaction(payload, energy, &mut self.nonce)?;
+        self.count += 1;
+
+        Ok(tx)
+    }
+}
+
+pub struct WccdGenerator {
+    args:             CommonArgs,
+    contract_address: ContractAddress,
+    nonce:            Nonce,
+    count:            usize,
+}
+
+#[derive(concordium_std::Serial)]
+struct SetMetadataUrlParams {
+    url:  String,
+    hash: Option<[u8; 32]>,
+}
+
+#[derive(concordium_std::Serial)]
+struct WrapParams {
+    to:   Receiver,
+    data: AdditionalData,
+}
+
+#[derive(concordium_std::Serial)]
+struct UnwrapParams {
+    amount:   TokenAmount,
+    owner:    Address,
+    receiver: Address,
+    data:     AdditionalData,
+}
+
+impl WccdGenerator {
+    pub async fn instantiate(mut args: CommonArgs) -> anyhow::Result<Self> {
+        // Get the initial nonce.
+        let mut nonce = args
+            .client
+            .get_next_account_sequence_number(&args.keys.address)
+            .await?;
+
+        let info = ContractDeploymentInfo {
+            module:      WCCD_MODULE,
+            name:        "init_cis2_wCCD",
+            init_energy: Energy::from(2596),
+        };
+        let params = SetMetadataUrlParams {
+            url:  "https://example.com".into(),
+            hash: None,
+        };
+        let contract_address = args
+            .deploy_and_init_contract(
+                info,
+                &mut nonce.nonce,
+                OwnedParameter::from_serial(&params)?,
+            )
+            .await
+            .context("Could not deploy/init the contract.")?;
+
+        // Give everyone on the network a wCCD token to increase the size of the state
+        // of the contract.
+        println!("Minting wCCD tokens for everyone...");
+        let receivers: Vec<_> = args
+            .client
+            .get_account_list(BlockIdentifier::LastFinal)
+            .await
+            .context("Could not obtain a list of accounts.")?
+            .response
+            .try_collect()
+            .await?;
+
+        for recv in receivers {
+            let params = WrapParams {
+                to:   Receiver::Account(recv),
+                data: AdditionalData::new(vec![])?,
+            };
+
+            let payload = UpdateContractPayload {
+                amount:       Amount::from_micro_ccd(1),
+                address:      contract_address,
+                receive_name: OwnedReceiveName::new("cis2_wCCD.wrap".into())?,
+                message:      OwnedParameter::from_serial(&params)?,
+            };
+
+            let wrap_tx = args.make_update_contract_transaction(
+                payload,
+                Energy::from(3500),
+                &mut nonce.nonce,
+            )?;
+            let block_item = BlockItem::AccountTransaction(wrap_tx);
+            let transaction_hash = args.client.send_block_item(&block_item).await?;
+            println!(
+                "{}: Transferred 1 wCCD to {recv} (hash = {transaction_hash}).",
+                chrono::Utc::now(),
+            );
+        }
+
+        Ok(Self {
+            args,
+            contract_address,
+            nonce: nonce.nonce,
+            count: 0,
+        })
+    }
+}
+
+impl Generate for WccdGenerator {
+    fn generate(&mut self) -> anyhow::Result<AccountTransaction<EncodedPayload>> {
+        // We modulate between wrapping, transferring, and unwrapping. All wCCD are
+        // minted for and transferred to our own account, which is fine for testing,
+        // since there is no special logic for this in the contract.
+        let payload = match self.count % 3 {
+            // Wrap
+            0 => {
+                let params = WrapParams {
+                    to:   Receiver::Account(self.args.keys.address),
+                    data: AdditionalData::new(vec![])?,
+                };
+
+                UpdateContractPayload {
+                    amount:       Amount::from_micro_ccd(1),
+                    address:      self.contract_address,
+                    receive_name: OwnedReceiveName::new("cis2_wCCD.wrap".into())?,
+                    message:      OwnedParameter::from_serial(&params)?,
+                }
+            }
+            // Transfer
+            1 => {
+                let params = TransferParams::new(
+                    [Transfer {
+                        // The token id of wCCD is 0.
+                        token_id: TokenId::new(vec![])?,
+                        amount:   TokenAmount::from(1u32),
+                        from:     Address::Account(self.args.keys.address),
+                        to:       Receiver::Account(self.args.keys.address),
+                        data:     AdditionalData::new(vec![])?,
+                    }]
+                    .to_vec(),
+                )?;
+
+                UpdateContractPayload {
+                    amount:       Amount::zero(),
+                    address:      self.contract_address,
+                    receive_name: OwnedReceiveName::new("cis2_wCCD.transfer".into())?,
+                    message:      OwnedParameter::from_serial(&params)?,
+                }
+            }
+            // Unwrap
+            2 => {
+                let params = UnwrapParams {
+                    amount:   TokenAmount::from(1u32),
+                    owner:    Address::Account(self.args.keys.address),
+                    receiver: Address::Account(self.args.keys.address),
+                    data:     AdditionalData::new(vec![])?,
+                };
+
+                UpdateContractPayload {
+                    amount:       Amount::zero(),
+                    address:      self.contract_address,
+                    receive_name: OwnedReceiveName::new("cis2_wCCD.unwrap".into())?,
+                    message:      OwnedParameter::from_serial(&params)?,
+                }
+            }
+            _ => unreachable!(),
+        };
+
+        let tx = self.args.make_update_contract_transaction(
             payload,
-            // TODO: What to do when the number of accounts in the contract increases?
             Energy::from(3500),
-        );
-        self.nonce.next_mut();
+            &mut self.nonce,
+        )?;
         self.count += 1;
 
         Ok(tx)

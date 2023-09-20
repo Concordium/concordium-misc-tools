@@ -8,6 +8,7 @@ use concordium_rust_sdk::{
 };
 use generator::{
     generate_transactions, CcdGenerator, CommonArgs, MintCis2Generator, TransferCis2Generator,
+    WccdGenerator,
 };
 use std::{path::PathBuf, str::FromStr, sync::Arc};
 
@@ -38,6 +39,10 @@ enum Command {
     MintNfts,
     /// Transfer CIS-2 tokens to a list of receivers.
     TransferCis2(TransferCis2Args),
+    /// Wrap, unwrap, and transfer WCCD tokens. First, wCCD are minted for every
+    /// account on the chain and then 1 wCCD is alternately wrapped,
+    /// transferred, and unwrapped.
+    Wccd,
 }
 
 #[derive(Debug, Args)]
@@ -137,6 +142,10 @@ async fn main() -> anyhow::Result<()> {
         Command::TransferCis2(transfer_cis2_args) => {
             let generator =
                 TransferCis2Generator::instantiate(args.clone(), transfer_cis2_args).await?;
+            generate_transactions(args, generator).await
+        }
+        Command::Wccd => {
+            let generator = WccdGenerator::instantiate(args.clone()).await?;
             generate_transactions(args, generator).await
         }
     }
