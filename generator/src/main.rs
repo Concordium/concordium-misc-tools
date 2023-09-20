@@ -7,8 +7,8 @@ use concordium_rust_sdk::{
     v2::{self},
 };
 use generator::{
-    generate_transactions, CcdGenerator, CommonArgs, MintCis2Generator, TransferCis2Generator,
-    WccdGenerator,
+    generate_transactions, CcdGenerator, CommonArgs, MintCis2Generator,
+    RegisterCredentialsGenerator, TransferCis2Generator, WccdGenerator,
 };
 use std::{path::PathBuf, str::FromStr, sync::Arc};
 
@@ -43,11 +43,13 @@ enum Command {
     /// account on the chain and then 1 wCCD is alternately wrapped,
     /// transferred, and unwrapped.
     Wccd,
+    /// Register Web3 ID credentials.
+    RegisterCredentials,
 }
 
 #[derive(Debug, Args)]
 pub struct CcdArgs {
-    #[arg(long = "receivers")]
+    #[arg(long = "receivers", help = "Path to file containing receivers.")]
     receivers: Option<PathBuf>,
     #[clap(
         long = "amount",
@@ -66,7 +68,7 @@ pub struct CcdArgs {
 
 #[derive(Debug, Args)]
 pub struct TransferCis2Args {
-    #[arg(long = "receivers")]
+    #[arg(long = "receivers", help = "Path to file containing receivers.")]
     receivers: Option<PathBuf>,
 }
 
@@ -146,6 +148,10 @@ async fn main() -> anyhow::Result<()> {
         }
         Command::Wccd => {
             let generator = WccdGenerator::instantiate(args.clone()).await?;
+            generate_transactions(args, generator).await
+        }
+        Command::RegisterCredentials => {
+            let generator = RegisterCredentialsGenerator::instantiate(args.clone()).await?;
             generate_transactions(args, generator).await
         }
     }
