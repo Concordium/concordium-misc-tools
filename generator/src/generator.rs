@@ -166,6 +166,7 @@ pub async fn generate_transactions(
     }
 }
 
+/// A generator that makes CCD transactions for a list of accounts.
 pub struct CcdGenerator {
     args:     CommonArgs,
     amount:   Amount,
@@ -266,6 +267,8 @@ impl Generate for CcdGenerator {
     }
 }
 
+/// A generator that makes transactions that mints CIS-2 NFT tokens for the
+/// sender.
 pub struct MintCis2Generator {
     args:             CommonArgs,
     contract_address: ContractAddress,
@@ -332,6 +335,8 @@ impl Generate for MintCis2Generator {
     }
 }
 
+/// A generator that makes transactions that transfer CIS-2 tokens to a list of
+/// accounts.
 pub struct TransferCis2Generator {
     args:             CommonArgs,
     contract_address: ContractAddress,
@@ -467,6 +472,7 @@ impl Generate for TransferCis2Generator {
     }
 }
 
+/// A generator that makes transactions that wrap, unwrap, and transfer WCCDs.
 pub struct WccdGenerator {
     args:             CommonArgs,
     contract_address: ContractAddress,
@@ -638,6 +644,7 @@ impl Generate for WccdGenerator {
     }
 }
 
+/// A generator that makes transactions that register dummy Web3 ID credentials.
 pub struct RegisterCredentialsGenerator {
     args:             CommonArgs,
     contract_address: ContractAddress,
