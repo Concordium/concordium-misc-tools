@@ -2,7 +2,7 @@
 import React, { useEffect, useState, ChangeEvent, PropsWithChildren } from 'react';
 import Switch from 'react-switch';
 import { toBuffer, serializeTypeValue } from '@concordium/web-sdk';
-import { withJsonRpcClient, WalletConnectionProps, useConnection, useConnect } from '@concordium/react-components';
+import { useGrpcClient, WalletConnectionProps, useConnection, useConnect, TESTNET } from '@concordium/react-components';
 import { version } from '../package.json';
 import { WalletConnectionTypeButton } from './WalletConnectorTypeButton';
 
@@ -80,6 +80,7 @@ export default function Main(props: WalletConnectionProps) {
 
     const { connection, setConnection, account } = useConnection(connectedAccounts, genesisHashes);
     const { connect, isConnecting, connectError } = useConnect(activeConnector, setConnection);
+    const grpcClient = useGrpcClient(TESTNET);
 
     const [viewError, setViewError] = useState('');
     const [returnValueError, setReturnValueError] = useState('');
@@ -150,10 +151,10 @@ export default function Main(props: WalletConnectionProps) {
     // Refresh accountInfo periodically.
     // eslint-disable-next-line consistent-return
     useEffect(() => {
-        if (connection && account) {
+        if (grpcClient && account) {
             const interval = setInterval(() => {
                 console.log('refreshing1');
-                withJsonRpcClient(connection, (rpcClient) => accountInfo(rpcClient, account))
+                accountInfo(grpcClient, account)
                     .then((value) => {
                         if (value !== undefined) {
                             setAccountBalance(value.accountAmount.toString());
@@ -167,15 +168,15 @@ export default function Main(props: WalletConnectionProps) {
             }, REFRESH_INTERVAL.asMilliseconds());
             return () => clearInterval(interval);
         }
-    }, [connection, account]);
+    }, [grpcClient, account]);
 
     // Refresh smartContractInfo periodically.
     // eslint-disable-next-line consistent-return
     useEffect(() => {
-        if (connection) {
+        if (grpcClient) {
             const interval = setInterval(() => {
                 console.log('refreshing2');
-                withJsonRpcClient(connection, (rpcClient) => smartContractInfo(rpcClient))
+                smartContractInfo(grpcClient)
                     .then((value) => {
                         if (value !== undefined) {
                             setSmartContractBalance(value.amount.microCcdAmount.toString());
@@ -189,15 +190,15 @@ export default function Main(props: WalletConnectionProps) {
             }, REFRESH_INTERVAL.asMilliseconds());
             return () => clearInterval(interval);
         }
-    }, [connection, account]);
+    }, [grpcClient, account]);
 
     // Refresh view periodically.
     // eslint-disable-next-line consistent-return
     useEffect(() => {
-        if (connection && account) {
+        if (grpcClient && account) {
             const interval = setInterval(() => {
                 console.log('refreshing3');
-                withJsonRpcClient(connection, (rpcClient) => view(rpcClient))
+                view(grpcClient)
                     .then((value) => {
                         if (value !== undefined) {
                             setRecord(JSON.parse(value));
@@ -211,11 +212,11 @@ export default function Main(props: WalletConnectionProps) {
             }, REFRESH_INTERVAL.asMilliseconds());
             return () => clearInterval(interval);
         }
-    }, [connection, account]);
+    }, [grpcClient, account]);
 
     useEffect(() => {
-        if (connection && account) {
-            withJsonRpcClient(connection, (rpcClient) => accountInfo(rpcClient, account))
+        if (grpcClient && account) {
+            accountInfo(grpcClient, account)
                 .then((value) => {
                     if (value !== undefined) {
                         setAccountBalance(value.accountAmount.toString());
@@ -227,11 +228,11 @@ export default function Main(props: WalletConnectionProps) {
                     setAccountBalance('');
                 });
         }
-    }, [connection]);
+    }, [grpcClient]);
 
     useEffect(() => {
-        if (connection && account) {
-            withJsonRpcClient(connection, (rpcClient) => smartContractInfo(rpcClient))
+        if (grpcClient && account) {
+            smartContractInfo(grpcClient)
                 .then((value) => {
                     if (value !== undefined) {
                         setSmartContractBalance(value.amount.microCcdAmount.toString());
@@ -243,11 +244,11 @@ export default function Main(props: WalletConnectionProps) {
                     setSmartContractBalance('');
                 });
         }
-    }, [connection]);
+    }, [grpcClient]);
 
     useEffect(() => {
-        if (connection && account) {
-            withJsonRpcClient(connection, (rpcClient) => view(rpcClient))
+        if (grpcClient && account) {
+            view(grpcClient)
                 .then((value) => {
                     if (value !== undefined) {
                         setRecord(JSON.parse(value));
@@ -259,7 +260,7 @@ export default function Main(props: WalletConnectionProps) {
                     setRecord('');
                 });
         }
-    }, [connection]);
+    }, [grpcClient]);
 
     return (
         <main className="container">
@@ -515,17 +516,19 @@ export default function Main(props: WalletConnectionProps) {
                                         onClick={() => {
                                             setReturnValue('');
                                             setReturnValueError('');
-                                            withJsonRpcClient(connection, (rpcClient) =>
-                                                getValue(rpcClient, useModuleSchema, readDropDown)
-                                            )
-                                                .then((value) => {
-                                                    if (value !== undefined) {
-                                                        setReturnValue(JSON.stringify(value));
-                                                    }
-                                                })
-                                                .catch((e) => {
-                                                    setReturnValueError((e as Error).message);
-                                                });
+                                            if (grpcClient) {
+                                                getValue(grpcClient, useModuleSchema, readDropDown)
+                                                    .then((value) => {
+                                                        if (value !== undefined) {
+                                                            setReturnValue(JSON.stringify(value));
+                                                        }
+                                                    })
+                                                    .catch((e) => {
+                                                        setReturnValueError((e as Error).message);
+                                                    });
+                                            } else {
+                                                setReturnValueError('`grpcClient` is undefined');
+                                            }
                                         }}
                                     >
                                         Get {readDropDown} value

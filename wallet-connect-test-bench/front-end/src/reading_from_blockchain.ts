@@ -1,4 +1,10 @@
-import { toBuffer, JsonRpcClient, deserializeTypeValue, deserializeReceiveReturnValue } from '@concordium/web-sdk';
+import {
+    toBuffer,
+    deserializeTypeValue,
+    deserializeReceiveReturnValue,
+    ConcordiumGRPCClient,
+    AccountAddress,
+} from '@concordium/web-sdk';
 
 import {
     CONTRACT_NAME,
@@ -19,7 +25,7 @@ import {
     BASE_64_SCHEMA,
 } from './constants';
 
-export async function getValue(rpcClient: JsonRpcClient, useModuleSchema: boolean, dropDown: string) {
+export async function getValue(rpcClient: ConcordiumGRPCClient, useModuleSchema: boolean, dropDown: string) {
     let entrypointName = `${CONTRACT_NAME}.get_u8`;
 
     switch (dropDown) {
@@ -150,7 +156,7 @@ export async function getValue(rpcClient: JsonRpcClient, useModuleSchema: boolea
     }
 }
 
-export async function view(rpcClient: JsonRpcClient) {
+export async function view(rpcClient: ConcordiumGRPCClient) {
     const res = await rpcClient.invokeContract({
         method: `${CONTRACT_NAME}.view`,
         contract: { index: CONTRACT_INDEX, subindex: CONTRACT_SUB_INDEX },
@@ -173,10 +179,10 @@ export async function view(rpcClient: JsonRpcClient) {
     }
 }
 
-export async function accountInfo(rpcClient: JsonRpcClient, account: string) {
-    return rpcClient.getAccountInfo(account);
+export async function accountInfo(rpcClient: ConcordiumGRPCClient, account: string) {
+    return rpcClient.getAccountInfo(new AccountAddress(account));
 }
 
-export async function smartContractInfo(rpcClient: JsonRpcClient) {
+export async function smartContractInfo(rpcClient: ConcordiumGRPCClient) {
     return rpcClient.getInstanceInfo({ index: CONTRACT_INDEX, subindex: CONTRACT_SUB_INDEX });
 }

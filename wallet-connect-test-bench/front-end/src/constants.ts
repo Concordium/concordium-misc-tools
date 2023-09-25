@@ -1,7 +1,6 @@
 import {
     BrowserWalletConnector,
     ephemeralConnectorType,
-    Network,
     WalletConnectConnector,
     CONCORDIUM_WALLET_CONNECT_PROJECT_ID,
 } from '@concordium/react-components';
@@ -9,9 +8,6 @@ import { SignClientTypes } from '@walletconnect/types';
 import moment from 'moment';
 
 export const REFRESH_INTERVAL = moment.duration(10, 'seconds');
-
-// The TESTNET_GENESIS_BLOCK_HASH is used to check that the user has its browser wallet connected to testnet and not to mainnet.
-export const TESTNET_GENESIS_BLOCK_HASH = '4221332d34e1694168c2a0c0b3fd0f273809612cb13d000d5c2e00e85f50f796';
 
 // The 'PARAMETER'/'RETURN_VALUE' schemas are created by running the command `cargo concordium --schema-json-out ./` in the `smart-contract` folder.
 // This produces an output file in the same folder which those schemas.
@@ -96,12 +92,6 @@ const WALLET_CONNECT_OPTS: SignClientTypes.Options = {
         url: '#',
         icons: ['https://walletconnect.com/walletconnect-logo.png'],
     },
-};
-export const TESTNET: Network = {
-    name: 'testnet',
-    genesisHash: TESTNET_GENESIS_BLOCK_HASH,
-    jsonRpcUrl: 'https://json-rpc.testnet.concordium.com',
-    ccdScanBaseUrl: 'https://testnet.ccdscan.io',
 };
 
 export const BROWSER_WALLET = ephemeralConnectorType(BrowserWalletConnector.create);
