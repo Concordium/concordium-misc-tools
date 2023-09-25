@@ -251,7 +251,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@concordium/browser-wallet-api-helpers@npm:^2.4.0":
+"@concordium/browser-wallet-api-helpers@npm:^2.4.0, @concordium/browser-wallet-api-helpers@npm:^2.5.0":
   version: 2.5.0
   resolution: "@concordium/browser-wallet-api-helpers@npm:2.5.0"
   dependencies:
@@ -281,13 +281,13 @@ __metadata:
   linkType: hard
 
 "@concordium/react-components@file:../../deps/concordium-dapp-libraries/packages/react-components::locator=test-bench-for-wallets%40workspace%3A.":
-  version: 0.2.1
-  resolution: "@concordium/react-components@file:../../deps/concordium-dapp-libraries/packages/react-components#../../deps/concordium-dapp-libraries/packages/react-components::hash=317d58&locator=test-bench-for-wallets%40workspace%3A."
+  version: 0.3.0
+  resolution: "@concordium/react-components@file:../../deps/concordium-dapp-libraries/packages/react-components#../../deps/concordium-dapp-libraries/packages/react-components::hash=a49798&locator=test-bench-for-wallets%40workspace%3A."
   dependencies:
-    "@concordium/wallet-connectors": ^0.2.1
+    "@concordium/wallet-connectors": ^0.3.1
   peerDependencies:
     react: ^18
-  checksum: 6cf53b6501e8163b73b5675434155d7fafeae4e85c23728ac4f95c9e76bf18df99bdfa5d911789845f44c517a9cb52bab6a8698ded47f071dbc1ea3c2b54228e
+  checksum: 5fb7680394b61708ff06f8e98611bc208110cfe369fe7f9200e681ee08f410b60781d88b67b70db934fc6e1ef847bf98656b8835452d0de1d15b91fc75d27afa
   languageName: node
   linkType: hard
 
@@ -299,13 +299,13 @@ __metadata:
   linkType: hard
 
 "@concordium/wallet-connectors@file:../../deps/concordium-dapp-libraries/packages/wallet-connectors::locator=test-bench-for-wallets%40workspace%3A.":
-  version: 0.2.3
-  resolution: "@concordium/wallet-connectors@file:../../deps/concordium-dapp-libraries/packages/wallet-connectors#../../deps/concordium-dapp-libraries/packages/wallet-connectors::hash=ca6e47&locator=test-bench-for-wallets%40workspace%3A."
+  version: 0.3.1
+  resolution: "@concordium/wallet-connectors@file:../../deps/concordium-dapp-libraries/packages/wallet-connectors#../../deps/concordium-dapp-libraries/packages/wallet-connectors::hash=d65759&locator=test-bench-for-wallets%40workspace%3A."
   dependencies:
-    "@concordium/browser-wallet-api-helpers": ^2.4.0
+    "@concordium/browser-wallet-api-helpers": ^2.5.0
     "@walletconnect/qrcode-modal": ^1.8.0
     "@walletconnect/sign-client": ^2.1.4
-  checksum: b82b9d7f8ed5365946d7df8ed1484a7b5c99c293afcc38eaab75673fa0e131416247bcdb26dd8538a504eec22f6e38642554991e56bde3659c0afc662ac0147a
+  checksum: 530be3a02f58380d7981015df90a8393dc46f16bad02ce719b9d9665e604a1762ebb6f08ed428fc0a63a86b9e741c16938ec66ee5319fdc3e06938c0de1a8e70
   languageName: node
   linkType: hard
 
