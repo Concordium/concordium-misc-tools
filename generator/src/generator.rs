@@ -27,15 +27,21 @@ use crate::{CcdArgs, Mode, TransferCis2Args};
 
 // All contracts are taken from
 // https://github.com/Concordium/concordium-rust-smart-contracts/tree/fcc668d87207aaf07b43f5a3b02b6d0a634368d0/examples
+// They were built by running `cargo concordium build` in their respective
+// directories.
 const MINT_CIS2_MODULE: &[u8] = include_bytes!("../resources/cis2_nft.wasm.v1");
 const TRANSFER_CIS2_MODULE: &[u8] = include_bytes!("../resources/cis2_multi.wasm.v1");
 const WCCD_MODULE: &[u8] = include_bytes!("../resources/cis2_wccd.wasm.v1");
 const REGISTER_CREDENTIALS_MODULE: &[u8] =
     include_bytes!("../resources/credential_registry.wasm.v1");
 
+/// Info needed to deploy and initialize a contract.
 struct ContractDeploymentInfo {
+    /// The module to deploy.
     module:      &'static [u8],
+    /// The name of the init function, e.g. "init_cis2_nft".
     name:        &'static str,
+    /// The energy needed to initialize the contract.
     init_energy: Energy,
 }
 
@@ -46,6 +52,7 @@ pub trait Generate {
 }
 
 #[derive(Clone)]
+/// Arguments used by all transaction generators.
 pub struct CommonArgs {
     pub client: v2::Client,
     pub keys:   Arc<WalletAccount>,
@@ -54,11 +61,14 @@ pub struct CommonArgs {
 }
 
 impl CommonArgs {
+    /// Deploys and initializes a contract based on a [`ContractDeploymentInfo`]
+    /// and an [`OwnedParameter`] to the init function. Also uses and increments
+    /// a supplied nonce.
     async fn deploy_and_init_contract(
         &mut self,
         info: ContractDeploymentInfo,
-        nonce: &mut Nonce,
         param: OwnedParameter,
+        nonce: &mut Nonce,
     ) -> anyhow::Result<ContractAddress> {
         println!("Deploying and initializing contract...");
 
@@ -298,7 +308,7 @@ impl MintCis2Generator {
             init_energy: Energy::from(2397),
         };
         let contract_address = args
-            .deploy_and_init_contract(info, &mut nonce.nonce, OwnedParameter::empty())
+            .deploy_and_init_contract(info, OwnedParameter::empty(), &mut nonce.nonce)
             .await
             .context("Could not deploy/init the contract.")?;
 
@@ -394,7 +404,7 @@ impl TransferCis2Generator {
             init_energy: Energy::from(2353),
         };
         let contract_address = args
-            .deploy_and_init_contract(info, &mut nonce.nonce, OwnedParameter::empty())
+            .deploy_and_init_contract(info, OwnedParameter::empty(), &mut nonce.nonce)
             .await
             .context("Could not deploy/init the contract.")?;
 
@@ -520,8 +530,8 @@ impl WccdGenerator {
         let contract_address = args
             .deploy_and_init_contract(
                 info,
-                &mut nonce.nonce,
                 OwnedParameter::from_serial(&params)?,
+                &mut nonce.nonce,
             )
             .await
             .context("Could not deploy/init the contract.")?;
@@ -615,7 +625,7 @@ impl Generate for WccdGenerator {
                 }
             }
             // Unwrap
-            2 => {
+            _ => {
                 let params = UnwrapParams {
                     amount:   TokenAmount::from(1u32),
                     owner:    Address::Account(self.args.keys.address),
@@ -630,7 +640,6 @@ impl Generate for WccdGenerator {
                     message:      OwnedParameter::from_serial(&params)?,
                 }
             }
-            _ => unreachable!(),
         };
 
         let tx = self.args.make_update_contract_transaction(
@@ -719,8 +728,8 @@ impl RegisterCredentialsGenerator {
         let contract_address = args
             .deploy_and_init_contract(
                 info,
-                &mut nonce.nonce,
                 OwnedParameter::from_serial(&params)?,
+                &mut nonce.nonce,
             )
             .await
             .context("Could not deploy/init the contract.")?;
