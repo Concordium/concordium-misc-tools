@@ -292,6 +292,8 @@ impl MintCis2Generator {
         let info = ContractDeploymentInfo {
             module:      MINT_CIS2_MODULE,
             name:        "init_cis2_nft",
+            // Determined by running the transaction and inspecting the energy cost with
+            // concordium-client.
             init_energy: Energy::from(2397),
         };
         let contract_address = info
@@ -326,6 +328,8 @@ impl Generate for MintCis2Generator {
             sender_address: self.args.keys.address,
             nonce:          self.nonce,
             expiry:         TransactionTime::seconds_after(self.args.expiry),
+            // Determined by running the transaction and inspecting the energy cost with
+            // concordium-client and then adding extra to account for variance.
             energy:         GivenEnergy::Absolute(Energy::from(3500)),
             amount:         Amount::zero(),
         };
@@ -398,6 +402,8 @@ impl TransferCis2Generator {
         let info = ContractDeploymentInfo {
             module:      TRANSFER_CIS2_MODULE,
             name:        "init_cis2_multi",
+            // Determined by running the transaction and inspecting the energy cost with
+            // concordium-client.
             init_energy: Energy::from(2353),
         };
         let contract_address = info
@@ -428,6 +434,8 @@ impl TransferCis2Generator {
             sender_address: args.keys.address,
             nonce:          nonce.nonce,
             expiry:         TransactionTime::seconds_after(args.expiry),
+            // Determined by running the transaction and inspecting the energy cost with
+            // concordium-client.
             energy:         GivenEnergy::Absolute(Energy::from(2740)),
             amount:         Amount::zero(),
         };
@@ -474,6 +482,8 @@ impl Generate for TransferCis2Generator {
             sender_address: self.args.keys.address,
             nonce:          self.nonce,
             expiry:         TransactionTime::seconds_after(self.args.expiry),
+            // Determined by running the transaction and inspecting the energy cost with
+            // concordium-client and then adding extra to account for variance.
             energy:         GivenEnergy::Absolute(Energy::from(3500)),
             amount:         Amount::zero(),
         };
@@ -525,6 +535,8 @@ impl WccdGenerator {
         let info = ContractDeploymentInfo {
             module:      WCCD_MODULE,
             name:        "init_cis2_wCCD",
+            // Determined by running the transaction and inspecting the energy cost with
+            // concordium-client.
             init_energy: Energy::from(2596),
         };
         let params = SetMetadataUrlParams {
@@ -592,6 +604,8 @@ impl Generate for WccdGenerator {
             sender_address: self.args.keys.address,
             nonce:          self.nonce,
             expiry:         TransactionTime::seconds_after(self.args.expiry),
+            // Determined by running the transaction and inspecting the energy cost with
+            // concordium-client and then adding extra to account for variance.
             energy:         GivenEnergy::Absolute(Energy::from(3500)),
             amount:         Amount::zero(),
         };
@@ -698,6 +712,8 @@ impl RegisterCredentialsGenerator {
         let info = ContractDeploymentInfo {
             module:      REGISTER_CREDENTIALS_MODULE,
             name:        "init_credential_registry",
+            // Determined by running the transaction and inspecting the energy cost with
+            // concordium-client.
             init_energy: Energy::from(2970),
         };
         // The parameters don't matter, since we can still issue, so they are all dummy
@@ -752,6 +768,8 @@ impl Generate for RegisterCredentialsGenerator {
             sender_address: self.args.keys.address,
             nonce:          self.nonce,
             expiry:         TransactionTime::seconds_after(self.args.expiry),
+            // Determined by running the transaction and inspecting the energy cost with
+            // concordium-client and then adding extra to account for variance.
             energy:         GivenEnergy::Absolute(Energy::from(5000)),
             amount:         Amount::zero(),
         };

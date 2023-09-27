@@ -82,9 +82,13 @@ struct App {
         default_value = "http://localhost:20000"
     )]
     endpoint: Endpoint,
-    #[clap(long = "sender")]
+    #[clap(long = "sender", help = "Path to file containing sender keys.")]
     account:  PathBuf,
-    #[clap(long = "tps")]
+    #[clap(
+        long = "tps",
+        help = "Transactions to send per second.",
+        default_value = "1"
+    )]
     tps:      u16,
     #[clap(
         long = "expiry",
