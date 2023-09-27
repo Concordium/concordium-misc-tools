@@ -10,7 +10,7 @@ use generator::{
     generate_transactions, CcdGenerator, CommonArgs, MintCis2Generator,
     RegisterCredentialsGenerator, TransferCis2Generator, WccdGenerator,
 };
-use std::{path::PathBuf, str::FromStr, sync::Arc};
+use std::{path::PathBuf, str::FromStr};
 
 mod generator;
 
@@ -124,35 +124,33 @@ async fn main() -> anyhow::Result<()> {
 
     let keys: WalletAccount =
         WalletAccount::from_json_file(app.account).context("Could not parse the keys file.")?;
-
     let args = CommonArgs {
-        client,
-        keys: Arc::new(keys),
-        tps: app.tps,
+        keys,
         expiry: app.expiry,
     };
 
     match app.command {
         Command::Ccd(ccd_args) => {
-            let generator = CcdGenerator::instantiate(args.clone(), ccd_args).await?;
-            generate_transactions(args, generator).await
+            let generator = CcdGenerator::instantiate(client.clone(), args, ccd_args).await?;
+            generate_transactions(client, generator, app.tps).await
         }
         Command::MintNfts => {
-            let generator = MintCis2Generator::instantiate(args.clone()).await?;
-            generate_transactions(args, generator).await
+            let generator = MintCis2Generator::instantiate(client.clone(), args).await?;
+            generate_transactions(client, generator, app.tps).await
         }
         Command::TransferCis2(transfer_cis2_args) => {
             let generator =
-                TransferCis2Generator::instantiate(args.clone(), transfer_cis2_args).await?;
-            generate_transactions(args, generator).await
+                TransferCis2Generator::instantiate(client.clone(), args, transfer_cis2_args)
+                    .await?;
+            generate_transactions(client, generator, app.tps).await
         }
         Command::Wccd => {
-            let generator = WccdGenerator::instantiate(args.clone()).await?;
-            generate_transactions(args, generator).await
+            let generator = WccdGenerator::instantiate(client.clone(), args).await?;
+            generate_transactions(client, generator, app.tps).await
         }
         Command::RegisterCredentials => {
-            let generator = RegisterCredentialsGenerator::instantiate(args.clone()).await?;
-            generate_transactions(args, generator).await
+            let generator = RegisterCredentialsGenerator::instantiate(client.clone(), args).await?;
+            generate_transactions(client, generator, app.tps).await
         }
     }
 }
