@@ -111,16 +111,16 @@ impl ContractDeploymentInfo {
     }
 }
 
-/// A transaction generator.
-pub trait Generate {
-    /// Generate a transaction. Will be called in a loop.
-    fn generate(&mut self) -> anyhow::Result<AccountTransaction<EncodedPayload>>;
-}
-
 /// Arguments used by all transaction generators.
 pub struct CommonArgs {
     pub keys:   WalletAccount,
     pub expiry: u32,
+}
+
+/// A transaction generator.
+pub trait Generate {
+    /// Generate a transaction. Will be called in a loop.
+    fn generate(&mut self) -> anyhow::Result<AccountTransaction<EncodedPayload>>;
 }
 
 pub async fn generate_transactions(
