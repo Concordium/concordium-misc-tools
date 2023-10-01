@@ -1,4 +1,5 @@
 use anyhow::Context;
+use clap::Args;
 use concordium_rust_sdk::{
     base::cis4_types::CredentialInfo,
     cis2::{
@@ -26,9 +27,49 @@ use concordium_rust_sdk::{
 };
 use futures::TryStreamExt;
 use rand::{rngs::StdRng, Rng, SeedableRng};
-use std::{collections, collections::BTreeMap, io::Cursor};
+use std::{collections, collections::BTreeMap, io::Cursor, path::PathBuf, str::FromStr};
 
-use crate::{CcdArgs, Mode, TransferCis2Args};
+#[derive(Debug, Args)]
+pub struct CcdArgs {
+    #[arg(long = "receivers", help = "Path to file containing receivers.")]
+    receivers: Option<PathBuf>,
+    #[clap(
+        long = "amount",
+        help = "CCD amount to send in each transaction",
+        default_value = "0"
+    )]
+    amount:    Amount,
+    #[clap(
+        long = "mode",
+        help = "If set this provides the mode when selecting accounts. It can either be `random` \
+                or a non-negative integer. If it is an integer then the set of receivers is \
+                partitioned based on baker id into the given amount of chunks."
+    )]
+    mode:      Option<Mode>,
+}
+
+#[derive(Debug, Args)]
+pub struct TransferCis2Args {
+    #[arg(long = "receivers", help = "Path to file containing receivers.")]
+    receivers: Option<PathBuf>,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum Mode {
+    Random,
+    Every(usize),
+}
+
+impl FromStr for Mode {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "random" => Ok(Self::Random),
+            s => Ok(Self::Every(s.parse()?)),
+        }
+    }
+}
 
 // All contracts were taken from
 // https://github.com/Concordium/concordium-rust-smart-contracts/tree/fcc668d87207aaf07b43f5a3b02b6d0a634368d0/examples

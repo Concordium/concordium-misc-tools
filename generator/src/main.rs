@@ -1,71 +1,13 @@
 use anyhow::Context;
-use clap::{Args, Parser, Subcommand};
-use concordium_rust_sdk::{common::types::Amount, endpoints::Endpoint, types::WalletAccount, v2};
+use clap::{Parser, Subcommand};
+use concordium_rust_sdk::{endpoints::Endpoint, types::WalletAccount, v2};
 use generator::{
     generate_transactions, CcdGenerator, CommonArgs, MintCis2Generator,
     RegisterCredentialsGenerator, TransferCis2Generator, WccdGenerator,
 };
-use std::{path::PathBuf, str::FromStr};
+use std::path::PathBuf;
 
 mod generator;
-
-#[derive(Debug, Clone, Copy)]
-enum Mode {
-    Random,
-    Every(usize),
-}
-
-impl FromStr for Mode {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "random" => Ok(Self::Random),
-            s => Ok(Self::Every(s.parse()?)),
-        }
-    }
-}
-
-#[derive(Debug, Subcommand)]
-enum Command {
-    /// Send CCD to a list of receivers.
-    Ccd(CcdArgs),
-    /// Mint CIS-2 NFT tokens.
-    MintNfts,
-    /// Transfer CIS-2 tokens to a list of receivers.
-    TransferCis2(TransferCis2Args),
-    /// Wrap, unwrap, and transfer WCCD tokens. First, wCCD are minted for every
-    /// account on the chain and then 1 wCCD is alternately wrapped,
-    /// transferred, and unwrapped.
-    Wccd,
-    /// Register Web3 ID credentials.
-    RegisterCredentials,
-}
-
-#[derive(Debug, Args)]
-pub struct CcdArgs {
-    #[arg(long = "receivers", help = "Path to file containing receivers.")]
-    receivers: Option<PathBuf>,
-    #[clap(
-        long = "amount",
-        help = "CCD amount to send in each transaction",
-        default_value = "0"
-    )]
-    amount:    Amount,
-    #[clap(
-        long = "mode",
-        help = "If set this provides the mode when selecting accounts. It can either be `random` \
-                or a non-negative integer. If it is an integer then the set of receivers is \
-                partitioned based on baker id into the given amount of chunks."
-    )]
-    mode:      Option<Mode>,
-}
-
-#[derive(Debug, Args)]
-pub struct TransferCis2Args {
-    #[arg(long = "receivers", help = "Path to file containing receivers.")]
-    receivers: Option<PathBuf>,
-}
 
 #[derive(clap::Parser, Debug)]
 #[clap(author, version, about)]
@@ -94,6 +36,22 @@ struct App {
 
     #[command(subcommand)]
     command: Command,
+}
+
+#[derive(Debug, Subcommand)]
+enum Command {
+    /// Send CCD to a list of receivers.
+    Ccd(generator::CcdArgs),
+    /// Mint CIS-2 NFT tokens.
+    MintNfts,
+    /// Transfer CIS-2 tokens to a list of receivers.
+    TransferCis2(generator::TransferCis2Args),
+    /// Wrap, unwrap, and transfer WCCD tokens. First, wCCD are minted for every
+    /// account on the chain and then 1 wCCD is alternately wrapped,
+    /// transferred, and unwrapped.
+    Wccd,
+    /// Register Web3 ID credentials.
+    RegisterCredentials,
 }
 
 #[tokio::main(flavor = "multi_thread")]
