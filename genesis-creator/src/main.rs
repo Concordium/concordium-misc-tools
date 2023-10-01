@@ -626,7 +626,7 @@ fn accounts(
 
                 let ga_public = GenesisAccountPublic {
                     address: ga.address,
-                    account_threshold: ga.account_keys.threshold.0.try_into()?,
+                    account_threshold: ga.account_keys.threshold,
                     credentials: ga.credentials.value,
                     balance,
                     baker,
@@ -658,7 +658,7 @@ fn accounts(
                 ensure!(num > 0, "repeat cannot be 0");
 
                 let num_keys = num_keys.unwrap_or(1);
-                let threshold = threshold.unwrap_or(SignatureThreshold(1));
+                let threshold = threshold.unwrap_or(SignatureThreshold::ONE);
 
                 ensure!(
                     num_keys >= u8::from(threshold),

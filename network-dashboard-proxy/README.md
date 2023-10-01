@@ -36,7 +36,7 @@ Then run
 
 ```
 docker build \
-    --build-arg build_image=rust:1.67-buster\
+    --build-arg build_image=rust:1.70-buster\
     --build-arg base_image=debian:buster\
     -f network-dashboard-proxy/scripts/build.Dockerfile\
     -t network-dashboard-proxy:latest .
