@@ -7,7 +7,7 @@ use concordium_rust_sdk::{
     endpoints::{QueryError, RPCError},
     id::{
         constants::{ArCurve, AttributeKind},
-        id_proof_types::{Proof, Statement},
+        id_proof_types::{Proof, ProofVersion, Statement},
         types::{AccountCredentialWithoutProofs, GlobalContext},
     },
     types::CredentialRegistrationID,
@@ -231,7 +231,7 @@ fn handle_web3id_provide_proof(
                 // And then verify the cryptographic proofs.
                 match presentation.verify(
                     &state.global_context,
-                    public_data.iter().map(|cm| &cm.commitments),
+                    public_data.iter().map(|cm| &cm.inputs),
                 ) {
                     Ok(statement) => Ok(warp::reply::json(&statement)),
                     Err(e) => {
@@ -412,6 +412,7 @@ async fn check_proof_worker(
     };
 
     if statement.verify(
+        ProofVersion::Version1,
         &request.challenge.0,
         &state.global_context,
         cred_id.as_ref(),

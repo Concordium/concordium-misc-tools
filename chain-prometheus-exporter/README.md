@@ -24,7 +24,7 @@ Then run
 
 ```
 docker build \
-    --build-arg build_image=rust:1.67-buster\
+    --build-arg build_image=rust:1.70-buster\
     --build-arg base_image=debian:buster\
     -f chain-prometheus-exporter/scripts/build.Dockerfile\
     -t chain-prometheus-exporter:latest .

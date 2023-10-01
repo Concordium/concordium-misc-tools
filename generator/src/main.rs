@@ -1,11 +1,6 @@
 use anyhow::Context;
 use clap::{Args, Parser, Subcommand};
-use concordium_rust_sdk::{
-    common::types::Amount,
-    endpoints::Endpoint,
-    types::WalletAccount,
-    v2::{self},
-};
+use concordium_rust_sdk::{common::types::Amount, endpoints::Endpoint, types::WalletAccount, v2};
 use generator::{
     generate_transactions, CcdGenerator, CommonArgs, MintCis2Generator,
     RegisterCredentialsGenerator, TransferCis2Generator, WccdGenerator,
