@@ -63,6 +63,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
@@ -186,6 +187,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
@@ -321,6 +323,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
@@ -455,6 +458,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
@@ -564,6 +568,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "stepAfter",
             "lineStyle": {
               "fill": "solid"
@@ -655,6 +660,116 @@
     {
       "datasource": {
         "type": "postgres",
+        "uid": "d4ab35f1-5c8e-48b6-8566-37f813b41e94"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 30
+      },
+      "id": 30,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "${postgres_db}"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "-- We join the accounts, transactions, and blocks table to get the earliest transaction timestamp for each account.\nWITH data as (\n  SELECT\n    MIN($__unixEpochGroup(blocks.timestamp, $__interval)) AS time\n  FROM accounts\n  JOIN accounts_transactions ON accounts_transactions.account = accounts.id\n  JOIN transactions ON transactions.id = accounts_transactions.transaction\n  JOIN blocks ON blocks.id = transactions.block\n  WHERE is_ccd_transfer(transactions.type)\n  GROUP BY accounts.id\n)\n\nSELECT\n  COUNT(1) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as total,\n  time\nFROM data;",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ],
+      "title": "Accounts with CCD transactions",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
         "uid": "${postgres_db}"
       },
       "description": "",
@@ -677,6 +792,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "stepAfter",
             "lineWidth": 1,
             "pointSize": 5,
@@ -799,6 +915,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
@@ -903,13 +1020,14 @@
             "axisPlacement": "auto",
             "barAlignment": 0,
             "drawStyle": "line",
-            "fillOpacity": 0,
+            "fillOpacity": 40,
             "gradientMode": "none",
             "hideFrom": {
               "legend": false,
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
@@ -920,7 +1038,7 @@
             "spanNulls": false,
             "stacking": {
               "group": "A",
-              "mode": "none"
+              "mode": "normal"
             },
             "thresholdsStyle": {
               "mode": "off"
@@ -956,21 +1074,6 @@
                 }
               }
             ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "successful"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "green",
-                  "mode": "fixed"
-                }
-              }
-            ]
           }
         ]
       },
@@ -989,7 +1092,7 @@
           "showLegend": true
         },
         "tooltip": {
-          "mode": "single",
+          "mode": "multi",
           "sort": "none"
         }
       },
@@ -1003,7 +1106,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "WITH data AS (\n  SELECT \n    COUNT(1) as count,\n    $__unixEpochGroup(blocks.timestamp, $__interval) AS time\n  FROM transactions\n  JOIN blocks\n  ON transactions.block=blocks.id\n  GROUP BY $__unixEpochGroup(blocks.timestamp, $__interval)\n)\n\nSELECT\n  data.time,\n  SUM(data.count) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as total \nFROM data;",
+          "rawSql": "WITH data AS (\n  SELECT \n    COUNT(1) as count,\n    transactions.type as type,\n    transactions.is_success as is_success,\n    $__unixEpochGroup(blocks.timestamp, $__interval) AS time\n  FROM transactions\n  JOIN blocks\n  ON transactions.block=blocks.id\n  GROUP BY $__unixEpochGroup(blocks.timestamp, $__interval), transactions.type, transactions.is_success\n)\n\nSELECT\n  data.time,\n  SUM(data.count) FILTER (WHERE data.type = 0 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as deploy_module,\n  SUM(data.count) FILTER (WHERE data.type = 1 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as init_contract,\n  SUM(data.count) FILTER (WHERE data.type = 2 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as update,\n  SUM(data.count) FILTER (WHERE data.type = 3 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as transfer,\n  SUM(data.count) FILTER (WHERE data.type = 4 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as add_baker,\n  SUM(data.count) FILTER (WHERE data.type = 5 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as remove_baker,\n  SUM(data.count) FILTER (WHERE data.type = 6 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as update_baker_stake,\n  SUM(data.count) FILTER (WHERE data.type = 7 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as update_baker_restake_earning,\n  SUM(data.count) FILTER (WHERE data.type = 8 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as update_baker_keys,\n  SUM(data.count) FILTER (WHERE data.type = 9 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as update_credential_keys,\n  SUM(data.count) FILTER (WHERE data.type = 10 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as encrypted_amount_transfer,\n  SUM(data.count) FILTER (WHERE data.type = 11 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as transfer_to_encrypted,\n  SUM(data.count) FILTER (WHERE data.type = 12 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as transfer_to_public,\n  SUM(data.count) FILTER (WHERE data.type = 13 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as transfer_with_schedule,\n  SUM(data.count) FILTER (WHERE data.type = 14 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as update_credentials,\n  SUM(data.count) FILTER (WHERE data.type = 15 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as register_data,\n  SUM(data.count) FILTER (WHERE data.type = 16 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as transfer_with_memo,\n  SUM(data.count) FILTER (WHERE data.type = 17 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as encrypted_amount_transfer_with_memo,\n  SUM(data.count) FILTER (WHERE data.type = 18 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as transfer_with_schedule_and_memo,\n  SUM(data.count) FILTER (WHERE data.type = 19 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as configure_baker,\n  SUM(data.count) FILTER (WHERE data.type = 20 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as configure_delegation,\n  SUM(data.count) FILTER (WHERE data.type = NULL OR NOT data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as rejected\nFROM data;\n",
           "refId": "A",
           "sql": {
             "columns": [
@@ -1057,6 +1160,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
@@ -1079,7 +1183,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": null
               },
               {
                 "color": "red",
@@ -1160,13 +1265,14 @@
             "axisPlacement": "auto",
             "barAlignment": 0,
             "drawStyle": "line",
-            "fillOpacity": 0,
+            "fillOpacity": 40,
             "gradientMode": "none",
             "hideFrom": {
               "legend": false,
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
@@ -1177,7 +1283,7 @@
             "spanNulls": false,
             "stacking": {
               "group": "A",
-              "mode": "none"
+              "mode": "normal"
             },
             "thresholdsStyle": {
               "mode": "off"
@@ -1188,7 +1294,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": null
               },
               {
                 "color": "red",
@@ -1197,7 +1304,23 @@
             ]
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "rejected"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 9,
@@ -1227,7 +1350,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT \n  COUNT(1),\n  COUNT(CASE WHEN is_success=false THEN 1 END) as rejected_count,\n  $__unixEpochGroup(blocks.timestamp, $__interval) AS time\nFROM transactions\nJOIN blocks\nON transactions.block=blocks.id\nWHERE $__unixEpochFilter(blocks.timestamp) \nGROUP BY $__unixEpochGroup(blocks.timestamp, $__interval);",
+          "rawSql": "SELECT \n  COUNT(1) FILTER (WHERE transactions.type = 0 AND transactions.is_success) as deploy_module,\n  COUNT(1) FILTER (WHERE transactions.type = 1 AND transactions.is_success) as init_contract,\n  COUNT(1) FILTER (WHERE transactions.type = 2 AND transactions.is_success) as update,\n  COUNT(1) FILTER (WHERE transactions.type = 3 AND transactions.is_success) as transfer,\n  COUNT(1) FILTER (WHERE transactions.type = 4 AND transactions.is_success) as add_baker,\n  COUNT(1) FILTER (WHERE transactions.type = 5 AND transactions.is_success) as remove_baker,\n  COUNT(1) FILTER (WHERE transactions.type = 6 AND transactions.is_success) as update_baker_stake,\n  COUNT(1) FILTER (WHERE transactions.type = 7 AND transactions.is_success) as update_baker_restake_earning,\n  COUNT(1) FILTER (WHERE transactions.type = 8 AND transactions.is_success) as update_baker_keys,\n  COUNT(1) FILTER (WHERE transactions.type = 9 AND transactions.is_success) as update_credential_keys,\n  COUNT(1) FILTER (WHERE transactions.type = 10 AND transactions.is_success) as encrypted_amount_transfer,\n  COUNT(1) FILTER (WHERE transactions.type = 11 AND transactions.is_success) as transfer_to_encrypted,\n  COUNT(1) FILTER (WHERE transactions.type = 12 AND transactions.is_success) as transfer_to_public,\n  COUNT(1) FILTER (WHERE transactions.type = 13 AND transactions.is_success) as transfer_with_schedule,\n  COUNT(1) FILTER (WHERE transactions.type = 14 AND transactions.is_success) as update_credentials,\n  COUNT(1) FILTER (WHERE transactions.type = 15 AND transactions.is_success) as register_data,\n  COUNT(1) FILTER (WHERE transactions.type = 16 AND transactions.is_success) as transfer_with_memo,\n  COUNT(1) FILTER (WHERE transactions.type = 17 AND transactions.is_success) as encrypted_amount_transfer_with_memo,\n  COUNT(1) FILTER (WHERE transactions.type = 18 AND transactions.is_success) as transfer_with_schedule_and_memo,\n  COUNT(1) FILTER (WHERE transactions.type = 19 AND transactions.is_success) as configure_baker,\n  COUNT(1) FILTER (WHERE transactions.type = 20 AND transactions.is_success) as configure_delegation,\n  COUNT(1) FILTER (WHERE transactions.type = NULL OR NOT transactions.is_success) as rejected,\n  $__unixEpochGroup(blocks.timestamp, $__interval) AS time\n  FROM transactions\n  JOIN blocks\n  ON transactions.block=blocks.id\n  GROUP BY $__unixEpochGroup(blocks.timestamp, $__interval);\n",
           "refId": "A",
           "sql": {
             "columns": [
@@ -1253,7 +1376,7 @@
     }
   ],
   "refresh": false,
-  "schemaVersion": 37,
+  "schemaVersion": 38,
   "style": "dark",
   "tags": [],
   "templating": {
@@ -1321,6 +1444,6 @@
   "timezone": "",
   "title": "KPI tracker",
   "uid": "8dm2sVA4k",
-  "version": 35,
+  "version": 10,
   "weekStart": ""
 }

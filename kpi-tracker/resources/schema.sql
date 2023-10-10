@@ -13,6 +13,14 @@ BEGIN
 END;
 $$;
 
+-- Returns whether a given transaction type is a CCD transfer.
+CREATE OR REPLACE FUNCTION is_ccd_transfer(type int2)
+  RETURNS boolean
+  LANGUAGE sql
+  IMMUTABLE
+  -- The types correspond to 3: Transfer, 10: EncryptedAmountTransfer, 13: TransferWithMemo, 16: TransferWithSchedule, 17: EncryptedAmountTransferWithMemo, 18: TransferWithScheduleAndMemo
+  RETURN type in (3, 10, 13, 16, 17, 18);
+
 -- All blocks. Mostly act as a time reference for other entities.
 CREATE TABLE IF NOT EXISTS blocks (
   id SERIAL8 PRIMARY KEY,
