@@ -738,7 +738,7 @@
         {
           "datasource": {
             "type": "postgres",
-            "uid": "d4ab35f1-5c8e-48b6-8566-37f813b41e94"
+            "uid": "${postgres_db}"
           },
           "editorMode": "code",
           "format": "table",
