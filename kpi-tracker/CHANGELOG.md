@@ -6,6 +6,8 @@
 - Add graph for accounts with CCD transfers.
 - Add graph for number of active finalizers.
 - Add graph showing active staking accounts, divided into bakers and delegators.
+- Add graph showing status of active bakers.
+- Add graph of delegation recipients.
 
 ## 1.1.0
 
