@@ -26,11 +26,17 @@ CREATE TABLE IF NOT EXISTS blocks (
   id SERIAL8 PRIMARY KEY,
   hash BYTEA NOT NULL UNIQUE,
   timestamp INT8 NOT NULL,
-  height INT8 NOT NULL,
-  total_stake INT8 -- NULL means the block is NOT a payday block.
+  height INT8 NOT NULL
 );
 -- Create index on block timestamp to improve performance when querying for blocks within a timerange.
 CREATE INDEX IF NOT EXISTS blocks_timestamp ON blocks (timestamp);
+
+-- All payday blocks (only exists for protocol version 4 and onwards).
+CREATE TABLE IF NOT EXISTS paydays (
+  block INT8 PRIMARY KEY REFERENCES blocks(id) ON DELETE RESTRICT ON UPDATE RESTRICT,
+  total_stake INT8 NOT NULL,
+  num_bakers INT8 -- Only supported for protocol version 6 and onwards.
+);
 
 -- All accounts created.
 CREATE TABLE IF NOT EXISTS accounts (

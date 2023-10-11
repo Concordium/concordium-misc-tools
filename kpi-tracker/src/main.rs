@@ -103,10 +103,10 @@ struct BlockDetails {
     /// Height of block from genesis. Used to restart the process of collecting
     /// metrics from the latest block recorded.
     height:      AbsoluteBlockHeight,
-    /// Total amount staked across all pools inclusive passive delegation. This
-    /// is only recorded for "payday" blocks reflected by `Some`, where non
-    /// payday blocks are reflected by `None`.
-    total_stake: Option<Amount>,
+    /// [`PaydayBlockData`] for the block. This is only recorded for "payday"
+    /// blocks reflected by `Some`, where non payday blocks are reflected by
+    /// `None`.
+    payday_data: Option<PaydayBlockData>,
 }
 
 /// Holds selected attributes about accounts created on chain.
@@ -204,6 +204,8 @@ enum BlockData {
 struct PreparedStatements {
     /// Insert block into DB
     insert_block:             tokio_postgres::Statement,
+    /// Insert payday into DB
+    insert_payday:            tokio_postgres::Statement,
     /// Insert account into DB
     insert_account:           tokio_postgres::Statement,
     /// Insert contract module into DB
@@ -230,9 +232,11 @@ impl PreparedStatements {
     async fn new(client: &tokio_postgres::Client) -> Result<Self, tokio_postgres::Error> {
         let insert_block = client
             .prepare(
-                "INSERT INTO blocks (hash, timestamp, height, total_stake) VALUES ($1, $2, $3, \
-                 $4) RETURNING id",
+                "INSERT INTO blocks (hash, timestamp, height) VALUES ($1, $2, $3) RETURNING id",
             )
+            .await?;
+        let insert_payday = client
+            .prepare("INSERT INTO paydays (block, total_stake, num_bakers) VALUES ($1, $2, $3)")
             .await?;
         let insert_account = client
             .prepare("INSERT INTO accounts (address, block, is_initial) VALUES ($1, $2, $3)")
@@ -287,6 +291,7 @@ impl PreparedStatements {
 
         Ok(Self {
             insert_block,
+            insert_payday,
             insert_account,
             insert_contract_module,
             insert_contract_instance,
@@ -305,20 +310,25 @@ impl PreparedStatements {
         block_hash: BlockHash,
         block_details: &BlockDetails,
     ) -> Result<i64, tokio_postgres::Error> {
-        let total_stake = block_details
-            .total_stake
-            .map(|amount| (amount.micro_ccd() as i64));
-        let values: [&(dyn ToSql + Sync); 4] = [
+        let values: [&(dyn ToSql + Sync); 3] = [
             &block_hash.as_ref(),
             &block_details.block_time.timestamp(),
             &(block_details.height.height as i64),
-            &total_stake,
         ];
 
         let now = tokio::time::Instant::now();
         let row = db_tx.query_one(&self.insert_block, &values).await?;
         let id = row.try_get::<_, i64>(0)?;
         log::trace!("Took {}ms to insert block.", now.elapsed().as_millis());
+
+        if let Some(payday_data) = block_details.payday_data {
+            let values: [&(dyn ToSql + Sync); 3] = [
+                &id,
+                &(payday_data.total_stake.micro_ccd() as i64),
+                &payday_data.baker_count,
+            ];
+            db_tx.execute(&self.insert_payday, &values).await?;
+        }
 
         Ok(id)
     }
@@ -736,7 +746,7 @@ async fn process_chain_genesis_block(
     let block_details = BlockDetails {
         block_time:  block_info.block_slot_time,
         height:      block_info.block_height,
-        total_stake: None,
+        payday_data: None,
     };
 
     let accounts = accounts_in_block(node, block_hash).await?;
@@ -749,43 +759,56 @@ async fn process_chain_genesis_block(
     Ok(genesis_data)
 }
 
+#[derive(Debug, Clone, Copy)]
+struct PaydayBlockData {
+    total_stake: Amount,
+    /// The amount of active bakers. Only for >= protocol version 6.
+    baker_count: Option<i64>,
+}
+
 /// If block specified by `block_hash` is a payday block (also implies >=
-/// protocol version 4), this returns the total stake for that block. Otherwise
-/// returns `None`.
-async fn p4_payday_total_stake(
+/// protocol version 4), this returns [`PaydayBlockData`]. Otherwise, returns
+/// `None`.
+async fn process_payday_block(
     node: &mut Client,
     block_hash: BlockHash,
-) -> anyhow::Result<Option<Amount>> {
-    let tokenomics_info = node
-        .get_tokenomics_info(block_hash)
+) -> anyhow::Result<Option<PaydayBlockData>> {
+    let is_payday_block = node
+        .is_payday_block(block_hash)
         .await
-        .with_context(|| format!("Could not get tokenomics info for block: {}", block_hash))?
+        .with_context(|| {
+            format!("Could not assert whether block is payday block for: {block_hash}")
+        })?
         .response;
 
-    if let RewardsOverview::V1 {
-        total_staked_capital,
-        ..
-    } = tokenomics_info
-    {
-        let is_payday_block = node
-            .is_payday_block(block_hash)
-            .await
-            .with_context(|| {
-                format!(
-                    "Could not assert whether block is payday block for: {}",
-                    block_hash
-                )
-            })?
-            .response;
-
-        if is_payday_block {
-            return Ok(Some(total_staked_capital));
-        };
-
+    if !is_payday_block {
         return Ok(None);
     }
 
-    Ok(None)
+    let tokenomics_info = node
+        .get_tokenomics_info(block_hash)
+        .await
+        .with_context(|| format!("Could not get tokenomics info for block: {block_hash}"))?
+        .response;
+
+    let RewardsOverview::V1 {
+        total_staked_capital,
+        ..
+    } = tokenomics_info else {
+        return Ok(None);
+    };
+
+    // TODO: Concurrently query for bakers and total stake
+    let baker_count = match node.get_bakers_reward_period(block_hash).await {
+        Ok(bakers) => Some(bakers.response.count().await as i64),
+        // Error means protocol version < 6
+        Err(_) => None,
+    };
+
+    Ok(Some(PaydayBlockData {
+        total_stake: total_staked_capital,
+        baker_count,
+    }))
 }
 
 /// Get `BlockDetails` for given block represented by `block_hash`
@@ -799,11 +822,11 @@ async fn get_block_details(
         .with_context(|| format!("Could not get block info for block: {}", block_hash))?
         .response;
 
-    let total_stake = p4_payday_total_stake(node, block_hash).await?;
+    let payday_data = process_payday_block(node, block_hash).await?;
     let block_details = BlockDetails {
         block_time: block_info.block_slot_time,
         height: block_info.block_height,
-        total_stake,
+        payday_data,
     };
 
     Ok(block_details)
