@@ -4,6 +4,7 @@
 
 - Split transaction graphs into separate types of transactions.
 - Add graph for accounts with CCD transfers.
+- Add graph for number of active bakers.
 
 ## 1.1.0
 

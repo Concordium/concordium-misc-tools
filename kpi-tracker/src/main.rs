@@ -798,7 +798,6 @@ async fn process_payday_block(
         return Ok(None);
     };
 
-    // TODO: Concurrently query for bakers and total stake
     let baker_count = match node.get_bakers_reward_period(block_hash).await {
         Ok(bakers) => Some(bakers.response.count().await as i64),
         // Error means protocol version < 6
