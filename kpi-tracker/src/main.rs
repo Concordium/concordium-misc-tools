@@ -10,7 +10,7 @@ use concordium_rust_sdk::{
         AbsoluteBlockHeight, AccountCreationDetails, AccountTransactionDetails,
         AccountTransactionEffects, BlockItemSummary,
         BlockItemSummaryDetails::{AccountCreation, AccountTransaction},
-        ContractAddress, CredentialType, RewardsOverview, TransactionType,
+        ContractAddress, CredentialType, TransactionType,
     },
     v2::{AccountIdentifier, Client, Endpoint},
 };
@@ -238,8 +238,8 @@ impl PreparedStatements {
             .await?;
         let insert_payday = client
             .prepare(
-                "INSERT INTO paydays (block, total_stake, num_bakers, num_finalizers, \
-                 num_delegators) VALUES ($1, $2, $3, $4, $5)",
+                "INSERT INTO paydays (block, total_equity_capital, total_delegated_stake, \
+                 num_bakers, num_finalizers, num_delegators) VALUES ($1, $2, $3, $4, $5, $6)",
             )
             .await?;
         let insert_account = client
@@ -326,9 +326,10 @@ impl PreparedStatements {
         log::trace!("Took {}ms to insert block.", now.elapsed().as_millis());
 
         if let Some(payday_data) = block_details.payday_data {
-            let values: [&(dyn ToSql + Sync); 5] = [
+            let values: [&(dyn ToSql + Sync); 6] = [
                 &id,
-                &(payday_data.total_stake.micro_ccd() as i64),
+                &payday_data.total_equity_capital,
+                &payday_data.total_delegated,
                 &payday_data.baker_count,
                 &payday_data.finalizer_count,
                 &payday_data.delegator_count,
@@ -769,14 +770,16 @@ async fn process_chain_genesis_block(
 /// that contains the block.
 #[derive(Debug, Clone, Copy)]
 struct PaydayBlockData {
-    // Total amount of CCD staked.
-    total_stake:     Amount,
+    // Total amount of CCD staked by bakers themselves.
+    total_equity_capital: i64,
+    // Total amount of microCCD delegated.
+    total_delegated:      i64,
     /// The amount of active bakers.
-    baker_count:     i64,
+    baker_count:          i64,
     /// The amount of active finalizers.
-    finalizer_count: i64,
+    finalizer_count:      i64,
     /// The amount of active delegators.
-    delegator_count: i64,
+    delegator_count:      i64,
 }
 
 /// If block specified by `block_hash` is a payday block (also implies >=
@@ -797,30 +800,20 @@ async fn process_payday_block(
     if !is_payday_block {
         return Ok(None);
     }
-
-    let tokenomics_info = node
-        .get_tokenomics_info(block_hash)
-        .await
-        .with_context(|| format!("Could not get tokenomics info for block: {block_hash}"))?
-        .response;
-
-    let RewardsOverview::V1 {
-        total_staked_capital,
-        ..
-    } = tokenomics_info else {
-        return Ok(None);
-    };
-
     let mut baker_response = node.get_bakers_reward_period(block_hash).await?.response;
 
     let mut baker_count = 0;
     let mut finalizer_count = 0;
+    let mut total_delegated = 0;
+    let mut total_equity_capital = 0;
     let mut delegating_accounts = HashSet::new();
     while let Some(baker) = baker_response.try_next().await? {
         baker_count += 1;
         if baker.is_finalizer {
             finalizer_count += 1;
         }
+        total_delegated += baker.delegated_capital.micro_ccd() as i64;
+        total_equity_capital += baker.equity_capital.micro_ccd() as i64;
         let mut pool_info = node
             .get_pool_delegators_reward_period(block_hash, baker.baker.baker_id)
             .await?
@@ -832,7 +825,8 @@ async fn process_payday_block(
     let delegator_count = delegating_accounts.len() as i64;
 
     Ok(Some(PaydayBlockData {
-        total_stake: total_staked_capital,
+        total_equity_capital,
+        total_delegated,
         baker_count,
         finalizer_count,
         delegator_count,

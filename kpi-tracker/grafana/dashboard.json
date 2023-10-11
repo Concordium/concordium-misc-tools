@@ -56,7 +56,7 @@
             "axisPlacement": "auto",
             "barAlignment": 0,
             "drawStyle": "line",
-            "fillOpacity": 0,
+            "fillOpacity": 40,
             "gradientMode": "none",
             "hideFrom": {
               "legend": false,
@@ -97,7 +97,38 @@
           },
           "unit": "CCD"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "baker_equity"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "delegated_stake"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "yellow",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 9,
@@ -127,7 +158,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT\n  $__unixEpochGroup(timestamp, $__interval) AS time,\n  paydays.total_stake::DECIMAL/1000000 as stake_ccd\nFROM blocks\nJOIN paydays ON paydays.block = blocks.id;",
+          "rawSql": "SELECT\n  paydays.total_equity_capital::DECIMAL/1000000 AS baker_equity,\n  paydays.total_delegated_stake::DECIMAL/1000000 AS delegated_stake,\n  $__unixEpochGroup(timestamp, $__interval) AS time\nFROM blocks\nJOIN paydays ON paydays.block = blocks.id;",
           "refId": "A",
           "sql": {
             "columns": [
@@ -1722,6 +1753,6 @@
   "timezone": "",
   "title": "KPI tracker",
   "uid": "8dm2sVA4k",
-  "version": 14,
+  "version": 17,
   "weekStart": ""
 }

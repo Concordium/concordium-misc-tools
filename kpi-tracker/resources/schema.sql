@@ -34,7 +34,8 @@ CREATE INDEX IF NOT EXISTS blocks_timestamp ON blocks (timestamp);
 -- All payday blocks (only exists for protocol version 4 and onwards).
 CREATE TABLE IF NOT EXISTS paydays (
   block INT8 PRIMARY KEY REFERENCES blocks(id) ON DELETE RESTRICT ON UPDATE RESTRICT,
-  total_stake INT8 NOT NULL,
+  total_equity_capital INT8 NOT NULL,
+  total_delegated_stake INT8 NOT NULL,
   num_bakers INT8 NOT NULL,
   num_finalizers INT8 NOT NULL,
   num_delegators INT8 NOT NULL
