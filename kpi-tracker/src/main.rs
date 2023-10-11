@@ -17,6 +17,7 @@ use concordium_rust_sdk::{
 use core::fmt;
 use futures::{self, future, stream::FuturesUnordered, Stream, StreamExt, TryStreamExt};
 use std::{
+    collections::HashSet,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -237,8 +238,8 @@ impl PreparedStatements {
             .await?;
         let insert_payday = client
             .prepare(
-                "INSERT INTO paydays (block, total_stake, num_bakers, num_finalizers) VALUES ($1, \
-                 $2, $3, $4)",
+                "INSERT INTO paydays (block, total_stake, num_bakers, num_finalizers, \
+                 num_delegators) VALUES ($1, $2, $3, $4, $5)",
             )
             .await?;
         let insert_account = client
@@ -325,11 +326,12 @@ impl PreparedStatements {
         log::trace!("Took {}ms to insert block.", now.elapsed().as_millis());
 
         if let Some(payday_data) = block_details.payday_data {
-            let values: [&(dyn ToSql + Sync); 4] = [
+            let values: [&(dyn ToSql + Sync); 5] = [
                 &id,
                 &(payday_data.total_stake.micro_ccd() as i64),
                 &payday_data.baker_count,
                 &payday_data.finalizer_count,
+                &payday_data.delegator_count,
             ];
             db_tx.execute(&self.insert_payday, &values).await?;
         }
@@ -773,6 +775,8 @@ struct PaydayBlockData {
     baker_count:     i64,
     /// The amount of active finalizers.
     finalizer_count: i64,
+    /// The amount of active delegators.
+    delegator_count: i64,
 }
 
 /// If block specified by `block_hash` is a payday block (also implies >=
@@ -811,17 +815,27 @@ async fn process_payday_block(
 
     let mut baker_count = 0;
     let mut finalizer_count = 0;
+    let mut delegating_accounts = HashSet::new();
     while let Some(baker) = baker_response.try_next().await? {
         baker_count += 1;
         if baker.is_finalizer {
             finalizer_count += 1;
         }
+        let mut pool_info = node
+            .get_pool_delegators_reward_period(block_hash, baker.baker.baker_id)
+            .await?
+            .response;
+        while let Some(delegator) = pool_info.try_next().await? {
+            delegating_accounts.insert(delegator.account);
+        }
     }
+    let delegator_count = delegating_accounts.len() as i64;
 
     Ok(Some(PaydayBlockData {
-        total_stake:     total_staked_capital,
+        total_stake: total_staked_capital,
         baker_count,
         finalizer_count,
+        delegator_count,
     }))
 }
 
