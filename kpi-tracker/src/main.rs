@@ -236,7 +236,10 @@ impl PreparedStatements {
             )
             .await?;
         let insert_payday = client
-            .prepare("INSERT INTO paydays (block, total_stake, num_bakers) VALUES ($1, $2, $3)")
+            .prepare(
+                "INSERT INTO paydays (block, total_stake, num_bakers, num_finalizers) VALUES ($1, \
+                 $2, $3, $4)",
+            )
             .await?;
         let insert_account = client
             .prepare("INSERT INTO accounts (address, block, is_initial) VALUES ($1, $2, $3)")
@@ -322,10 +325,11 @@ impl PreparedStatements {
         log::trace!("Took {}ms to insert block.", now.elapsed().as_millis());
 
         if let Some(payday_data) = block_details.payday_data {
-            let values: [&(dyn ToSql + Sync); 3] = [
+            let values: [&(dyn ToSql + Sync); 4] = [
                 &id,
                 &(payday_data.total_stake.micro_ccd() as i64),
                 &payday_data.baker_count,
+                &payday_data.finalizer_count,
             ];
             db_tx.execute(&self.insert_payday, &values).await?;
         }
@@ -759,11 +763,16 @@ async fn process_chain_genesis_block(
     Ok(genesis_data)
 }
 
+/// Contains data about a payday block, which is relevant for the reward period
+/// that contains the block.
 #[derive(Debug, Clone, Copy)]
 struct PaydayBlockData {
-    total_stake: Amount,
-    /// The amount of active bakers. Only for >= protocol version 6.
-    baker_count: Option<i64>,
+    // Total amount of CCD staked.
+    total_stake:     Amount,
+    /// The amount of active bakers.
+    baker_count:     i64,
+    /// The amount of active finalizers.
+    finalizer_count: i64,
 }
 
 /// If block specified by `block_hash` is a payday block (also implies >=
@@ -798,15 +807,21 @@ async fn process_payday_block(
         return Ok(None);
     };
 
-    let baker_count = match node.get_bakers_reward_period(block_hash).await {
-        Ok(bakers) => Some(bakers.response.count().await as i64),
-        // Error means protocol version < 6
-        Err(_) => None,
-    };
+    let mut baker_response = node.get_bakers_reward_period(block_hash).await?.response;
+
+    let mut baker_count = 0;
+    let mut finalizer_count = 0;
+    while let Some(baker) = baker_response.try_next().await? {
+        baker_count += 1;
+        if baker.is_finalizer {
+            finalizer_count += 1;
+        }
+    }
 
     Ok(Some(PaydayBlockData {
-        total_stake: total_staked_capital,
+        total_stake:     total_staked_capital,
         baker_count,
+        finalizer_count,
     }))
 }
 
