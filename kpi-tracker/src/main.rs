@@ -10,7 +10,8 @@ use concordium_rust_sdk::{
         AbsoluteBlockHeight, AccountCreationDetails, AccountTransactionDetails,
         AccountTransactionEffects, BlockItemSummary,
         BlockItemSummaryDetails::{AccountCreation, AccountTransaction},
-        ContractAddress, CredentialType, OpenStatus, TransactionType,
+        ContractAddress, CredentialType, OpenStatus, RewardsOverview, SpecialTransactionOutcome,
+        TransactionType,
     },
     v2::{AccountIdentifier, Client, Endpoint},
 };
@@ -239,10 +240,11 @@ impl PreparedStatements {
         let insert_payday = client
             .prepare(
                 "INSERT INTO paydays (block, total_equity_capital, total_passively_delegated, \
-                 total_actively_delegated, num_bakers, num_open_bakers, num_closed_bakers, \
+                 total_actively_delegated, total_ccd, pool_reward, finalizer_reward,
+                 foundation_reward, num_bakers, num_open_bakers, num_closed_bakers, \
                  num_open_delegation_recipients, num_closed_for_new_delegation_recipients, \
                  num_finalizers, num_delegators) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, \
-                 $11)",
+                 $11, $12, $13, $14, $15)",
             )
             .await?;
         let insert_account = client
@@ -329,11 +331,15 @@ impl PreparedStatements {
         log::trace!("Took {}ms to insert block.", now.elapsed().as_millis());
 
         if let Some(payday_data) = block_details.payday_data {
-            let values: [&(dyn ToSql + Sync); 11] = [
+            let values: [&(dyn ToSql + Sync); 15] = [
                 &id,
                 &payday_data.total_equity_capital,
                 &payday_data.total_passively_delegated,
                 &payday_data.total_actively_delegated,
+                &payday_data.total_ccd,
+                &payday_data.pool_reward,
+                &payday_data.finalizer_reward,
+                &payday_data.foundation_reward,
                 &payday_data.baker_count,
                 &payday_data.open_baker_count,
                 &payday_data.closed_baker_count,
@@ -784,6 +790,14 @@ struct PaydayBlockData {
     total_passively_delegated: i64,
     /// Total number of microCCD delegated actively.
     total_actively_delegated: i64,
+    /// Total microCCD in existence.
+    total_ccd: i64,
+    /// Reward in microCCD for the winning baker pool.
+    pool_reward: i64,
+    /// Reward in microCCD for the winning finalizer.
+    finalizer_reward: i64,
+    /// Reward in microCCD for the foundation.
+    foundation_reward: i64,
     /// The number of active bakers.
     baker_count: i64,
     /// The number of active bakers open for new delegators.
@@ -816,12 +830,39 @@ async fn process_payday_block(
             format!("Could not assert whether block is payday block for: {block_hash}")
         })?
         .response;
-
     if !is_payday_block {
         return Ok(None);
     }
-    let mut baker_response = node.get_bakers_reward_period(block_hash).await?.response;
 
+    // Handle special payday events
+    let mut pool_reward = None;
+    let mut finalizer_reward = None;
+    let mut foundation_reward = None;
+    let mut special_events = node.get_block_special_events(block_hash).await?.response;
+    while let Some(event) = special_events.try_next().await? {
+        match event {
+            SpecialTransactionOutcome::PaydayFoundationReward {
+                development_charge, ..
+            } => foundation_reward = Some(development_charge.micro_ccd() as i64),
+            SpecialTransactionOutcome::PaydayPoolReward {
+                baker_reward,
+                finalization_reward,
+                ..
+            } => {
+                pool_reward = Some(baker_reward.micro_ccd() as i64);
+                finalizer_reward = Some(finalization_reward.micro_ccd() as i64);
+            }
+            _ => {}
+        }
+    }
+
+    // Get total CCDs in existence
+    let tokenomics_info = node.get_tokenomics_info(block_hash).await?.response;
+    let (RewardsOverview::V1 { common: data, .. } | RewardsOverview::V0 { data }) = tokenomics_info;
+    let total_ccd = data.total_amount.micro_ccd() as i64;
+
+    // Count entities and staked CCDs
+    let mut baker_response = node.get_bakers_reward_period(block_hash).await?.response;
     let mut baker_count = 0;
     let mut open_baker_count = 0;
     let mut closed_baker_count = 0;
@@ -884,6 +925,10 @@ async fn process_payday_block(
         total_equity_capital,
         total_passively_delegated,
         total_actively_delegated,
+        total_ccd,
+        pool_reward: pool_reward.context("Missing PaydayPoolReward event")?,
+        finalizer_reward: finalizer_reward.context("Missing PaydayPoolReward event")?,
+        foundation_reward: foundation_reward.context("Missing PaydayFoundationReward event")?,
         baker_count,
         open_baker_count,
         closed_baker_count,
