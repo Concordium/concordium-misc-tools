@@ -44,8 +44,7 @@ CREATE TABLE IF NOT EXISTS paydays (
   num_bakers INT8 NOT NULL,
   num_open_bakers INT8 NOT NULL,
   num_closed_bakers INT8 NOT NULL,
-  num_open_delegation_recipients INT8 NOT NULL,
-  num_closed_for_new_delegation_recipients INT8 NOT NULL,
+  num_delegation_recipients INT8 NOT NULL,
   num_finalizers INT8 NOT NULL,
   num_delegators INT8 NOT NULL
 );
