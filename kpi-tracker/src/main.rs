@@ -832,7 +832,7 @@ async fn process_payday_block(
         match event {
             SpecialTransactionOutcome::PaydayFoundationReward {
                 development_charge, ..
-            } => foundation_reward += dbg!(development_charge.micro_ccd()),
+            } => foundation_reward += development_charge.micro_ccd(),
             SpecialTransactionOutcome::PaydayPoolReward {
                 baker_reward,
                 finalization_reward,
