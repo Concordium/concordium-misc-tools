@@ -128,7 +128,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT\n  paydays.pool_reward::DECIMAL/1000000 as baker_rewards,\n  paydays.finalizer_reward::DECIMAL/1000000 as finalizer_rewards,\n  paydays.foundation_reward::DECIMAL/1000000 as foundation_charge,\n  $__unixEpochGroup(blocks.timestamp, $__interval) AS time\nFROM paydays\nJOIN blocks on blocks.id = paydays.block;",
+          "rawSql": "SELECT\n  paydays.pool_reward::DECIMAL/1000000 as validator_rewards,\n  paydays.finalizer_reward::DECIMAL/1000000 as finalizer_rewards,\n  paydays.foundation_reward::DECIMAL/1000000 as foundation_charge,\n  $__unixEpochGroup(blocks.timestamp, $__interval) AS time\nFROM paydays\nJOIN blocks on blocks.id = paydays.block;",
           "refId": "A",
           "sql": {
             "columns": [
@@ -239,7 +239,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "WITH data AS (\n  SELECT\n    paydays.pool_reward::DECIMAL/1000000 as baker_rewards,\n    paydays.finalizer_reward::DECIMAL/1000000 as finalizer_rewards,\n    paydays.foundation_reward::DECIMAL/1000000 as foundation_charge,\n    $__unixEpochGroup(blocks.timestamp, $__interval) AS time\n  FROM paydays\n  JOIN blocks on blocks.id = paydays.block\n)\n\nSELECT\n  SUM(baker_rewards) OVER (ORDER BY time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS baker_rewards,\n  SUM(finalizer_rewards) OVER (ORDER BY time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS finalizer_rewards,\n  SUM(foundation_charge) OVER (ORDER BY time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS foundation_charge,\n  time\nFROM data;",
+          "rawSql": "WITH data AS (\n  SELECT\n    paydays.pool_reward::DECIMAL/1000000 as validator_rewards,\n    paydays.finalizer_reward::DECIMAL/1000000 as finalizer_rewards,\n    paydays.foundation_reward::DECIMAL/1000000 as foundation_charge,\n    $__unixEpochGroup(blocks.timestamp, $__interval) AS time\n  FROM paydays\n  JOIN blocks on blocks.id = paydays.block\n)\n\nSELECT\n  SUM(validator_rewards) OVER (ORDER BY time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS validator_rewards,\n  SUM(finalizer_rewards) OVER (ORDER BY time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS finalizer_rewards,\n  SUM(foundation_charge) OVER (ORDER BY time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS foundation_charge,\n  time\nFROM data;",
           "refId": "A",
           "sql": {
             "columns": [
@@ -288,7 +288,7 @@
               "viz": false
             },
             "insertNulls": false,
-            "lineInterpolation": "stepAfter",
+            "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
             "scaleDistribution": {
@@ -448,7 +448,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "baker_equity"
+              "options": "validator_equity"
             },
             "properties": [
               {
@@ -463,7 +463,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "actively_delegated"
+              "options": "delegated_to_pool"
             },
             "properties": [
               {
@@ -520,7 +520,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT\n  paydays.total_equity_capital::DECIMAL/1000000 AS baker_equity,\n  paydays.total_actively_delegated::DECIMAL/1000000 AS actively_delegated,\n  paydays.total_passively_delegated::DECIMAL/1000000 AS passively_delegated,\n  $__unixEpochGroup(timestamp, $__interval) AS time\nFROM blocks\nJOIN paydays ON paydays.block = blocks.id;",
+          "rawSql": "SELECT\n  paydays.total_equity_capital::DECIMAL/1000000 AS validator_equity,\n  paydays.total_actively_delegated::DECIMAL/1000000 AS delegated_to_pool,\n  paydays.total_passively_delegated::DECIMAL/1000000 AS passively_delegated,\n  $__unixEpochGroup(timestamp, $__interval) AS time\nFROM blocks\nJOIN paydays ON paydays.block = blocks.id;",
           "refId": "A",
           "sql": {
             "columns": [
@@ -662,7 +662,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT\n  paydays.num_bakers as bakers,\n  paydays.num_delegators as delegators,\n  $__unixEpochGroup(timestamp, $__interval) AS time\nFROM paydays\nJOIN blocks ON blocks.id = paydays.block;",
+          "rawSql": "SELECT\n  paydays.num_pools as staking_pools,\n  paydays.num_delegators as delegators,\n  $__unixEpochGroup(timestamp, $__interval) AS time\nFROM paydays\nJOIN blocks ON blocks.id = paydays.block;",
           "refId": "A",
           "sql": {
             "columns": [
@@ -691,6 +691,7 @@
         "type": "postgres",
         "uid": "${postgres_db}"
       },
+      "description": "Note: this counts all registered pools, not only pools that participated in a reward period, so the total may be slightly inconsistent with the \"Active staking accounts\" graph.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -703,7 +704,7 @@
             "axisPlacement": "auto",
             "barAlignment": 0,
             "drawStyle": "line",
-            "fillOpacity": 20,
+            "fillOpacity": 0,
             "gradientMode": "none",
             "hideFrom": {
               "legend": false,
@@ -711,7 +712,7 @@
               "viz": false
             },
             "insertNulls": false,
-            "lineInterpolation": "stepAfter",
+            "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
             "scaleDistribution": {
@@ -721,7 +722,7 @@
             "spanNulls": false,
             "stacking": {
               "group": "A",
-              "mode": "normal"
+              "mode": "none"
             },
             "thresholdsStyle": {
               "mode": "off"
@@ -817,7 +818,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT\n  paydays.num_open_bakers as open_for_new,\n  paydays.num_bakers - paydays.num_open_bakers - paydays.num_closed_bakers as closed_for_new,\n  paydays.num_closed_bakers as closed,\n  $__unixEpochGroup(timestamp, $__interval) AS time\nFROM paydays\nJOIN blocks ON blocks.id = paydays.block;",
+          "rawSql": "SELECT\n  paydays.num_open_pools as open_for_new,\n  paydays.num_closed_for_new_pools as closed_for_new,\n  paydays.num_closed_pools as closed,\n  $__unixEpochGroup(timestamp, $__interval) AS time\nFROM paydays\nJOIN blocks ON blocks.id = paydays.block;",
           "refId": "A",
           "sql": {
             "columns": [
@@ -838,7 +839,7 @@
           }
         }
       ],
-      "title": "Active baker status",
+      "title": "Staking pool status",
       "type": "timeseries"
     },
     {
@@ -2410,6 +2411,6 @@
   "timezone": "",
   "title": "KPI tracker",
   "uid": "8dm2sVA4k",
-  "version": 29,
+  "version": 31,
   "weekStart": ""
 }
