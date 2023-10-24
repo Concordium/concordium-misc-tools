@@ -797,7 +797,7 @@ struct PaydayBlockData {
     finalizer_reward:           u64,
     /// Reward in microCCD for the foundation.
     foundation_reward:          u64,
-    /// The number of pools in this reward peirod.
+    /// The number of pools in this reward period.
     pool_count:                 usize,
     /// The number of pools open for new delegators at the time of the payday
     /// block.
@@ -832,7 +832,7 @@ async fn process_payday_block(
         match event {
             SpecialTransactionOutcome::PaydayFoundationReward {
                 development_charge, ..
-            } => foundation_reward += development_charge.micro_ccd(),
+            } => foundation_reward += dbg!(development_charge.micro_ccd()),
             SpecialTransactionOutcome::PaydayPoolReward {
                 baker_reward,
                 finalization_reward,

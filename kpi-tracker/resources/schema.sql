@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS paydays (
   pool_reward INT8 NOT NULL,
   finalizer_reward INT8 NOT NULL,
   foundation_reward INT8 NOT NULL,
-  -- Number of staking pools active in the preceding payday period.
+  -- Number of staking pools active in the payday period of the block, i.e. going forward until the next payday block.
   num_pools INT8 NOT NULL,
   -- Note: This is a snapshot of the number of open pools at the time of the payday block, i.e. NOT directly related to the number of staking pools for the preceding payday period (`num_pools`).
   num_open_pools INT8 NOT NULL,
