@@ -10,7 +10,8 @@ use concordium_rust_sdk::{
         AbsoluteBlockHeight, AccountCreationDetails, AccountTransactionDetails,
         AccountTransactionEffects, BlockItemSummary,
         BlockItemSummaryDetails::{AccountCreation, AccountTransaction},
-        ContractAddress, CredentialType, RewardsOverview, TransactionType,
+        ContractAddress, CredentialType, OpenStatus, RewardsOverview, SpecialTransactionOutcome,
+        TransactionType,
     },
     v2::{AccountIdentifier, Client, Endpoint},
 };
@@ -237,8 +238,12 @@ impl PreparedStatements {
             .await?;
         let insert_payday = client
             .prepare(
-                "INSERT INTO paydays (block, total_stake, num_bakers, num_finalizers) VALUES ($1, \
-                 $2, $3, $4)",
+                "INSERT INTO paydays (block, total_equity_capital, total_passively_delegated, \
+                 total_actively_delegated, total_ccd, pool_reward, finalizer_reward,
+                 foundation_reward, num_pools, num_open_pools, num_closed_pools, \
+                 num_closed_for_new_pools, num_delegation_recipients, num_finalizers, \
+                 num_delegators) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, \
+                 $14, $15)",
             )
             .await?;
         let insert_account = client
@@ -325,11 +330,22 @@ impl PreparedStatements {
         log::trace!("Took {}ms to insert block.", now.elapsed().as_millis());
 
         if let Some(payday_data) = block_details.payday_data {
-            let values: [&(dyn ToSql + Sync); 4] = [
+            let values: [&(dyn ToSql + Sync); 15] = [
                 &id,
-                &(payday_data.total_stake.micro_ccd() as i64),
-                &payday_data.baker_count,
-                &payday_data.finalizer_count,
+                &(payday_data.total_equity_capital as i64),
+                &(payday_data.total_passively_delegated as i64),
+                &(payday_data.total_actively_delegated as i64),
+                &(payday_data.total_ccd as i64),
+                &(payday_data.pool_reward as i64),
+                &(payday_data.finalizer_reward as i64),
+                &(payday_data.foundation_reward as i64),
+                &(payday_data.pool_count as i64),
+                &(payday_data.open_pool_count as i64),
+                &(payday_data.closed_for_new_pool_count as i64),
+                &(payday_data.closed_pool_count as i64),
+                &(payday_data.delegation_recipient_count as i64),
+                &(payday_data.finalizer_count as i64),
+                &(payday_data.delegator_count as i64),
             ];
             db_tx.execute(&self.insert_payday, &values).await?;
         }
@@ -767,12 +783,37 @@ async fn process_chain_genesis_block(
 /// that contains the block.
 #[derive(Debug, Clone, Copy)]
 struct PaydayBlockData {
-    // Total amount of CCD staked.
-    total_stake:     Amount,
-    /// The amount of active bakers.
-    baker_count:     i64,
-    /// The amount of active finalizers.
-    finalizer_count: i64,
+    /// Total number of mircoCCD staked by bakers themselves.
+    total_equity_capital:       u64,
+    /// Total number of microCCD delegated passivly.
+    total_passively_delegated:  u64,
+    /// Total number of microCCD delegated to specific pools.
+    total_actively_delegated:   u64,
+    /// Total microCCD in existence.
+    total_ccd:                  u64,
+    /// Reward in microCCD for the winning baker pool.
+    pool_reward:                u64,
+    /// Reward in microCCD for the winning finalizer.
+    finalizer_reward:           u64,
+    /// Reward in microCCD for the foundation.
+    foundation_reward:          u64,
+    /// The number of pools in this reward peirod.
+    pool_count:                 usize,
+    /// The number of pools open for new delegators at the time of the payday
+    /// block.
+    open_pool_count:            usize,
+    /// The number of pools closed for new delegators at the time of the payday
+    /// block.
+    closed_for_new_pool_count:  usize,
+    /// The number of pools closed for all delegators at the time of the payday
+    /// block.
+    closed_pool_count:          usize,
+    /// The number of pools with delegated capital in this reward period.
+    delegation_recipient_count: usize,
+    /// The number of finalizers in this reward period.
+    finalizer_count:            usize,
+    /// The number of delegators in this reward period.
+    delegator_count:            usize,
 }
 
 /// If block specified by `block_hash` is a payday block (also implies >=
@@ -782,46 +823,110 @@ async fn process_payday_block(
     node: &mut Client,
     block_hash: BlockHash,
 ) -> anyhow::Result<Option<PaydayBlockData>> {
-    let is_payday_block = node
-        .is_payday_block(block_hash)
-        .await
-        .with_context(|| {
-            format!("Could not assert whether block is payday block for: {block_hash}")
-        })?
-        .response;
-
-    if !is_payday_block {
-        return Ok(None);
-    }
-
-    let tokenomics_info = node
-        .get_tokenomics_info(block_hash)
-        .await
-        .with_context(|| format!("Could not get tokenomics info for block: {block_hash}"))?
-        .response;
-
-    let RewardsOverview::V1 {
-        total_staked_capital,
-        ..
-    } = tokenomics_info else {
-        return Ok(None);
-    };
-
-    let mut baker_response = node.get_bakers_reward_period(block_hash).await?.response;
-
-    let mut baker_count = 0;
-    let mut finalizer_count = 0;
-    while let Some(baker) = baker_response.try_next().await? {
-        baker_count += 1;
-        if baker.is_finalizer {
-            finalizer_count += 1;
+    // Handle special payday events
+    let mut pool_reward = 0;
+    let mut finalizer_reward = 0;
+    let mut foundation_reward = 0;
+    let mut special_events = node.get_block_special_events(block_hash).await?.response;
+    while let Some(event) = special_events.try_next().await? {
+        match event {
+            SpecialTransactionOutcome::PaydayFoundationReward {
+                development_charge, ..
+            } => foundation_reward += development_charge.micro_ccd(),
+            SpecialTransactionOutcome::PaydayPoolReward {
+                baker_reward,
+                finalization_reward,
+                ..
+            } => {
+                pool_reward += baker_reward.micro_ccd();
+                finalizer_reward += finalization_reward.micro_ccd();
+            }
+            _ => {}
         }
     }
 
+    if pool_reward == 0 {
+        // Block wasn't a payday block
+        return Ok(None);
+    }
+
+    // Get total CCDs in existence
+    let tokenomics_info = node.get_tokenomics_info(block_hash).await?.response;
+    let (RewardsOverview::V1 { common: data, .. } | RewardsOverview::V0 { data }) = tokenomics_info;
+    let total_ccd = data.total_amount.micro_ccd();
+
+    // Count entities and staked CCDs
+    let mut baker_response = node.get_bakers_reward_period(block_hash).await?.response;
+    let mut pool_count = 0;
+    let mut open_pool_count = 0;
+    let mut closed_for_new_pool_count = 0;
+    let mut closed_pool_count = 0;
+    let mut delegation_recipient_count = 0;
+    let mut finalizer_count = 0;
+    let mut total_actively_delegated = 0;
+    let mut total_equity_capital = 0;
+    let mut delegating_account_count = 0;
+    while let Some(baker) = baker_response.try_next().await? {
+        pool_count += 1;
+        if baker.is_finalizer {
+            finalizer_count += 1;
+        }
+        total_actively_delegated += baker.delegated_capital.micro_ccd();
+        total_equity_capital += baker.equity_capital.micro_ccd();
+
+        if baker.delegated_capital.micro_ccd() != 0 {
+            delegation_recipient_count += 1;
+        }
+
+        let delegators = node
+            .get_pool_delegators_reward_period(block_hash, baker.baker.baker_id)
+            .await?
+            .response;
+        delegating_account_count += delegators.count().await;
+    }
+
+    let mut baker_list = node.get_baker_list(block_hash).await?.response;
+    while let Some(baker_id) = baker_list.try_next().await? {
+        let pool_info = node
+            .get_pool_info(block_hash, baker_id)
+            .await?
+            .response
+            .pool_info;
+
+        match pool_info.open_status {
+            OpenStatus::OpenForAll => open_pool_count += 1,
+            OpenStatus::ClosedForNew => closed_for_new_pool_count += 1,
+            OpenStatus::ClosedForAll => closed_pool_count += 1,
+        }
+    }
+
+    let passive_delegators = node
+        .get_passive_delegators_reward_period(block_hash)
+        .await?
+        .response;
+    let delegator_count = delegating_account_count + passive_delegators.count().await;
+    let total_passively_delegated = node
+        .get_passive_delegation_info(block_hash)
+        .await?
+        .response
+        .current_payday_delegated_capital
+        .micro_ccd();
+
     Ok(Some(PaydayBlockData {
-        total_stake:     total_staked_capital,
-        baker_count,
+        total_equity_capital,
+        total_passively_delegated,
+        total_actively_delegated,
+        total_ccd,
+        pool_reward,
+        finalizer_reward,
+        foundation_reward,
+        pool_count,
+        open_pool_count,
+        closed_for_new_pool_count,
+        closed_pool_count,
+        delegation_recipient_count,
         finalizer_count,
+        delegator_count,
     }))
 }
 
