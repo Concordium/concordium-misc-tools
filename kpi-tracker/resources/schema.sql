@@ -34,8 +34,24 @@ CREATE INDEX IF NOT EXISTS blocks_timestamp ON blocks (timestamp);
 -- All payday blocks (only exists for protocol version 4 and onwards).
 CREATE TABLE IF NOT EXISTS paydays (
   block INT8 PRIMARY KEY REFERENCES blocks(id) ON DELETE RESTRICT ON UPDATE RESTRICT,
-  total_stake INT8 NOT NULL,
-  num_bakers INT8 -- Only supported for protocol version 6 and onwards.
+  total_equity_capital INT8 NOT NULL,
+  total_passively_delegated INT8 NOT NULL,
+  total_actively_delegated INT8 NOT NULL,
+  total_ccd INT8 NOT NULL,
+  pool_reward INT8 NOT NULL,
+  finalizer_reward INT8 NOT NULL,
+  foundation_reward INT8 NOT NULL,
+  -- Number of staking pools active in the preceding payday period.
+  num_pools INT8 NOT NULL,
+  -- Note: This is a snapshot of the number of open pools at the time of the payday block, i.e. NOT directly related to the number of staking pools for the preceding payday period (`num_pools`).
+  num_open_pools INT8 NOT NULL,
+  -- Same as above.
+  num_closed_for_new_pools INT8 NOT NULL,
+  -- Same as above.
+  num_closed_pools INT8 NOT NULL,
+  num_delegation_recipients INT8 NOT NULL,
+  num_finalizers INT8 NOT NULL,
+  num_delegators INT8 NOT NULL
 );
 
 -- All accounts created.
