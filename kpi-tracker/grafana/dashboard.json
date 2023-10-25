@@ -49,7 +49,7 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "continuous-GrYlRd"
+            "mode": "palette-classic"
           },
           "custom": {
             "axisCenteredZero": false,
@@ -98,7 +98,23 @@
           },
           "unit": "CCD"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "finalizer_rewards"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "yellow",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 8,
@@ -128,7 +144,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT\n  paydays.pool_reward::DECIMAL/1000000 as validator_rewards,\n  paydays.finalizer_reward::DECIMAL/1000000 as finalizer_rewards,\n  paydays.foundation_reward::DECIMAL/1000000 as foundation_charge,\n  $__unixEpochGroup(blocks.timestamp, $__interval) AS time\nFROM paydays\nJOIN blocks on blocks.id = paydays.block;",
+          "rawSql": "SELECT\n  paydays.pool_reward::DECIMAL/1000000 as validator_rewards,\n  paydays.finalizer_reward::DECIMAL/1000000 as finalizer_rewards,\n  $__unixEpochGroup(blocks.timestamp, $__interval) AS time\nFROM paydays\nJOIN blocks on blocks.id = paydays.block;",
           "refId": "A",
           "sql": {
             "columns": [
@@ -160,7 +176,7 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "continuous-GrYlRd"
+            "mode": "palette-classic"
           },
           "custom": {
             "axisCenteredZero": false,
@@ -209,7 +225,23 @@
           },
           "unit": "CCD"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "finalizer_rewards"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "yellow",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 8,
@@ -239,7 +271,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "WITH data AS (\n  SELECT\n    paydays.pool_reward::DECIMAL/1000000 as validator_rewards,\n    paydays.finalizer_reward::DECIMAL/1000000 as finalizer_rewards,\n    paydays.foundation_reward::DECIMAL/1000000 as foundation_charge,\n    $__unixEpochGroup(blocks.timestamp, $__interval) AS time\n  FROM paydays\n  JOIN blocks on blocks.id = paydays.block\n)\n\nSELECT\n  SUM(validator_rewards) OVER (ORDER BY time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS validator_rewards,\n  SUM(finalizer_rewards) OVER (ORDER BY time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS finalizer_rewards,\n  SUM(foundation_charge) OVER (ORDER BY time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS foundation_charge,\n  time\nFROM data;",
+          "rawSql": "WITH data AS (\n  SELECT\n    paydays.pool_reward::DECIMAL/1000000 as validator_rewards,\n    paydays.finalizer_reward::DECIMAL/1000000 as finalizer_rewards,\n    $__unixEpochGroup(blocks.timestamp, $__interval) AS time\n  FROM paydays\n  JOIN blocks on blocks.id = paydays.block\n)\n\nSELECT\n  SUM(validator_rewards) OVER (ORDER BY time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS validator_rewards,\n  SUM(finalizer_rewards) OVER (ORDER BY time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS finalizer_rewards,\n  time\nFROM data;",
           "refId": "A",
           "sql": {
             "columns": [
@@ -317,6 +349,226 @@
                 "value": 80
               }
             ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 9
+      },
+      "id": 39,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "${postgres_db}"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  paydays.foundation_reward::DECIMAL/1000000 as foundation_charge,\n  $__unixEpochGroup(blocks.timestamp, $__interval) AS time\nFROM paydays\nJOIN blocks on blocks.id = paydays.block;",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ],
+      "title": "Foundation tax",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "${postgres_db}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 9
+      },
+      "id": 40,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "${postgres_db}"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH data AS (\n  SELECT\n    paydays.foundation_reward::DECIMAL/1000000 as foundation_charge,\n    $__unixEpochGroup(blocks.timestamp, $__interval) AS time\n  FROM paydays\n  JOIN blocks on blocks.id = paydays.block\n)\n\nSELECT\n  SUM(foundation_charge) OVER (ORDER BY time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS foundation_charge,\n  time\nFROM data;",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ],
+      "title": "Foundation tax (cumulative)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "${postgres_db}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
           },
           "unit": "CCD"
         },
@@ -326,7 +578,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 9
+        "y": 17
       },
       "id": 36,
       "options": {
@@ -380,7 +632,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 17
+        "y": 25
       },
       "id": 19,
       "panels": [],
@@ -496,7 +748,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 18
+        "y": 26
       },
       "id": 9,
       "options": {
@@ -638,7 +890,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 18
+        "y": 26
       },
       "id": 31,
       "options": {
@@ -794,7 +1046,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 26
+        "y": 34
       },
       "id": 33,
       "options": {
@@ -936,7 +1188,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 26
+        "y": 34
       },
       "id": 34,
       "options": {
@@ -989,7 +1241,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 34
+        "y": 42
       },
       "id": 17,
       "title": "Entities",
@@ -1059,7 +1311,7 @@
         "h": 10,
         "w": 12,
         "x": 0,
-        "y": 35
+        "y": 43
       },
       "id": 28,
       "options": {
@@ -1195,7 +1447,7 @@
         "h": 10,
         "w": 12,
         "x": 12,
-        "y": 35
+        "y": 43
       },
       "id": 29,
       "options": {
@@ -1329,7 +1581,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 45
+        "y": 53
       },
       "id": 3,
       "options": {
@@ -1442,7 +1694,7 @@
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 45
+        "y": 53
       },
       "id": 7,
       "options": {
@@ -1552,7 +1804,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 54
+        "y": 62
       },
       "id": 30,
       "options": {
@@ -1663,7 +1915,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 54
+        "y": 62
       },
       "id": 26,
       "options": {
@@ -1799,7 +2051,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 62
+        "y": 70
       },
       "id": 32,
       "options": {
@@ -1853,7 +2105,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 70
+        "y": 78
       },
       "id": 15,
       "panels": [],
@@ -1923,7 +2175,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 71
+        "y": 79
       },
       "id": 13,
       "options": {
@@ -2049,7 +2301,7 @@
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 71
+        "y": 79
       },
       "id": 5,
       "options": {
@@ -2167,7 +2419,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 80
+        "y": 88
       },
       "id": 11,
       "options": {
@@ -2293,7 +2545,7 @@
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 80
+        "y": 88
       },
       "id": 21,
       "options": {
@@ -2411,6 +2663,6 @@
   "timezone": "",
   "title": "KPI tracker",
   "uid": "8dm2sVA4k",
-  "version": 31,
+  "version": 32,
   "weekStart": ""
 }
