@@ -1,5 +1,5 @@
 [package]
-name = "user-gui"
+name = "company-id-gui"
 version = "0.0.0"
 description = "A Tauri App"
 authors = ["you"]
