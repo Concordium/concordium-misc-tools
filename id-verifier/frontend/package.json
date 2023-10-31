@@ -41,7 +41,7 @@
     "scripts": {
         "lint-and-fix": "eslint . --cache --max-warnings 0 --ext .ts,.tsx --fix",
         "lint": "eslint . --cache --max-warnings 0 --ext .ts,.tsx",
-        "build": "node --loader ts-node/esm ./esbuild.config.ts",
+        "build": "ts-node ./esbuild.config.ts",
         "watch": "cross-env WATCH=1 yarn build",
         "start": "live-server ./dist"
     }
