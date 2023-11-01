@@ -2,3 +2,8 @@
 @import 'bootstrap-config';
 @import 'layout';
 @import 'components';
+
+body,
+#root {
+    height: 100%;
+}
