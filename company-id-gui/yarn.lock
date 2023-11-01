@@ -217,6 +217,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@fontsource/ibm-plex-sans@npm:^5.0.17":
+  version: 5.0.17
+  resolution: "@fontsource/ibm-plex-sans@npm:5.0.17"
+  checksum: b504488a57a7fa319e8debecfd4d543d730222adcb104dc021af4146a581badbf5898f8ceb5629b288519cae88e77752747784cd3e9cd822716e47dea0ce1026
+  languageName: node
+  linkType: hard
+
 "@humanwhocodes/config-array@npm:^0.11.13":
   version: 0.11.13
   resolution: "@humanwhocodes/config-array@npm:0.11.13"
@@ -509,6 +516,13 @@ __metadata:
   version: 0.1.5
   resolution: "@swc/types@npm:0.1.5"
   checksum: 6aee11f62d3d805a64848e0bd5f0e0e615f958e327a9e1260056c368d7d28764d89e38bd8005a536c9bf18afbcd303edd84099d60df34a2975d62540f61df13b
+  languageName: node
+  linkType: hard
+
+"@tauri-apps/api@npm:^1.5.1":
+  version: 1.5.1
+  resolution: "@tauri-apps/api@npm:1.5.1"
+  checksum: d69f8f2cf856aa2bd17bc6ba71dc9c11f683be6e95ad7d3657fd107d994fd96a1f609baac13bd1677cd813770c1d4c818d115c9581b86ecc67adafad0b7bedf0
   languageName: node
   linkType: hard
 
@@ -1074,6 +1088,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"bootstrap-icons@npm:^1.11.1":
+  version: 1.11.1
+  resolution: "bootstrap-icons@npm:1.11.1"
+  checksum: d78ff24a832fc47db0c7ba5d92d150caee6d8e9ccef24c6de5c2d9728b9610884c8ade3ecadcf09fffae207786acdf40bb026ea5b79a774a1ada62026d9fe16b
+  languageName: node
+  linkType: hard
+
 "bootstrap@npm:^5.3.2":
   version: 5.3.2
   resolution: "bootstrap@npm:5.3.2"
@@ -1251,6 +1272,8 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "dapp-template@workspace:."
   dependencies:
+    "@fontsource/ibm-plex-sans": ^5.0.17
+    "@tauri-apps/api": ^1.5.1
     "@tauri-apps/cli": ^1.5.0
     "@types/react": ^18.2.15
     "@types/react-dom": ^18.2.7
@@ -1258,6 +1281,7 @@ __metadata:
     "@typescript-eslint/parser": ^6.0.0
     "@vitejs/plugin-react-swc": ^3.3.2
     bootstrap: ^5.3.2
+    bootstrap-icons: ^1.11.1
     eslint: ^8.45.0
     eslint-config-prettier: ^9.0.0
     eslint-plugin-jsx-a11y: ^6.7.1

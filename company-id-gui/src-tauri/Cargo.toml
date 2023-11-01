@@ -1,6 +1,6 @@
 [package]
 name = "company-id-gui"
-version = "0.0.0"
+version = "0.1.0"
 description = "A Tauri App"
 authors = ["you"]
 license = ""
@@ -13,9 +13,16 @@ edition = "2021"
 tauri-build = { version = "1.5", features = [] }
 
 [dependencies]
-tauri = { version = "1.5", features = ["shell-open"] }
+tauri = { version = "1.5", features = [ "dialog", "clipboard-write-text", "shell-open"] }
 serde = { version = "1.0", features = ["derive"] }
+key_derivation = { version = "*", path = "../../deps/concordium-rust-sdk/concordium-base/rust-src/key_derivation" }
+concordium_base = { version = "*", path = "../../deps/concordium-rust-sdk/concordium-base/rust-src/concordium_base" }
 serde_json = "1.0"
+bitvec = "1.0"
+sha2 = "0.10"
+rand = "0.8"
+hkdf = "0.12"
+pairing = "0.15"
 
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem

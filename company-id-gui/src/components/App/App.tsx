@@ -13,6 +13,7 @@ function App() {
 
     return (
         <div className="h-100 d-flex flex-column justify-content-center align-items-center">
+            <img src="/ccd-logo.svg" className="mb-4" width={100} height={100} alt="Concordium logo" />
             {menuItem === null ? (
                 <>
                     <h1 className="mb-4">Concordium Company ID Tool</h1>
@@ -33,7 +34,7 @@ function App() {
                     </div>
                 </>
             ) : menuItem === MenuItem.RequestIdentity ? (
-                <RequestIdentity goBack={() => setMenuItem(null)} />
+                <RequestIdentity goHome={() => setMenuItem(null)} />
             ) : (
                 <div></div>
             )}
