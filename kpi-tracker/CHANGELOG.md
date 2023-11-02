@@ -2,6 +2,8 @@
 
 ## Unreleased changes
 
+## 2.0.0
+
 - Split transaction graphs into separate types of transactions.
 - Add graph for accounts with CCD transfers.
 - Add graph for number of active finalizers.
@@ -10,6 +12,8 @@
 - Add graph of delegation recipients.
 - Add graph for minted CCDs.
 - Add graphs for baker, finalizer, and foundation rewards.
+- Add `KPI_TRACKER_BULK_INSERT_MAX` option to insert multiple blocks at the same
+  time during catchup. The default is 20.
 
 ## 1.1.0
 
