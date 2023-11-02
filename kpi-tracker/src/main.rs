@@ -42,7 +42,7 @@ struct Args {
         env = "KPI_TRACKER_NODES",
         value_delimiter = ','
     )]
-    node_endpoints: Vec<Endpoint>,
+    node_endpoints:  Vec<Endpoint>,
     /// Database connection string.
     #[arg(
         long = "db-connection",
@@ -52,10 +52,10 @@ struct Args {
                 application.",
         env = "KPI_TRACKER_DB_CONNECTION"
     )]
-    db_connection:  tokio_postgres::config::Config,
+    db_connection:   tokio_postgres::config::Config,
     /// Logging level of the application
     #[arg(long = "log-level", default_value_t = log::LevelFilter::Debug, env = "KPI_TRACKER_LOG_LEVEL")]
-    log_level:      log::LevelFilter,
+    log_level:       log::LevelFilter,
     /// Number of parallel queries to run against node
     #[arg(
         long = "num-parallel",
@@ -64,7 +64,17 @@ struct Args {
                 something different than 1 when catching up.",
         env = "KPI_TRACKER_NUM_PARALLEL"
     )]
-    num_parallel:   u8,
+    num_parallel:    u8,
+    /// Maximum number of blocks to insert into the database at the same time.
+    #[arg(
+        long = "bulk-insert-max",
+        default_value_t = 20,
+        help = "The number of blocks to insert in bulk. This helps during catchup since database \
+                transaction commit is a significant amount of time. Blocks will only be inserted \
+                if they are pending in the queue.",
+        env = "KPI_TRACKER_BULK_INSERT_MAX"
+    )]
+    bulk_insert_max: usize,
     /// Max amount of seconds a response from a node can fall behind before
     /// trying another.
     #[arg(
@@ -72,7 +82,7 @@ struct Args {
         default_value_t = 240,
         env = "KPI_TRACKER_MAX_BEHIND_SECONDS"
     )]
-    max_behind_s:   u32,
+    max_behind_s:    u32,
 }
 
 /// Used to canonicalize account addresses to ensure no aliases are stored (as
@@ -176,22 +186,6 @@ struct NormalBlockData {
     contract_modules:   ContractModules,
     /// Smart contract instantiations included in the block
     contract_instances: ContractInstances,
-}
-
-impl BlockData {
-    pub fn block_hash(&self) -> BlockHash {
-        match self {
-            BlockData::ChainGenesis(gd) => gd.block_hash,
-            BlockData::Normal(n) => n.block_hash,
-        }
-    }
-
-    pub fn num_transactions(&self) -> usize {
-        match self {
-            BlockData::ChainGenesis(_) => 0,
-            BlockData::Normal(n) => n.transactions.len(),
-        }
-    }
 }
 
 /// Used for sending data to db process.
@@ -1074,16 +1068,20 @@ async fn node_process(
     Ok(())
 }
 
-/// Inserts the `block_data` collected for a single block into the database
+/// Inserts the `block_datas` collected for one or more blocks into the database
 /// defined by `db`. Everything is commited as a single transactions allowing
 /// for easy restoration from the last recorded block (by height) inserted into
-/// the database. Returns the height of the processed block along with the
-/// duration it took to process.
-async fn db_insert_block<'a>(
+/// the database. Returns the heights of the processed block along with their
+/// hashes and the duration it took to process the blocks.
+async fn db_insert_blocks<'a, 'b>(
     db: &mut DBConn,
-    block_data: &'a BlockData,
+    block_datas: impl Iterator<Item = &'a BlockData>,
     tx_num: &mut i64,
-) -> anyhow::Result<(AbsoluteBlockHeight, chrono::Duration)> {
+) -> anyhow::Result<(
+    Vec<(BlockHash, AbsoluteBlockHeight)>,
+    usize,
+    chrono::Duration,
+)> {
     let start = chrono::Utc::now();
     let db_tx = db
         .client
@@ -1110,62 +1108,67 @@ async fn db_insert_block<'a>(
         Ok::<_, tokio_postgres::Error>(block_id)
     };
 
-    let height = match block_data {
-        BlockData::ChainGenesis(ChainGenesisBlockData {
-            block_hash,
-            block_details,
-            accounts,
-        }) => {
-            insert_common(*block_hash, block_details, accounts).await?;
-            block_details.height
-        }
-        BlockData::Normal(NormalBlockData {
-            block_hash,
-            block_details,
-            accounts,
-            transactions,
-            contract_modules,
-            contract_instances,
-        }) => {
-            let block_id = insert_common(*block_hash, block_details, accounts).await?;
+    let mut heights = Vec::new();
+    let mut num_txs = 0;
+    for block_data in block_datas {
+        match block_data {
+            BlockData::ChainGenesis(ChainGenesisBlockData {
+                block_hash,
+                block_details,
+                accounts,
+            }) => {
+                insert_common(*block_hash, block_details, accounts).await?;
+                heights.push((*block_hash, block_details.height));
+            }
+            BlockData::Normal(NormalBlockData {
+                block_hash,
+                block_details,
+                accounts,
+                transactions,
+                contract_modules,
+                contract_instances,
+            }) => {
+                num_txs += transactions.len();
+                let block_id = insert_common(*block_hash, block_details, accounts).await?;
 
-            for module_ref in contract_modules.iter() {
-                db.prepared
-                    .insert_contract_module(tx_ref, block_id, *module_ref)
+                for module_ref in contract_modules.iter() {
+                    db.prepared
+                        .insert_contract_module(tx_ref, block_id, *module_ref)
+                        .await?;
+                }
+
+                for (address, details) in contract_instances.iter() {
+                    db.prepared
+                        .insert_contract_instance(tx_ref, block_id, *address, details)
+                        .await?;
+                }
+
+                let f = db
+                    .prepared
+                    .insert_transactions(tx_num, tx_ref, block_id, transactions)
                     .await?;
+
+                let mut futs = Vec::new();
+                let now = tokio::time::Instant::now();
+                for (id, aff_accs, aff_contracts) in f.iter() {
+                    futs.push(db.prepared.insert_transaction(
+                        tx_ref,
+                        block_details.block_time.timestamp(),
+                        *id,
+                        aff_accs,
+                        aff_contracts,
+                    ));
+                }
+                futures::future::try_join_all(futs).await?;
+                log::trace!(
+                    "Inserted all transactions in {}ms.",
+                    now.elapsed().as_millis()
+                );
+
+                heights.push((*block_hash, block_details.height));
             }
-
-            for (address, details) in contract_instances.iter() {
-                db.prepared
-                    .insert_contract_instance(tx_ref, block_id, *address, details)
-                    .await?;
-            }
-
-            let f = db
-                .prepared
-                .insert_transactions(tx_num, tx_ref, block_id, transactions)
-                .await?;
-
-            let mut futs = Vec::new();
-            let now = tokio::time::Instant::now();
-            for (id, aff_accs, aff_contracts) in f.iter() {
-                futs.push(db.prepared.insert_transaction(
-                    tx_ref,
-                    block_details.block_time.timestamp(),
-                    *id,
-                    aff_accs,
-                    aff_contracts,
-                ));
-            }
-            futures::future::try_join_all(futs).await?;
-            log::trace!(
-                "Inserted all transactions in {}ms.",
-                now.elapsed().as_millis()
-            );
-
-            block_details.height
         }
-    };
+    }
 
     let now = tokio::time::Instant::now();
     db_tx
@@ -1175,7 +1178,7 @@ async fn db_insert_block<'a>(
     log::trace!("Commit completed in {}ms.", now.elapsed().as_millis());
 
     let end = chrono::Utc::now().signed_duration_since(start);
-    Ok((height, end))
+    Ok((heights, num_txs, end))
 }
 
 /// Runs a process of inserting data coming in on `block_receiver` in a database
@@ -1184,6 +1187,7 @@ async fn run_db_process(
     db_connection: tokio_postgres::config::Config,
     mut block_receiver: tokio::sync::mpsc::Receiver<BlockData>,
     height_sender: tokio::sync::oneshot::Sender<Option<AbsoluteBlockHeight>>,
+    bulk_insert_max: usize,
     stop_flag: Arc<AtomicBool>,
 ) -> anyhow::Result<()> {
     let mut db = DBConn::create(db_connection.clone(), true)
@@ -1215,19 +1219,40 @@ async fn run_db_process(
         let next_block_data = if retry_block_data.is_some() {
             retry_block_data
         } else {
-            block_receiver.recv().await
+            let v = block_receiver.recv().await;
+            v.map(|x| vec![x])
         };
 
-        if let Some(block_data) = next_block_data {
+        if let Some(mut block_data) = next_block_data {
+            // If there are pending blocks in the queue try to insert up to
+            // `bulk_insert_max` of them in the same database transaction.
+            {
+                if block_data.len() < bulk_insert_max {
+                    while let Ok(item) = block_receiver.try_recv() {
+                        block_data.push(item);
+                        if block_data.len() >= bulk_insert_max {
+                            break;
+                        }
+                    }
+                }
+            }
             let checkpoint_tx_num = tx_num;
-            match db_insert_block(&mut db, &block_data, &mut tx_num).await {
-                Ok((height, time)) => {
+            match db_insert_blocks(&mut db, block_data.iter(), &mut tx_num).await {
+                Ok((infos, num_txs, time)) => {
                     successive_db_errors = 0;
                     log::info!(
-                        "Processed block {} at height {} with {} transactions in {}ms",
-                        block_data.block_hash(),
-                        height.height,
-                        block_data.num_transactions(),
+                        "Processed blocks {} at heights {} with {} transactions in {}ms",
+                        infos
+                            .iter()
+                            .map(|x| x.0.to_string())
+                            .collect::<Vec<_>>()
+                            .join(", "),
+                        infos
+                            .iter()
+                            .map(|x| x.1.to_string())
+                            .collect::<Vec<_>>()
+                            .join(", "),
+                        num_txs,
                         time.num_milliseconds()
                     );
                     retry_block_data = None;
@@ -1323,6 +1348,7 @@ async fn main() -> anyhow::Result<()> {
         args.db_connection,
         block_receiver,
         height_sender,
+        args.bulk_insert_max,
         stop_flag.clone(),
     ));
 
