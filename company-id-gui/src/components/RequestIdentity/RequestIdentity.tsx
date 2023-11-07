@@ -3,7 +3,7 @@ import { Button, Card, CardBody, CardHeader, Form, FormControl, InputGroup, Prog
 import { invoke } from '@tauri-apps/api/tauri';
 import { writeText } from '@tauri-apps/api/clipboard';
 import { open } from '@tauri-apps/api/shell';
-import './RequestIdentity.scss';
+import { SubMenuProps } from '../App';
 
 enum Step {
     Info = 0,
@@ -11,12 +11,7 @@ enum Step {
     ReenterSeedphrase = 67,
     SaveRequest = 100,
 }
-
-interface RequestIdentityProps {
-    goHome: () => void;
-}
-
-function RequestIdentity({ goHome }: RequestIdentityProps) {
+function RequestIdentity({ goHome, network }: SubMenuProps) {
     const [step, setStep] = useState(Step.Info);
 
     return (
@@ -33,7 +28,8 @@ function RequestIdentity({ goHome }: RequestIdentityProps) {
             ) : (
                 <SaveRequest back={() => setStep(Step.ReenterSeedphrase)} />
             )}
-            <ProgressBar now={step} className="mt-3" />
+            <ProgressBar now={step} className="mt-3 mb-3" />
+            <div className="text-start">Network: {network}</div>
         </div>
     );
 }
@@ -80,13 +76,13 @@ function ShowSeedphrase({ back, proceed }: NavigationProps) {
     return (
         <>
             <p className="text-start">
-                Here is your seedphrase. It is the key that grants access to the created account, so please write it
-                down and store it in a safe place.
+                <strong>Important:</strong> Here is your seedphrase. It is the key that grants access to the created
+                account, so please write it down and store it in a safe place.
             </p>
             <Card className="mb-3 text-start">
                 <CardHeader className="d-flex justify-content-between align-items-center">
                     Seedphrase
-                    <Button variant="outline-secondary" onClick={copySeedphrase}>
+                    <Button variant="outline-secondary" onClick={copySeedphrase} disabled={seedphrase == ''}>
                         <i className={copyIcon} />
                     </Button>
                 </CardHeader>
@@ -98,7 +94,7 @@ function ShowSeedphrase({ back, proceed }: NavigationProps) {
                 <Button variant="secondary" onClick={back}>
                     Back
                 </Button>
-                <Button variant="primary" onClick={proceed}>
+                <Button variant="primary" onClick={proceed} disabled={seedphrase == ''}>
                     Proceed
                 </Button>
             </div>
@@ -107,17 +103,19 @@ function ShowSeedphrase({ back, proceed }: NavigationProps) {
 }
 
 function ReenterSeedphrase({ back, proceed }: NavigationProps) {
-    const [reenteredSeedphrase, setReenteredSeedphrase] = useState('');
     const [error, setError] = useState<string | null>(null);
 
-    const handleSubmit = (e: FormEvent) => {
+    const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        if (reenteredSeedphrase === '') {
+        const formData = new FormData(e.target as HTMLFormElement);
+        const seedphrase = formData.get('seedphrase') as string;
+
+        if (seedphrase === '') {
             setError('Please enter your seedphrase.');
             return;
         }
 
-        invoke<boolean>('check_seedphrase', { seedphrase: reenteredSeedphrase })
+        invoke<boolean>('check_seedphrase', { seedphrase })
             .then((res) => {
                 if (res) {
                     setError(null);
@@ -130,24 +128,19 @@ function ReenterSeedphrase({ back, proceed }: NavigationProps) {
     };
 
     return (
-        <Form noValidate onSubmit={handleSubmit}>
+        <Form noValidate className="text-start" onSubmit={handleSubmit}>
             <p>Reenter your seedphrase to confirm that you have written it down correctly.</p>
-            <Card className="mb-3 text-start">
-                <CardHeader>Seedphrase</CardHeader>
-                <CardBody className="font-monospace">
-                    <InputGroup hasValidation>
-                        <FormControl
-                            as="textarea"
-                            rows={4}
-                            value={reenteredSeedphrase}
-                            onChange={(e) => setReenteredSeedphrase(e.target.value)}
-                            isInvalid={error !== null}
-                            required
-                        />
-                        {error && <FormControl.Feedback type="invalid">{error}</FormControl.Feedback>}
-                    </InputGroup>
-                </CardBody>
-            </Card>
+            <InputGroup className="mb-3">
+                <Form.Control
+                    className="font-monospace"
+                    as="textarea"
+                    rows={4}
+                    name="seedphrase"
+                    isInvalid={error !== null}
+                    required
+                />
+                {error && <FormControl.Feedback type="invalid">{error}</FormControl.Feedback>}
+            </InputGroup>
             <div className="d-flex justify-content-between">
                 <Button variant="secondary" onClick={back}>
                     Back
@@ -189,7 +182,7 @@ function SaveRequest({ back }: Omit<NavigationProps, 'proceed'>) {
                 for instructions on what to do with the file. Afterwards, you can close this program.
             </p>
             <div className="d-flex">
-                <Button variant="secondary" onClick={back}>
+                <Button variant="secondary" onClick={back} disabled={isSaving}>
                     Back
                 </Button>
                 <div className="ms-auto d-flex align-items-center">

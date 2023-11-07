@@ -1,23 +1,28 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use concordium_base::{
+use std::str::FromStr;
+
+use concordium_rust_sdk::{
     common::{Versioned, VERSION_0},
-    dodis_yampolskiy_prf as prf,
     id::{
         account_holder::generate_pio_v1,
         constants::ArCurve,
+        dodis_yampolskiy_prf as prf,
+        pedersen_commitment::Value as PedersenValue,
         secret_sharing::Threshold,
         types::{
             AccCredentialInfo, ArInfos, CredentialHolderInfo, GlobalContext, IdCredentials,
             IdObjectUseData, IpContext, IpInfo,
         },
     },
-    pedersen_commitment::Value as PedersenValue,
+    v2,
 };
 use key_derivation::{words_to_seed, ConcordiumHdWallet, Net};
 use pairing::bls12_381::Bls12;
-use tauri::api::dialog::blocking::FileDialogBuilder;
+use serde::Serialize;
+use tauri::{api::dialog::blocking::FileDialogBuilder, async_runtime::Mutex};
+use tonic::transport::ClientTlsConfig;
 
 mod bip39;
 
@@ -26,16 +31,78 @@ const TESTNET_CRYPTOGRAPHIC_PARAMETERS: &str =
     include_str!("../resources/testnet/cryptographic-parameters.json");
 const TESTNET_IP_INFO: &str = include_str!("../resources/testnet/ip-info.json");
 
+// https://github.com/Concordium/concordium-infra-genesis-data/blob/master/testnet/2022-06-13/genesis_data/genesis_hash
+const TESTNET_GENESIS_HASH: &str =
+    "4221332d34e1694168c2a0c0b3fd0f273809612cb13d000d5c2e00e85f50f796";
+// https://github.com/Concordium/concordium-infra-genesis-data/blob/master/mainnet/2021-06-09/genesis_hash
+const MAINNET_GENESIS_HASH: &str =
+    "9dd9ca4d19e9393877d2c44b70f89acbfc0883c2243e5eeaecc0d1cd0503f478";
+
 struct State {
     seedphrase: String,
+    node:       Mutex<Option<v2::Client>>,
+    net:        Mutex<Option<Net>>,
+}
+
+#[derive(Debug, thiserror::Error)]
+enum Error {
+    #[error("Error connecting to node: {0}")]
+    Connection(#[from] tonic::transport::Error),
+    #[error("Error querying node: {0}")]
+    Query(#[from] v2::QueryError),
+    #[error("Node is not on the {0} network.")]
+    WrongNetwork(Net),
+}
+
+// Needs Serialize to be able to return it from a command
+impl Serialize for Error {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer, {
+        self.to_string().serialize(serializer)
+    }
 }
 
 #[tauri::command]
-fn get_seedphrase(state: tauri::State<State>) -> String { state.seedphrase.clone() }
+async fn set_node_and_network(
+    state: tauri::State<'_, State>,
+    endpoint: String,
+    net: Net,
+) -> Result<(), Error> {
+    let endpoint = v2::Endpoint::from_str(&endpoint)?;
+    let endpoint = if endpoint
+        .uri()
+        .scheme()
+        .map_or(false, |x| x == &http::uri::Scheme::HTTPS)
+    {
+        endpoint.tls_config(ClientTlsConfig::new())?
+    } else {
+        endpoint
+    };
+    let mut client = v2::Client::new(endpoint).await?;
+
+    // Check that the node is on the right network
+    let genesis_hash = client.get_consensus_info().await?.genesis_block;
+    let expected_genesis_hash = match net {
+        Net::Mainnet => MAINNET_GENESIS_HASH,
+        Net::Testnet => TESTNET_GENESIS_HASH,
+    };
+    if genesis_hash.to_string() != expected_genesis_hash {
+        return Err(Error::WrongNetwork(net));
+    }
+
+    *state.node.lock().await = Some(client);
+    *state.net.lock().await = Some(net);
+
+    Ok(())
+}
 
 #[tauri::command]
-fn check_seedphrase(state: tauri::State<State>, seedphrase: String) -> bool {
-    state.seedphrase == seedphrase
+fn get_seedphrase(state: tauri::State<'_, State>) -> String { state.seedphrase.clone() }
+
+#[tauri::command]
+fn check_seedphrase(state: tauri::State<'_, State>, seedphrase: String) -> bool {
+    seedphrase.trim() == state.seedphrase
 }
 
 /// Generate a request file for identity object. Needs to be async because the
@@ -121,17 +188,22 @@ async fn save_request_file(state: tauri::State<'_, State>, net: Net) -> Result<(
 
 fn main() -> Result<(), String> {
     let bip39_vec = bip39::bip39_words().collect::<Vec<_>>();
-    let words = bip39::rerandomize_bip39(&[], &bip39_vec)?;
+    let words = bip39::rerandomize_bip39(&[], &bip39_vec).unwrap();
     let seedphrase = words.join(" ");
 
-    let state = State { seedphrase };
+    let state = State {
+        seedphrase,
+        node: Mutex::new(None),
+        net: Mutex::new(None),
+    };
 
     tauri::Builder::default()
         .manage(state)
         .invoke_handler(tauri::generate_handler![
             get_seedphrase,
             check_seedphrase,
-            save_request_file
+            save_request_file,
+            set_node_and_network,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
