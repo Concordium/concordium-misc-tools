@@ -302,7 +302,7 @@ async fn create_account(
     seedphrase: String,
     id_object: String,
     acc_index: u8,
-) -> Result<(), Error> {
+) -> Result<Account, Error> {
     let id_object = parse_id_object(id_object)?;
     let bip39_map = bip39::bip39_map();
     let seedphrase = seedphrase.trim();
@@ -358,18 +358,23 @@ async fn create_account(
     });
     *state.account_keys.lock().await = Some(file_data.clone());
 
+    let account = Account {
+        index: acc_index,
+        address: details.address,
+    };
+
     let Some(path) = FileDialogBuilder::new()
         .set_file_name("account-keys.json")
         .set_title("Save account key file")
         .save_file()
     else {
-        return Ok(());
+        return Ok(account);
     };
 
     let file = std::fs::File::create(path).map_err(|e| Error::FileError(e.into()))?;
     serde_json::to_writer_pretty(file, &file_data).map_err(|e| Error::FileError(e.into()))?;
 
-    Ok(())
+    Ok(account)
 }
 
 async fn get_credential_deployment_info(

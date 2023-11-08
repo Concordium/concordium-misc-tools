@@ -66,12 +66,13 @@ function CreateAccount({ goHome, network }: SubMenuProps) {
             accountIndex++;
         }
         try {
-            await invoke('create_account', {
+            const account = await invoke<Account>('create_account', {
                 idObject: idObjectState,
                 seedphrase: seedphraseState,
                 accIndex: accountIndex,
             });
             setCreateAccountError(null);
+            setAccountList([...accountList, account]);
         } catch (e: unknown) {
             setCreateAccountError(e as string);
         } finally {
