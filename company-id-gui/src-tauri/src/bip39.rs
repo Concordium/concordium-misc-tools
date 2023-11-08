@@ -99,7 +99,7 @@ pub fn bytes_to_bip39(bytes: &[u8], bip_word_list: &[&str]) -> Result<Vec<String
 }
 
 /// Verify whether the given vector of words constitutes a valid BIP39 sentence.
-pub fn verify_bip39(word_vec: &[String], bip_word_map: &HashMap<&str, usize>) -> bool {
+pub fn verify_bip39(word_vec: &[&str], bip_word_map: &HashMap<&str, usize>) -> bool {
     // check that word_vec contains allowed number of words
     match word_vec.len() {
         12 | 15 | 18 | 21 | 24 => (),
@@ -109,7 +109,7 @@ pub fn verify_bip39(word_vec: &[String], bip_word_map: &HashMap<&str, usize>) ->
     // convert word vector to bits
     let mut bit_vec = BitVec::<u8, Msb0>::new();
     for word in word_vec {
-        match bip_word_map.get(word.as_str()) {
+        match bip_word_map.get(word) {
             Some(idx) => {
                 let word_bits = BitVec::<u16, Msb0>::from_element(*idx as u16);
                 // There are 2048 words in the BIP39 list, which can be represented using 11

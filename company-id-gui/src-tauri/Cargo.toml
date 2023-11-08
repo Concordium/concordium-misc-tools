@@ -26,6 +26,10 @@ pairing = "0.15"
 http = "0.2"
 tonic = {version = "0.8", features = ["tls", "tls-roots"] } # Use system trust roots.
 thiserror = "1.0"
+chrono = "0.4"
+anyhow = "1.0"
+ed25519-dalek = "1.0"
+either = "1.6"
 
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem
