@@ -73,6 +73,7 @@ struct State {
     node:         Mutex<Option<v2::Client>>,
     net:          Mutex<Option<Net>>,
     account_keys: Mutex<Option<serde_json::Value>>,
+    id_index:     Mutex<Option<u32>>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -254,6 +255,7 @@ async fn get_identity_accounts(
             }
         })
         .ok_or(Error::SeedphraseIdObjectMismatch)?;
+    *state.id_index.lock().await = Some(id_index);
 
     let mut accounts = Vec::new();
     let mut client = state.node.lock().await;
@@ -359,7 +361,7 @@ async fn create_account(
     *state.account_keys.lock().await = Some(file_data.clone());
 
     let account = Account {
-        index: acc_index,
+        index:   acc_index,
         address: details.address,
     };
 
@@ -395,19 +397,11 @@ async fn get_credential_deployment_info(
     };
 
     let ip_index = net_data.ip_info.ip_identity.0;
-    // Find the identity index asssoicated with the identity object
-    let id_index = (0..20)
-        .find_map(|id_idx| {
-            let id_cred_sec = wallet.get_id_cred_sec(ip_index, id_idx).ok()?;
-            let g = net_data.global_ctx.on_chain_commitment_key.g;
-            let id_cred_pub = g.mul_by_scalar(&id_cred_sec);
-            if id_cred_pub == id_obj.pre_identity_object.id_cred_pub {
-                Some(id_idx)
-            } else {
-                None
-            }
-        })
-        .ok_or(Error::SeedphraseIdObjectMismatch)?;
+    let id_index = state
+        .id_index
+        .lock()
+        .await
+        .context("Identity index was not initialized")?;
 
     let policy: Policy<ArCurve, AttributeKind> = Policy {
         valid_to:   id_obj.get_attribute_list().valid_to,
@@ -499,6 +493,7 @@ fn main() -> anyhow::Result<()> {
         node: Mutex::new(None),
         net: Mutex::new(None),
         account_keys: Mutex::new(None),
+        id_index: Mutex::new(None),
     };
 
     tauri::Builder::default()
@@ -516,7 +511,9 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn parse_id_object(id_object: String) -> Result<IdentityObjectV1<Bls12, ArCurve, AttributeKind>, Error> {
+fn parse_id_object(
+    id_object: String,
+) -> Result<IdentityObjectV1<Bls12, ArCurve, AttributeKind>, Error> {
     let id_obj: Versioned<serde_json::Value> = serde_json::from_str(&id_object)?;
     if id_obj.version != VERSION_0 {
         return Err(

@@ -5,6 +5,7 @@ import CreateAccount from '../CreateAccount/CreateAccount';
 import { Network } from '.';
 import { version } from '../../../package.json';
 import { invoke } from '@tauri-apps/api/tauri';
+import IdentityRecovery from '../IdentityRecovery/IdentityRecovery';
 
 enum MenuItem {
     RequestIdentity,
@@ -26,7 +27,7 @@ function App() {
 
     const actualNodeURL = nodeURL ?? defaultNodeURL;
 
-    const proceedToCreateAccount = async () => {
+    const connectAndProceed = async (menuItem: MenuItem) => {
         if (actualNodeURL === null) {
             setNodeURLError('Please enter a node URL.');
             return;
@@ -34,7 +35,7 @@ function App() {
         setIsConnecting(true);
         try {
             await invoke('set_node_and_network', { endpoint: actualNodeURL, net: network });
-            setMenuItem(MenuItem.CreateAccount);
+            setMenuItem(menuItem);
         } catch (e) {
             setNodeURLError(e as string);
         } finally {
@@ -94,7 +95,7 @@ function App() {
                         </Button>
                         <Button
                             variant="primary"
-                            onClick={proceedToCreateAccount}
+                            onClick={() => connectAndProceed(MenuItem.CreateAccount)}
                             className="mb-3"
                             disabled={isConnecting}
                         >
@@ -102,7 +103,7 @@ function App() {
                         </Button>
                         <Button
                             variant="secondary"
-                            onClick={() => setMenuItem(MenuItem.IdentityRecovery)}
+                            onClick={() => connectAndProceed(MenuItem.IdentityRecovery)}
                             disabled={isConnecting}
                         >
                             Identity Recovery
@@ -114,7 +115,7 @@ function App() {
             ) : menuItem === MenuItem.CreateAccount ? (
                 <CreateAccount goHome={() => setMenuItem(null)} network={network} />
             ) : (
-                <div></div>
+                <IdentityRecovery goHome={() => setMenuItem(null)} network={network} />
             )}
         </div>
     );
