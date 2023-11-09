@@ -6,20 +6,25 @@ use concordium_rust_sdk::{
     smart_contracts::common::{AccountAddress, Amount, ACCOUNT_ADDRESS_SIZE},
     types::{
         hashes::{BlockHash, TransactionHash},
+        queries::BlockInfo,
         smart_contracts::ModuleReference,
         AbsoluteBlockHeight, AccountCreationDetails, AccountTransactionDetails,
-        AccountTransactionEffects, BlockItemSummary,
+        AccountTransactionEffects, BlockHeight, BlockItemSummary,
         BlockItemSummaryDetails::{AccountCreation, AccountTransaction},
-        ContractAddress, CredentialType, OpenStatus, RewardsOverview, SpecialTransactionOutcome,
-        TransactionType,
+        ContractAddress, CredentialType, GenesisIndex, OpenStatus, ProtocolVersion,
+        RewardsOverview, SpecialTransactionOutcome, TransactionType,
     },
-    v2::{AccountIdentifier, Client, Endpoint},
+    v2::{AccountIdentifier, BlockIdentifier, Client, Endpoint, RelativeBlockHeight},
 };
 use core::fmt;
-use futures::{self, future, stream::FuturesUnordered, Stream, StreamExt, TryStreamExt};
+use futures::{
+    self, future,
+    stream::{FuturesOrdered, FuturesUnordered},
+    Stream, StreamExt, TryStreamExt,
+};
 use std::{
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
         Arc,
     },
     time::Duration,
@@ -110,14 +115,19 @@ struct BlockDetails {
     /// Finalization time of the block. Used to show how metrics evolve over
     /// time by linking entities, such as accounts and transactions, to
     /// the block in which they are created.
-    block_time:  DateTime<Utc>,
+    block_time:       DateTime<Utc>,
     /// Height of block from genesis. Used to restart the process of collecting
     /// metrics from the latest block recorded.
-    height:      AbsoluteBlockHeight,
+    height:           AbsoluteBlockHeight,
     /// [`PaydayBlockData`] for the block. This is only recorded for "payday"
     /// blocks reflected by `Some`, where non payday blocks are reflected by
     /// `None`.
-    payday_data: Option<PaydayBlockData>,
+    payday_data:      Option<PaydayBlockData>,
+    /// Number of transactions in a block.
+    num_transactions: u64,
+    block_hash:       BlockHash,
+    genesis_index:    GenesisIndex,
+    era_height:       BlockHeight,
 }
 
 /// Holds selected attributes about accounts created on chain.
@@ -718,12 +728,12 @@ fn to_block_events(block_item: BlockItemSummary) -> Vec<BlockEvent> {
 /// Maps a stream of transactions to a stream of `BlockEvent`s
 async fn get_block_events(
     node: &mut Client,
-    block_hash: BlockHash,
+    block_hash: BlockIdentifier,
 ) -> anyhow::Result<impl Stream<Item = anyhow::Result<BlockEvent>>> {
     let transactions = node
         .get_block_transaction_events(block_hash)
         .await
-        .with_context(|| format!("Could not get transactions for block: {}", block_hash))?
+        .with_context(|| format!("Could not get transactions for block: {:?}", block_hash))?
         .response;
 
     let block_events = transactions
@@ -734,7 +744,7 @@ async fn get_block_events(
         })
         .map_err(move |err| {
             anyhow!(
-                "Error while streaming transactions for block: {} - {}",
+                "Error while streaming transactions for block: {:?} - {}",
                 block_hash,
                 err
             )
@@ -758,9 +768,13 @@ async fn process_chain_genesis_block(
         .response;
 
     let block_details = BlockDetails {
-        block_time:  block_info.block_slot_time,
-        height:      block_info.block_height,
+        block_time: block_info.block_slot_time,
+        height: block_info.block_height,
         payday_data: None,
+        num_transactions: 0,
+        block_hash,
+        genesis_index: 0.into(),
+        era_height: 0.into(),
     };
 
     let accounts = accounts_in_block(node, block_hash).await?;
@@ -815,18 +829,31 @@ struct PaydayBlockData {
 /// `None`.
 async fn process_payday_block(
     node: &mut Client,
-    block_hash: BlockHash,
+    block_info: &BlockInfo,
 ) -> anyhow::Result<Option<PaydayBlockData>> {
+    let start_time = tokio::time::Instant::now();
+    if block_info.protocol_version <= ProtocolVersion::P3 {
+        return Ok(None);
+    }
+    let block_ident = BlockIdentifier::RelativeHeight(RelativeBlockHeight {
+        genesis_index: block_info.genesis_index,
+        height:        block_info.era_block_height,
+        restrict:      true,
+    });
     // Handle special payday events
     let mut pool_reward = 0;
     let mut finalizer_reward = 0;
     let mut foundation_reward = 0;
-    let mut special_events = node.get_block_special_events(block_hash).await?.response;
+    let mut special_events = node.get_block_special_events(block_ident).await?.response;
+    let mut is_payday_block = false;
     while let Some(event) = special_events.try_next().await? {
         match event {
             SpecialTransactionOutcome::PaydayFoundationReward {
                 development_charge, ..
-            } => foundation_reward += development_charge.micro_ccd(),
+            } => {
+                foundation_reward += development_charge.micro_ccd();
+                is_payday_block = true;
+            }
             SpecialTransactionOutcome::PaydayPoolReward {
                 baker_reward,
                 finalization_reward,
@@ -834,92 +861,144 @@ async fn process_payday_block(
             } => {
                 pool_reward += baker_reward.micro_ccd();
                 finalizer_reward += finalization_reward.micro_ccd();
+                is_payday_block = true;
+            }
+            SpecialTransactionOutcome::PaydayAccountReward { .. } => {
+                is_payday_block = true;
             }
             _ => {}
         }
     }
 
-    if pool_reward == 0 {
+    if !is_payday_block {
         // Block wasn't a payday block
         return Ok(None);
     }
 
     // Get total CCDs in existence
-    let tokenomics_info = node.get_tokenomics_info(block_hash).await?.response;
+    let a = tokio::time::Instant::now();
+    let tokenomics_info = node.get_tokenomics_info(block_ident).await?.response;
+    log::debug!(
+        "Took {} ms to query tokenomics info.",
+        tokio::time::Instant::now().duration_since(a).as_millis()
+    );
     let (RewardsOverview::V1 { common: data, .. } | RewardsOverview::V0 { data }) = tokenomics_info;
     let total_ccd = data.total_amount.micro_ccd();
 
     // Count entities and staked CCDs
-    let mut baker_response = node.get_bakers_reward_period(block_hash).await?.response;
-    let mut pool_count = 0;
-    let mut open_pool_count = 0;
-    let mut closed_for_new_pool_count = 0;
-    let mut closed_pool_count = 0;
-    let mut delegation_recipient_count = 0;
-    let mut finalizer_count = 0;
-    let mut total_actively_delegated = 0;
-    let mut total_equity_capital = 0;
-    let mut delegating_account_count = 0;
-    while let Some(baker) = baker_response.try_next().await? {
-        pool_count += 1;
-        if baker.is_finalizer {
-            finalizer_count += 1;
-        }
-        total_actively_delegated += baker.delegated_capital.micro_ccd();
-        total_equity_capital += baker.equity_capital.micro_ccd();
+    let a = tokio::time::Instant::now();
+    let baker_response = node.get_bakers_reward_period(block_ident).await?.response;
+    log::debug!(
+        "Took {} ms to query bakers in reward period.",
+        tokio::time::Instant::now().duration_since(a).as_millis()
+    );
 
-        if baker.delegated_capital.micro_ccd() != 0 {
-            delegation_recipient_count += 1;
-        }
+    let baker_list = node.get_baker_list(block_ident).await?.response;
 
-        let delegators = node
-            .get_pool_delegators_reward_period(block_hash, baker.baker.baker_id)
-            .await?
-            .response;
-        delegating_account_count += delegators.count().await;
-    }
+    let pool_count = AtomicUsize::new(0);
+    let open_pool_count = AtomicUsize::new(0);
+    let closed_for_new_pool_count = AtomicUsize::new(0);
+    let closed_pool_count = AtomicUsize::new(0);
+    let delegation_recipient_count = AtomicUsize::new(0);
+    let finalizer_count = AtomicUsize::new(0);
+    let total_actively_delegated = AtomicU64::new(0);
+    let total_equity_capital = AtomicU64::new(0);
+    let delegating_account_count = AtomicUsize::new(0);
+    let fut1 = baker_response
+        .map_err(Into::into)
+        .try_for_each_concurrent(Some(16), |baker| {
+            let node = node.clone();
+            async {
+                let baker = baker;
+                let mut node = node;
+                pool_count.fetch_add(1, Ordering::AcqRel);
+                if baker.is_finalizer {
+                    finalizer_count.fetch_add(1, Ordering::AcqRel);
+                }
+                total_actively_delegated
+                    .fetch_add(baker.delegated_capital.micro_ccd(), Ordering::AcqRel);
+                total_equity_capital.fetch_add(baker.equity_capital.micro_ccd(), Ordering::AcqRel);
 
-    let mut baker_list = node.get_baker_list(block_hash).await?.response;
-    while let Some(baker_id) = baker_list.try_next().await? {
-        let pool_info = node
-            .get_pool_info(block_hash, baker_id)
-            .await?
-            .response
-            .pool_info;
+                if baker.delegated_capital.micro_ccd() != 0 {
+                    delegation_recipient_count.fetch_add(1, Ordering::AcqRel);
+                    let delegators = node
+                        .get_pool_delegators_reward_period(block_ident, baker.baker.baker_id)
+                        .await?
+                        .response;
+                    delegating_account_count.fetch_add(delegators.count().await, Ordering::AcqRel);
+                }
 
-        match pool_info.open_status {
-            OpenStatus::OpenForAll => open_pool_count += 1,
-            OpenStatus::ClosedForNew => closed_for_new_pool_count += 1,
-            OpenStatus::ClosedForAll => closed_pool_count += 1,
-        }
-    }
+                Ok::<_, anyhow::Error>(())
+            }
+        });
 
+    let fut2 = baker_list
+        .map_err(Into::into)
+        .try_for_each_concurrent(Some(16), |baker_id| {
+            let mut node = node.clone();
+            let closed_for_new_pool_count = &closed_for_new_pool_count;
+            let open_pool_count = &open_pool_count;
+            let closed_pool_count = &closed_pool_count;
+            async move {
+                let pi = node.get_pool_info(block_ident, baker_id).await?.response;
+                let pool_info = pi.pool_info;
+                match pool_info.open_status {
+                    OpenStatus::OpenForAll => open_pool_count.fetch_add(1, Ordering::AcqRel),
+                    OpenStatus::ClosedForNew => {
+                        closed_for_new_pool_count.fetch_add(1, Ordering::AcqRel)
+                    }
+                    OpenStatus::ClosedForAll => closed_pool_count.fetch_add(1, Ordering::AcqRel),
+                };
+                Ok::<_, anyhow::Error>(())
+            }
+        });
+
+    let a = tokio::time::Instant::now();
+    futures::try_join!(fut1, fut2)?;
+    log::debug!(
+        "Took {} ms to query baker lists.",
+        tokio::time::Instant::now().duration_since(a).as_millis()
+    );
+
+    let a = tokio::time::Instant::now();
     let passive_delegators = node
-        .get_passive_delegators_reward_period(block_hash)
+        .get_passive_delegators_reward_period(block_ident)
         .await?
         .response;
-    let delegator_count = delegating_account_count + passive_delegators.count().await;
+    let delegator_count =
+        delegating_account_count.load(Ordering::Acquire) + passive_delegators.count().await;
+    log::debug!(
+        "Took {} ms to query passive delegators lists.",
+        tokio::time::Instant::now().duration_since(a).as_millis()
+    );
     let total_passively_delegated = node
-        .get_passive_delegation_info(block_hash)
+        .get_passive_delegation_info(block_ident)
         .await?
         .response
         .current_payday_delegated_capital
         .micro_ccd();
 
+    let end = tokio::time::Instant::now();
+    log::debug!(
+        "Queried payday data for block {} in {}ms.",
+        block_info.block_hash,
+        end.duration_since(start_time).as_millis()
+    );
+
     Ok(Some(PaydayBlockData {
-        total_equity_capital,
+        total_equity_capital: total_equity_capital.load(Ordering::Acquire),
         total_passively_delegated,
-        total_actively_delegated,
+        total_actively_delegated: total_actively_delegated.load(Ordering::Acquire),
         total_ccd,
         pool_reward,
         finalizer_reward,
         foundation_reward,
-        pool_count,
-        open_pool_count,
-        closed_for_new_pool_count,
-        closed_pool_count,
-        delegation_recipient_count,
-        finalizer_count,
+        pool_count: pool_count.load(Ordering::Acquire),
+        open_pool_count: open_pool_count.load(Ordering::Acquire),
+        closed_for_new_pool_count: closed_for_new_pool_count.load(Ordering::Acquire),
+        closed_pool_count: closed_pool_count.load(Ordering::Acquire),
+        delegation_recipient_count: delegation_recipient_count.load(Ordering::Acquire),
+        finalizer_count: finalizer_count.load(Ordering::Acquire),
         delegator_count,
     }))
 }
@@ -927,7 +1006,7 @@ async fn process_payday_block(
 /// Get `BlockDetails` for given block represented by `block_hash`
 async fn get_block_details(
     node: &mut Client,
-    block_hash: BlockHash,
+    block_hash: AbsoluteBlockHeight,
 ) -> anyhow::Result<BlockDetails> {
     let block_info = node
         .get_block_info(block_hash)
@@ -935,11 +1014,15 @@ async fn get_block_details(
         .with_context(|| format!("Could not get block info for block: {}", block_hash))?
         .response;
 
-    let payday_data = process_payday_block(node, block_hash).await?;
+    let payday_data = process_payday_block(node, &block_info).await?;
     let block_details = BlockDetails {
         block_time: block_info.block_slot_time,
         height: block_info.block_height,
         payday_data,
+        num_transactions: block_info.transaction_count,
+        block_hash: block_info.block_hash,
+        genesis_index: block_info.genesis_index,
+        era_height: block_info.era_block_height,
     };
 
     Ok(block_details)
@@ -949,13 +1032,12 @@ async fn get_block_details(
 /// corresponding to events captured by the block.
 async fn process_block(
     node: &mut Client,
-    block_hash: BlockHash,
+    height: AbsoluteBlockHeight,
 ) -> anyhow::Result<NormalBlockData> {
-    let block_details = get_block_details(node, block_hash).await?;
-    let block_events = get_block_events(node, block_hash).await?;
+    let block_details = get_block_details(node, height).await?;
 
     let mut block_data = NormalBlockData {
-        block_hash,
+        block_hash: block_details.block_hash,
         block_details,
         accounts: Vec::new(),
         transactions: Vec::new(),
@@ -963,27 +1045,35 @@ async fn process_block(
         contract_instances: Vec::new(),
     };
 
-    block_events
-        .try_for_each(|be| {
-            match be {
-                BlockEvent::AccountCreation(address, details) => {
-                    block_data.accounts.push((address, details));
-                }
-                BlockEvent::AccountTransaction(hash, details) => {
-                    block_data.transactions.push((hash, details));
-                }
-                BlockEvent::ContractModuleDeployment(module_ref) => {
-                    block_data.contract_modules.push(module_ref);
-                }
-                BlockEvent::ContractInstantiation(address, details) => {
-                    block_data.contract_instances.push((address, details));
-                }
-            };
+    let block_ident = BlockIdentifier::RelativeHeight(RelativeBlockHeight {
+        genesis_index: block_details.genesis_index,
+        height:        block_details.era_height,
+        restrict:      true,
+    });
 
-            future::ok(())
-        })
-        .await?;
+    if block_details.num_transactions > 0 {
+        let block_events = get_block_events(node, block_ident).await?;
+        block_events
+            .try_for_each(|be| {
+                match be {
+                    BlockEvent::AccountCreation(address, details) => {
+                        block_data.accounts.push((address, details));
+                    }
+                    BlockEvent::AccountTransaction(hash, details) => {
+                        block_data.transactions.push((hash, details));
+                    }
+                    BlockEvent::ContractModuleDeployment(module_ref) => {
+                        block_data.contract_modules.push(module_ref);
+                    }
+                    BlockEvent::ContractInstantiation(address, details) => {
+                        block_data.contract_instances.push((address, details));
+                    }
+                };
 
+                future::ok(())
+            })
+            .await?;
+    }
     Ok(block_data)
 }
 
@@ -1045,18 +1135,25 @@ async fn node_process(
             .await
             .with_context(|| format!("Timeout reached for node: {}", node_endpoint.uri()))?;
 
+        let mut processed_chunks = FuturesOrdered::new();
         for block in chunks {
-            let block_data = process_block(&mut node, block.block_hash).await?;
+            let mut node = node.clone();
+            let fut = async move {
+                let block_data = process_block(&mut node, block.height).await;
+                (block_data, block.height)
+            };
+            processed_chunks.push_back(fut);
+        }
+        while let Some((block_data, block_height)) = processed_chunks.next().await {
             if block_sender
-                .send(BlockData::Normal(block_data))
+                .send(BlockData::Normal(block_data?))
                 .await
                 .is_err()
             {
                 log::error!("The database connection has been closed. Terminating node queries.");
                 return Ok(());
             }
-
-            *latest_height = Some(block.height);
+            *latest_height = Some(block_height);
         }
 
         if has_error {
@@ -1324,7 +1421,7 @@ async fn set_shutdown(flag: Arc<AtomicBool>) -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::main]
+#[tokio::main(flavor = "multi_thread", worker_threads = 4)]
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
