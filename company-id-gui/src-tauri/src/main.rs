@@ -11,16 +11,16 @@ use concordium_rust_sdk::{
     },
     id::{
         account_holder::{create_credential, generate_pio_v1},
-        constants::{ArCurve, AttributeKind},
+        constants::{ArCurve, AttributeKind, IpPairing},
         curve_arithmetic::Curve,
         dodis_yampolskiy_prf as prf,
         pedersen_commitment::Value as PedersenValue,
         secret_sharing::Threshold,
         types::{
             account_address_from_registration_id, AccCredentialInfo, AccountCredential,
-            AccountCredentialMessage, AccountKeys, ArInfos, CredentialData,
-            CredentialDeploymentInfo, CredentialHolderInfo, GlobalContext, HasIdentityObjectFields,
-            IdCredentials, IdObjectUseData, IdentityObjectV1, IpContext, IpInfo, Policy,
+            AccountCredentialMessage, AccountKeys, ArInfos, CredentialData, CredentialHolderInfo,
+            GlobalContext, HasIdentityObjectFields, IdCredentials, IdObjectUseData,
+            IdentityObjectV1, IpContext, IpInfo, Policy,
         },
     },
     smart_contracts::common::{AccountAddress, SignatureThreshold},
@@ -319,14 +319,10 @@ async fn create_account(
         net,
     };
 
-    let (message_expiry, cdi, acc_keys) =
+    let (acc_cred_msg, acc_keys) =
         get_credential_deployment_info(state.inner(), id_object, wallet, acc_index).await?;
 
     // Submit the credential to the chain
-    let acc_cred_msg = AccountCredentialMessage {
-        message_expiry,
-        credential:     AccountCredential::Normal { cdi },
-    };
     let bi = BlockItem::<Payload>::CredentialDeployment(Box::new(acc_cred_msg));
     let mut client = state.node.lock().await;
     let client = client.as_mut().context("No node set.")?;
@@ -381,13 +377,12 @@ async fn create_account(
 
 async fn get_credential_deployment_info(
     state: &State,
-    id_obj: IdentityObjectV1<Bls12, ArCurve, AttributeKind>,
+    id_obj: IdentityObjectV1<IpPairing, ArCurve, AttributeKind>,
     wallet: ConcordiumHdWallet,
     acc_index: u8,
 ) -> Result<
-        (
-            TransactionTime,
-        CredentialDeploymentInfo<Bls12, ArCurve, AttributeKind>,
+    (
+        AccountCredentialMessage<IpPairing, ArCurve, AttributeKind>,
         AccountKeys,
     ),
     Error,
@@ -453,7 +448,7 @@ async fn get_credential_deployment_info(
         credential_index: acc_index,
     };
 
-    let transaction_time = TransactionTime::seconds_after(5 * 60);
+    let message_expiry = TransactionTime::seconds_after(5 * 60);
     let (cdi, _) = create_credential(
         context,
         &id_obj,
@@ -462,7 +457,7 @@ async fn get_credential_deployment_info(
         policy,
         &acc_data,
         &credential_context,
-        &Either::Left(transaction_time),
+        &Either::Left(message_expiry),
     )
     .context("Could not generate the credential.")?;
 
@@ -471,7 +466,11 @@ async fn get_credential_deployment_info(
         threshold: AccountThreshold::ONE,
     };
 
-    Ok((transaction_time, cdi, acc_keys))
+    let acc_cred_msg = AccountCredentialMessage {
+        message_expiry,
+        credential: AccountCredential::Normal { cdi },
+    };
+    Ok((acc_cred_msg, acc_keys))
 }
 
 fn main() -> anyhow::Result<()> {

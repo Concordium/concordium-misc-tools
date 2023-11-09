@@ -13,7 +13,7 @@ edition = "2021"
 tauri-build = { version = "1.5", features = [] }
 
 [dependencies]
-tauri = { version = "1.5", features = [ "dialog", "clipboard-write-text", "shell-open"] }
+tauri = { version = "1.5", features = ["clipboard-write-text", "dialog", "shell-open"] }
 serde = { version = "1.0", features = ["derive"] }
 key_derivation = { version = "*", path = "../../deps/concordium-rust-sdk/concordium-base/rust-src/key_derivation" }
 concordium-rust-sdk = { version = "*", path = "../../deps/concordium-rust-sdk" }
