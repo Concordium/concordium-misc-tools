@@ -319,12 +319,12 @@ async fn create_account(
         net,
     };
 
-    let (cdi, acc_keys) =
+    let (message_expiry, cdi, acc_keys) =
         get_credential_deployment_info(state.inner(), id_object, wallet, acc_index).await?;
 
     // Submit the credential to the chain
     let acc_cred_msg = AccountCredentialMessage {
-        message_expiry: TransactionTime::seconds_after(5 * 60),
+        message_expiry,
         credential:     AccountCredential::Normal { cdi },
     };
     let bi = BlockItem::<Payload>::CredentialDeployment(Box::new(acc_cred_msg));
@@ -385,7 +385,8 @@ async fn get_credential_deployment_info(
     wallet: ConcordiumHdWallet,
     acc_index: u8,
 ) -> Result<
-    (
+        (
+            TransactionTime,
         CredentialDeploymentInfo<Bls12, ArCurve, AttributeKind>,
         AccountKeys,
     ),
@@ -452,7 +453,7 @@ async fn get_credential_deployment_info(
         credential_index: acc_index,
     };
 
-    let transaction_time = Either::Left(TransactionTime::seconds_after(5 * 60));
+    let transaction_time = TransactionTime::seconds_after(5 * 60);
     let (cdi, _) = create_credential(
         context,
         &id_obj,
@@ -461,7 +462,7 @@ async fn get_credential_deployment_info(
         policy,
         &acc_data,
         &credential_context,
-        &transaction_time,
+        &Either::Left(transaction_time),
     )
     .context("Could not generate the credential.")?;
 
@@ -470,7 +471,7 @@ async fn get_credential_deployment_info(
         threshold: AccountThreshold::ONE,
     };
 
-    Ok((cdi, acc_keys))
+    Ok((transaction_time, cdi, acc_keys))
 }
 
 fn main() -> anyhow::Result<()> {
