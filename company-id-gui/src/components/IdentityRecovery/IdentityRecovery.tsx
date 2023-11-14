@@ -87,10 +87,15 @@ function IdentityRecovery({ goHome, network }: SubMenuProps) {
                     <p className="mb-3">The below list of accounts are associated with the company identity.</p>
                     <ListGroup className="mb-3">
                         {accountList.map((account, idx) => (
-                            <ListGroup.Item key={Math.pow(2, account.idIndex * 3) * Math.pow(3, account.accIndex)}>
+                            <ListGroup.Item
+                                action
+                                className="d-flex"
+                                onClick={() => recoverAccount(idx)}
+                                disabled={recoveringAccount !== null}
+                                key={Math.pow(2, account.idIndex * 3) * Math.pow(3, account.accIndex)}
+                            >
                                 {account.idIndex},{account.accIndex}: {account.address}
-                                {recoveringAccount === idx && <i className="bi-arrow-repeat spinner ms-2" />}
-                                <Button onClick={() => recoverAccount(idx)}>Recover</Button>
+                                {recoveringAccount === idx && <i className="bi-arrow-repeat spinner ms-auto" />}
                             </ListGroup.Item>
                         ))}
                     </ListGroup>

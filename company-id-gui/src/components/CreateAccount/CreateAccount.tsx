@@ -102,9 +102,10 @@ function CreateAccount({ goHome, network }: SubMenuProps) {
     return accountList === null ? (
         <Form noValidate onSubmit={get_accounts} className="text-start" style={{ width: 650 }}>
             <p>
-                This menu can be used to create an account on the chain. In order to complete the account creation
-                process you should have a 24 word seedphrase and an identity object from Notabene. If you do not have
-                these, please follow the steps in the &ldquo;Request Identity&rdquo; menu.
+                This menu can be used to create a new account on the chain or regenerate the keys for an old account. In
+                order to complete the account creation process you should have a 24 word seedphrase and an identity
+                object from Notabene. If you do not have these, please follow the steps in the &ldquo;Request
+                Identity&rdquo; menu.
             </p>
             <Form.Label htmlFor="seedphrase">Enter seedphrase</Form.Label>
             <InputGroup className="mb-3">

@@ -75,6 +75,17 @@ struct State {
     id_index:     Mutex<Option<u32>>,
 }
 
+/// A wallet and additional context.
+struct WalletContext<'state> {
+    net_data:   &'state NetData,
+    wallet:     ConcordiumHdWallet,
+    ip_context: IpContext<'state, Bls12, ArCurve>,
+    /// The index of the identity. This may or may not be set depending on which
+    /// sub-menu the user is in. If it is not set this will default to 0.
+    id_index:   u32,
+    ip_index:   u32,
+}
+
 impl State {
     async fn wallet_context<'state>(
         &'state self,
@@ -115,14 +126,6 @@ impl State {
             ip_index,
         })
     }
-}
-
-struct WalletContext<'state> {
-    net_data:   &'state NetData,
-    wallet:     ConcordiumHdWallet,
-    ip_context: IpContext<'state, Bls12, ArCurve>,
-    id_index:   u32,
-    ip_index:   u32,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -254,9 +257,11 @@ async fn save_request_file(state: tauri::State<'_, State>, net: Net) -> Result<(
 const MAX_ACCOUNT_FAILURES: u8 = 20;
 
 #[derive(serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct Account {
-    index:   u8,
-    address: AccountAddress,
+    id_index:  u32,
+    acc_index: u8,
+    address:   AccountAddress,
 }
 
 #[tauri::command]
@@ -292,7 +297,7 @@ async fn get_identity_accounts(
     let client = client.as_mut().context("No node set.")?;
     let ip_index = net_data.ip_info.ip_identity.0;
     let mut acc_fail_count = 0;
-    for acc_idx in 0u8..=255 {
+    for acc_index in 0u8..=255 {
         // This needs to be in a separate scope to avoid keeping prf_key across an await
         // boundary
         let address = {
@@ -300,7 +305,7 @@ async fn get_identity_accounts(
                 .get_prf_key(ip_index, id_index)
                 .context("Failed to get PRF key.")?;
             let reg_id = prf_key
-                .prf(net_data.global_ctx.elgamal_generator(), acc_idx)
+                .prf(net_data.global_ctx.elgamal_generator(), acc_index)
                 .context("Failed to compute PRF.")?;
             account_address_from_registration_id(&reg_id)
         };
@@ -310,10 +315,12 @@ async fn get_identity_accounts(
         {
             Ok(_) => {
                 let account = Account {
-                    index: acc_idx,
+                    id_index,
+                    acc_index,
                     address,
                 };
                 accounts.push(account);
+                acc_fail_count = 0;
             }
             Err(e) if e.is_not_found() => {
                 acc_fail_count += 1;
@@ -337,10 +344,11 @@ async fn create_account(
 ) -> Result<Account, Error> {
     let id_object = parse_id_object(id_object)?;
     let wallet_context = state.wallet_context(&seedphrase).await?;
+    let id_index = wallet_context.id_index;
     let net = wallet_context.wallet.net;
 
     if acc_index > id_object.alist.max_accounts {
-        return Err(Error::TooManyAccounts)
+        return Err(Error::TooManyAccounts);
     }
 
     let (acc_cred_msg, acc_keys) =
@@ -380,7 +388,8 @@ async fn create_account(
     });
 
     let account = Account {
-        index:   acc_index,
+        id_index,
+        acc_index,
         address: details.address,
     };
 
@@ -510,7 +519,7 @@ async fn save_keys(
     } = state.wallet_context(&seedphrase).await?;
     let net = wallet.net;
 
-    let acc_data = get_account_keys(&wallet, ip_index, id_index, account.index)?;
+    let acc_data = get_account_keys(&wallet, ip_index, id_index, account.acc_index)?;
     let acc_keys = AccountKeys {
         keys:      [(CredentialIndex::from(0), acc_data)].into(),
         threshold: AccountThreshold::ONE,
@@ -520,7 +529,7 @@ async fn save_keys(
         .get_prf_key(ip_index, id_index)
         .context("Failed to get PRF key.")?;
     let cred_id_exp = prf_key
-        .prf_exponent(account.index)
+        .prf_exponent(account.acc_index)
         .context("Failed to compute PRF exponent.")?;
     let cred_reg_id = CredentialRegistrationID::from_exponent(&net_data.global_ctx, cred_id_exp);
 
@@ -552,6 +561,71 @@ async fn save_keys(
     serde_json::to_writer_pretty(file, &file_data).map_err(|e| Error::FileError(e.into()))?;
 
     Ok(())
+}
+
+const MAX_IDENTITY_FAILURES: u8 = 20;
+
+#[tauri::command]
+async fn recover_identities(
+    state: tauri::State<'_, State>,
+    seedphrase: String,
+) -> Result<Vec<Account>, Error> {
+    let WalletContext {
+        net_data,
+        wallet,
+        ip_index,
+        ..
+    } = state.wallet_context(&seedphrase).await?;
+
+    let mut accounts = Vec::new();
+    let mut client = state.node.lock().await;
+    let client = client.as_mut().context("No node set.")?;
+    
+    let mut id_fail_count = 0;
+    'id_loop: for id_index in 0.. {
+        let mut acc_fail_count = 0;
+        for acc_index in 0u8..=255 {
+            // This needs to be in a separate scope to avoid keeping prf_key across an await
+            // boundary
+            let address = {
+                let prf_key = wallet
+                    .get_prf_key(ip_index, id_index)
+                    .context("Failed to get PRF key.")?;
+                let reg_id = prf_key
+                    .prf(net_data.global_ctx.elgamal_generator(), acc_index)
+                    .context("Failed to compute PRF.")?;
+                account_address_from_registration_id(&reg_id)
+            };
+            match client
+                .get_account_info(&address.into(), v2::BlockIdentifier::LastFinal)
+                .await
+            {
+                Ok(_) => {
+                    let account = Account {
+                        id_index,
+                        acc_index,
+                        address,
+                    };
+                    accounts.push(account);
+                    acc_fail_count = 0;
+                    id_fail_count = 0;
+                }
+                Err(e) if e.is_not_found() => {
+                    acc_fail_count += 1;
+                    if acc_fail_count > MAX_ACCOUNT_FAILURES {
+                        id_fail_count += 1;
+                        if id_fail_count > MAX_IDENTITY_FAILURES {
+                            break 'id_loop;
+                        }
+                        break;
+                    }
+                }
+                Err(e) => return Err(anyhow::anyhow!("Cannot query the node: {e}").into()),
+            }
+        }
+    }
+
+    Ok(accounts)
 }
 
 fn main() -> anyhow::Result<()> {
@@ -586,6 +660,7 @@ fn main() -> anyhow::Result<()> {
             get_identity_accounts,
             create_account,
             save_keys,
+            recover_identities,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
