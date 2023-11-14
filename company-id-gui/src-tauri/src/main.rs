@@ -26,7 +26,7 @@ use concordium_rust_sdk::{
     smart_contracts::common::{AccountAddress, SignatureThreshold},
     types::{
         transactions::{BlockItem, Payload},
-        AccountThreshold, BlockItemSummaryDetails,
+        AccountThreshold, BlockItemSummaryDetails, CredentialRegistrationID,
     },
     v2,
 };
@@ -72,8 +72,57 @@ struct State {
     mainnet_data: NetData,
     node:         Mutex<Option<v2::Client>>,
     net:          Mutex<Option<Net>>,
-    account_keys: Mutex<Option<serde_json::Value>>,
     id_index:     Mutex<Option<u32>>,
+}
+
+impl State {
+    async fn wallet_context<'state>(
+        &'state self,
+        seedphrase: &str,
+    ) -> Result<WalletContext<'state>, Error> {
+        let bip39_map = bip39::bip39_map();
+        let seedphrase = seedphrase.trim();
+        let seed_words: Vec<_> = seedphrase.split(' ').collect();
+        if !bip39::verify_bip39(&seed_words, &bip39_map) {
+            return Err(Error::InvalidSeedphrase);
+        }
+        let wallet = ConcordiumHdWallet {
+            seed: words_to_seed(&seedphrase),
+            net:  self.net.lock().await.context("No network set.")?,
+        };
+
+        let net_data = match wallet.net {
+            Net::Mainnet => &self.mainnet_data,
+            Net::Testnet => &self.testnet_data,
+        };
+
+        let ip_index = net_data.ip_info.ip_identity.0;
+        // If id_index is not set we are creating a new identity request and should use
+        // the first identity index.
+        let id_index = self.id_index.lock().await.unwrap_or(0);
+
+        let context = IpContext::new(
+            &net_data.ip_info,
+            &net_data.ars.anonymity_revokers,
+            &net_data.global_ctx,
+        );
+
+        Ok(WalletContext {
+            net_data,
+            wallet,
+            ip_context: context,
+            id_index,
+            ip_index,
+        })
+    }
+}
+
+struct WalletContext<'state> {
+    net_data:   &'state NetData,
+    wallet:     ConcordiumHdWallet,
+    ip_context: IpContext<'state, Bls12, ArCurve>,
+    id_index:   u32,
+    ip_index:   u32,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -94,6 +143,8 @@ enum Error {
     SeedphraseIdObjectMismatch,
     #[error("Internal error: {0}")]
     Internal(#[from] anyhow::Error),
+    #[error("You have used all possible accounts for this identity.")]
+    TooManyAccounts,
 }
 
 // Needs Serialize to be able to return it from a command
@@ -150,36 +201,27 @@ fn check_seedphrase(state: tauri::State<'_, State>, seedphrase: String) -> bool 
 /// Generate a request file for identity object. Needs to be async because the
 /// file dialog blocks the thread.
 #[tauri::command]
-async fn save_request_file(state: tauri::State<'_, State>, net: Net) -> Result<(), String> {
-    let net_data = match net {
-        Net::Mainnet => &state.mainnet_data,
-        Net::Testnet => &state.testnet_data,
-    };
-
-    let context = IpContext::new(
-        &net_data.ip_info,
-        &net_data.ars.anonymity_revokers,
-        &net_data.global_ctx,
-    );
-
-    let wallet = ConcordiumHdWallet {
-        seed: words_to_seed(&state.seedphrase),
-        net,
-    };
-    let identity_provider_index = net_data.ip_info.ip_identity.0;
-    let identity_index = 0;
+async fn save_request_file(state: tauri::State<'_, State>, net: Net) -> Result<(), Error> {
+    *state.net.lock().await = Some(net);
+    let WalletContext {
+        net_data,
+        wallet,
+        ip_context,
+        id_index,
+        ip_index,
+    } = state.wallet_context(&state.seedphrase).await?;
 
     let prf_key: prf::SecretKey<ArCurve> = wallet
-        .get_prf_key(identity_provider_index, identity_index)
-        .map_err(|e| format!("Could not get prf key: {e}"))?;
+        .get_prf_key(ip_index, id_index)
+        .context("Could not get prf key")?;
 
     let id_cred_scalar = wallet
-        .get_id_cred_sec(identity_provider_index, identity_index)
-        .map_err(|e| format!("Could not get idCredSec: {e}"))?;
+        .get_id_cred_sec(ip_index, id_index)
+        .context("Could not get idCredSec")?;
 
     let randomness = wallet
-        .get_blinding_randomness(identity_provider_index, identity_index)
-        .map_err(|e| format!("Could not get blinding randomness: {e}"))?;
+        .get_blinding_randomness(ip_index, id_index)
+        .context("Could not get blinding randomness")?;
 
     let id_cred_sec: PedersenValue<ArCurve> = PedersenValue::new(id_cred_scalar);
     let id_cred: IdCredentials<ArCurve> = IdCredentials { id_cred_sec };
@@ -192,8 +234,8 @@ async fn save_request_file(state: tauri::State<'_, State>, net: Net) -> Result<(
     let id_use_data = IdObjectUseData { aci, randomness };
 
     let threshold = Threshold(net_data.ars.anonymity_revokers.len() as u8 - 1);
-    let (pio, _) = generate_pio_v1(&context, threshold, &id_use_data)
-        .ok_or_else(|| "Failed to generate the identity object request.".to_string())?;
+    let (pio, _) = generate_pio_v1(&ip_context, threshold, &id_use_data)
+        .context("Failed to generate the identity object request.")?;
     let ver_pio = Versioned::new(VERSION_0, pio);
 
     let Some(path) = FileDialogBuilder::new()
@@ -204,14 +246,14 @@ async fn save_request_file(state: tauri::State<'_, State>, net: Net) -> Result<(
         return Ok(());
     };
 
-    let file = std::fs::File::create(path).map_err(|e| format!("Could not create file: {e}"))?;
-    serde_json::to_writer_pretty(file, &ver_pio)
-        .map_err(|e| format!("Could not write to file: {e}"))
+    let file = std::fs::File::create(path).context("Could not create file.")?;
+    serde_json::to_writer_pretty(file, &ver_pio).context("Could not write to file.")?;
+    Ok(())
 }
 
 const MAX_ACCOUNT_FAILURES: u8 = 20;
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 struct Account {
     index:   u8,
     address: AccountAddress,
@@ -224,21 +266,9 @@ async fn get_identity_accounts(
     id_object: String,
 ) -> Result<Vec<Account>, Error> {
     let id_object = parse_id_object(id_object)?;
-    let bip39_map = bip39::bip39_map();
-    let seedphrase = seedphrase.trim();
-    let seed_words: Vec<_> = seedphrase.split(' ').collect();
-    if !bip39::verify_bip39(&seed_words, &bip39_map) {
-        return Err(Error::InvalidSeedphrase);
-    }
-    let wallet = ConcordiumHdWallet {
-        seed: words_to_seed(&seedphrase),
-        net:  state.net.lock().await.context("No network set.")?,
-    };
-
-    let net_data = match wallet.net {
-        Net::Mainnet => &state.mainnet_data,
-        Net::Testnet => &state.testnet_data,
-    };
+    let WalletContext {
+        net_data, wallet, ..
+    } = state.wallet_context(&seedphrase).await?;
 
     // Find the identity index asssoicated with the identity object
     let id_index = (0..20)
@@ -306,21 +336,15 @@ async fn create_account(
     acc_index: u8,
 ) -> Result<Account, Error> {
     let id_object = parse_id_object(id_object)?;
-    let bip39_map = bip39::bip39_map();
-    let seedphrase = seedphrase.trim();
-    let seed_words: Vec<_> = seedphrase.split(' ').collect();
-    if !bip39::verify_bip39(&seed_words, &bip39_map) {
-        return Err(Error::InvalidSeedphrase);
+    let wallet_context = state.wallet_context(&seedphrase).await?;
+    let net = wallet_context.wallet.net;
+
+    if acc_index > id_object.alist.max_accounts {
+        return Err(Error::TooManyAccounts)
     }
 
-    let net = state.net.lock().await.context("No network set.")?;
-    let wallet = ConcordiumHdWallet {
-        seed: words_to_seed(&seedphrase),
-        net,
-    };
-
     let (acc_cred_msg, acc_keys) =
-        get_credential_deployment_info(state.inner(), id_object, wallet, acc_index).await?;
+        get_credential_deployment_info(id_object, wallet_context, acc_index).await?;
 
     // Submit the credential to the chain
     let bi = BlockItem::<Payload>::CredentialDeployment(Box::new(acc_cred_msg));
@@ -354,7 +378,6 @@ async fn create_account(
             "address": details.address
         }
     });
-    *state.account_keys.lock().await = Some(file_data.clone());
 
     let account = Account {
         index:   acc_index,
@@ -376,9 +399,8 @@ async fn create_account(
 }
 
 async fn get_credential_deployment_info(
-    state: &State,
     id_obj: IdentityObjectV1<IpPairing, ArCurve, AttributeKind>,
-    wallet: ConcordiumHdWallet,
+    wallet_context: WalletContext<'_>,
     acc_index: u8,
 ) -> Result<
     (
@@ -387,17 +409,13 @@ async fn get_credential_deployment_info(
     ),
     Error,
 > {
-    let net_data = match wallet.net {
-        Net::Mainnet => &state.mainnet_data,
-        Net::Testnet => &state.testnet_data,
-    };
-
-    let ip_index = net_data.ip_info.ip_identity.0;
-    let id_index = state
-        .id_index
-        .lock()
-        .await
-        .context("Identity index was not initialized")?;
+    let WalletContext {
+        wallet,
+        ip_context,
+        id_index,
+        ip_index,
+        ..
+    } = wallet_context;
 
     let policy: Policy<ArCurve, AttributeKind> = Policy {
         valid_to:   id_obj.get_attribute_list().valid_to,
@@ -405,12 +423,6 @@ async fn get_credential_deployment_info(
         policy_vec: BTreeMap::new(),
         _phantom:   Default::default(),
     };
-
-    let context = IpContext::new(
-        &net_data.ip_info,
-        &net_data.ars.anonymity_revokers,
-        &net_data.global_ctx,
-    );
 
     let randomness = wallet
         .get_blinding_randomness(ip_index, id_index)
@@ -431,16 +443,7 @@ async fn get_credential_deployment_info(
     };
     let id_use_data = IdObjectUseData { aci, randomness };
 
-    let secret = wallet
-        .get_account_signing_key(ip_index, id_index, acc_index as u32)
-        .context("Failed to get account signing key.")?;
-    let mut keys = std::collections::BTreeMap::new();
-    let public = ed25519_dalek::PublicKey::from(&secret);
-    keys.insert(KeyIndex(0), KeyPair { secret, public });
-    let acc_data = CredentialData {
-        keys,
-        threshold: SignatureThreshold::ONE,
-    };
+    let acc_data = get_account_keys(&wallet, ip_index, id_index, acc_index)?;
     let credential_context = CredentialContext {
         wallet,
         identity_provider_index: ip_index.into(),
@@ -450,7 +453,7 @@ async fn get_credential_deployment_info(
 
     let message_expiry = TransactionTime::seconds_after(5 * 60);
     let (cdi, _) = create_credential(
-        context,
+        ip_context,
         &id_obj,
         &id_use_data,
         acc_index,
@@ -473,6 +476,84 @@ async fn get_credential_deployment_info(
     Ok((acc_cred_msg, acc_keys))
 }
 
+fn get_account_keys(
+    wallet: &ConcordiumHdWallet,
+    ip_index: u32,
+    id_index: u32,
+    acc_index: u8,
+) -> Result<CredentialData, Error> {
+    let secret = wallet
+        .get_account_signing_key(ip_index, id_index, acc_index as u32)
+        .context("Failed to get account signing key.")?;
+    let mut keys = std::collections::BTreeMap::new();
+    let public = ed25519_dalek::PublicKey::from(&secret);
+    keys.insert(KeyIndex(0), KeyPair { secret, public });
+
+    Ok(CredentialData {
+        keys,
+        threshold: SignatureThreshold::ONE,
+    })
+}
+
+#[tauri::command]
+async fn save_keys(
+    state: tauri::State<'_, State>,
+    seedphrase: String,
+    account: Account,
+) -> Result<(), Error> {
+    let WalletContext {
+        net_data,
+        wallet,
+        id_index,
+        ip_index,
+        ..
+    } = state.wallet_context(&seedphrase).await?;
+    let net = wallet.net;
+
+    let acc_data = get_account_keys(&wallet, ip_index, id_index, account.index)?;
+    let acc_keys = AccountKeys {
+        keys:      [(CredentialIndex::from(0), acc_data)].into(),
+        threshold: AccountThreshold::ONE,
+    };
+
+    let prf_key = wallet
+        .get_prf_key(ip_index, id_index)
+        .context("Failed to get PRF key.")?;
+    let cred_id_exp = prf_key
+        .prf_exponent(account.index)
+        .context("Failed to compute PRF exponent.")?;
+    let cred_reg_id = CredentialRegistrationID::from_exponent(&net_data.global_ctx, cred_id_exp);
+
+    let file_data = json!({
+        "type": "concordium-browser-wallet-account",
+        "v": 0,
+        "environment": match net {
+            Net::Mainnet => "mainnet",
+            Net::Testnet => "testnet",
+        },
+        "value": {
+            "accountKeys": acc_keys,
+            "credentials": {
+                "0": cred_reg_id
+            },
+            "address": account.address
+        }
+    });
+
+    let Some(path) = FileDialogBuilder::new()
+        .set_file_name("account-keys.json")
+        .set_title("Save account key file")
+        .save_file()
+    else {
+        return Ok(());
+    };
+
+    let file = std::fs::File::create(path).map_err(|e| Error::FileError(e.into()))?;
+    serde_json::to_writer_pretty(file, &file_data).map_err(|e| Error::FileError(e.into()))?;
+
+    Ok(())
+}
+
 fn main() -> anyhow::Result<()> {
     let bip39_vec = bip39::bip39_words().collect::<Vec<_>>();
     let words = bip39::rerandomize_bip39(&[], &bip39_vec).unwrap();
@@ -492,7 +573,6 @@ fn main() -> anyhow::Result<()> {
         )?,
         node: Mutex::new(None),
         net: Mutex::new(None),
-        account_keys: Mutex::new(None),
         id_index: Mutex::new(None),
     };
 
@@ -505,6 +585,7 @@ fn main() -> anyhow::Result<()> {
             set_node_and_network,
             get_identity_accounts,
             create_account,
+            save_keys,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

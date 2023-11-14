@@ -44,7 +44,7 @@ function App() {
     };
 
     return (
-        <div className="h-100 d-flex flex-column justify-content-center align-items-center">
+        <div className="d-flex flex-column justify-content-center align-items-center" style={{ minHeight: '100%' }}>
             <img src="/ccd-logo.svg" className="mb-4" width={100} height={100} alt="Concordium logo" />
             {menuItem === null ? (
                 <>

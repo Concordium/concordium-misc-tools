@@ -18,6 +18,9 @@ function CreateAccount({ goHome, network }: SubMenuProps) {
     const [seedphraseState, setSeedphraseState] = useState(null as string | null);
     const [gettingAccounts, setGettingAccounts] = useState(false);
     const [creatingAccount, setCreatingAccount] = useState(false);
+    const [savingKeys, setSavingKeys] = useState(null as number | null);
+
+    const createAccountButtonsDisabled = creatingAccount || savingKeys !== null;
 
     const get_accounts = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
@@ -80,8 +83,24 @@ function CreateAccount({ goHome, network }: SubMenuProps) {
         }
     };
 
+    const saveKeys = async (account: Account) => {
+        if (seedphraseState === null) {
+            console.error('Seedphrase is null');
+            return;
+        }
+
+        setSavingKeys(account.index);
+        try {
+            await invoke('save_keys', { seedphrase: seedphraseState, account });
+        } catch (e: unknown) {
+            setCreateAccountError(e as string);
+        } finally {
+            setSavingKeys(null);
+        }
+    };
+
     return accountList === null ? (
-        <Form noValidate onSubmit={get_accounts} className="text-start" style={{ width: 600 }}>
+        <Form noValidate onSubmit={get_accounts} className="text-start" style={{ width: 650 }}>
             <p>
                 This menu can be used to create an account on the chain. In order to complete the account creation
                 process you should have a 24 word seedphrase and an identity object from Notabene. If you do not have
@@ -127,7 +146,7 @@ function CreateAccount({ goHome, network }: SubMenuProps) {
             </div>
         </Form>
     ) : (
-        <div className="text-start" style={{ width: 600 }}>
+        <div className="text-start" style={{ width: 650 }}>
             {accountList.length === 0 ? (
                 <p className="mb-3">
                     There are currently no accounts associated with the company identity. Press the button below to
@@ -138,8 +157,21 @@ function CreateAccount({ goHome, network }: SubMenuProps) {
                     <p className="mb-3">The below list of accounts are associated with the company identity.</p>
                     <ListGroup className="mb-3">
                         {accountList.map((account) => (
-                            <ListGroup.Item key={account.index}>
+                            <ListGroup.Item className="d-flex align-items-center" key={account.index}>
                                 {account.index}: {account.address}
+                                <div className="ms-auto d-flex">
+                                    {savingKeys === account.index && (
+                                        <i className="bi-arrow-repeat spinner align-self-center" />
+                                    )}
+                                    <Button
+                                        variant="secondary"
+                                        className="ms-2"
+                                        onClick={() => saveKeys(account)}
+                                        disabled={createAccountButtonsDisabled}
+                                    >
+                                        Save
+                                    </Button>
+                                </div>
                             </ListGroup.Item>
                         ))}
                     </ListGroup>
@@ -149,10 +181,19 @@ function CreateAccount({ goHome, network }: SubMenuProps) {
             {createAccountError && <p className="mb-3 text-danger">{createAccountError}</p>}
 
             <div className="d-flex align-items-center">
-                <Button variant="secondary" onClick={() => setAccountList(null)} disabled={creatingAccount}>
+                <Button
+                    variant="secondary"
+                    onClick={() => setAccountList(null)}
+                    disabled={createAccountButtonsDisabled}
+                >
                     Back
                 </Button>
-                <Button variant="primary" className="ms-3" onClick={createAccount} disabled={creatingAccount}>
+                <Button
+                    variant="primary"
+                    className="ms-3"
+                    onClick={createAccount}
+                    disabled={createAccountButtonsDisabled}
+                >
                     Create Account
                 </Button>
                 {creatingAccount && <i className="bi-arrow-repeat spinner ms-2" />}

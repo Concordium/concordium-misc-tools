@@ -3,9 +3,13 @@
 @import 'layout';
 @import 'components';
 
-body,
-#root {
+body {
     height: 100%;
+    display: flex;
+}
+
+#root {
+    margin: auto;
 }
 
 textarea {

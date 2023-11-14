@@ -44,7 +44,7 @@ function IdentityRecovery({ goHome, network }: SubMenuProps) {
     };
 
     return accountList === null ? (
-        <Form noValidate className="text-start" style={{ width: 600 }} onSubmit={recoverIdentities}>
+        <Form noValidate className="text-start" style={{ width: 650 }} onSubmit={recoverIdentities}>
             <p className="mb-3">
                 This menu can recover credentials for a company identity. To begin, enter your seedphrase below.
             </p>
@@ -76,7 +76,7 @@ function IdentityRecovery({ goHome, network }: SubMenuProps) {
             </div>
         </Form>
     ) : (
-        <div className="text-start" style={{ width: 600 }}>
+        <div className="text-start" style={{ width: 650 }}>
             {accountList.length === 0 ? (
                 <p className="mb-3">
                     There are currently no accounts associated with the company identity. Press the button below to
