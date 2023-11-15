@@ -100,7 +100,7 @@ function CreateAccount({ goHome, network }: SubMenuProps) {
     };
 
     return accountList === null ? (
-        <Form noValidate onSubmit={get_accounts} className="text-start" style={{ width: 650 }}>
+        <Form noValidate onSubmit={get_accounts} className="text-start" style={{ width: 700 }}>
             <p>
                 This menu can be used to create a new account on the chain or regenerate the keys for an old account. In
                 order to complete the account creation process you should have a 24 word seedphrase and an identity
@@ -147,7 +147,7 @@ function CreateAccount({ goHome, network }: SubMenuProps) {
             </div>
         </Form>
     ) : (
-        <div className="text-start" style={{ width: 650 }}>
+        <div className="text-start" style={{ width: 700 }}>
             {accountList.length === 0 ? (
                 <p className="mb-3">
                     There are currently no accounts associated with the company identity. Press the button below to

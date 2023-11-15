@@ -5,6 +5,10 @@ use std::{collections::BTreeMap, str::FromStr};
 
 use anyhow::Context;
 use concordium_rust_sdk::{
+    base::{
+        random_oracle::RandomOracle,
+        sigma_protocols::{common::prove, dlog},
+    },
     common::{
         types::{CredentialIndex, KeyIndex, KeyPair, TransactionTime},
         Versioned, VERSION_0,
@@ -20,7 +24,7 @@ use concordium_rust_sdk::{
             account_address_from_registration_id, AccCredentialInfo, AccountCredential,
             AccountCredentialMessage, AccountKeys, ArInfos, CredentialData, CredentialHolderInfo,
             GlobalContext, HasIdentityObjectFields, IdCredentials, IdObjectUseData,
-            IdentityObjectV1, IpContext, IpInfo, Policy,
+            IdRecoveryRequest, IdentityObjectV1, IpContext, IpInfo, Policy,
         },
     },
     smart_contracts::common::{AccountAddress, SignatureThreshold},
@@ -33,6 +37,7 @@ use concordium_rust_sdk::{
 use either::Either;
 use key_derivation::{words_to_seed, ConcordiumHdWallet, CredentialContext, Net};
 use pairing::bls12_381::Bls12;
+use rand::*;
 use serde::Serialize;
 use serde_json::json;
 use tauri::{api::dialog::blocking::FileDialogBuilder, async_runtime::Mutex};
@@ -59,7 +64,6 @@ const TESTNET_GENESIS_HASH: &str =
 const MAINNET_GENESIS_HASH: &str =
     "9dd9ca4d19e9393877d2c44b70f89acbfc0883c2243e5eeaecc0d1cd0503f478";
 
-#[derive(serde::Serialize)]
 struct NetData {
     ip_info:    IpInfo<Bls12>,
     ars:        ArInfos<ArCurve>,
@@ -77,7 +81,6 @@ struct State {
 
 /// A wallet and additional context.
 struct WalletContext<'state> {
-    net_data:   &'state NetData,
     wallet:     ConcordiumHdWallet,
     ip_context: IpContext<'state, Bls12, ArCurve>,
     /// The index of the identity. This may or may not be set depending on which
@@ -92,8 +95,8 @@ impl State {
         seedphrase: &str,
     ) -> Result<WalletContext<'state>, Error> {
         let bip39_map = bip39::bip39_map();
-        let seedphrase = seedphrase.trim();
-        let seed_words: Vec<_> = seedphrase.split(' ').collect();
+        let seed_words: Vec<_> = seedphrase.split_whitespace().collect();
+        let seedphrase = seed_words.join(" ");
         if !bip39::verify_bip39(&seed_words, &bip39_map) {
             return Err(Error::InvalidSeedphrase);
         }
@@ -119,7 +122,6 @@ impl State {
         );
 
         Ok(WalletContext {
-            net_data,
             wallet,
             ip_context: context,
             id_index,
@@ -198,7 +200,8 @@ fn get_seedphrase(state: tauri::State<'_, State>) -> String { state.seedphrase.c
 
 #[tauri::command]
 fn check_seedphrase(state: tauri::State<'_, State>, seedphrase: String) -> bool {
-    seedphrase.trim() == state.seedphrase
+    let seed_words: Vec<_> = seedphrase.split_whitespace().collect();
+    seed_words.join(" ") == state.seedphrase
 }
 
 /// Generate a request file for identity object. Needs to be async because the
@@ -207,7 +210,6 @@ fn check_seedphrase(state: tauri::State<'_, State>, seedphrase: String) -> bool 
 async fn save_request_file(state: tauri::State<'_, State>, net: Net) -> Result<(), Error> {
     *state.net.lock().await = Some(net);
     let WalletContext {
-        net_data,
         wallet,
         ip_context,
         id_index,
@@ -236,7 +238,7 @@ async fn save_request_file(state: tauri::State<'_, State>, net: Net) -> Result<(
     };
     let id_use_data = IdObjectUseData { aci, randomness };
 
-    let threshold = Threshold(net_data.ars.anonymity_revokers.len() as u8 - 1);
+    let threshold = Threshold(ip_context.ars_infos.len() as u8 - 1);
     let (pio, _) = generate_pio_v1(&ip_context, threshold, &id_use_data)
         .context("Failed to generate the identity object request.")?;
     let ver_pio = Versioned::new(VERSION_0, pio);
@@ -271,17 +273,16 @@ async fn get_identity_accounts(
     id_object: String,
 ) -> Result<Vec<Account>, Error> {
     let id_object = parse_id_object(id_object)?;
-    let WalletContext {
-        net_data, wallet, ..
+    let WalletContext { wallet, ip_context, ..
     } = state.wallet_context(&seedphrase).await?;
 
     // Find the identity index asssoicated with the identity object
     let id_index = (0..20)
         .find_map(|id_idx| {
             let id_cred_sec = wallet
-                .get_id_cred_sec(net_data.ip_info.ip_identity.0, id_idx)
+                .get_id_cred_sec(ip_context.ip_info.ip_identity.0, id_idx)
                 .ok()?;
-            let g = net_data.global_ctx.on_chain_commitment_key.g;
+            let g = ip_context.global_context.on_chain_commitment_key.g;
             let id_cred_pub = g.mul_by_scalar(&id_cred_sec);
             if id_cred_pub == id_object.pre_identity_object.id_cred_pub {
                 Some(id_idx)
@@ -295,7 +296,7 @@ async fn get_identity_accounts(
     let mut accounts = Vec::new();
     let mut client = state.node.lock().await;
     let client = client.as_mut().context("No node set.")?;
-    let ip_index = net_data.ip_info.ip_identity.0;
+    let ip_index = ip_context.ip_info.ip_identity.0;
     let mut acc_fail_count = 0;
     for acc_index in 0u8..=255 {
         // This needs to be in a separate scope to avoid keeping prf_key across an await
@@ -305,7 +306,7 @@ async fn get_identity_accounts(
                 .get_prf_key(ip_index, id_index)
                 .context("Failed to get PRF key.")?;
             let reg_id = prf_key
-                .prf(net_data.global_ctx.elgamal_generator(), acc_index)
+                .prf(ip_context.global_context.elgamal_generator(), acc_index)
                 .context("Failed to compute PRF.")?;
             account_address_from_registration_id(&reg_id)
         };
@@ -511,8 +512,8 @@ async fn save_keys(
     account: Account,
 ) -> Result<(), Error> {
     let WalletContext {
-        net_data,
         wallet,
+        ip_context,
         id_index,
         ip_index,
         ..
@@ -531,7 +532,7 @@ async fn save_keys(
     let cred_id_exp = prf_key
         .prf_exponent(account.acc_index)
         .context("Failed to compute PRF exponent.")?;
-    let cred_reg_id = CredentialRegistrationID::from_exponent(&net_data.global_ctx, cred_id_exp);
+    let cred_reg_id = CredentialRegistrationID::from_exponent(&ip_context.global_context, cred_id_exp);
 
     let file_data = json!({
         "type": "concordium-browser-wallet-account",
@@ -571,8 +572,8 @@ async fn recover_identities(
     seedphrase: String,
 ) -> Result<Vec<Account>, Error> {
     let WalletContext {
-        net_data,
         wallet,
+        ip_context,
         ip_index,
         ..
     } = state.wallet_context(&seedphrase).await?;
@@ -580,7 +581,7 @@ async fn recover_identities(
     let mut accounts = Vec::new();
     let mut client = state.node.lock().await;
     let client = client.as_mut().context("No node set.")?;
-    
+
     let mut id_fail_count = 0;
     'id_loop: for id_index in 0.. {
         let mut acc_fail_count = 0;
@@ -592,7 +593,7 @@ async fn recover_identities(
                     .get_prf_key(ip_index, id_index)
                     .context("Failed to get PRF key.")?;
                 let reg_id = prf_key
-                    .prf(net_data.global_ctx.elgamal_generator(), acc_index)
+                    .prf(ip_context.global_context.elgamal_generator(), acc_index)
                     .context("Failed to compute PRF.")?;
                 account_address_from_registration_id(&reg_id)
             };
@@ -628,6 +629,68 @@ async fn recover_identities(
     Ok(accounts)
 }
 
+#[tauri::command]
+async fn generate_recovery_request(
+    state: tauri::State<'_, State>,
+    seedphrase: String,
+    id_index: u32,
+) -> Result<(), Error> {
+    let WalletContext {
+        wallet,
+        ip_context,
+        ip_index,
+        ..
+    } = state.wallet_context(&seedphrase).await?;
+
+    let id_cred_scalar = wallet
+        .get_id_cred_sec(ip_index, id_index)
+        .context("Could not get idCredSec")?;
+    let id_cred_sec = PedersenValue::new(id_cred_scalar);
+
+    let g = ip_context.global_context.on_chain_commitment_key.g;
+    let id_cred_pub = g.mul_by_scalar(&id_cred_sec);
+    let prover = dlog::Dlog {
+        public: id_cred_pub,
+        coeff:  g,
+    };
+    let secret = dlog::DlogSecret {
+        secret: id_cred_sec,
+    };
+    let timestamp = chrono::Utc::now().timestamp() as u64;
+
+    let mut csprng = thread_rng();
+    let mut transcript = RandomOracle::domain("IdRecoveryProof");
+    transcript.append_message(b"ctx", &ip_context.global_context);
+    transcript.append_message(b"timestamp", &timestamp);
+    transcript.append_message(b"ipIdentity", &ip_context.ip_info.ip_identity);
+    transcript.append_message(b"ipVerifyKey", &ip_context.ip_info.ip_verify_key);
+    let proof = prove(&mut transcript, &prover, secret, &mut csprng)
+        .context("Failed to generate recovery proof.")?;
+
+    let request = IdRecoveryRequest {
+        id_cred_pub,
+        timestamp,
+        proof,
+    };
+    let json = Versioned {
+        version: VERSION_0,
+        value:   request,
+    };
+
+    let Some(path) = FileDialogBuilder::new()
+        .set_file_name("recovery-request.json")
+        .set_title("Save recovery request file")
+        .save_file()
+    else {
+        return Ok(());
+    };
+
+    let file = std::fs::File::create(path).map_err(|e| Error::FileError(e.into()))?;
+    serde_json::to_writer_pretty(file, &json).map_err(|e| Error::FileError(e.into()))?;
+
+    Ok(())
+}
+
 fn main() -> anyhow::Result<()> {
     let bip39_vec = bip39::bip39_words().collect::<Vec<_>>();
     let words = bip39::rerandomize_bip39(&[], &bip39_vec).unwrap();
@@ -661,6 +724,7 @@ fn main() -> anyhow::Result<()> {
             create_account,
             save_keys,
             recover_identities,
+            generate_recovery_request,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

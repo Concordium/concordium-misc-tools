@@ -11,11 +11,12 @@ enum Step {
     ReenterSeedphrase = 67,
     SaveRequest = 100,
 }
+
 function RequestIdentity({ goHome, network }: SubMenuProps) {
     const [step, setStep] = useState(Step.Info);
 
     return (
-        <div style={{ width: 650 }}>
+        <div style={{ width: 600 }}>
             {step === Step.Info ? (
                 <Info back={goHome} proceed={() => setStep(Step.ShowSeedphrase)} />
             ) : step === Step.ShowSeedphrase ? (

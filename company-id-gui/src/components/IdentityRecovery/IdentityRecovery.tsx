@@ -1,6 +1,6 @@
 import { Button, Form, InputGroup, ListGroup } from 'react-bootstrap';
 import { SubMenuProps } from '../App';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { invoke } from '@tauri-apps/api/tauri';
 
 interface Account {
@@ -13,8 +13,30 @@ function IdentityRecovery({ goHome, network }: SubMenuProps) {
     const [accountList, setAccountList] = useState(null as Account[] | null);
     const [seedphraseError, setSeedphraseError] = useState(null as string | null);
     const [recoverError, setRecoverError] = useState(null as string | null);
-    const [recoveringAccount, setRecoveringAccount] = useState(null as number | null);
+    const [savingKeys, setSavingKeys] = useState(null as number | null);
     const [recoveringIdentities, setRecoveringIdentities] = useState(false);
+    const [generatingRecoveryRequest, setGeneratingRecoveryRequest] = useState(false);
+    const [seedphraseState, setSeedphraseState] = useState(null as string | null);
+
+    const isWorking = recoveringIdentities || savingKeys !== null || generatingRecoveryRequest;
+
+    const identities = useMemo(() => {
+        if (accountList === null) return [0];
+
+        const identities: number[] = [];
+        for (const account of accountList ?? []) {
+            if (!identities.includes(account.idIndex)) identities.push(account.idIndex);
+        }
+        for (let id = 0; id <= accountList.length; id++) {
+            if (!identities.includes(id)) {
+                identities.push(id);
+                break;
+            }
+        }
+        return identities;
+    }, [accountList]);
+
+    const [selectedIdentity, setSelectedIdentity] = useState(identities[0]);
 
     const recoverIdentities = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
@@ -24,27 +46,67 @@ function IdentityRecovery({ goHome, network }: SubMenuProps) {
             setSeedphraseError('Please enter your seedphrase.');
             return;
         }
+        setSeedphraseState(seedphrase);
 
         setRecoverError(null);
         setRecoveringIdentities(true);
         try {
             const accounts = await invoke<Account[]>('recover_identities', { seedphrase });
             setAccountList(accounts);
+            setRecoverError(null);
         } catch (e: unknown) {
             const errString = e as string;
             if (errString.startsWith('Invalid seedphrase')) setSeedphraseError(errString);
-            else setRecoverError(e as string);
+            else setRecoverError(errString);
         } finally {
             setRecoveringIdentities(false);
         }
     };
 
-    const recoverAccount = (idx: number) => {
-        setRecoveringAccount(idx);
+    const saveKeys = async (idx: number) => {
+        const account = accountList?.[idx];
+        if (!account) {
+            console.error(`Account at index ${idx} not found`);
+            setRecoverError('Something went wrong, try restarting the application.');
+            return;
+        }
+        if (seedphraseState === null) {
+            console.error('Seedphrase not set');
+            setRecoverError('Something went wrong, try restarting the application.');
+            return;
+        }
+
+        setSavingKeys(idx);
+        try {
+            await invoke('save_keys', { seedphrase: seedphraseState, account });
+            setRecoverError(null);
+        } catch (e: unknown) {
+            setRecoverError(e as string);
+        } finally {
+            setSavingKeys(null);
+        }
+    };
+
+    const generateRecoveryRequest = async () => {
+        if (seedphraseState === null) {
+            console.error('Seedphrase not set');
+            setRecoverError('Something went wrong, try restarting the application.');
+            return;
+        }
+
+        setGeneratingRecoveryRequest(true);
+        try {
+            await invoke('generate_recovery_request', { seedphrase: seedphraseState, idIndex: selectedIdentity });
+            setRecoverError(null);
+        } catch (e: unknown) {
+            setRecoverError(e as string);
+        } finally {
+            setGeneratingRecoveryRequest(false);
+        }
     };
 
     return accountList === null ? (
-        <Form noValidate className="text-start" style={{ width: 650 }} onSubmit={recoverIdentities}>
+        <Form noValidate className="text-start" style={{ width: 700 }} onSubmit={recoverIdentities}>
             <p className="mb-3">
                 This menu can recover credentials for a company identity. To begin, enter your seedphrase below.
             </p>
@@ -76,7 +138,7 @@ function IdentityRecovery({ goHome, network }: SubMenuProps) {
             </div>
         </Form>
     ) : (
-        <div className="text-start" style={{ width: 650 }}>
+        <div className="text-start" style={{ width: 700 }}>
             {accountList.length === 0 ? (
                 <p className="mb-3">
                     There are currently no accounts associated with the company identity. Press the button below to
@@ -84,18 +146,28 @@ function IdentityRecovery({ goHome, network }: SubMenuProps) {
                 </p>
             ) : (
                 <>
-                    <p className="mb-3">The below list of accounts are associated with the company identity.</p>
+                    <p className="mb-3">
+                        The below list of accounts are associated with the company identity. You can save keys for
+                        individual accounts or generate a request to recover the identity object.
+                    </p>
                     <ListGroup className="mb-3">
                         {accountList.map((account, idx) => (
                             <ListGroup.Item
-                                action
-                                className="d-flex"
-                                onClick={() => recoverAccount(idx)}
-                                disabled={recoveringAccount !== null}
+                                className="d-flex align-items-center"
                                 key={Math.pow(2, account.idIndex * 3) * Math.pow(3, account.accIndex)}
                             >
                                 {account.idIndex},{account.accIndex}: {account.address}
-                                {recoveringAccount === idx && <i className="bi-arrow-repeat spinner ms-auto" />}
+                                <div className="ms-auto d-flex">
+                                    {savingKeys === idx && <i className="bi-arrow-repeat spinner align-self-center" />}
+                                    <Button
+                                        variant="secondary"
+                                        className="ms-2"
+                                        onClick={() => saveKeys(idx)}
+                                        disabled={isWorking}
+                                    >
+                                        Save
+                                    </Button>
+                                </div>
                             </ListGroup.Item>
                         ))}
                     </ListGroup>
@@ -104,10 +176,28 @@ function IdentityRecovery({ goHome, network }: SubMenuProps) {
 
             {recoverError && <p className="mb-3 text-danger">{recoverError}</p>}
 
+            {identities.length > 1 && (
+                <InputGroup className="mb-3">
+                    <InputGroup.Text>Identity to recover</InputGroup.Text>
+                    <Form.Select
+                        value={selectedIdentity}
+                        onChange={(e) => setSelectedIdentity(parseInt(e.target.value))}
+                    >
+                        {identities.map((id) => (
+                            <option key={id}>{id}</option>
+                        ))}
+                    </Form.Select>
+                </InputGroup>
+            )}
+
             <div className="d-flex align-items-center">
-                <Button variant="secondary" onClick={() => setAccountList(null)} disabled={recoveringAccount !== null}>
+                <Button variant="secondary" onClick={() => setAccountList(null)} disabled={isWorking}>
                     Back
                 </Button>
+                <Button className="ms-3" variant="primary" onClick={generateRecoveryRequest} disabled={isWorking}>
+                    Generate recovery request
+                </Button>
+                {generatingRecoveryRequest && <i className="bi-arrow-repeat spinner align-self-center ms-2" />}
             </div>
         </div>
     );
