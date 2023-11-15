@@ -266,14 +266,21 @@ struct Account {
     address:   AccountAddress,
 }
 
+#[derive(serde::Serialize)]
+struct IdentityData {
+    accounts:   Vec<Account>,
+    attributes: Vec<(String, String)>,
+}
+
 #[tauri::command]
-async fn get_identity_accounts(
+async fn get_identity_data(
     state: tauri::State<'_, State>,
     seedphrase: String,
     id_object: String,
-) -> Result<Vec<Account>, Error> {
+) -> Result<IdentityData, Error> {
     let id_object = parse_id_object(id_object)?;
-    let WalletContext { wallet, ip_context, ..
+    let WalletContext {
+        wallet, ip_context, ..
     } = state.wallet_context(&seedphrase).await?;
 
     // Find the identity index asssoicated with the identity object
@@ -333,7 +340,17 @@ async fn get_identity_accounts(
         }
     }
 
-    Ok(accounts)
+    let attributes = id_object
+        .alist
+        .alist
+        .into_iter()
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .collect();
+
+    Ok(IdentityData {
+        accounts,
+        attributes,
+    })
 }
 
 #[tauri::command]
@@ -532,7 +549,8 @@ async fn save_keys(
     let cred_id_exp = prf_key
         .prf_exponent(account.acc_index)
         .context("Failed to compute PRF exponent.")?;
-    let cred_reg_id = CredentialRegistrationID::from_exponent(&ip_context.global_context, cred_id_exp);
+    let cred_reg_id =
+        CredentialRegistrationID::from_exponent(&ip_context.global_context, cred_id_exp);
 
     let file_data = json!({
         "type": "concordium-browser-wallet-account",
@@ -720,7 +738,7 @@ fn main() -> anyhow::Result<()> {
             check_seedphrase,
             save_request_file,
             set_node_and_network,
-            get_identity_accounts,
+            get_identity_data,
             create_account,
             save_keys,
             recover_identities,

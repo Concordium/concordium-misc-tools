@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Button, Form, InputGroup } from 'react-bootstrap';
 import RequestIdentity from '../RequestIdentity/RequestIdentity';
 import CreateAccount from '../CreateAccount/CreateAccount';
@@ -20,13 +20,11 @@ function App() {
     const [nodeURL, setNodeURL] = useState(null as string | null);
     const [isConnecting, setIsConnecting] = useState(false);
 
-    const actualNodeURL = useMemo(() => {
-        const defaultNodeURL =
-            network === Network.Testnet
-                ? 'http://node.testnet.concordium.com:20000'
-                : 'https://grpc.mainnet.concordium.software:20000';
-        return nodeURL ?? defaultNodeURL;
-    }, [network, nodeURL]);
+    const defaultNodeURL =
+        network === Network.Testnet
+            ? 'http://node.testnet.concordium.com:20000'
+            : 'https://grpc.mainnet.concordium.software:20000';
+    const actualNodeURL = nodeURL ?? defaultNodeURL;
 
     const connectAndProceed = async (menuItem: MenuItem) => {
         if (actualNodeURL === null) {

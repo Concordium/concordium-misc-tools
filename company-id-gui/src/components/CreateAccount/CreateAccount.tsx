@@ -1,26 +1,26 @@
-import { Button, Form, InputGroup, ListGroup } from 'react-bootstrap';
-import { SubMenuProps } from '../App';
+import { Button, Form, InputGroup, ListGroup, Table } from 'react-bootstrap';
+import { Network, SubMenuProps } from '../App';
 import { FormEvent, useState } from 'react';
 import { invoke } from '@tauri-apps/api/tauri';
 
+interface IdentityData {
+    accounts: Account[];
+    attributes: [string, string][];
+}
+
 interface Account {
-    index: number;
+    accIndex: number;
     address: string;
 }
 
 function CreateAccount({ goHome, network }: SubMenuProps) {
-    const [accountList, setAccountList] = useState(null as Account[] | null);
+    const [identityData, setIdentityData] = useState(null as IdentityData | null);
     const [seedphraseError, setSeedphraseError] = useState(null as string | null);
     const [idObjectError, setIdObjectError] = useState(null as string | null);
     const [getAccountsError, setGetAccountsError] = useState(null as string | null);
-    const [createAccountError, setCreateAccountError] = useState(null as string | null);
     const [idObjectState, setIDObjectState] = useState(null as string | null);
     const [seedphraseState, setSeedphraseState] = useState(null as string | null);
     const [gettingAccounts, setGettingAccounts] = useState(false);
-    const [creatingAccount, setCreatingAccount] = useState(false);
-    const [savingKeys, setSavingKeys] = useState(null as number | null);
-
-    const createAccountButtonsDisabled = creatingAccount || savingKeys !== null;
 
     const get_accounts = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
@@ -44,8 +44,10 @@ function CreateAccount({ goHome, network }: SubMenuProps) {
         setIDObjectState(idObjectText);
         setSeedphraseState(seedphrase);
         try {
-            const result = await invoke<Account[]>('get_identity_accounts', { seedphrase, idObject: idObjectText });
-            setAccountList(result);
+            const result = await invoke<IdentityData>('get_identity_data', { seedphrase, idObject: idObjectText });
+            setIdentityData(result);
+            setSeedphraseError(null);
+            setIdObjectError(null);
         } catch (e: unknown) {
             const errString = e as string;
             if (errString.startsWith('Invalid identity object')) setIdObjectError(errString);
@@ -56,50 +58,7 @@ function CreateAccount({ goHome, network }: SubMenuProps) {
         }
     };
 
-    const createAccount = async () => {
-        if (accountList === null) {
-            console.error('Account list is null');
-            return;
-        }
-
-        setCreatingAccount(true);
-        let accountIndex = 0;
-        for (const account of accountList) {
-            if (account.index > accountIndex) break;
-            accountIndex++;
-        }
-        try {
-            const account = await invoke<Account>('create_account', {
-                idObject: idObjectState,
-                seedphrase: seedphraseState,
-                accIndex: accountIndex,
-            });
-            setCreateAccountError(null);
-            setAccountList([...accountList, account]);
-        } catch (e: unknown) {
-            setCreateAccountError(e as string);
-        } finally {
-            setCreatingAccount(false);
-        }
-    };
-
-    const saveKeys = async (account: Account) => {
-        if (seedphraseState === null) {
-            console.error('Seedphrase is null');
-            return;
-        }
-
-        setSavingKeys(account.index);
-        try {
-            await invoke('save_keys', { seedphrase: seedphraseState, account });
-        } catch (e: unknown) {
-            setCreateAccountError(e as string);
-        } finally {
-            setSavingKeys(null);
-        }
-    };
-
-    return accountList === null ? (
+    return identityData === null ? (
         <Form noValidate onSubmit={get_accounts} className="text-start" style={{ width: 700 }}>
             <p>
                 This menu can be used to create a new account on the chain or regenerate the keys for an old account. In
@@ -147,21 +106,105 @@ function CreateAccount({ goHome, network }: SubMenuProps) {
             </div>
         </Form>
     ) : (
+        <Accounts
+            goBack={() => setIdentityData(null)}
+            network={network}
+            seedphrase={seedphraseState!}
+            idObject={idObjectState!}
+            identityData={identityData}
+            addAccount={(account) =>
+                setIdentityData({ ...identityData, accounts: [...identityData.accounts, account] })
+            }
+        />
+    );
+}
+
+interface AccountsProps {
+    network: Network;
+    seedphrase: string;
+    idObject: string;
+    identityData: IdentityData;
+    goBack: () => void;
+    addAccount: (account: Account) => void;
+}
+
+function Accounts({ network, seedphrase, idObject, identityData, goBack, addAccount }: AccountsProps) {
+    const [creatingAccount, setCreatingAccount] = useState(false);
+    const [createAccountError, setCreateAccountError] = useState(null as string | null);
+    const [savingKeys, setSavingKeys] = useState(null as number | null);
+
+    const createAccountButtonsDisabled = creatingAccount || savingKeys !== null;
+
+    const createAccount = async () => {
+        setCreatingAccount(true);
+        let accountIndex = 0;
+        for (const account of identityData.accounts) {
+            if (account.accIndex > accountIndex) break;
+            accountIndex++;
+        }
+        try {
+            const account = await invoke<Account>('create_account', {
+                idObject,
+                seedphrase,
+                accIndex: accountIndex,
+            });
+            setCreateAccountError(null);
+            addAccount(account);
+        } catch (e: unknown) {
+            setCreateAccountError(e as string);
+        } finally {
+            setCreatingAccount(false);
+        }
+    };
+
+    const saveKeys = async (account: Account) => {
+        setSavingKeys(account.accIndex);
+        try {
+            await invoke('save_keys', { seedphrase, account });
+        } catch (e: unknown) {
+            setCreateAccountError(e as string);
+        } finally {
+            setSavingKeys(null);
+        }
+    };
+    return (
         <div className="text-start" style={{ width: 700 }}>
-            {accountList.length === 0 ? (
+            {identityData.attributes && (
+                <>
+                    <h2>Attributes</h2>
+                    <Table bordered className="mb-3">
+                        <tbody>
+                            {identityData.attributes.map(([k, v]) => (
+                                <tr key={k}>
+                                    <td>
+                                        <strong>{k}</strong>
+                                    </td>
+                                    <td>{v}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </Table>
+                </>
+            )}
+
+            <h2>Accounts</h2>
+            {identityData.accounts.length === 0 ? (
                 <p className="mb-3">
                     There are currently no accounts associated with the company identity. Press the button below to
                     create a new account.
                 </p>
             ) : (
                 <>
-                    <p className="mb-3">The below list of accounts are associated with the company identity.</p>
+                    <p className="mb-3">
+                        The below list of accounts are associated with the company identity. You can save the keys for
+                        an account by pressing the &ldquo;Save&rdquo; button next to it.
+                    </p>
                     <ListGroup className="mb-3">
-                        {accountList.map((account) => (
-                            <ListGroup.Item className="d-flex align-items-center" key={account.index}>
-                                {account.index}: {account.address}
+                        {identityData.accounts.map((account) => (
+                            <ListGroup.Item className="d-flex align-items-center" key={account.accIndex}>
+                                {account.accIndex}: {account.address}
                                 <div className="ms-auto d-flex">
-                                    {savingKeys === account.index && (
+                                    {savingKeys === account.accIndex && (
                                         <i className="bi-arrow-repeat spinner align-self-center" />
                                     )}
                                     <Button
@@ -182,11 +225,7 @@ function CreateAccount({ goHome, network }: SubMenuProps) {
             {createAccountError && <p className="mb-3 text-danger">{createAccountError}</p>}
 
             <div className="d-flex align-items-center">
-                <Button
-                    variant="secondary"
-                    onClick={() => setAccountList(null)}
-                    disabled={createAccountButtonsDisabled}
-                >
+                <Button variant="secondary" onClick={goBack} disabled={createAccountButtonsDisabled}>
                     Back
                 </Button>
                 <Button
@@ -198,6 +237,7 @@ function CreateAccount({ goHome, network }: SubMenuProps) {
                     Create Account
                 </Button>
                 {creatingAccount && <i className="bi-arrow-repeat spinner ms-2" />}
+                <span className="ms-auto">Connected to: {network}</span>
             </div>
         </div>
     );
