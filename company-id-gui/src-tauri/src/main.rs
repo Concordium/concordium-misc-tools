@@ -4,6 +4,7 @@
 use std::{collections::BTreeMap, str::FromStr};
 
 use anyhow::Context;
+use concordium_rust_sdk::types::AggregateSigPairing;
 use concordium_rust_sdk::{
     base::{
         random_oracle::RandomOracle,
@@ -36,14 +37,11 @@ use concordium_rust_sdk::{
 };
 use either::Either;
 use key_derivation::{words_to_seed, ConcordiumHdWallet, CredentialContext, Net};
-use pairing::bls12_381::Bls12;
 use rand::*;
 use serde::Serialize;
 use serde_json::json;
 use tauri::{api::dialog::blocking::FileDialogBuilder, async_runtime::Mutex};
 use tonic::transport::ClientTlsConfig;
-
-mod bip39;
 
 // All the resources are included in the binary as strings. This is done to
 // avoid having to ship the resources separately. The resources are all taken
@@ -65,7 +63,7 @@ const MAINNET_GENESIS_HASH: &str =
     "9dd9ca4d19e9393877d2c44b70f89acbfc0883c2243e5eeaecc0d1cd0503f478";
 
 struct NetData {
-    ip_info:    IpInfo<Bls12>,
+    ip_info:    IpInfo<AggregateSigPairing>,
     ars:        ArInfos<ArCurve>,
     global_ctx: GlobalContext<ArCurve>,
 }
@@ -82,7 +80,7 @@ struct State {
 /// A wallet and additional context.
 struct WalletContext<'state> {
     wallet:     ConcordiumHdWallet,
-    ip_context: IpContext<'state, Bls12, ArCurve>,
+    ip_context: IpContext<'state, AggregateSigPairing, ArCurve>,
     /// The index of the identity. This may or may not be set depending on which
     /// sub-menu the user is in. If it is not set this will default to 0.
     id_index:   u32,
@@ -94,10 +92,10 @@ impl State {
         &'state self,
         seedphrase: &str,
     ) -> Result<WalletContext<'state>, Error> {
-        let bip39_map = bip39::bip39_map();
-        let seed_words: Vec<_> = seedphrase.split_whitespace().collect();
+        let bip39_map = client_server_helpers::bip39_map();
+        let seed_words: Vec<_> = seedphrase.split_whitespace().map(String::from).collect();
         let seedphrase = seed_words.join(" ");
-        if !bip39::verify_bip39(&seed_words, &bip39_map) {
+        if !client_server_helpers::verify_bip39(&seed_words, &bip39_map) {
             return Err(Error::InvalidSeedphrase);
         }
         let wallet = ConcordiumHdWallet {
@@ -710,8 +708,8 @@ async fn generate_recovery_request(
 }
 
 fn main() -> anyhow::Result<()> {
-    let bip39_vec = bip39::bip39_words().collect::<Vec<_>>();
-    let words = bip39::rerandomize_bip39(&[], &bip39_vec).unwrap();
+    let bip39_vec = client_server_helpers::bip39_words().collect::<Vec<_>>();
+    let words = client_server_helpers::rerandomize_bip39(&[], &bip39_vec).unwrap();
     let seedphrase = words.join(" ");
 
     let state = State {
@@ -751,7 +749,7 @@ fn main() -> anyhow::Result<()> {
 
 fn parse_id_object(
     id_object: String,
-) -> Result<IdentityObjectV1<Bls12, ArCurve, AttributeKind>, Error> {
+) -> Result<IdentityObjectV1<AggregateSigPairing, ArCurve, AttributeKind>, Error> {
     let id_obj: Versioned<serde_json::Value> = serde_json::from_str(&id_object)?;
     if id_obj.version != VERSION_0 {
         return Err(

@@ -2,6 +2,7 @@ import { Button, Form, InputGroup, ListGroup } from 'react-bootstrap';
 import { SubMenuProps } from '../App';
 import { useMemo, useState } from 'react';
 import { invoke } from '@tauri-apps/api/tauri';
+import { open } from '@tauri-apps/api/shell';
 
 interface Account {
     idIndex: number;
@@ -105,6 +106,12 @@ function IdentityRecovery({ goHome, network }: SubMenuProps) {
         }
     };
 
+    const openDocumentation = () => {
+        open('https://developer.concordium.software/en/mainnet/net/guides/company-identities.html').catch(
+            console.error,
+        );
+    };
+
     return accountList === null ? (
         <Form noValidate className="text-start" style={{ width: 700 }} onSubmit={recoverIdentities}>
             <p className="mb-3">
@@ -131,7 +138,7 @@ function IdentityRecovery({ goHome, network }: SubMenuProps) {
                     Back
                 </Button>
                 <Button type="submit" variant="primary" className="ms-3" disabled={recoveringIdentities}>
-                    Recover Identities
+                    Find identities
                 </Button>
                 {recoveringIdentities && <i className="bi-arrow-repeat spinner align-self-center ms-2" />}
                 <div className="ms-auto">Connected to: {network}</div>
@@ -148,7 +155,14 @@ function IdentityRecovery({ goHome, network }: SubMenuProps) {
                 <>
                     <p className="mb-3">
                         The below list of accounts are associated with the company identity. You can save keys for
-                        individual accounts or generate a request to recover the identity object.
+                        individual accounts or generate a request to recover the identity object. See the{' '}
+                        {
+                            // eslint-disable-next-line jsx-a11y/anchor-is-valid
+                            <a href="#" onClick={openDocumentation}>
+                                Concordium Documentation
+                            </a>
+                        }{' '}
+                        for instructions on what to do with the recovery request file generated.
                     </p>
                     <ListGroup className="mb-3">
                         {accountList.map((account, idx) => (
@@ -198,6 +212,7 @@ function IdentityRecovery({ goHome, network }: SubMenuProps) {
                     Generate recovery request
                 </Button>
                 {generatingRecoveryRequest && <i className="bi-arrow-repeat spinner align-self-center ms-2" />}
+                <div className="ms-auto">Connected to: {network}</div>
             </div>
         </div>
     );

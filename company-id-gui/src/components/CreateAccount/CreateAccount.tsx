@@ -40,7 +40,6 @@ function CreateAccount({ goHome, network }: SubMenuProps) {
         setGettingAccounts(true);
 
         const idObjectText = await idObject.text();
-        console.log(idObjectText);
         setIDObjectState(idObjectText);
         setSeedphraseState(seedphrase);
         try {
@@ -167,6 +166,7 @@ function Accounts({ network, seedphrase, idObject, identityData, goBack, addAcco
             setSavingKeys(null);
         }
     };
+
     return (
         <div className="text-start" style={{ width: 700 }}>
             {identityData.attributes && (
