@@ -7,7 +7,7 @@ use concordium_rust_sdk::{
     types::{
         hashes::{BlockHash, TransactionHash},
         queries::BlockInfo,
-        smart_contracts::ModuleReference,
+        smart_contracts::{ModuleReference, WasmVersion},
         AbsoluteBlockHeight, AccountCreationDetails, AccountTransactionDetails,
         AccountTransactionEffects, BlockHeight, BlockItemSummary,
         BlockItemSummaryDetails::{AccountCreation, AccountTransaction},
@@ -158,6 +158,8 @@ struct TransactionDetails {
 struct ContractInstanceDetails {
     /// Foreign key to the module used to instantiate the contract
     module_ref: ModuleReference,
+    /// Version of the contract.
+    version:    WasmVersion,
 }
 
 /// List of (canonical) account address, account detail pairs
@@ -258,7 +260,8 @@ impl PreparedStatements {
             .await?;
         let insert_contract_instance = client
             .prepare(
-                "INSERT INTO contracts (index, subindex, module, block) VALUES ($1, $2, $3, $4)",
+                "INSERT INTO contracts (index, subindex, version, module, block) VALUES ($1, $2, \
+                 $3, $4, $5)",
             )
             .await?;
 
@@ -403,14 +406,19 @@ impl PreparedStatements {
         let module_ref = contract_details.module_ref.as_ref();
         // It is not too bad to do two queries here since new instance
         // creations will be rare.
+        let numeric_version = match contract_details.version {
+            WasmVersion::V0 => 0i16,
+            WasmVersion::V1 => 1i16,
+        };
         let row = db_tx
             .query_one(&self.contract_module_by_ref, &[&module_ref])
             .await?;
         let module_id = row.try_get::<_, i64>(0)?;
 
-        let values: [&(dyn ToSql + Sync); 4] = [
+        let values: [&(dyn ToSql + Sync); 5] = [
             &(contract_address.index as i64),
             &(contract_address.subindex as i64),
+            &numeric_version,
             &module_id,
             &block_id,
         ];
@@ -706,6 +714,7 @@ fn to_block_events(block_item: BlockItemSummary) -> Vec<BlockEvent> {
                 AccountTransactionEffects::ContractInitialized { data } => {
                     let details = ContractInstanceDetails {
                         module_ref: data.origin_ref,
+                        version:    data.contract_version,
                     };
                     let event = BlockEvent::ContractInstantiation(data.address, details);
                     events.push(event);

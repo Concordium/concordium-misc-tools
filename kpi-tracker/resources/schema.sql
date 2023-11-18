@@ -74,6 +74,7 @@ CREATE TABLE IF NOT EXISTS contracts (
   id SERIAL8 PRIMARY KEY,
   index INT8 NOT NULL,
   subindex INT8 NOT NULL,
+  version INT2 NOT NULL,
   module INT8 NOT NULL REFERENCES modules(id) ON DELETE RESTRICT ON UPDATE RESTRICT,
   block INT8 NOT NULL REFERENCES blocks(id) ON DELETE RESTRICT ON UPDATE RESTRICT, -- To support time series output.
   UNIQUE (index, subindex)
