@@ -737,13 +737,15 @@ fn to_block_events(block_item: BlockItemSummary) -> Vec<BlockEvent> {
 /// Maps a stream of transactions to a stream of `BlockEvent`s
 async fn get_block_events(
     node: &mut Client,
-    block_hash: BlockIdentifier,
+    block_ident: BlockIdentifier,
 ) -> anyhow::Result<impl Stream<Item = anyhow::Result<BlockEvent>>> {
-    let transactions = node
-        .get_block_transaction_events(block_hash)
+    let transactions_response = node
+        .get_block_transaction_events(block_ident)
         .await
-        .with_context(|| format!("Could not get transactions for block: {:?}", block_hash))?
-        .response;
+        .with_context(|| format!("Could not get transactions for block: {:?}", block_ident))?;
+    let block_hash = transactions_response.block_hash;
+
+    let transactions = transactions_response.response;
 
     let block_events = transactions
         .map_ok(move |bi| {
@@ -753,7 +755,7 @@ async fn get_block_events(
         })
         .map_err(move |err| {
             anyhow!(
-                "Error while streaming transactions for block: {:?} - {}",
+                "Error while streaming transactions for block: {} - {}",
                 block_hash,
                 err
             )
@@ -838,6 +840,7 @@ struct PaydayBlockData {
 /// `None`.
 async fn process_payday_block(
     node: &mut Client,
+    max_concurrent: usize,
     block_info: &BlockInfo,
 ) -> anyhow::Result<Option<PaydayBlockData>> {
     let start_time = tokio::time::Instant::now();
@@ -913,54 +916,60 @@ async fn process_payday_block(
     let total_actively_delegated = AtomicU64::new(0);
     let total_equity_capital = AtomicU64::new(0);
     let delegating_account_count = AtomicUsize::new(0);
-    let fut1 = baker_response
-        .map_err(Into::into)
-        .try_for_each_concurrent(Some(16), |baker| {
-            let node = node.clone();
-            async {
-                let baker = baker;
-                let mut node = node;
-                pool_count.fetch_add(1, Ordering::AcqRel);
-                if baker.is_finalizer {
-                    finalizer_count.fetch_add(1, Ordering::AcqRel);
-                }
-                total_actively_delegated
-                    .fetch_add(baker.delegated_capital.micro_ccd(), Ordering::AcqRel);
-                total_equity_capital.fetch_add(baker.equity_capital.micro_ccd(), Ordering::AcqRel);
-
-                if baker.delegated_capital.micro_ccd() != 0 {
-                    delegation_recipient_count.fetch_add(1, Ordering::AcqRel);
-                    let delegators = node
-                        .get_pool_delegators_reward_period(block_ident, baker.baker.baker_id)
-                        .await?
-                        .response;
-                    delegating_account_count.fetch_add(delegators.count().await, Ordering::AcqRel);
-                }
-
-                Ok::<_, anyhow::Error>(())
-            }
-        });
-
-    let fut2 = baker_list
-        .map_err(Into::into)
-        .try_for_each_concurrent(Some(16), |baker_id| {
-            let mut node = node.clone();
-            let closed_for_new_pool_count = &closed_for_new_pool_count;
-            let open_pool_count = &open_pool_count;
-            let closed_pool_count = &closed_pool_count;
-            async move {
-                let pi = node.get_pool_info(block_ident, baker_id).await?.response;
-                let pool_info = pi.pool_info;
-                match pool_info.open_status {
-                    OpenStatus::OpenForAll => open_pool_count.fetch_add(1, Ordering::AcqRel),
-                    OpenStatus::ClosedForNew => {
-                        closed_for_new_pool_count.fetch_add(1, Ordering::AcqRel)
+    let fut1 =
+        baker_response
+            .map_err(Into::into)
+            .try_for_each_concurrent(Some(max_concurrent), |baker| {
+                let node = node.clone();
+                async {
+                    let baker = baker;
+                    let mut node = node;
+                    pool_count.fetch_add(1, Ordering::AcqRel);
+                    if baker.is_finalizer {
+                        finalizer_count.fetch_add(1, Ordering::AcqRel);
                     }
-                    OpenStatus::ClosedForAll => closed_pool_count.fetch_add(1, Ordering::AcqRel),
-                };
-                Ok::<_, anyhow::Error>(())
-            }
-        });
+                    total_actively_delegated
+                        .fetch_add(baker.delegated_capital.micro_ccd(), Ordering::AcqRel);
+                    total_equity_capital
+                        .fetch_add(baker.equity_capital.micro_ccd(), Ordering::AcqRel);
+
+                    if baker.delegated_capital.micro_ccd() != 0 {
+                        delegation_recipient_count.fetch_add(1, Ordering::AcqRel);
+                        let delegators = node
+                            .get_pool_delegators_reward_period(block_ident, baker.baker.baker_id)
+                            .await?
+                            .response;
+                        delegating_account_count
+                            .fetch_add(delegators.count().await, Ordering::AcqRel);
+                    }
+
+                    Ok::<_, anyhow::Error>(())
+                }
+            });
+
+    let fut2 =
+        baker_list
+            .map_err(Into::into)
+            .try_for_each_concurrent(Some(max_concurrent), |baker_id| {
+                let mut node = node.clone();
+                let closed_for_new_pool_count = &closed_for_new_pool_count;
+                let open_pool_count = &open_pool_count;
+                let closed_pool_count = &closed_pool_count;
+                async move {
+                    let pi = node.get_pool_info(block_ident, baker_id).await?.response;
+                    let pool_info = pi.pool_info;
+                    match pool_info.open_status {
+                        OpenStatus::OpenForAll => open_pool_count.fetch_add(1, Ordering::AcqRel),
+                        OpenStatus::ClosedForNew => {
+                            closed_for_new_pool_count.fetch_add(1, Ordering::AcqRel)
+                        }
+                        OpenStatus::ClosedForAll => {
+                            closed_pool_count.fetch_add(1, Ordering::AcqRel)
+                        }
+                    };
+                    Ok::<_, anyhow::Error>(())
+                }
+            });
 
     let a = tokio::time::Instant::now();
     futures::try_join!(fut1, fut2)?;
@@ -1015,6 +1024,7 @@ async fn process_payday_block(
 /// Get `BlockDetails` for given block represented by `block_hash`
 async fn get_block_details(
     node: &mut Client,
+    max_concurrent: usize,
     block_hash: AbsoluteBlockHeight,
 ) -> anyhow::Result<BlockDetails> {
     let block_info = node
@@ -1023,7 +1033,7 @@ async fn get_block_details(
         .with_context(|| format!("Could not get block info for block: {}", block_hash))?
         .response;
 
-    let payday_data = process_payday_block(node, &block_info).await?;
+    let payday_data = process_payday_block(node, max_concurrent, &block_info).await?;
     let block_details = BlockDetails {
         block_time: block_info.block_slot_time,
         height: block_info.block_height,
@@ -1041,9 +1051,10 @@ async fn get_block_details(
 /// corresponding to events captured by the block.
 async fn process_block(
     node: &mut Client,
+    max_concurrent: usize,
     height: AbsoluteBlockHeight,
 ) -> anyhow::Result<NormalBlockData> {
-    let block_details = get_block_details(node, height).await?;
+    let block_details = get_block_details(node, max_concurrent, height).await?;
 
     let mut block_data = NormalBlockData {
         block_hash: block_details.block_hash,
@@ -1148,7 +1159,7 @@ async fn node_process(
         for block in chunks {
             let mut node = node.clone();
             let fut = async move {
-                let block_data = process_block(&mut node, block.height).await;
+                let block_data = process_block(&mut node, num_parallel.into(), block.height).await;
                 (block_data, block.height)
             };
             processed_chunks.push_back(fut);
