@@ -172,31 +172,34 @@ function Accounts({ network, seedphrase, idObject, identityData, goBack, addAcco
             {identityData.attributes && (
                 <>
                     <h2>Attributes</h2>
-                    <Table bordered className="mb-3">
-                        <tbody>
-                            {identityData.attributes.map(([k, v]) => (
-                                <tr key={k}>
-                                    <td>
-                                        <strong>{k}</strong>
-                                    </td>
-                                    <td>{v}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </Table>
+                    {identityData.attributes.length !== 0 && (
+                        <Table bordered className="mb-3">
+                            <tbody>
+                                {identityData.attributes.map(([k, v]) => (
+                                    <tr key={k}>
+                                        <td>
+                                            <strong>{k}</strong>
+                                        </td>
+                                        <td>{v}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </Table>
+                    )}
+                    {identityData.attributes.length === 0 && <p> The identity object has no attributes </p>}
                 </>
             )}
 
             <h2>Accounts</h2>
             {identityData.accounts.length === 0 ? (
                 <p className="mb-3">
-                    There are currently no accounts associated with the company identity. Press the button below to
+                    There are currently no accounts associated with the supplied identity. Press the button below to
                     create a new account.
                 </p>
             ) : (
                 <>
                     <p className="mb-3">
-                        The below list of accounts are associated with the company identity. You can save the keys for
+                        The below list of accounts are associated with the supplied identity. You can save the keys for
                         an account by pressing the &ldquo;Save&rdquo; button next to it.
                     </p>
                     <ListGroup className="mb-3">

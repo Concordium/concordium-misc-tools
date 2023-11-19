@@ -3,7 +3,7 @@ import { Button, Card, CardBody, CardHeader, Form, FormControl, InputGroup, Prog
 import { invoke } from '@tauri-apps/api/tauri';
 import { writeText } from '@tauri-apps/api/clipboard';
 import { open } from '@tauri-apps/api/shell';
-import { SubMenuProps } from '../App';
+import { Network, SubMenuProps } from '../App';
 
 enum Step {
     Info = 0,
@@ -27,7 +27,7 @@ function RequestIdentity({ goHome, network }: SubMenuProps) {
                     proceed={() => setStep(Step.SaveRequest)}
                 />
             ) : (
-                <SaveRequest back={() => setStep(Step.ReenterSeedphrase)} />
+                <SaveRequest network={network} back={() => setStep(Step.ReenterSeedphrase)} />
             )}
             <ProgressBar now={step} className="mt-3 mb-3" />
             <div className="text-start">Network: {network}</div>
@@ -154,12 +154,12 @@ function ReenterSeedphrase({ back, proceed }: NavigationProps) {
     );
 }
 
-function SaveRequest({ back }: Omit<NavigationProps, 'proceed'>) {
+function SaveRequest({ back, network }: Omit<NavigationProps, 'proceed'> & { network: Network }) {
     const [isSaving, setIsSaving] = useState(false);
     const saveRequest = async () => {
         setIsSaving(true);
         try {
-            await invoke('save_request_file', { net: 'Testnet' });
+            await invoke('save_request_file', { net: network });
         } finally {
             setIsSaving(false);
         }
@@ -173,14 +173,15 @@ function SaveRequest({ back }: Omit<NavigationProps, 'proceed'>) {
     return (
         <>
             <p className="text-start">
-                Save the request.json file to your computer by clicking the button below. Then, follow the guide in the{' '}
+                Save the <code>request.json</code> file to your computer by clicking the button below. Then, follow the
+                guide in the{' '}
                 {
                     // eslint-disable-next-line jsx-a11y/anchor-is-valid
                     <a href="#" onClick={openDocumentation}>
                         Concordium Documentation
                     </a>
                 }{' '}
-                for instructions on what to do with the file. Afterwards, you can close this program.
+                for instructions on what to do with the file. After saving the file, you may close this program.
             </p>
             <div className="d-flex">
                 <Button variant="secondary" onClick={back} disabled={isSaving}>

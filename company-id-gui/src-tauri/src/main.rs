@@ -4,7 +4,6 @@
 use std::{collections::BTreeMap, str::FromStr};
 
 use anyhow::Context;
-use concordium_rust_sdk::types::AggregateSigPairing;
 use concordium_rust_sdk::{
     base::{
         random_oracle::RandomOracle,
@@ -31,7 +30,7 @@ use concordium_rust_sdk::{
     smart_contracts::common::{AccountAddress, SignatureThreshold},
     types::{
         transactions::{BlockItem, Payload},
-        AccountThreshold, BlockItemSummaryDetails, CredentialRegistrationID,
+        AccountThreshold, AggregateSigPairing, BlockItemSummaryDetails, CredentialRegistrationID,
     },
     v2,
 };
@@ -241,9 +240,21 @@ async fn save_request_file(state: tauri::State<'_, State>, net: Net) -> Result<(
         .context("Failed to generate the identity object request.")?;
     let ver_pio = Versioned::new(VERSION_0, pio);
 
-    let Some(path) = FileDialogBuilder::new()
+    let mut file_builder = FileDialogBuilder::new()
         .set_file_name("request.json")
-        .set_title("Save request file")
+        .set_title("Save request file");
+    if let Ok(cd) = std::env::current_dir() {
+        file_builder = file_builder.set_directory(cd);
+    } else {
+        let user_dirs = directories::UserDirs::new();
+        if let Some(documents) = user_dirs
+            .as_ref()
+            .and_then(directories::UserDirs::document_dir)
+        {
+            file_builder = file_builder.set_directory(documents);
+        }
+    };
+    let Some(path) = file_builder
         .save_file()
     else {
         return Ok(());
@@ -281,7 +292,7 @@ async fn get_identity_data(
         wallet, ip_context, ..
     } = state.wallet_context(&seedphrase).await?;
 
-    // Find the identity index asssoicated with the identity object
+    // Find the identity index associated with the identity object
     let id_index = (0..20)
         .find_map(|id_idx| {
             let id_cred_sec = wallet

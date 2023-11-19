@@ -15,7 +15,7 @@ enum MenuItem {
 
 function App() {
     const [menuItem, setMenuItem] = useState(null as MenuItem | null);
-    const [network, setNetwork] = useState('Testnet' as Network);
+    const [network, setNetwork] = useState('Mainnet' as Network);
     const [nodeURLError, setNodeURLError] = useState(null as string | null);
     const [nodeURL, setNodeURL] = useState(null as string | null);
     const [isConnecting, setIsConnecting] = useState(false);
