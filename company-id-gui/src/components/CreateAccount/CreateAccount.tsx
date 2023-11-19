@@ -186,7 +186,7 @@ function Accounts({ network, seedphrase, idObject, identityData, goBack, addAcco
                             </tbody>
                         </Table>
                     )}
-                    {identityData.attributes.length === 0 && <p> The identity object has no attributes </p>}
+                    {identityData.attributes.length === 0 && <p> The identity object has no attributes. </p>}
                 </>
             )}
 
