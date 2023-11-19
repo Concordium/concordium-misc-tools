@@ -1,5 +1,7 @@
 name: 'Publish Company ID'
 on:
+  pull_request:
+    branches: main
   # push:
   #   branches:
   #     - release
