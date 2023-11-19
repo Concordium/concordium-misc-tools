@@ -6,19 +6,25 @@ use concordium_rust_sdk::{
     smart_contracts::common::{AccountAddress, Amount, ACCOUNT_ADDRESS_SIZE},
     types::{
         hashes::{BlockHash, TransactionHash},
-        smart_contracts::ModuleReference,
+        queries::BlockInfo,
+        smart_contracts::{ModuleReference, WasmVersion},
         AbsoluteBlockHeight, AccountCreationDetails, AccountTransactionDetails,
-        AccountTransactionEffects, BlockItemSummary,
+        AccountTransactionEffects, BlockHeight, BlockItemSummary,
         BlockItemSummaryDetails::{AccountCreation, AccountTransaction},
-        ContractAddress, CredentialType, RewardsOverview, TransactionType,
+        ContractAddress, CredentialType, GenesisIndex, OpenStatus, ProtocolVersion,
+        RewardsOverview, SpecialTransactionOutcome, TransactionType,
     },
-    v2::{AccountIdentifier, Client, Endpoint},
+    v2::{AccountIdentifier, BlockIdentifier, Client, Endpoint, RelativeBlockHeight},
 };
 use core::fmt;
-use futures::{self, future, stream::FuturesUnordered, Stream, StreamExt, TryStreamExt};
+use futures::{
+    self, future,
+    stream::{FuturesOrdered, FuturesUnordered},
+    Stream, StreamExt, TryStreamExt,
+};
 use std::{
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
         Arc,
     },
     time::Duration,
@@ -41,7 +47,7 @@ struct Args {
         env = "KPI_TRACKER_NODES",
         value_delimiter = ','
     )]
-    node_endpoints: Vec<Endpoint>,
+    node_endpoints:  Vec<Endpoint>,
     /// Database connection string.
     #[arg(
         long = "db-connection",
@@ -51,10 +57,10 @@ struct Args {
                 application.",
         env = "KPI_TRACKER_DB_CONNECTION"
     )]
-    db_connection:  tokio_postgres::config::Config,
+    db_connection:   tokio_postgres::config::Config,
     /// Logging level of the application
     #[arg(long = "log-level", default_value_t = log::LevelFilter::Debug, env = "KPI_TRACKER_LOG_LEVEL")]
-    log_level:      log::LevelFilter,
+    log_level:       log::LevelFilter,
     /// Number of parallel queries to run against node
     #[arg(
         long = "num-parallel",
@@ -63,7 +69,17 @@ struct Args {
                 something different than 1 when catching up.",
         env = "KPI_TRACKER_NUM_PARALLEL"
     )]
-    num_parallel:   u8,
+    num_parallel:    u8,
+    /// Maximum number of blocks to insert into the database at the same time.
+    #[arg(
+        long = "bulk-insert-max",
+        default_value_t = 20,
+        help = "The number of blocks to insert in bulk. This helps during catchup since database \
+                transaction commit is a significant amount of time. Blocks will only be inserted \
+                if they are pending in the queue.",
+        env = "KPI_TRACKER_BULK_INSERT_MAX"
+    )]
+    bulk_insert_max: usize,
     /// Max amount of seconds a response from a node can fall behind before
     /// trying another.
     #[arg(
@@ -71,7 +87,7 @@ struct Args {
         default_value_t = 240,
         env = "KPI_TRACKER_MAX_BEHIND_SECONDS"
     )]
-    max_behind_s:   u32,
+    max_behind_s:    u32,
 }
 
 /// Used to canonicalize account addresses to ensure no aliases are stored (as
@@ -99,14 +115,19 @@ struct BlockDetails {
     /// Finalization time of the block. Used to show how metrics evolve over
     /// time by linking entities, such as accounts and transactions, to
     /// the block in which they are created.
-    block_time:  DateTime<Utc>,
+    block_time:       DateTime<Utc>,
     /// Height of block from genesis. Used to restart the process of collecting
     /// metrics from the latest block recorded.
-    height:      AbsoluteBlockHeight,
-    /// Total amount staked across all pools inclusive passive delegation. This
-    /// is only recorded for "payday" blocks reflected by `Some`, where non
-    /// payday blocks are reflected by `None`.
-    total_stake: Option<Amount>,
+    height:           AbsoluteBlockHeight,
+    /// [`PaydayBlockData`] for the block. This is only recorded for "payday"
+    /// blocks reflected by `Some`, where non payday blocks are reflected by
+    /// `None`.
+    payday_data:      Option<PaydayBlockData>,
+    /// Number of transactions in a block.
+    num_transactions: u64,
+    block_hash:       BlockHash,
+    genesis_index:    GenesisIndex,
+    era_height:       BlockHeight,
 }
 
 /// Holds selected attributes about accounts created on chain.
@@ -137,6 +158,8 @@ struct TransactionDetails {
 struct ContractInstanceDetails {
     /// Foreign key to the module used to instantiate the contract
     module_ref: ModuleReference,
+    /// Version of the contract.
+    version:    WasmVersion,
 }
 
 /// List of (canonical) account address, account detail pairs
@@ -177,22 +200,6 @@ struct NormalBlockData {
     contract_instances: ContractInstances,
 }
 
-impl BlockData {
-    pub fn block_hash(&self) -> BlockHash {
-        match self {
-            BlockData::ChainGenesis(gd) => gd.block_hash,
-            BlockData::Normal(n) => n.block_hash,
-        }
-    }
-
-    pub fn num_transactions(&self) -> usize {
-        match self {
-            BlockData::ChainGenesis(_) => 0,
-            BlockData::Normal(n) => n.transactions.len(),
-        }
-    }
-}
-
 /// Used for sending data to db process.
 #[derive(Debug)]
 enum BlockData {
@@ -204,6 +211,8 @@ enum BlockData {
 struct PreparedStatements {
     /// Insert block into DB
     insert_block:             tokio_postgres::Statement,
+    /// Insert payday into DB
+    insert_payday:            tokio_postgres::Statement,
     /// Insert account into DB
     insert_account:           tokio_postgres::Statement,
     /// Insert contract module into DB
@@ -230,8 +239,17 @@ impl PreparedStatements {
     async fn new(client: &tokio_postgres::Client) -> Result<Self, tokio_postgres::Error> {
         let insert_block = client
             .prepare(
-                "INSERT INTO blocks (hash, timestamp, height, total_stake) VALUES ($1, $2, $3, \
-                 $4) RETURNING id",
+                "INSERT INTO blocks (hash, timestamp, height) VALUES ($1, $2, $3) RETURNING id",
+            )
+            .await?;
+        let insert_payday = client
+            .prepare(
+                "INSERT INTO paydays (block, total_equity_capital, total_passively_delegated, \
+                 total_actively_delegated, total_ccd, pool_reward, finalizer_reward,
+                 foundation_reward, num_pools, num_open_pools, num_closed_pools, \
+                 num_closed_for_new_pools, num_delegation_recipients, num_finalizers, \
+                 num_delegators) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, \
+                 $14, $15)",
             )
             .await?;
         let insert_account = client
@@ -242,7 +260,8 @@ impl PreparedStatements {
             .await?;
         let insert_contract_instance = client
             .prepare(
-                "INSERT INTO contracts (index, subindex, module, block) VALUES ($1, $2, $3, $4)",
+                "INSERT INTO contracts (index, subindex, version, module, block) VALUES ($1, $2, \
+                 $3, $4, $5)",
             )
             .await?;
 
@@ -287,6 +306,7 @@ impl PreparedStatements {
 
         Ok(Self {
             insert_block,
+            insert_payday,
             insert_account,
             insert_contract_module,
             insert_contract_instance,
@@ -305,20 +325,37 @@ impl PreparedStatements {
         block_hash: BlockHash,
         block_details: &BlockDetails,
     ) -> Result<i64, tokio_postgres::Error> {
-        let total_stake = block_details
-            .total_stake
-            .map(|amount| (amount.micro_ccd() as i64));
-        let values: [&(dyn ToSql + Sync); 4] = [
+        let values: [&(dyn ToSql + Sync); 3] = [
             &block_hash.as_ref(),
             &block_details.block_time.timestamp(),
             &(block_details.height.height as i64),
-            &total_stake,
         ];
 
         let now = tokio::time::Instant::now();
         let row = db_tx.query_one(&self.insert_block, &values).await?;
         let id = row.try_get::<_, i64>(0)?;
         log::trace!("Took {}ms to insert block.", now.elapsed().as_millis());
+
+        if let Some(payday_data) = block_details.payday_data {
+            let values: [&(dyn ToSql + Sync); 15] = [
+                &id,
+                &(payday_data.total_equity_capital as i64),
+                &(payday_data.total_passively_delegated as i64),
+                &(payday_data.total_actively_delegated as i64),
+                &(payday_data.total_ccd as i64),
+                &(payday_data.pool_reward as i64),
+                &(payday_data.finalizer_reward as i64),
+                &(payday_data.foundation_reward as i64),
+                &(payday_data.pool_count as i64),
+                &(payday_data.open_pool_count as i64),
+                &(payday_data.closed_for_new_pool_count as i64),
+                &(payday_data.closed_pool_count as i64),
+                &(payday_data.delegation_recipient_count as i64),
+                &(payday_data.finalizer_count as i64),
+                &(payday_data.delegator_count as i64),
+            ];
+            db_tx.execute(&self.insert_payday, &values).await?;
+        }
 
         Ok(id)
     }
@@ -369,14 +406,19 @@ impl PreparedStatements {
         let module_ref = contract_details.module_ref.as_ref();
         // It is not too bad to do two queries here since new instance
         // creations will be rare.
+        let numeric_version = match contract_details.version {
+            WasmVersion::V0 => 0i16,
+            WasmVersion::V1 => 1i16,
+        };
         let row = db_tx
             .query_one(&self.contract_module_by_ref, &[&module_ref])
             .await?;
         let module_id = row.try_get::<_, i64>(0)?;
 
-        let values: [&(dyn ToSql + Sync); 4] = [
+        let values: [&(dyn ToSql + Sync); 5] = [
             &(contract_address.index as i64),
             &(contract_address.subindex as i64),
+            &numeric_version,
             &module_id,
             &block_id,
         ];
@@ -672,6 +714,7 @@ fn to_block_events(block_item: BlockItemSummary) -> Vec<BlockEvent> {
                 AccountTransactionEffects::ContractInitialized { data } => {
                     let details = ContractInstanceDetails {
                         module_ref: data.origin_ref,
+                        version:    data.contract_version,
                     };
                     let event = BlockEvent::ContractInstantiation(data.address, details);
                     events.push(event);
@@ -694,13 +737,15 @@ fn to_block_events(block_item: BlockItemSummary) -> Vec<BlockEvent> {
 /// Maps a stream of transactions to a stream of `BlockEvent`s
 async fn get_block_events(
     node: &mut Client,
-    block_hash: BlockHash,
+    block_ident: BlockIdentifier,
 ) -> anyhow::Result<impl Stream<Item = anyhow::Result<BlockEvent>>> {
-    let transactions = node
-        .get_block_transaction_events(block_hash)
+    let transactions_response = node
+        .get_block_transaction_events(block_ident)
         .await
-        .with_context(|| format!("Could not get transactions for block: {}", block_hash))?
-        .response;
+        .with_context(|| format!("Could not get transactions for block: {:?}", block_ident))?;
+    let block_hash = transactions_response.block_hash;
+
+    let transactions = transactions_response.response;
 
     let block_events = transactions
         .map_ok(move |bi| {
@@ -734,9 +779,13 @@ async fn process_chain_genesis_block(
         .response;
 
     let block_details = BlockDetails {
-        block_time:  block_info.block_slot_time,
-        height:      block_info.block_height,
-        total_stake: None,
+        block_time: block_info.block_slot_time,
+        height: block_info.block_height,
+        payday_data: None,
+        num_transactions: 0,
+        block_hash,
+        genesis_index: 0.into(),
+        era_height: 0.into(),
     };
 
     let accounts = accounts_in_block(node, block_hash).await?;
@@ -749,49 +798,234 @@ async fn process_chain_genesis_block(
     Ok(genesis_data)
 }
 
+/// Contains data about a payday block, which is relevant for the reward period
+/// that contains the block.
+#[derive(Debug, Clone, Copy)]
+struct PaydayBlockData {
+    /// Total number of mircoCCD staked by bakers themselves.
+    total_equity_capital:       u64,
+    /// Total number of microCCD delegated passivly.
+    total_passively_delegated:  u64,
+    /// Total number of microCCD delegated to specific pools.
+    total_actively_delegated:   u64,
+    /// Total microCCD in existence.
+    total_ccd:                  u64,
+    /// Reward in microCCD for the winning baker pool.
+    pool_reward:                u64,
+    /// Reward in microCCD for the winning finalizer.
+    finalizer_reward:           u64,
+    /// Reward in microCCD for the foundation.
+    foundation_reward:          u64,
+    /// The number of pools in this reward period.
+    pool_count:                 usize,
+    /// The number of pools open for new delegators at the time of the payday
+    /// block.
+    open_pool_count:            usize,
+    /// The number of pools closed for new delegators at the time of the payday
+    /// block.
+    closed_for_new_pool_count:  usize,
+    /// The number of pools closed for all delegators at the time of the payday
+    /// block.
+    closed_pool_count:          usize,
+    /// The number of pools with delegated capital in this reward period.
+    delegation_recipient_count: usize,
+    /// The number of finalizers in this reward period.
+    finalizer_count:            usize,
+    /// The number of delegators in this reward period.
+    delegator_count:            usize,
+}
+
 /// If block specified by `block_hash` is a payday block (also implies >=
-/// protocol version 4), this returns the total stake for that block. Otherwise
-/// returns `None`.
-async fn p4_payday_total_stake(
+/// protocol version 4), this returns [`PaydayBlockData`]. Otherwise, returns
+/// `None`.
+async fn process_payday_block(
     node: &mut Client,
-    block_hash: BlockHash,
-) -> anyhow::Result<Option<Amount>> {
-    let tokenomics_info = node
-        .get_tokenomics_info(block_hash)
-        .await
-        .with_context(|| format!("Could not get tokenomics info for block: {}", block_hash))?
-        .response;
+    max_concurrent: usize,
+    block_info: &BlockInfo,
+) -> anyhow::Result<Option<PaydayBlockData>> {
+    let start_time = tokio::time::Instant::now();
+    if block_info.protocol_version <= ProtocolVersion::P3 {
+        return Ok(None);
+    }
+    let block_ident = BlockIdentifier::RelativeHeight(RelativeBlockHeight {
+        genesis_index: block_info.genesis_index,
+        height:        block_info.era_block_height,
+        restrict:      true,
+    });
+    // Handle special payday events
+    let mut pool_reward = 0;
+    let mut finalizer_reward = 0;
+    let mut foundation_reward = 0;
+    let mut special_events = node.get_block_special_events(block_ident).await?.response;
+    let mut is_payday_block = false;
+    while let Some(event) = special_events.try_next().await? {
+        match event {
+            SpecialTransactionOutcome::PaydayFoundationReward {
+                development_charge, ..
+            } => {
+                foundation_reward += development_charge.micro_ccd();
+                is_payday_block = true;
+            }
+            SpecialTransactionOutcome::PaydayPoolReward {
+                baker_reward,
+                finalization_reward,
+                ..
+            } => {
+                pool_reward += baker_reward.micro_ccd();
+                finalizer_reward += finalization_reward.micro_ccd();
+                is_payday_block = true;
+            }
+            SpecialTransactionOutcome::PaydayAccountReward { .. } => {
+                is_payday_block = true;
+            }
+            _ => {}
+        }
+    }
 
-    if let RewardsOverview::V1 {
-        total_staked_capital,
-        ..
-    } = tokenomics_info
-    {
-        let is_payday_block = node
-            .is_payday_block(block_hash)
-            .await
-            .with_context(|| {
-                format!(
-                    "Could not assert whether block is payday block for: {}",
-                    block_hash
-                )
-            })?
-            .response;
-
-        if is_payday_block {
-            return Ok(Some(total_staked_capital));
-        };
-
+    if !is_payday_block {
+        // Block wasn't a payday block
         return Ok(None);
     }
 
-    Ok(None)
+    // Get total CCDs in existence
+    let a = tokio::time::Instant::now();
+    let tokenomics_info = node.get_tokenomics_info(block_ident).await?.response;
+    log::debug!(
+        "Took {} ms to query tokenomics info.",
+        tokio::time::Instant::now().duration_since(a).as_millis()
+    );
+    let (RewardsOverview::V1 { common: data, .. } | RewardsOverview::V0 { data }) = tokenomics_info;
+    let total_ccd = data.total_amount.micro_ccd();
+
+    // Count entities and staked CCDs
+    let a = tokio::time::Instant::now();
+    let baker_response = node.get_bakers_reward_period(block_ident).await?.response;
+    log::debug!(
+        "Took {} ms to query bakers in reward period.",
+        tokio::time::Instant::now().duration_since(a).as_millis()
+    );
+
+    let baker_list = node.get_baker_list(block_ident).await?.response;
+
+    let pool_count = AtomicUsize::new(0);
+    let open_pool_count = AtomicUsize::new(0);
+    let closed_for_new_pool_count = AtomicUsize::new(0);
+    let closed_pool_count = AtomicUsize::new(0);
+    let delegation_recipient_count = AtomicUsize::new(0);
+    let finalizer_count = AtomicUsize::new(0);
+    let total_actively_delegated = AtomicU64::new(0);
+    let total_equity_capital = AtomicU64::new(0);
+    let delegating_account_count = AtomicUsize::new(0);
+    let fut1 =
+        baker_response
+            .map_err(Into::into)
+            .try_for_each_concurrent(Some(max_concurrent), |baker| {
+                let node = node.clone();
+                async {
+                    let baker = baker;
+                    let mut node = node;
+                    pool_count.fetch_add(1, Ordering::AcqRel);
+                    if baker.is_finalizer {
+                        finalizer_count.fetch_add(1, Ordering::AcqRel);
+                    }
+                    total_actively_delegated
+                        .fetch_add(baker.delegated_capital.micro_ccd(), Ordering::AcqRel);
+                    total_equity_capital
+                        .fetch_add(baker.equity_capital.micro_ccd(), Ordering::AcqRel);
+
+                    if baker.delegated_capital.micro_ccd() != 0 {
+                        delegation_recipient_count.fetch_add(1, Ordering::AcqRel);
+                        let delegators = node
+                            .get_pool_delegators_reward_period(block_ident, baker.baker.baker_id)
+                            .await?
+                            .response;
+                        delegating_account_count
+                            .fetch_add(delegators.count().await, Ordering::AcqRel);
+                    }
+
+                    Ok::<_, anyhow::Error>(())
+                }
+            });
+
+    let fut2 =
+        baker_list
+            .map_err(Into::into)
+            .try_for_each_concurrent(Some(max_concurrent), |baker_id| {
+                let mut node = node.clone();
+                let closed_for_new_pool_count = &closed_for_new_pool_count;
+                let open_pool_count = &open_pool_count;
+                let closed_pool_count = &closed_pool_count;
+                async move {
+                    let pi = node.get_pool_info(block_ident, baker_id).await?.response;
+                    let pool_info = pi.pool_info;
+                    match pool_info.open_status {
+                        OpenStatus::OpenForAll => open_pool_count.fetch_add(1, Ordering::AcqRel),
+                        OpenStatus::ClosedForNew => {
+                            closed_for_new_pool_count.fetch_add(1, Ordering::AcqRel)
+                        }
+                        OpenStatus::ClosedForAll => {
+                            closed_pool_count.fetch_add(1, Ordering::AcqRel)
+                        }
+                    };
+                    Ok::<_, anyhow::Error>(())
+                }
+            });
+
+    let a = tokio::time::Instant::now();
+    futures::try_join!(fut1, fut2)?;
+    log::debug!(
+        "Took {} ms to query baker lists.",
+        tokio::time::Instant::now().duration_since(a).as_millis()
+    );
+
+    let a = tokio::time::Instant::now();
+    let passive_delegators = node
+        .get_passive_delegators_reward_period(block_ident)
+        .await?
+        .response;
+    let delegator_count =
+        delegating_account_count.load(Ordering::Acquire) + passive_delegators.count().await;
+    log::debug!(
+        "Took {} ms to query passive delegators lists.",
+        tokio::time::Instant::now().duration_since(a).as_millis()
+    );
+    let total_passively_delegated = node
+        .get_passive_delegation_info(block_ident)
+        .await?
+        .response
+        .current_payday_delegated_capital
+        .micro_ccd();
+
+    let end = tokio::time::Instant::now();
+    log::debug!(
+        "Queried payday data for block {} in {}ms.",
+        block_info.block_hash,
+        end.duration_since(start_time).as_millis()
+    );
+
+    Ok(Some(PaydayBlockData {
+        total_equity_capital: total_equity_capital.load(Ordering::Acquire),
+        total_passively_delegated,
+        total_actively_delegated: total_actively_delegated.load(Ordering::Acquire),
+        total_ccd,
+        pool_reward,
+        finalizer_reward,
+        foundation_reward,
+        pool_count: pool_count.load(Ordering::Acquire),
+        open_pool_count: open_pool_count.load(Ordering::Acquire),
+        closed_for_new_pool_count: closed_for_new_pool_count.load(Ordering::Acquire),
+        closed_pool_count: closed_pool_count.load(Ordering::Acquire),
+        delegation_recipient_count: delegation_recipient_count.load(Ordering::Acquire),
+        finalizer_count: finalizer_count.load(Ordering::Acquire),
+        delegator_count,
+    }))
 }
 
 /// Get `BlockDetails` for given block represented by `block_hash`
 async fn get_block_details(
     node: &mut Client,
-    block_hash: BlockHash,
+    max_concurrent: usize,
+    block_hash: AbsoluteBlockHeight,
 ) -> anyhow::Result<BlockDetails> {
     let block_info = node
         .get_block_info(block_hash)
@@ -799,11 +1033,15 @@ async fn get_block_details(
         .with_context(|| format!("Could not get block info for block: {}", block_hash))?
         .response;
 
-    let total_stake = p4_payday_total_stake(node, block_hash).await?;
+    let payday_data = process_payday_block(node, max_concurrent, &block_info).await?;
     let block_details = BlockDetails {
         block_time: block_info.block_slot_time,
         height: block_info.block_height,
-        total_stake,
+        payday_data,
+        num_transactions: block_info.transaction_count,
+        block_hash: block_info.block_hash,
+        genesis_index: block_info.genesis_index,
+        era_height: block_info.era_block_height,
     };
 
     Ok(block_details)
@@ -813,13 +1051,13 @@ async fn get_block_details(
 /// corresponding to events captured by the block.
 async fn process_block(
     node: &mut Client,
-    block_hash: BlockHash,
+    max_concurrent: usize,
+    height: AbsoluteBlockHeight,
 ) -> anyhow::Result<NormalBlockData> {
-    let block_details = get_block_details(node, block_hash).await?;
-    let block_events = get_block_events(node, block_hash).await?;
+    let block_details = get_block_details(node, max_concurrent, height).await?;
 
     let mut block_data = NormalBlockData {
-        block_hash,
+        block_hash: block_details.block_hash,
         block_details,
         accounts: Vec::new(),
         transactions: Vec::new(),
@@ -827,27 +1065,35 @@ async fn process_block(
         contract_instances: Vec::new(),
     };
 
-    block_events
-        .try_for_each(|be| {
-            match be {
-                BlockEvent::AccountCreation(address, details) => {
-                    block_data.accounts.push((address, details));
-                }
-                BlockEvent::AccountTransaction(hash, details) => {
-                    block_data.transactions.push((hash, details));
-                }
-                BlockEvent::ContractModuleDeployment(module_ref) => {
-                    block_data.contract_modules.push(module_ref);
-                }
-                BlockEvent::ContractInstantiation(address, details) => {
-                    block_data.contract_instances.push((address, details));
-                }
-            };
+    let block_ident = BlockIdentifier::RelativeHeight(RelativeBlockHeight {
+        genesis_index: block_details.genesis_index,
+        height:        block_details.era_height,
+        restrict:      true,
+    });
 
-            future::ok(())
-        })
-        .await?;
+    if block_details.num_transactions > 0 {
+        let block_events = get_block_events(node, block_ident).await?;
+        block_events
+            .try_for_each(|be| {
+                match be {
+                    BlockEvent::AccountCreation(address, details) => {
+                        block_data.accounts.push((address, details));
+                    }
+                    BlockEvent::AccountTransaction(hash, details) => {
+                        block_data.transactions.push((hash, details));
+                    }
+                    BlockEvent::ContractModuleDeployment(module_ref) => {
+                        block_data.contract_modules.push(module_ref);
+                    }
+                    BlockEvent::ContractInstantiation(address, details) => {
+                        block_data.contract_instances.push((address, details));
+                    }
+                };
 
+                future::ok(())
+            })
+            .await?;
+    }
     Ok(block_data)
 }
 
@@ -909,18 +1155,25 @@ async fn node_process(
             .await
             .with_context(|| format!("Timeout reached for node: {}", node_endpoint.uri()))?;
 
+        let mut processed_chunks = FuturesOrdered::new();
         for block in chunks {
-            let block_data = process_block(&mut node, block.block_hash).await?;
+            let mut node = node.clone();
+            let fut = async move {
+                let block_data = process_block(&mut node, num_parallel.into(), block.height).await;
+                (block_data, block.height)
+            };
+            processed_chunks.push_back(fut);
+        }
+        while let Some((block_data, block_height)) = processed_chunks.next().await {
             if block_sender
-                .send(BlockData::Normal(block_data))
+                .send(BlockData::Normal(block_data?))
                 .await
                 .is_err()
             {
                 log::error!("The database connection has been closed. Terminating node queries.");
                 return Ok(());
             }
-
-            *latest_height = Some(block.height);
+            *latest_height = Some(block_height);
         }
 
         if has_error {
@@ -932,16 +1185,20 @@ async fn node_process(
     Ok(())
 }
 
-/// Inserts the `block_data` collected for a single block into the database
+/// Inserts the `block_datas` collected for one or more blocks into the database
 /// defined by `db`. Everything is commited as a single transactions allowing
 /// for easy restoration from the last recorded block (by height) inserted into
-/// the database. Returns the height of the processed block along with the
-/// duration it took to process.
-async fn db_insert_block<'a>(
+/// the database. Returns the heights of the processed block along with their
+/// hashes and the duration it took to process the blocks.
+async fn db_insert_blocks<'a, 'b>(
     db: &mut DBConn,
-    block_data: &'a BlockData,
+    block_datas: impl Iterator<Item = &'a BlockData>,
     tx_num: &mut i64,
-) -> anyhow::Result<(AbsoluteBlockHeight, chrono::Duration)> {
+) -> anyhow::Result<(
+    Vec<(BlockHash, AbsoluteBlockHeight)>,
+    usize,
+    chrono::Duration,
+)> {
     let start = chrono::Utc::now();
     let db_tx = db
         .client
@@ -968,62 +1225,67 @@ async fn db_insert_block<'a>(
         Ok::<_, tokio_postgres::Error>(block_id)
     };
 
-    let height = match block_data {
-        BlockData::ChainGenesis(ChainGenesisBlockData {
-            block_hash,
-            block_details,
-            accounts,
-        }) => {
-            insert_common(*block_hash, block_details, accounts).await?;
-            block_details.height
-        }
-        BlockData::Normal(NormalBlockData {
-            block_hash,
-            block_details,
-            accounts,
-            transactions,
-            contract_modules,
-            contract_instances,
-        }) => {
-            let block_id = insert_common(*block_hash, block_details, accounts).await?;
+    let mut heights = Vec::new();
+    let mut num_txs = 0;
+    for block_data in block_datas {
+        match block_data {
+            BlockData::ChainGenesis(ChainGenesisBlockData {
+                block_hash,
+                block_details,
+                accounts,
+            }) => {
+                insert_common(*block_hash, block_details, accounts).await?;
+                heights.push((*block_hash, block_details.height));
+            }
+            BlockData::Normal(NormalBlockData {
+                block_hash,
+                block_details,
+                accounts,
+                transactions,
+                contract_modules,
+                contract_instances,
+            }) => {
+                num_txs += transactions.len();
+                let block_id = insert_common(*block_hash, block_details, accounts).await?;
 
-            for module_ref in contract_modules.iter() {
-                db.prepared
-                    .insert_contract_module(tx_ref, block_id, *module_ref)
+                for module_ref in contract_modules.iter() {
+                    db.prepared
+                        .insert_contract_module(tx_ref, block_id, *module_ref)
+                        .await?;
+                }
+
+                for (address, details) in contract_instances.iter() {
+                    db.prepared
+                        .insert_contract_instance(tx_ref, block_id, *address, details)
+                        .await?;
+                }
+
+                let f = db
+                    .prepared
+                    .insert_transactions(tx_num, tx_ref, block_id, transactions)
                     .await?;
+
+                let mut futs = Vec::new();
+                let now = tokio::time::Instant::now();
+                for (id, aff_accs, aff_contracts) in f.iter() {
+                    futs.push(db.prepared.insert_transaction(
+                        tx_ref,
+                        block_details.block_time.timestamp(),
+                        *id,
+                        aff_accs,
+                        aff_contracts,
+                    ));
+                }
+                futures::future::try_join_all(futs).await?;
+                log::trace!(
+                    "Inserted all transactions in {}ms.",
+                    now.elapsed().as_millis()
+                );
+
+                heights.push((*block_hash, block_details.height));
             }
-
-            for (address, details) in contract_instances.iter() {
-                db.prepared
-                    .insert_contract_instance(tx_ref, block_id, *address, details)
-                    .await?;
-            }
-
-            let f = db
-                .prepared
-                .insert_transactions(tx_num, tx_ref, block_id, transactions)
-                .await?;
-
-            let mut futs = Vec::new();
-            let now = tokio::time::Instant::now();
-            for (id, aff_accs, aff_contracts) in f.iter() {
-                futs.push(db.prepared.insert_transaction(
-                    tx_ref,
-                    block_details.block_time.timestamp(),
-                    *id,
-                    aff_accs,
-                    aff_contracts,
-                ));
-            }
-            futures::future::try_join_all(futs).await?;
-            log::trace!(
-                "Inserted all transactions in {}ms.",
-                now.elapsed().as_millis()
-            );
-
-            block_details.height
         }
-    };
+    }
 
     let now = tokio::time::Instant::now();
     db_tx
@@ -1033,7 +1295,7 @@ async fn db_insert_block<'a>(
     log::trace!("Commit completed in {}ms.", now.elapsed().as_millis());
 
     let end = chrono::Utc::now().signed_duration_since(start);
-    Ok((height, end))
+    Ok((heights, num_txs, end))
 }
 
 /// Runs a process of inserting data coming in on `block_receiver` in a database
@@ -1042,6 +1304,7 @@ async fn run_db_process(
     db_connection: tokio_postgres::config::Config,
     mut block_receiver: tokio::sync::mpsc::Receiver<BlockData>,
     height_sender: tokio::sync::oneshot::Sender<Option<AbsoluteBlockHeight>>,
+    bulk_insert_max: usize,
     stop_flag: Arc<AtomicBool>,
 ) -> anyhow::Result<()> {
     let mut db = DBConn::create(db_connection.clone(), true)
@@ -1073,19 +1336,40 @@ async fn run_db_process(
         let next_block_data = if retry_block_data.is_some() {
             retry_block_data
         } else {
-            block_receiver.recv().await
+            let v = block_receiver.recv().await;
+            v.map(|x| vec![x])
         };
 
-        if let Some(block_data) = next_block_data {
+        if let Some(mut block_data) = next_block_data {
+            // If there are pending blocks in the queue try to insert up to
+            // `bulk_insert_max` of them in the same database transaction.
+            {
+                if block_data.len() < bulk_insert_max {
+                    while let Ok(item) = block_receiver.try_recv() {
+                        block_data.push(item);
+                        if block_data.len() >= bulk_insert_max {
+                            break;
+                        }
+                    }
+                }
+            }
             let checkpoint_tx_num = tx_num;
-            match db_insert_block(&mut db, &block_data, &mut tx_num).await {
-                Ok((height, time)) => {
+            match db_insert_blocks(&mut db, block_data.iter(), &mut tx_num).await {
+                Ok((infos, num_txs, time)) => {
                     successive_db_errors = 0;
                     log::info!(
-                        "Processed block {} at height {} with {} transactions in {}ms",
-                        block_data.block_hash(),
-                        height.height,
-                        block_data.num_transactions(),
+                        "Processed blocks {} at heights {} with {} transactions in {}ms",
+                        infos
+                            .iter()
+                            .map(|x| x.0.to_string())
+                            .collect::<Vec<_>>()
+                            .join(", "),
+                        infos
+                            .iter()
+                            .map(|x| x.1.to_string())
+                            .collect::<Vec<_>>()
+                            .join(", "),
+                        num_txs,
                         time.num_milliseconds()
                     );
                     retry_block_data = None;
@@ -1157,7 +1441,7 @@ async fn set_shutdown(flag: Arc<AtomicBool>) -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::main]
+#[tokio::main(flavor = "multi_thread", worker_threads = 4)]
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
@@ -1181,6 +1465,7 @@ async fn main() -> anyhow::Result<()> {
         args.db_connection,
         block_receiver,
         height_sender,
+        args.bulk_insert_max,
         stop_flag.clone(),
     ));
 
