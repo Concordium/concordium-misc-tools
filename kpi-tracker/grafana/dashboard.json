@@ -24,7 +24,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 2,
+  "id": 7,
   "links": [],
   "liveNow": false,
   "panels": [
@@ -1646,118 +1646,6 @@
         "type": "postgres",
         "uid": "${postgres_db}"
       },
-      "description": "The number of accounts that have CCD transactions in the selected period.\n\nThe CCD transactions are transfers of CCD, which includes transfers (with or without memo), scheduled transfers (with or without memo) and encrypted transfers (with or without memo).",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 60
-      },
-      "id": 30,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "postgres",
-            "uid": "${postgres_db}"
-          },
-          "editorMode": "code",
-          "format": "table",
-          "rawQuery": true,
-          "rawSql": "-- We join the accounts, transactions, and blocks table to get the earliest transaction timestamp for each account.\nWITH data as (\n  SELECT\n    MIN($__unixEpochGroup(blocks.timestamp, $__interval)) AS time\n  FROM accounts\n  JOIN accounts_transactions ON accounts_transactions.account = accounts.id\n  JOIN transactions ON transactions.id = accounts_transactions.transaction\n  JOIN blocks ON blocks.id = transactions.block\n  WHERE $__unixEpochFilter(blocks.timestamp) AND is_ccd_transfer(transactions.type)\n  GROUP BY accounts.id\n)\n\nSELECT\n  COUNT(1) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as total,\n  time\nFROM data;",
-          "refId": "A",
-          "sql": {
-            "columns": [
-              {
-                "parameters": [],
-                "type": "function"
-              }
-            ],
-            "groupBy": [
-              {
-                "property": {
-                  "type": "string"
-                },
-                "type": "groupBy"
-              }
-            ],
-            "limit": 50
-          }
-        }
-      ],
-      "title": "Accounts with CCD transactions",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "postgres",
-        "uid": "${postgres_db}"
-      },
       "description": "The total number of smart contract modules since genesis.",
       "fieldConfig": {
         "defaults": {
@@ -1816,7 +1704,7 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 12,
+        "x": 0,
         "y": 60
       },
       "id": 26,
@@ -2064,9 +1952,32 @@
                 ]
               },
               {
+                "__systemRef": "hideSeriesFrom",
                 "matcher": {
-                  "id": "byName",
-                  "options": "register_data"
+                  "id": "byNames",
+                  "options": {
+                    "mode": "exclude",
+                    "names": [
+                      "deploy_module",
+                      "init_contract",
+                      "update",
+                      "transfer",
+                      "update_credential_keys",
+                      "encrypted_amount_transfer",
+                      "transfer_to_encrypted",
+                      "transfer_to_public",
+                      "transfer_with_schedule",
+                      "update_credentials",
+                      "transfer_with_memo",
+                      "encrypted_amount_transfer_with_memo",
+                      "transfer_with_schedule_and_memo",
+                      "configure_baker",
+                      "configure_delegation",
+                      "rejected"
+                    ],
+                    "prefix": "All except:",
+                    "readOnly": true
+                  }
                 },
                 "properties": [
                   {
@@ -2332,9 +2243,32 @@
                 ]
               },
               {
+                "__systemRef": "hideSeriesFrom",
                 "matcher": {
-                  "id": "byName",
-                  "options": "register_data"
+                  "id": "byNames",
+                  "options": {
+                    "mode": "exclude",
+                    "names": [
+                      "deploy_module",
+                      "init_contract",
+                      "update",
+                      "transfer",
+                      "update_credential_keys",
+                      "encrypted_amount_transfer",
+                      "transfer_to_encrypted",
+                      "transfer_to_public",
+                      "transfer_with_schedule",
+                      "update_credentials",
+                      "transfer_with_memo",
+                      "encrypted_amount_transfer_with_memo",
+                      "transfer_with_schedule_and_memo",
+                      "configure_baker",
+                      "configure_delegation",
+                      "rejected"
+                    ],
+                    "prefix": "All except:",
+                    "readOnly": true
+                  }
                 },
                 "properties": [
                   {
@@ -2480,7 +2414,7 @@
             "h": 10,
             "w": 12,
             "x": 0,
-            "y": 1
+            "y": 88
           },
           "id": 28,
           "interval": "1d",
@@ -2617,7 +2551,7 @@
             "h": 10,
             "w": 12,
             "x": 12,
-            "y": 1
+            "y": 88
           },
           "id": 29,
           "interval": "1d",
@@ -2688,6 +2622,117 @@
             }
           ],
           "title": "Active smart contracts (historical)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "${postgres_db}"
+          },
+          "description": "The number of accounts that have CCD transactions in the selected period.\n\nThe CCD transactions are transfers of CCD, which includes transfers (with or without memo), scheduled transfers (with or without memo) and encrypted transfers (with or without memo).",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green"
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 98
+          },
+          "id": 30,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "postgres",
+                "uid": "${postgres_db}"
+              },
+              "editorMode": "code",
+              "format": "table",
+              "rawQuery": true,
+              "rawSql": "-- We join the accounts, transactions, and blocks table to get the earliest transaction timestamp for each account.\nWITH data as (\n  SELECT\n    MIN($__unixEpochGroup(blocks.timestamp, $__interval)) AS time\n  FROM accounts\n  JOIN accounts_transactions ON accounts_transactions.account = accounts.id\n  JOIN transactions ON transactions.id = accounts_transactions.transaction\n  JOIN blocks ON blocks.id = transactions.block\n  WHERE $__unixEpochFilter(blocks.timestamp) AND is_ccd_transfer(transactions.type)\n  GROUP BY accounts.id\n)\n\nSELECT\n  COUNT(1) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as total,\n  time\nFROM data;",
+              "refId": "A",
+              "sql": {
+                "columns": [
+                  {
+                    "parameters": [],
+                    "type": "function"
+                  }
+                ],
+                "groupBy": [
+                  {
+                    "property": {
+                      "type": "string"
+                    },
+                    "type": "groupBy"
+                  }
+                ],
+                "limit": 50
+              }
+            }
+          ],
+          "title": "Accounts with CCD transactions",
           "type": "timeseries"
         }
       ],
@@ -2780,6 +2825,6 @@
   "timezone": "",
   "title": "Concordium KPI tracker",
   "uid": "8dm2sVA4k",
-  "version": 2,
+  "version": 1,
   "weekStart": "monday"
 }
