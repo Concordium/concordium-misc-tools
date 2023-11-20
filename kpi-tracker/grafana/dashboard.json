@@ -29,14 +29,16 @@
   "liveNow": false,
   "panels": [
     {
+      "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
         "y": 0
       },
-      "id": 19,
-      "title": "Misc",
+      "id": 35,
+      "panels": [],
+      "title": "Tokenomics",
       "type": "row"
     },
     {
@@ -44,12 +46,14 @@
         "type": "postgres",
         "uid": "${postgres_db}"
       },
+      "description": "The amount of rewards issued to bakers and validators each payday. This is updated once per payday.",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
@@ -80,7 +84,266 @@
               "mode": "off"
             }
           },
-          "decimals": 6,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "CCD"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "finalizer_rewards"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "yellow",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 1
+      },
+      "id": 37,
+      "interval": "1d",
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "${postgres_db}"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  paydays.pool_reward::DECIMAL/1000000 as validator_rewards,\n  paydays.finalizer_reward::DECIMAL/1000000 as finalizer_rewards,\n  $__unixEpochGroup(blocks.timestamp, $__interval) AS time\nFROM paydays\nJOIN blocks on blocks.id = paydays.block;",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ],
+      "title": "Rewards",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "${postgres_db}"
+      },
+      "description": "Comulative amount of rewards given to validators in the given period.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "CCD"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "finalizer_rewards"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "yellow",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 1
+      },
+      "id": 38,
+      "interval": "1d",
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "${postgres_db}"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH data AS (\n  SELECT\n    paydays.pool_reward::DECIMAL/1000000 as validator_rewards,\n    paydays.finalizer_reward::DECIMAL/1000000 as finalizer_rewards,\n    $__unixEpochGroup(blocks.timestamp, $__interval) AS time\n  FROM paydays\n  JOIN blocks on blocks.id = paydays.block\n  WHERE $__unixEpochFilter(blocks.timestamp)\n)\n\nSELECT\n  SUM(validator_rewards) OVER (ORDER BY time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS validator_rewards,\n  SUM(finalizer_rewards) OVER (ORDER BY time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS finalizer_rewards,\n  time\nFROM data;",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ],
+      "title": "Rewards (cumulative)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "${postgres_db}"
+      },
+      "description": "The amount of CCD paid as foundation tax (from transaction fees) to the foundation reward account.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
@@ -100,10 +363,409 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 9,
+        "h": 8,
         "w": 12,
         "x": 0,
-        "y": 1
+        "y": 9
+      },
+      "id": 39,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "${postgres_db}"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  paydays.foundation_reward::DECIMAL/1000000 as foundation_charge,\n  $__unixEpochGroup(blocks.timestamp, $__interval) AS time\nFROM paydays\nJOIN blocks on blocks.id = paydays.block;",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ],
+      "title": "Foundation tax",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "${postgres_db}"
+      },
+      "description": "The total amount of foundation tax paid. This is updated once per payday.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 9
+      },
+      "id": 40,
+      "interval": "1d",
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "${postgres_db}"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH data AS (\n  SELECT\n    paydays.foundation_reward::DECIMAL/1000000 as foundation_charge,\n    $__unixEpochGroup(blocks.timestamp, $__interval) AS time\n  FROM paydays\n  JOIN blocks on blocks.id = paydays.block\n)\n\nSELECT\n  SUM(foundation_charge) OVER (ORDER BY time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS foundation_charge,\n  time\nFROM data;",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ],
+      "title": "Foundation tax (cumulative)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "${postgres_db}"
+      },
+      "description": "The total amount of minted CCD since genesis. This is updated once per payday.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "CCD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 17
+      },
+      "id": 36,
+      "interval": "1d",
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "${postgres_db}"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH data AS (\n  SELECT\n    ROW_NUMBER() OVER (ORDER BY blocks.id) id,\n    paydays.total_ccd,\n    $__unixEpochGroup(blocks.timestamp, $__interval) AS time\n  FROM paydays\n  JOIN blocks ON blocks.id = paydays.block\n)\n\nSELECT\n  (curr.total_ccd - prev.total_ccd)::DECIMAL/1000000 AS minted,\n  curr.time\nFROM data curr\nJOIN data prev ON prev.id + 1 = curr.id;\n",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ],
+      "title": "Minted CCDs",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 25
+      },
+      "id": 19,
+      "panels": [],
+      "title": "Staking",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "${postgres_db}"
+      },
+      "description": "The number of staked CCD, split into different types of staking.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "normal"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "CCD"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "validator_equity"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "delegated_to_pool"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "yellow",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "passively_delegated"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "orange",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 26
       },
       "id": 9,
       "options": {
@@ -127,7 +789,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT\n  $__unixEpochGroup(timestamp, $__interval) AS time,\n  SUM(total_stake::DECIMAL/1000000) as stake_ccd\nFROM blocks\nWHERE total_stake IS NOT NULL\nAND $__unixEpochFilter(timestamp)\nGROUP BY $__unixEpochGroup(timestamp, $__interval);",
+          "rawSql": "SELECT\n  paydays.total_equity_capital::DECIMAL/1000000 AS validator_equity,\n  paydays.total_actively_delegated::DECIMAL/1000000 AS delegated_to_pool,\n  paydays.total_passively_delegated::DECIMAL/1000000 AS passively_delegated,\n  $__unixEpochGroup(timestamp, $__interval) AS time\nFROM blocks\nJOIN paydays ON paydays.block = blocks.id;",
           "refId": "A",
           "sql": {
             "columns": [
@@ -148,7 +810,596 @@
           }
         }
       ],
-      "title": "Staked CCD",
+      "title": "Staked CCDs",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "${postgres_db}"
+      },
+      "description": "The number of accounts that are staking. This is updated once per payday.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "pointSize": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "normal"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "decimals": 0,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "staking_pools"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "delegators"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "yellow",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 26
+      },
+      "id": 31,
+      "interval": "1d",
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "${postgres_db}"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  paydays.num_pools as staking_pools,\n  paydays.num_delegators as delegators,\n  $__unixEpochGroup(timestamp, $__interval) AS time\nFROM paydays\nJOIN blocks ON blocks.id = paydays.block;",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ],
+      "title": "Number of accounts staking",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "${postgres_db}"
+      },
+      "description": "Note: this counts all registered pools, not only pools that participated in a reward period, so the total may be slightly inconsistent with the \"Active staking accounts\" graph.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": -1,
+            "drawStyle": "line",
+            "fillOpacity": 100,
+            "gradientMode": "scheme",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 7,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "normal"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "open_for_new"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "closed_for_new"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "closed"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 34
+      },
+      "id": 33,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "${postgres_db}"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  paydays.num_open_pools as open_for_new,\n  paydays.num_closed_for_new_pools as closed_for_new,\n  paydays.num_closed_pools as closed,\n  $__unixEpochGroup(timestamp, $__interval) AS time\nFROM paydays\nJOIN blocks ON blocks.id = paydays.block;",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ],
+      "title": "Staking pool status",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "${postgres_db}"
+      },
+      "description": "The number of pools that have delegators. This is updated once per payday.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 30,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "normal"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "decimals": 0,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "open_for_new"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "closed_for_new"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 34
+      },
+      "id": 34,
+      "interval": "1d",
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "${postgres_db}"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  paydays.num_delegation_recipients as count,\n  $__unixEpochGroup(blocks.timestamp, $__interval) AS time\nFROM paydays\nJOIN blocks ON blocks.id = paydays.block;",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ],
+      "title": "Delegation recipients",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "${postgres_db}"
+      },
+      "description": "The number of validators that are also finalizers overlaid on top of the total number of validators. This is captured once per payday.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic",
+            "seriesBy": "last"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 100,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "decimals": 0,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "number_of_finalizers"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "continuous-RdYlGr"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "total_staking_pools"
+            },
+            "properties": [
+              {
+                "id": "custom.fillOpacity",
+                "value": 6
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 42
+      },
+      "id": 32,
+      "interval": "1d",
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "${postgres_db}"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  paydays.num_finalizers as number_of_finalizers,\n  paydays.num_pools as total_staking_pools,\n  $__unixEpochGroup(timestamp, $__interval) AS time\nFROM paydays\nJOIN blocks ON blocks.id = paydays.block;",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ],
+      "title": "Number of finalizers as a proportion of validators",
       "type": "timeseries"
     },
     {
@@ -156,7 +1407,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 10
+        "y": 50
       },
       "id": 17,
       "title": "Entities",
@@ -167,284 +1418,14 @@
         "type": "postgres",
         "uid": "${postgres_db}"
       },
-      "description": "",
+      "description": "The total number of accounts.",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 10,
-        "w": 12,
-        "x": 0,
-        "y": 11
-      },
-      "id": 28,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "9.3.6",
-      "targets": [
-        {
-          "datasource": {
-            "type": "postgres",
-            "uid": "${postgres_db}"
-          },
-          "editorMode": "code",
-          "format": "time_series",
-          "rawQuery": true,
-          "rawSql": "-- Construct a table of dates filtered by graph scope\nWITH dates AS (\n  SELECT DISTINCT ON (time)\n    -- bigint is important here to make use of the account_activeness_time index, as otherwise the underlying type of time is double precision, which in turn makes the query use sequential scan which is 3x slower per loop.\n    $__unixEpochGroup(blocks.timestamp,'1d')::bigint as time\n  FROM blocks\n  WHERE $__unixEpochFilter(blocks.timestamp)\n  ORDER BY $__unixEpochGroup(blocks.timestamp, '1d')::bigint\n)\n\nSELECT \n  (\n    SELECT COUNT(DISTINCT account)\n    FROM account_activeness\n    WHERE time BETWEEN (d.time - 86400 * $active_period) AND d.time\n  ) as active_accounts,\n  time\nFROM dates as d;\n",
-          "refId": "A",
-          "sql": {
-            "columns": [
-              {
-                "alias": "\"time\"",
-                "parameters": [
-                  {
-                    "name": "\"timestamp\"",
-                    "type": "functionParameter"
-                  }
-                ],
-                "type": "function"
-              },
-              {
-                "name": "COUNT",
-                "parameters": [
-                  {
-                    "name": "total_stake",
-                    "type": "functionParameter"
-                  }
-                ],
-                "type": "function"
-              }
-            ],
-            "groupBy": [
-              {
-                "property": {
-                  "name": "\"timestamp\"",
-                  "type": "string"
-                },
-                "type": "groupBy"
-              }
-            ],
-            "limit": 50,
-            "whereJsonTree": {
-              "children1": [],
-              "id": "b9b8b99a-89ab-4cde-b012-31860b9ba670",
-              "type": "group"
-            }
-          },
-          "table": "blocks"
-        }
-      ],
-      "title": "Active accounts (historical)",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "postgres",
-        "uid": "${postgres_db}"
-      },
-      "description": "",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 10,
-        "w": 12,
-        "x": 12,
-        "y": 11
-      },
-      "id": 29,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "9.3.6",
-      "targets": [
-        {
-          "datasource": {
-            "type": "postgres",
-            "uid": "${postgres_db}"
-          },
-          "editorMode": "code",
-          "format": "time_series",
-          "rawQuery": true,
-          "rawSql": "-- Construct a table of dates filtered by graph scope\nWITH dates AS (\n  SELECT DISTINCT ON (time)\n    -- bigint is important here to make use of the account_activeness_time index, as otherwise the underlying type of time is double precision, which in turn makes the query use sequential scan which is 3x slower per loop.\n    $__unixEpochGroup(blocks.timestamp,'1d')::bigint as time\n  FROM blocks\n  WHERE $__unixEpochFilter(blocks.timestamp)\n  ORDER BY $__unixEpochGroup(blocks.timestamp, '1d')::bigint\n)\n\nSELECT \n  (\n    SELECT COUNT(DISTINCT contract)\n    FROM contract_activeness\n    WHERE time BETWEEN (d.time - 86400 * $active_period) AND d.time\n  ) as active_contracts,\n  time\nFROM dates as d;",
-          "refId": "A",
-          "sql": {
-            "columns": [
-              {
-                "alias": "\"time\"",
-                "parameters": [
-                  {
-                    "name": "\"timestamp\"",
-                    "type": "functionParameter"
-                  }
-                ],
-                "type": "function"
-              },
-              {
-                "name": "COUNT",
-                "parameters": [
-                  {
-                    "name": "total_stake",
-                    "type": "functionParameter"
-                  }
-                ],
-                "type": "function"
-              }
-            ],
-            "groupBy": [
-              {
-                "property": {
-                  "name": "\"timestamp\"",
-                  "type": "string"
-                },
-                "type": "groupBy"
-              }
-            ],
-            "limit": 50,
-            "whereJsonTree": {
-              "children1": [],
-              "id": "b9b8b99a-89ab-4cde-b012-31860b9ba670",
-              "type": "group"
-            }
-          },
-          "table": "blocks"
-        }
-      ],
-      "title": "Active smart contracts (historical)",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "postgres",
-        "uid": "${postgres_db}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
@@ -496,7 +1477,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 21
+        "y": 51
       },
       "id": 3,
       "options": {
@@ -549,12 +1530,14 @@
         "type": "postgres",
         "uid": "${postgres_db}"
       },
+      "description": "The total number of smart contract instances.",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
@@ -609,9 +1592,10 @@
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 21
+        "y": 51
       },
       "id": 7,
+      "interval": "1h",
       "options": {
         "legend": {
           "calcs": [],
@@ -633,7 +1617,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "WITH data AS (\n  SELECT \n    COUNT(1) AS contracts_count,\n    $__unixEpochGroup(blocks.timestamp, $__interval) AS time\n  FROM blocks\n  JOIN contracts\n  ON blocks.id=contracts.block\n  GROUP BY $__unixEpochGroup(blocks.timestamp, $__interval)\n)\n\nSELECT\n  data.time,\n  SUM(data.contracts_count) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as contracts\nFROM data;",
+          "rawSql": "WITH data AS (\n  SELECT \n    COUNT(1) AS contracts_count,\n    contracts.version as version,\n    $__unixEpochGroup(blocks.timestamp, $__interval) AS time\n  FROM blocks\n  JOIN contracts\n  ON blocks.id=contracts.block\n  GROUP BY contracts.version, $__unixEpochGroup(blocks.timestamp, $__interval)\n)\n\nSELECT\n  data.time,\n  SUM(data.contracts_count) FILTER (WHERE data.version = 0) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as contracts_v0,\n  SUM(data.contracts_count) FILTER (WHERE data.version = 1) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as contracts_v1\nFROM data;",
           "refId": "A",
           "sql": {
             "columns": [
@@ -660,14 +1644,16 @@
     {
       "datasource": {
         "type": "postgres",
-        "uid": "d4ab35f1-5c8e-48b6-8566-37f813b41e94"
+        "uid": "${postgres_db}"
       },
+      "description": "The number of accounts that have CCD transactions in the selected period.\n\nThe CCD transactions are transfers of CCD, which includes transfers (with or without memo), scheduled transfers (with or without memo) and encrypted transfers (with or without memo).",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
@@ -719,7 +1705,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 30
+        "y": 60
       },
       "id": 30,
       "options": {
@@ -743,7 +1729,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "-- We join the accounts, transactions, and blocks table to get the earliest transaction timestamp for each account.\nWITH data as (\n  SELECT\n    MIN($__unixEpochGroup(blocks.timestamp, $__interval)) AS time\n  FROM accounts\n  JOIN accounts_transactions ON accounts_transactions.account = accounts.id\n  JOIN transactions ON transactions.id = accounts_transactions.transaction\n  JOIN blocks ON blocks.id = transactions.block\n  WHERE is_ccd_transfer(transactions.type)\n  GROUP BY accounts.id\n)\n\nSELECT\n  COUNT(1) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as total,\n  time\nFROM data;",
+          "rawSql": "-- We join the accounts, transactions, and blocks table to get the earliest transaction timestamp for each account.\nWITH data as (\n  SELECT\n    MIN($__unixEpochGroup(blocks.timestamp, $__interval)) AS time\n  FROM accounts\n  JOIN accounts_transactions ON accounts_transactions.account = accounts.id\n  JOIN transactions ON transactions.id = accounts_transactions.transaction\n  JOIN blocks ON blocks.id = transactions.block\n  WHERE $__unixEpochFilter(blocks.timestamp) AND is_ccd_transfer(transactions.type)\n  GROUP BY accounts.id\n)\n\nSELECT\n  COUNT(1) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as total,\n  time\nFROM data;",
           "refId": "A",
           "sql": {
             "columns": [
@@ -772,13 +1758,14 @@
         "type": "postgres",
         "uid": "${postgres_db}"
       },
-      "description": "",
+      "description": "The total number of smart contract modules since genesis.",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
@@ -827,10 +1814,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 10,
+        "h": 8,
         "w": 12,
         "x": 12,
-        "y": 30
+        "y": 60
       },
       "id": 26,
       "options": {
@@ -879,513 +1866,845 @@
       "type": "timeseries"
     },
     {
-      "collapsed": false,
+      "collapsed": true,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 40
+        "y": 68
       },
       "id": 15,
-      "panels": [],
+      "panels": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "${postgres_db}"
+          },
+          "description": "The amount of transaction fees, in CCD, paid in the selected period.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "CCD"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 9,
+            "w": 12,
+            "x": 0,
+            "y": 69
+          },
+          "id": 13,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "postgres",
+                "uid": "${postgres_db}"
+              },
+              "editorMode": "code",
+              "format": "table",
+              "rawQuery": true,
+              "rawSql": "WITH data AS (\n  SELECT \n    SUM(t.cost)::DECIMAL/1000000 AS fees,\n    $__unixEpochGroup(b.timestamp, $__interval) AS time\n  FROM transactions AS t\n  JOIN blocks AS b\n  ON t.block=b.id\n  WHERE $__unixEpochFilter(b.timestamp)\n  GROUP BY $__unixEpochGroup(b.timestamp, $__interval)\n)\n\nSELECT\n  time,\n  SUM(fees) OVER (ORDER BY time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as cumulative_fees \nFROM data;",
+              "refId": "A",
+              "sql": {
+                "columns": [
+                  {
+                    "parameters": [],
+                    "type": "function"
+                  }
+                ],
+                "groupBy": [
+                  {
+                    "property": {
+                      "type": "string"
+                    },
+                    "type": "groupBy"
+                  }
+                ],
+                "limit": 50
+              }
+            }
+          ],
+          "title": "Transaction fees (cumulative)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "${postgres_db}"
+          },
+          "description": "The number of transactions, comulative in the period selected.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 40,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "normal"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "fieldMinMax": false,
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "rejected"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "red",
+                      "mode": "fixed"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "register_data"
+                },
+                "properties": [
+                  {
+                    "id": "custom.hideFrom",
+                    "value": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": true
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 9,
+            "w": 12,
+            "x": 12,
+            "y": 69
+          },
+          "id": 5,
+          "interval": "1h",
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "right",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "9.3.6",
+          "targets": [
+            {
+              "datasource": {
+                "type": "postgres",
+                "uid": "${postgres_db}"
+              },
+              "editorMode": "code",
+              "format": "time_series",
+              "rawQuery": true,
+              "rawSql": "WITH data AS (\n  SELECT \n    COUNT(1) as count,\n    transactions.type as type,\n    transactions.is_success as is_success,\n    $__unixEpochGroup(blocks.timestamp, $__interval) AS time\n  FROM transactions\n  JOIN blocks\n  ON transactions.block=blocks.id\n  WHERE $__unixEpochFilter(blocks.timestamp)\n  GROUP BY $__unixEpochGroup(blocks.timestamp, $__interval), transactions.type, transactions.is_success\n)\n\nSELECT\n  data.time,\n  SUM(data.count) FILTER (WHERE data.type = 0 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as deploy_module,\n  SUM(data.count) FILTER (WHERE data.type = 1 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as init_contract,\n  SUM(data.count) FILTER (WHERE data.type = 2 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as update,\n  SUM(data.count) FILTER (WHERE data.type = 3 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as transfer,\n  SUM(data.count) FILTER (WHERE data.type = 9 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as update_credential_keys,\n  SUM(data.count) FILTER (WHERE data.type = 10 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as encrypted_amount_transfer,\n  SUM(data.count) FILTER (WHERE data.type = 11 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as transfer_to_encrypted,\n  SUM(data.count) FILTER (WHERE data.type = 12 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as transfer_to_public,\n  SUM(data.count) FILTER (WHERE data.type = 13 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as transfer_with_schedule,\n  SUM(data.count) FILTER (WHERE data.type = 14 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as update_credentials,\n  SUM(data.count) FILTER (WHERE data.type = 15 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as register_data,\n  SUM(data.count) FILTER (WHERE data.type = 16 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as transfer_with_memo,\n  SUM(data.count) FILTER (WHERE data.type = 17 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as encrypted_amount_transfer_with_memo,\n  SUM(data.count) FILTER (WHERE data.type = 18 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as transfer_with_schedule_and_memo,\n  SUM(data.count) FILTER (WHERE data.type IN (4, 5, 6, 7, 8, 19) AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as configure_baker,\n  SUM(data.count) FILTER (WHERE data.type = 20 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as configure_delegation,\n  SUM(data.count) FILTER (WHERE data.type = NULL OR NOT data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as rejected\nFROM data;\n",
+              "refId": "A",
+              "sql": {
+                "columns": [
+                  {
+                    "parameters": [
+                      {
+                        "name": "*",
+                        "type": "functionParameter"
+                      }
+                    ],
+                    "type": "function"
+                  }
+                ],
+                "groupBy": [
+                  {
+                    "property": {
+                      "type": "string"
+                    },
+                    "type": "groupBy"
+                  }
+                ],
+                "limit": 50
+              },
+              "table": "transactions"
+            }
+          ],
+          "title": "Transactions (cumulative)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "${postgres_db}"
+          },
+          "description": "Transaction fees. Note that there is some aggregation in this. Each data point is at least an hour worth of blocks.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "smooth",
+                "lineStyle": {
+                  "fill": "solid"
+                },
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "CCD"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 9,
+            "w": 12,
+            "x": 0,
+            "y": 78
+          },
+          "id": 11,
+          "interval": "1h",
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "postgres",
+                "uid": "${postgres_db}"
+              },
+              "editorMode": "code",
+              "format": "table",
+              "rawQuery": true,
+              "rawSql": "SELECT \n  SUM(t.cost)::DECIMAL/1000000 AS fees,\n  $__unixEpochGroup(b.timestamp, $__interval) AS time\nFROM transactions AS t\nJOIN blocks AS b\nON t.block=b.id\nWHERE $__unixEpochFilter(b.timestamp)\nGROUP BY $__unixEpochGroup(b.timestamp, $__interval);",
+              "refId": "A",
+              "sql": {
+                "columns": [
+                  {
+                    "parameters": [],
+                    "type": "function"
+                  }
+                ],
+                "groupBy": [
+                  {
+                    "property": {
+                      "type": "string"
+                    },
+                    "type": "groupBy"
+                  }
+                ],
+                "limit": 50
+              }
+            }
+          ],
+          "title": "Transaction fees",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "${postgres_db}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 40,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "smooth",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "normal"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "rejected"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "red",
+                      "mode": "fixed"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "register_data"
+                },
+                "properties": [
+                  {
+                    "id": "custom.hideFrom",
+                    "value": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": true
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 9,
+            "w": 12,
+            "x": 12,
+            "y": 78
+          },
+          "id": 21,
+          "interval": "1h",
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "right",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "asc"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "postgres",
+                "uid": "${postgres_db}"
+              },
+              "editorMode": "code",
+              "format": "table",
+              "rawQuery": true,
+              "rawSql": "SELECT \n  COUNT(1) FILTER (WHERE transactions.type = 0 AND transactions.is_success) as deploy_module,\n  COUNT(1) FILTER (WHERE transactions.type = 1 AND transactions.is_success) as init_contract,\n  COUNT(1) FILTER (WHERE transactions.type = 2 AND transactions.is_success) as update,\n  COUNT(1) FILTER (WHERE transactions.type = 3 AND transactions.is_success) as transfer,\n  COUNT(1) FILTER (WHERE transactions.type = 9 AND transactions.is_success) as update_credential_keys,\n  COUNT(1) FILTER (WHERE transactions.type = 10 AND transactions.is_success) as encrypted_amount_transfer,\n  COUNT(1) FILTER (WHERE transactions.type = 11 AND transactions.is_success) as transfer_to_encrypted,\n  COUNT(1) FILTER (WHERE transactions.type = 12 AND transactions.is_success) as transfer_to_public,\n  COUNT(1) FILTER (WHERE transactions.type = 13 AND transactions.is_success) as transfer_with_schedule,\n  COUNT(1) FILTER (WHERE transactions.type = 14 AND transactions.is_success) as update_credentials,\n  COUNT(1) FILTER (WHERE transactions.type = 15 AND transactions.is_success) as register_data,\n  COUNT(1) FILTER (WHERE transactions.type = 16 AND transactions.is_success) as transfer_with_memo,\n  COUNT(1) FILTER (WHERE transactions.type = 17 AND transactions.is_success) as encrypted_amount_transfer_with_memo,\n  COUNT(1) FILTER (WHERE transactions.type = 18 AND transactions.is_success) as transfer_with_schedule_and_memo,\n  COUNT(1) FILTER (WHERE transactions.type IN (4, 5, 6, 7, 8, 19) AND transactions.is_success) as configure_baker,\n  COUNT(1) FILTER (WHERE transactions.type = 20 AND transactions.is_success) as configure_delegation,\n  COUNT(1) FILTER (WHERE transactions.type = NULL OR NOT transactions.is_success) as rejected,\n  $__unixEpochGroup(blocks.timestamp, $__interval) AS time\n  FROM transactions\n  JOIN blocks\n  ON transactions.block=blocks.id\n  WHERE $__unixEpochFilter(blocks.timestamp)\n  GROUP BY $__unixEpochGroup(blocks.timestamp, $__interval);\n",
+              "refId": "A",
+              "sql": {
+                "columns": [
+                  {
+                    "parameters": [],
+                    "type": "function"
+                  }
+                ],
+                "groupBy": [
+                  {
+                    "property": {
+                      "type": "string"
+                    },
+                    "type": "groupBy"
+                  }
+                ],
+                "limit": 50
+              }
+            }
+          ],
+          "title": "Transactions",
+          "type": "timeseries"
+        }
+      ],
       "title": "Transactions",
       "type": "row"
     },
     {
-      "datasource": {
-        "type": "postgres",
-        "uid": "${postgres_db}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "decimals": 6,
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "CCD"
-        },
-        "overrides": []
-      },
+      "collapsed": true,
       "gridPos": {
-        "h": 9,
-        "w": 12,
+        "h": 1,
+        "w": 24,
         "x": 0,
-        "y": 41
+        "y": 69
       },
-      "id": 13,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "targets": [
+      "id": 41,
+      "panels": [
         {
           "datasource": {
             "type": "postgres",
             "uid": "${postgres_db}"
           },
-          "editorMode": "code",
-          "format": "table",
-          "rawQuery": true,
-          "rawSql": "WITH data AS (\n  SELECT \n    SUM(t.cost)::DECIMAL/1000000 AS fees,\n    $__unixEpochGroup(b.timestamp, $__interval) AS time\n  FROM transactions AS t\n  JOIN blocks AS b\n  ON t.block=b.id\n  GROUP BY $__unixEpochGroup(b.timestamp, $__interval)\n)\n\nSELECT\n  time,\n  SUM(fees) OVER (ORDER BY time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as cumulative_fees \nFROM data;",
-          "refId": "A",
-          "sql": {
-            "columns": [
-              {
-                "parameters": [],
-                "type": "function"
-              }
-            ],
-            "groupBy": [
-              {
-                "property": {
-                  "type": "string"
+          "description": "",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
                 },
-                "type": "groupBy"
-              }
-            ],
-            "limit": 50
-          }
-        }
-      ],
-      "title": "Transaction fees (cumulative)",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "postgres",
-        "uid": "${postgres_db}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green"
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "none"
+            },
+            "overrides": []
           },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 40,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
+          "gridPos": {
+            "h": 10,
+            "w": 12,
+            "x": 0,
+            "y": 1
+          },
+          "id": 28,
+          "interval": "1d",
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
             },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "normal"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
             }
           },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
+          "pluginVersion": "9.3.6",
+          "targets": [
+            {
+              "datasource": {
+                "type": "postgres",
+                "uid": "${postgres_db}"
               },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "rejected"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "red",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 12,
-        "y": 41
-      },
-      "id": 5,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "9.3.6",
-      "targets": [
-        {
-          "datasource": {
-            "type": "postgres",
-            "uid": "${postgres_db}"
-          },
-          "editorMode": "code",
-          "format": "time_series",
-          "rawQuery": true,
-          "rawSql": "WITH data AS (\n  SELECT \n    COUNT(1) as count,\n    transactions.type as type,\n    transactions.is_success as is_success,\n    $__unixEpochGroup(blocks.timestamp, $__interval) AS time\n  FROM transactions\n  JOIN blocks\n  ON transactions.block=blocks.id\n  GROUP BY $__unixEpochGroup(blocks.timestamp, $__interval), transactions.type, transactions.is_success\n)\n\nSELECT\n  data.time,\n  SUM(data.count) FILTER (WHERE data.type = 0 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as deploy_module,\n  SUM(data.count) FILTER (WHERE data.type = 1 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as init_contract,\n  SUM(data.count) FILTER (WHERE data.type = 2 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as update,\n  SUM(data.count) FILTER (WHERE data.type = 3 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as transfer,\n  SUM(data.count) FILTER (WHERE data.type = 4 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as add_baker,\n  SUM(data.count) FILTER (WHERE data.type = 5 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as remove_baker,\n  SUM(data.count) FILTER (WHERE data.type = 6 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as update_baker_stake,\n  SUM(data.count) FILTER (WHERE data.type = 7 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as update_baker_restake_earning,\n  SUM(data.count) FILTER (WHERE data.type = 8 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as update_baker_keys,\n  SUM(data.count) FILTER (WHERE data.type = 9 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as update_credential_keys,\n  SUM(data.count) FILTER (WHERE data.type = 10 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as encrypted_amount_transfer,\n  SUM(data.count) FILTER (WHERE data.type = 11 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as transfer_to_encrypted,\n  SUM(data.count) FILTER (WHERE data.type = 12 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as transfer_to_public,\n  SUM(data.count) FILTER (WHERE data.type = 13 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as transfer_with_schedule,\n  SUM(data.count) FILTER (WHERE data.type = 14 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as update_credentials,\n  SUM(data.count) FILTER (WHERE data.type = 15 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as register_data,\n  SUM(data.count) FILTER (WHERE data.type = 16 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as transfer_with_memo,\n  SUM(data.count) FILTER (WHERE data.type = 17 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as encrypted_amount_transfer_with_memo,\n  SUM(data.count) FILTER (WHERE data.type = 18 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as transfer_with_schedule_and_memo,\n  SUM(data.count) FILTER (WHERE data.type = 19 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as configure_baker,\n  SUM(data.count) FILTER (WHERE data.type = 20 AND data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as configure_delegation,\n  SUM(data.count) FILTER (WHERE data.type = NULL OR NOT data.is_success) OVER (ORDER BY data.time ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as rejected\nFROM data;\n",
-          "refId": "A",
-          "sql": {
-            "columns": [
-              {
-                "parameters": [
+              "editorMode": "code",
+              "format": "time_series",
+              "rawQuery": true,
+              "rawSql": "-- Construct a table of dates filtered by graph scope\nWITH dates AS (\n  SELECT DISTINCT ON (time)\n    -- bigint is important here to make use of the account_activeness_time index, as otherwise the underlying type of time is double precision, which in turn makes the query use sequential scan which is 3x slower per loop.\n    $__unixEpochGroup(blocks.timestamp,'1d')::bigint as time\n  FROM blocks\n  WHERE $__unixEpochFilter(blocks.timestamp)\n  ORDER BY $__unixEpochGroup(blocks.timestamp, '1d')::bigint\n)\n\nSELECT \n  (\n    SELECT COUNT(DISTINCT account)\n    FROM account_activeness\n    WHERE time BETWEEN (d.time - 86400 * $active_period) AND d.time\n  ) as active_accounts,\n  time\nFROM dates as d;\n",
+              "refId": "A",
+              "sql": {
+                "columns": [
                   {
-                    "name": "*",
-                    "type": "functionParameter"
+                    "alias": "\"time\"",
+                    "parameters": [
+                      {
+                        "name": "\"timestamp\"",
+                        "type": "functionParameter"
+                      }
+                    ],
+                    "type": "function"
+                  },
+                  {
+                    "name": "COUNT",
+                    "parameters": [
+                      {
+                        "name": "total_stake",
+                        "type": "functionParameter"
+                      }
+                    ],
+                    "type": "function"
                   }
                 ],
-                "type": "function"
-              }
-            ],
-            "groupBy": [
-              {
-                "property": {
-                  "type": "string"
-                },
-                "type": "groupBy"
-              }
-            ],
-            "limit": 50
-          },
-          "table": "transactions"
-        }
-      ],
-      "title": "Transactions (cumulative)",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "postgres",
-        "uid": "${postgres_db}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "decimals": 6,
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "CCD"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 0,
-        "y": 50
-      },
-      "id": 11,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "postgres",
-            "uid": "${postgres_db}"
-          },
-          "editorMode": "code",
-          "format": "table",
-          "rawQuery": true,
-          "rawSql": "SELECT \n  SUM(t.cost)::DECIMAL/1000000 AS fees,\n  $__unixEpochGroup(b.timestamp, $__interval) AS time\nFROM transactions AS t\nJOIN blocks AS b\nON t.block=b.id\nWHERE $__unixEpochFilter(b.timestamp)\nGROUP BY $__unixEpochGroup(b.timestamp, $__interval);",
-          "refId": "A",
-          "sql": {
-            "columns": [
-              {
-                "parameters": [],
-                "type": "function"
-              }
-            ],
-            "groupBy": [
-              {
-                "property": {
-                  "type": "string"
-                },
-                "type": "groupBy"
-              }
-            ],
-            "limit": 50
-          }
-        }
-      ],
-      "title": "Transaction fees",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "postgres",
-        "uid": "${postgres_db}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 40,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "normal"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "rejected"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "red",
-                  "mode": "fixed"
+                "groupBy": [
+                  {
+                    "property": {
+                      "name": "\"timestamp\"",
+                      "type": "string"
+                    },
+                    "type": "groupBy"
+                  }
+                ],
+                "limit": 50,
+                "whereJsonTree": {
+                  "children1": [],
+                  "id": "b9b8b99a-89ab-4cde-b012-31860b9ba670",
+                  "type": "group"
                 }
-              }
-            ]
-          }
-        ]
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 12,
-        "y": 50
-      },
-      "id": 21,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
+              },
+              "table": "blocks"
+            }
+          ],
+          "title": "Active accounts (historical)",
+          "type": "timeseries"
         },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "asc"
-        }
-      },
-      "targets": [
         {
           "datasource": {
             "type": "postgres",
             "uid": "${postgres_db}"
           },
-          "editorMode": "code",
-          "format": "table",
-          "rawQuery": true,
-          "rawSql": "SELECT \n  COUNT(1) FILTER (WHERE transactions.type = 0 AND transactions.is_success) as deploy_module,\n  COUNT(1) FILTER (WHERE transactions.type = 1 AND transactions.is_success) as init_contract,\n  COUNT(1) FILTER (WHERE transactions.type = 2 AND transactions.is_success) as update,\n  COUNT(1) FILTER (WHERE transactions.type = 3 AND transactions.is_success) as transfer,\n  COUNT(1) FILTER (WHERE transactions.type = 4 AND transactions.is_success) as add_baker,\n  COUNT(1) FILTER (WHERE transactions.type = 5 AND transactions.is_success) as remove_baker,\n  COUNT(1) FILTER (WHERE transactions.type = 6 AND transactions.is_success) as update_baker_stake,\n  COUNT(1) FILTER (WHERE transactions.type = 7 AND transactions.is_success) as update_baker_restake_earning,\n  COUNT(1) FILTER (WHERE transactions.type = 8 AND transactions.is_success) as update_baker_keys,\n  COUNT(1) FILTER (WHERE transactions.type = 9 AND transactions.is_success) as update_credential_keys,\n  COUNT(1) FILTER (WHERE transactions.type = 10 AND transactions.is_success) as encrypted_amount_transfer,\n  COUNT(1) FILTER (WHERE transactions.type = 11 AND transactions.is_success) as transfer_to_encrypted,\n  COUNT(1) FILTER (WHERE transactions.type = 12 AND transactions.is_success) as transfer_to_public,\n  COUNT(1) FILTER (WHERE transactions.type = 13 AND transactions.is_success) as transfer_with_schedule,\n  COUNT(1) FILTER (WHERE transactions.type = 14 AND transactions.is_success) as update_credentials,\n  COUNT(1) FILTER (WHERE transactions.type = 15 AND transactions.is_success) as register_data,\n  COUNT(1) FILTER (WHERE transactions.type = 16 AND transactions.is_success) as transfer_with_memo,\n  COUNT(1) FILTER (WHERE transactions.type = 17 AND transactions.is_success) as encrypted_amount_transfer_with_memo,\n  COUNT(1) FILTER (WHERE transactions.type = 18 AND transactions.is_success) as transfer_with_schedule_and_memo,\n  COUNT(1) FILTER (WHERE transactions.type = 19 AND transactions.is_success) as configure_baker,\n  COUNT(1) FILTER (WHERE transactions.type = 20 AND transactions.is_success) as configure_delegation,\n  COUNT(1) FILTER (WHERE transactions.type = NULL OR NOT transactions.is_success) as rejected,\n  $__unixEpochGroup(blocks.timestamp, $__interval) AS time\n  FROM transactions\n  JOIN blocks\n  ON transactions.block=blocks.id\n  GROUP BY $__unixEpochGroup(blocks.timestamp, $__interval);\n",
-          "refId": "A",
-          "sql": {
-            "columns": [
-              {
-                "parameters": [],
-                "type": "function"
-              }
-            ],
-            "groupBy": [
-              {
-                "property": {
-                  "type": "string"
+          "description": "The number of smart contract instances that have had activity in the specified Active period.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
                 },
-                "type": "groupBy"
-              }
-            ],
-            "limit": 50
-          }
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green"
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "none"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 10,
+            "w": 12,
+            "x": 12,
+            "y": 1
+          },
+          "id": 29,
+          "interval": "1d",
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "9.3.6",
+          "targets": [
+            {
+              "datasource": {
+                "type": "postgres",
+                "uid": "${postgres_db}"
+              },
+              "editorMode": "code",
+              "format": "time_series",
+              "rawQuery": true,
+              "rawSql": "-- Construct a table of dates filtered by graph scope\nWITH dates AS (\n  SELECT DISTINCT ON (time)\n    -- bigint is important here to make use of the account_activeness_time index, as otherwise the underlying type of time is double precision, which in turn makes the query use sequential scan which is 3x slower per loop.\n    $__unixEpochGroup(blocks.timestamp,'1d')::bigint as time\n  FROM blocks\n  WHERE $__unixEpochFilter(blocks.timestamp)\n  ORDER BY $__unixEpochGroup(blocks.timestamp, '1d')::bigint\n)\n\nSELECT \n  (\n    SELECT COUNT(DISTINCT contract)\n    FROM contract_activeness\n    WHERE time BETWEEN (d.time - 86400 * $active_period) AND d.time\n  ) as active_contracts,\n  time\nFROM dates as d;",
+              "refId": "A",
+              "sql": {
+                "columns": [
+                  {
+                    "alias": "\"time\"",
+                    "parameters": [
+                      {
+                        "name": "\"timestamp\"",
+                        "type": "functionParameter"
+                      }
+                    ],
+                    "type": "function"
+                  },
+                  {
+                    "name": "COUNT",
+                    "parameters": [
+                      {
+                        "name": "total_stake",
+                        "type": "functionParameter"
+                      }
+                    ],
+                    "type": "function"
+                  }
+                ],
+                "groupBy": [
+                  {
+                    "property": {
+                      "name": "\"timestamp\"",
+                      "type": "string"
+                    },
+                    "type": "groupBy"
+                  }
+                ],
+                "limit": 50,
+                "whereJsonTree": {
+                  "children1": [],
+                  "id": "b9b8b99a-89ab-4cde-b012-31860b9ba670",
+                  "type": "group"
+                }
+              },
+              "table": "blocks"
+            }
+          ],
+          "title": "Active smart contracts (historical)",
+          "type": "timeseries"
         }
       ],
-      "title": "Transactions",
-      "type": "timeseries"
+      "title": "Active entities",
+      "type": "row"
     }
   ],
-  "refresh": false,
+  "refresh": "",
   "schemaVersion": 38,
-  "style": "dark",
   "tags": [],
   "templating": {
     "list": [
       {
         "current": {
           "selected": false,
-          "text": "KPI mainnet",
-          "value": "KPI mainnet"
+          "text": "Postgres",
+          "value": "P44368ADAD746BC27"
         },
         "hide": 0,
         "includeAll": false,
@@ -1402,7 +2721,7 @@
       },
       {
         "current": {
-          "selected": true,
+          "selected": false,
           "text": "30",
           "value": "30"
         },
@@ -1413,6 +2732,16 @@
         "multi": false,
         "name": "active_period",
         "options": [
+          {
+            "selected": false,
+            "text": "180",
+            "value": "180"
+          },
+          {
+            "selected": false,
+            "text": "90",
+            "value": "90"
+          },
           {
             "selected": true,
             "text": "30",
@@ -1440,10 +2769,17 @@
     "from": "now-90d",
     "to": "now"
   },
-  "timepicker": {},
+  "timepicker": {
+    "hidden": false,
+    "refresh_intervals": [
+      "1h",
+      "2h",
+      "1d"
+    ]
+  },
   "timezone": "",
-  "title": "KPI tracker",
+  "title": "Concordium KPI tracker",
   "uid": "8dm2sVA4k",
-  "version": 10,
-  "weekStart": ""
+  "version": 2,
+  "weekStart": "monday"
 }

@@ -96,3 +96,27 @@ This docker image can be built using
 docker build --build-arg build_image=rust:1.70-buster --build-arg base_image=debian:buster -f ./scripts/Dockerfile ../
 ```
 which produces a debian-buster based image.
+
+## Compose configuration for local development
+
+There is a [compose.yml](./scripts/compose.yml) file that can be used to start
+up both a postgres database and grafana loaded with the dashboard to present
+KPIs.
+
+To start it use
+
+```console
+docker-compose -f ./scripts/compose.yml up
+```
+from the directory of the README file.
+
+This will start a grafana service listening on port 3000 on the host, and a
+postgres database listening on port 5432. The `kpi-tracker` database is created
+on startup.
+
+Note that no state is persisted, so when the process terminates all data is
+forfeit.
+
+This compose configuration uses the configurations in
+[scripts/provisioning](./scripts/provisioning/) to set up the default grafana
+dashboard and data source.

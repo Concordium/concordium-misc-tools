@@ -26,11 +26,33 @@ CREATE TABLE IF NOT EXISTS blocks (
   id SERIAL8 PRIMARY KEY,
   hash BYTEA NOT NULL UNIQUE,
   timestamp INT8 NOT NULL,
-  height INT8 NOT NULL,
-  total_stake INT8 -- NULL means the block is NOT a payday block.
+  height INT8 NOT NULL
 );
 -- Create index on block timestamp to improve performance when querying for blocks within a timerange.
 CREATE INDEX IF NOT EXISTS blocks_timestamp ON blocks (timestamp);
+
+-- All payday blocks (only exists for protocol version 4 and onwards).
+CREATE TABLE IF NOT EXISTS paydays (
+  block INT8 PRIMARY KEY REFERENCES blocks(id) ON DELETE RESTRICT ON UPDATE RESTRICT,
+  total_equity_capital INT8 NOT NULL,
+  total_passively_delegated INT8 NOT NULL,
+  total_actively_delegated INT8 NOT NULL,
+  total_ccd INT8 NOT NULL,
+  pool_reward INT8 NOT NULL,
+  finalizer_reward INT8 NOT NULL,
+  foundation_reward INT8 NOT NULL,
+  -- Number of staking pools active in the payday period of the block, i.e. going forward until the next payday block.
+  num_pools INT8 NOT NULL,
+  -- Note: This is a snapshot of the number of open pools at the time of the payday block, i.e. NOT directly related to the number of staking pools for the preceding payday period (`num_pools`).
+  num_open_pools INT8 NOT NULL,
+  -- Same as above.
+  num_closed_for_new_pools INT8 NOT NULL,
+  -- Same as above.
+  num_closed_pools INT8 NOT NULL,
+  num_delegation_recipients INT8 NOT NULL,
+  num_finalizers INT8 NOT NULL,
+  num_delegators INT8 NOT NULL
+);
 
 -- All accounts created.
 CREATE TABLE IF NOT EXISTS accounts (
@@ -52,6 +74,7 @@ CREATE TABLE IF NOT EXISTS contracts (
   id SERIAL8 PRIMARY KEY,
   index INT8 NOT NULL,
   subindex INT8 NOT NULL,
+  version INT2 NOT NULL,
   module INT8 NOT NULL REFERENCES modules(id) ON DELETE RESTRICT ON UPDATE RESTRICT,
   block INT8 NOT NULL REFERENCES blocks(id) ON DELETE RESTRICT ON UPDATE RESTRICT, -- To support time series output.
   UNIQUE (index, subindex)
