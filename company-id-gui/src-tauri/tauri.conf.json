@@ -23,6 +23,11 @@
             }
         },
         "bundle": {
+            "windows": {
+                "certificateThumbprint": "3a5016ad02802c21ca5867aec72b9594af5cac57",
+                "digestAlgorithm": "sha256",
+                "timestampUrl": "http://timestamp.comodoca.com"
+            },
             "active": true,
             "targets": "all",
             "identifier": "software.concordium",

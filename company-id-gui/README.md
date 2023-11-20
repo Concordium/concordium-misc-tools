@@ -20,6 +20,8 @@ Then, to build:
 cargo tauri build
 ```
 
+To build a signed version for windows the `src-tauri/tauri.conf.json` has to be updated with the correct thumbprint following the last part of the procedure outline in the [documentation](https://tauri.app/v1/guides/distribution/sign-windows#c-prepare-variables).
+
 Or, to run:
 
 ```bash
