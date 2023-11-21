@@ -1,8 +1,6 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::{collections::BTreeMap, str::FromStr};
-
 use anyhow::Context;
 use concordium_rust_sdk::{
     base::{
@@ -10,7 +8,7 @@ use concordium_rust_sdk::{
         sigma_protocols::{common::prove, dlog},
     },
     common::{
-        types::{CredentialIndex, KeyIndex, KeyPair, TransactionTime},
+        types::{KeyIndex, KeyPair, TransactionTime},
         Versioned, VERSION_0,
     },
     id::{
@@ -30,7 +28,7 @@ use concordium_rust_sdk::{
     smart_contracts::common::{AccountAddress, SignatureThreshold},
     types::{
         transactions::{BlockItem, Payload},
-        AccountThreshold, AggregateSigPairing, BlockItemSummaryDetails, CredentialRegistrationID,
+        AggregateSigPairing, BlockItemSummaryDetails, CredentialRegistrationID,
     },
     v2,
 };
@@ -39,6 +37,7 @@ use key_derivation::{words_to_seed, ConcordiumHdWallet, CredentialContext, Net};
 use rand::*;
 use serde::{ser::SerializeStruct, Serialize};
 use serde_json::json;
+use std::{collections::BTreeMap, str::FromStr};
 use tauri::{api::dialog::blocking::FileDialogBuilder, async_runtime::Mutex};
 use tonic::transport::ClientTlsConfig;
 
@@ -80,9 +79,7 @@ struct State {
 struct WalletContext<'state> {
     wallet:     ConcordiumHdWallet,
     ip_context: IpContext<'state, AggregateSigPairing, ArCurve>,
-    /// The index of the identity. This may or may not be set depending on which
-    /// sub-menu the user is in. If it is not set this will default to 0.
-    id_index:   u32,
+    id_index:   Option<u32>,
     ip_index:   u32,
 }
 
@@ -107,10 +104,8 @@ impl State {
             Net::Testnet => &self.testnet_data,
         };
 
+        let id_index = *self.id_index.lock().await;
         let ip_index = net_data.ip_info.ip_identity.0;
-        // If id_index is not set we are creating a new identity request and should use
-        // the first identity index.
-        let id_index = self.id_index.lock().await.unwrap_or(0);
 
         let context = IpContext::new(
             &net_data.ip_info,
@@ -212,9 +207,10 @@ async fn save_request_file(state: tauri::State<'_, State>, net: Net) -> Result<(
     let WalletContext {
         wallet,
         ip_context,
-        id_index,
         ip_index,
+        ..
     } = state.wallet_context(&state.seedphrase).await?;
+    let id_index = 0;
 
     let prf_key: prf::SecretKey<ArCurve> = wallet
         .get_prf_key(ip_index, id_index)
@@ -268,8 +264,6 @@ async fn save_request_file(state: tauri::State<'_, State>, net: Net) -> Result<(
     Ok(())
 }
 
-const MAX_ACCOUNT_FAILURES: u8 = 20;
-
 #[derive(serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Account {
@@ -284,6 +278,10 @@ struct IdentityData {
     attributes: Vec<(String, String)>,
 }
 
+/// When finding all accounts for an identity, we stop after this many failures,
+/// i.e. if we have not found any accounts for this many consecutive indices.
+const MAX_ACCOUNT_FAILURES: u8 = 20;
+
 #[tauri::command]
 async fn get_identity_data(
     state: tauri::State<'_, State>,
@@ -295,7 +293,10 @@ async fn get_identity_data(
         wallet, ip_context, ..
     } = state.wallet_context(&seedphrase).await?;
 
-    // Find the identity index associated with the identity object
+    // Find the identity index associated with the identity object. We do this
+    // by computing the public key for each index and comparing it to the
+    // identity object's public key. If we do not find a match after 20
+    // iterations, we give up and return an error.
     let id_index = (0..20)
         .find_map(|id_idx| {
             let id_cred_sec = wallet
@@ -317,10 +318,10 @@ async fn get_identity_data(
     let client = client.as_mut().context("No node set.")?;
     let ip_index = ip_context.ip_info.ip_identity.0;
     let mut acc_fail_count = 0;
-    for acc_index in 0u8..=255 {
-        // This needs to be in a separate scope to avoid keeping prf_key across an await
-        // boundary
+    for acc_index in 0u8..=id_object.alist.max_accounts {
         let address = {
+            // This needs to be in a separate scope to avoid keeping prf_key across an await
+            // boundary
             let prf_key = wallet
                 .get_prf_key(ip_index, id_index)
                 .context("Failed to get PRF key.")?;
@@ -374,7 +375,7 @@ async fn create_account(
 ) -> Result<Account, Error> {
     let id_object = parse_id_object(id_object)?;
     let wallet_context = state.wallet_context(&seedphrase).await?;
-    let id_index = wallet_context.id_index;
+    let id_index = wallet_context.id_index.context("Identity index not set.")?;
     let net = wallet_context.wallet.net;
 
     if acc_index > id_object.alist.max_accounts {
@@ -455,6 +456,7 @@ async fn get_credential_deployment_info(
         ip_index,
         ..
     } = wallet_context;
+    let id_index = id_index.context("Identity index not set.")?;
 
     let policy: Policy<ArCurve, AttributeKind> = Policy {
         valid_to:   id_obj.get_attribute_list().valid_to,
@@ -490,7 +492,7 @@ async fn get_credential_deployment_info(
         credential_index: acc_index,
     };
 
-    let message_expiry = TransactionTime::seconds_after(5 * 60);
+    let message_expiry = TransactionTime::minutes_after(5);
     let (cdi, _) = create_credential(
         ip_context,
         &id_obj,
@@ -503,11 +505,7 @@ async fn get_credential_deployment_info(
     )
     .context("Could not generate the credential.")?;
 
-    let acc_keys = AccountKeys {
-        keys:      [(CredentialIndex::from(0), acc_data)].into(),
-        threshold: AccountThreshold::ONE,
-    };
-
+    let acc_keys: AccountKeys = acc_data.into();
     let acc_cred_msg = AccountCredentialMessage {
         message_expiry,
         credential: AccountCredential::Normal { cdi },
@@ -524,8 +522,8 @@ fn get_account_keys(
     let secret = wallet
         .get_account_signing_key(ip_index, id_index, acc_index as u32)
         .context("Failed to get account signing key.")?;
+    let public = (&secret).into();
     let mut keys = std::collections::BTreeMap::new();
-    let public = ed25519_dalek::PublicKey::from(&secret);
     keys.insert(KeyIndex(0), KeyPair { secret, public });
 
     Ok(CredentialData {
@@ -543,20 +541,16 @@ async fn save_keys(
     let WalletContext {
         wallet,
         ip_context,
-        id_index,
         ip_index,
         ..
     } = state.wallet_context(&seedphrase).await?;
     let net = wallet.net;
 
-    let acc_data = get_account_keys(&wallet, ip_index, id_index, account.acc_index)?;
-    let acc_keys = AccountKeys {
-        keys:      [(CredentialIndex::from(0), acc_data)].into(),
-        threshold: AccountThreshold::ONE,
-    };
+    let acc_data = get_account_keys(&wallet, ip_index, account.id_index, account.acc_index)?;
+    let acc_keys: AccountKeys = acc_data.into();
 
     let prf_key = wallet
-        .get_prf_key(ip_index, id_index)
+        .get_prf_key(ip_index, account.id_index)
         .context("Failed to get PRF key.")?;
     let cred_id_exp = prf_key
         .prf_exponent(account.acc_index)
@@ -594,6 +588,9 @@ async fn save_keys(
     Ok(())
 }
 
+/// When finding all identities for a seedphrase, we stop after this many
+/// failures, i.e. if we have failed to find accounts for a candidate identity
+/// this many times.
 const MAX_IDENTITY_FAILURES: u8 = 20;
 
 #[tauri::command]
@@ -616,9 +613,9 @@ async fn recover_identities(
     'id_loop: for id_index in 0.. {
         let mut acc_fail_count = 0;
         for acc_index in 0u8..=255 {
-            // This needs to be in a separate scope to avoid keeping prf_key across an await
-            // boundary
             let address = {
+                // This needs to be in a separate scope to avoid keeping prf_key across an await
+                // boundary
                 let prf_key = wallet
                     .get_prf_key(ip_index, id_index)
                     .context("Failed to get PRF key.")?;

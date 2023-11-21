@@ -194,13 +194,13 @@ function Accounts({ network, seedphrase, idObject, identityData, goBack, addAcco
 
             <h2>Accounts</h2>
             {identityData.accounts.length === 0 ? (
-                <p className="mb-3">
+                <p>
                     There are currently no accounts associated with the supplied identity. Press the button below to
                     create a new account.
                 </p>
             ) : (
                 <>
-                    <p className="mb-3">
+                    <p>
                         The below list of accounts are associated with the supplied identity. You can save the keys for
                         an account by pressing the &ldquo;Save&rdquo; button next to it.
                     </p>

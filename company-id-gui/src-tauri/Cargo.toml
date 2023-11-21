@@ -26,7 +26,6 @@ tonic = { version = "0.8", features = ["tls", "tls-roots"] } # Use system trust 
 thiserror = "1.0"
 chrono = "0.4"
 anyhow = "1.0"
-ed25519-dalek = "1.0"
 either = "1.6"
 directories = "5.0"
 strum = { version = "0.25", features = ["derive"] }

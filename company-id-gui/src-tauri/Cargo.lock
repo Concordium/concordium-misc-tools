@@ -652,7 +652,6 @@ dependencies = [
  "chrono",
  "concordium-rust-sdk",
  "directories",
- "ed25519-dalek",
  "either",
  "http",
  "key_derivation",

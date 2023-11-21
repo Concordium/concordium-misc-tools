@@ -116,9 +116,7 @@ function IdentityRecovery({ goHome, network }: SubMenuProps) {
 
     return accountList === null ? (
         <Form noValidate className="text-start" style={{ width: 700 }} onSubmit={recoverIdentities}>
-            <p className="mb-3">
-                This menu can recover credentials for the supplied identity. To begin, enter your seedphrase below.
-            </p>
+            <p>This menu can recover credentials for the supplied identity. To begin, enter your seedphrase below.</p>
             <Form.Label htmlFor="seedphrase">Enter seedphrase</Form.Label>
             <InputGroup className="mb-3">
                 <Form.Control
@@ -133,7 +131,7 @@ function IdentityRecovery({ goHome, network }: SubMenuProps) {
                 {seedphraseError && <Form.Control.Feedback type="invalid">{seedphraseError}</Form.Control.Feedback>}
             </InputGroup>
 
-            {recoverError && <p className="mb-3 text-danger">{recoverError}</p>}
+            {recoverError && <p className="text-danger">{recoverError}</p>}
 
             <div className="d-flex align-items-baseline">
                 <Button variant="secondary" onClick={goHome} disabled={recoveringIdentities}>
@@ -149,13 +147,13 @@ function IdentityRecovery({ goHome, network }: SubMenuProps) {
     ) : (
         <div className="text-start" style={{ width: 700 }}>
             {accountList.length === 0 ? (
-                <p className="mb-3">
+                <p>
                     There are currently no accounts associated with the supplied identity. Press the button below to
                     create a new account.
                 </p>
             ) : (
                 <>
-                    <p className="mb-3">
+                    <p>
                         The below list of accounts are associated with the supplied identity. You can save keys for
                         individual accounts or generate a request to recover the identity object. See the{' '}
                         {

@@ -7,9 +7,10 @@ import { Network, SubMenuProps } from '../App';
 
 enum Step {
     Info = 0,
-    ShowSeedphrase = 33,
-    ReenterSeedphrase = 67,
-    SaveRequest = 100,
+    ShowSeedphrase = 25,
+    ReenterSeedphrase = 50,
+    SaveRequest = 75,
+    DocumentationStep = 100,
 }
 
 function RequestIdentity({ goHome, network }: SubMenuProps) {
@@ -26,8 +27,14 @@ function RequestIdentity({ goHome, network }: SubMenuProps) {
                     back={() => setStep(Step.ShowSeedphrase)}
                     proceed={() => setStep(Step.SaveRequest)}
                 />
+            ) : step === Step.SaveRequest ? (
+                <SaveRequest
+                    network={network}
+                    back={() => setStep(Step.ReenterSeedphrase)}
+                    proceed={() => setStep(Step.DocumentationStep)}
+                />
             ) : (
-                <SaveRequest network={network} back={() => setStep(Step.ReenterSeedphrase)} />
+                <DocumentationStep back={() => setStep(Step.SaveRequest)} />
             )}
             <ProgressBar now={step} className="mt-3 mb-3" />
             <div className="text-start">Network: {network}</div>
@@ -58,20 +65,32 @@ function Info({ back, proceed }: NavigationProps) {
 
 function ShowSeedphrase({ back, proceed }: NavigationProps) {
     const [seedphrase, setSeedphrase] = useState('');
+    const [error, setError] = useState<string | null>(null);
+
     useEffect(() => {
+        // Should resolve immediately
         invoke<string>('get_seedphrase')
-            .then((res) => setSeedphrase(res))
-            .catch(console.error);
+            .then(setSeedphrase)
+            .catch((e: unknown) => {
+                // In theory this is infallible, so this should never happen
+                setError('Something went wrong. Try restarting the application.');
+                console.error(e);
+            });
     }, []);
 
     const [copyIcon, setCopyIcon] = useState('bi-clipboard');
     const copySeedphrase = () => {
-        setCopyIcon('bi-clipboard-check');
         writeText(seedphrase)
             .then(() => {
+                setCopyIcon('bi-clipboard-check');
                 setTimeout(() => setCopyIcon('bi-clipboard'), 1000);
             })
-            .catch(console.error);
+            .catch((e: unknown) => {
+                // The OS seemingly rejected the copy to clipboard request
+                setCopyIcon('bi-clipboard-x');
+                setTimeout(() => setCopyIcon('bi-clipboard'), 1000);
+                console.error(e);
+            });
     };
 
     return (
@@ -80,22 +99,26 @@ function ShowSeedphrase({ back, proceed }: NavigationProps) {
                 <strong>Important:</strong> Here is your seedphrase. It is the key that grants access to the created
                 account, so please write it down and store it in a safe place.
             </p>
-            <Card className="mb-3 text-start">
-                <CardHeader className="d-flex justify-content-between align-items-center">
-                    Seedphrase
-                    <Button variant="outline-secondary" onClick={copySeedphrase} disabled={seedphrase == ''}>
-                        <i className={copyIcon} />
-                    </Button>
-                </CardHeader>
-                <CardBody className="font-monospace">
-                    <span>{seedphrase}</span>
-                </CardBody>
-            </Card>
+            {error ? (
+                <p className="text-danger mb-3">{error}</p>
+            ) : (
+                <Card className="mb-3 text-start">
+                    <CardHeader className="d-flex justify-content-between align-items-center">
+                        Seedphrase
+                        <Button variant="outline-secondary" onClick={copySeedphrase} disabled={seedphrase == ''}>
+                            <i className={copyIcon} />
+                        </Button>
+                    </CardHeader>
+                    <CardBody className="font-monospace">
+                        <span>{seedphrase}</span>
+                    </CardBody>
+                </Card>
+            )}
             <div className="d-flex justify-content-between">
                 <Button variant="secondary" onClick={back}>
                     Back
                 </Button>
-                <Button variant="primary" onClick={proceed} disabled={seedphrase == ''}>
+                <Button variant="primary" onClick={proceed} disabled={seedphrase == '' || error !== null}>
                     Proceed
                 </Button>
             </div>
@@ -154,34 +177,22 @@ function ReenterSeedphrase({ back, proceed }: NavigationProps) {
     );
 }
 
-function SaveRequest({ back, network }: Omit<NavigationProps, 'proceed'> & { network: Network }) {
+function SaveRequest({ back, proceed, network }: NavigationProps & { network: Network }) {
     const [isSaving, setIsSaving] = useState(false);
     const saveRequest = async () => {
         setIsSaving(true);
         try {
             await invoke('save_request_file', { net: network });
+            proceed();
         } finally {
             setIsSaving(false);
         }
-    };
-    const openDocumentation = () => {
-        open('https://developer.concordium.software/en/mainnet/net/guides/company-identities.html').catch(
-            console.error,
-        );
     };
 
     return (
         <>
             <p className="text-start">
-                Save the <code>request.json</code> file to your computer by clicking the button below. Then, follow the
-                guide in the{' '}
-                {
-                    // eslint-disable-next-line jsx-a11y/anchor-is-valid
-                    <a href="#" onClick={openDocumentation}>
-                        Concordium Documentation
-                    </a>
-                }{' '}
-                for instructions on what to do with the file. After saving the file, you may close this program.
+                Save the <code>request.json</code> file to your computer by clicking the button below.
             </p>
             <div className="d-flex">
                 <Button variant="secondary" onClick={back} disabled={isSaving}>
@@ -193,6 +204,40 @@ function SaveRequest({ back, network }: Omit<NavigationProps, 'proceed'> & { net
                         Generate request.json
                     </Button>{' '}
                 </div>
+            </div>
+        </>
+    );
+}
+
+function DocumentationStep({ back }: Omit<NavigationProps, 'proceed'>) {
+    const [error, setError] = useState<string | null>(null);
+
+    const openDocumentation = () => {
+        open('https://developer.concordium.software/en/mainnet/net/guides/company-identities.html').catch(
+            (e: unknown) => {
+                setError(
+                    'Failed to open documentation. Try manually entering it in your browser: \
+                    https://developer.concordium.software/en/mainnet/net/guides/company-identities.html',
+                );
+                console.error(e);
+            },
+        );
+    };
+
+    return (
+        <>
+            <p className="text-start">
+                Follow the guide in the documentation to complete the process of creating a company ID by clicking the
+                button below.
+            </p>
+            {error && <p className="text-start text-danger">{error}</p>}
+            <div className="d-flex justify-content-between">
+                <Button variant="secondary" onClick={back}>
+                    Back
+                </Button>
+                <Button variant="primary" onClick={openDocumentation}>
+                    Open documentation
+                </Button>
             </div>
         </>
     );
