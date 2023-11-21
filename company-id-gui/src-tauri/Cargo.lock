@@ -645,7 +645,7 @@ dependencies = [
 
 [[package]]
 name = "company-id-gui"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "bitvec",

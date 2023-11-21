@@ -1,10 +1,9 @@
 [package]
 name = "company-id-gui"
-version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
-license = ""
-repository = ""
+version = "1.0.0"
+description = "Concordium Company ID GUI"
+authors = ["Concordium <developers@concordium.com>"]
+license = "Apache-2.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
