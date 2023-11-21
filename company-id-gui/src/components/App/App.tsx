@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Button, Form, InputGroup } from 'react-bootstrap';
 import RequestIdentity from '../RequestIdentity/RequestIdentity';
 import CreateAccount from '../CreateAccount/CreateAccount';
-import { Network } from '.';
+import { AppError, Network } from '.';
 import { version } from '../../../package.json';
 import { invoke } from '@tauri-apps/api/tauri';
 import IdentityRecovery from '../IdentityRecovery/IdentityRecovery';
@@ -35,8 +35,8 @@ function App() {
         try {
             await invoke('set_node_and_network', { endpoint: actualNodeURL, net: network });
             setMenuItem(menuItem);
-        } catch (e) {
-            setNodeURLError(e as string);
+        } catch (e: unknown) {
+            setNodeURLError((e as AppError).message);
         } finally {
             setIsConnecting(false);
         }

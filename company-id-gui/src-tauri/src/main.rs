@@ -37,7 +37,7 @@ use concordium_rust_sdk::{
 use either::Either;
 use key_derivation::{words_to_seed, ConcordiumHdWallet, CredentialContext, Net};
 use rand::*;
-use serde::Serialize;
+use serde::{ser::SerializeStruct, Serialize};
 use serde_json::json;
 use tauri::{api::dialog::blocking::FileDialogBuilder, async_runtime::Mutex};
 use tonic::transport::ClientTlsConfig;
@@ -127,7 +127,7 @@ impl State {
     }
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, strum::IntoStaticStr)]
 enum Error {
     #[error("Error connecting to node: {0}")]
     Connection(#[from] tonic::transport::Error),
@@ -154,7 +154,10 @@ impl Serialize for Error {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer, {
-        self.to_string().serialize(serializer)
+        let mut error = serializer.serialize_struct("Error", 2)?;
+        error.serialize_field("type", <&str>::from(self))?;
+        error.serialize_field("message", &self.to_string())?;
+        error.end()
     }
 }
 

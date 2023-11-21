@@ -1,5 +1,5 @@
 import { Button, Form, InputGroup, ListGroup } from 'react-bootstrap';
-import { SubMenuProps } from '../App';
+import { AppError, AppErrorType, SubMenuProps } from '../App';
 import { useMemo, useState } from 'react';
 import { invoke } from '@tauri-apps/api/tauri';
 import { open } from '@tauri-apps/api/shell';
@@ -43,6 +43,8 @@ function IdentityRecovery({ goHome, network }: SubMenuProps) {
         e.preventDefault();
         const formData = new FormData(e.target as HTMLFormElement);
         const seedphrase = formData.get('seedphrase') as string;
+
+        setSeedphraseError(null);
         if (seedphrase === '') {
             setSeedphraseError('Please enter your seedphrase.');
             return;
@@ -56,9 +58,9 @@ function IdentityRecovery({ goHome, network }: SubMenuProps) {
             setAccountList(accounts);
             setRecoverError(null);
         } catch (e: unknown) {
-            const errString = e as string;
-            if (errString.startsWith('Invalid seedphrase')) setSeedphraseError(errString);
-            else setRecoverError(errString);
+            const err = e as AppError;
+            if (err.type === AppErrorType.InvalidSeedphrase) setSeedphraseError(err.message);
+            else setRecoverError(err.message);
         } finally {
             setRecoveringIdentities(false);
         }
@@ -82,7 +84,7 @@ function IdentityRecovery({ goHome, network }: SubMenuProps) {
             await invoke('save_keys', { seedphrase: seedphraseState, account });
             setRecoverError(null);
         } catch (e: unknown) {
-            setRecoverError(e as string);
+            setRecoverError((e as AppError).message);
         } finally {
             setSavingKeys(null);
         }
@@ -100,7 +102,7 @@ function IdentityRecovery({ goHome, network }: SubMenuProps) {
             await invoke('generate_recovery_request', { seedphrase: seedphraseState, idIndex: selectedIdentity });
             setRecoverError(null);
         } catch (e: unknown) {
-            setRecoverError(e as string);
+            setRecoverError((e as AppError).message);
         } finally {
             setGeneratingRecoveryRequest(false);
         }

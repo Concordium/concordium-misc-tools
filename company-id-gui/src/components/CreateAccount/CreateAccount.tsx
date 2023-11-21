@@ -1,5 +1,5 @@
 import { Button, Form, InputGroup, ListGroup, Table } from 'react-bootstrap';
-import { Network, SubMenuProps } from '../App';
+import { AppError, AppErrorType, Network, SubMenuProps } from '../App';
 import { FormEvent, useState } from 'react';
 import { invoke } from '@tauri-apps/api/tauri';
 
@@ -27,6 +27,9 @@ function CreateAccount({ goHome, network }: SubMenuProps) {
         const formData = new FormData(e.target as HTMLFormElement);
         const seedphrase = formData.get('seedphrase') as string;
         const idObject = formData.get('id-object') as File;
+
+        setSeedphraseError(null);
+        setIdObjectError(null);
         if (seedphrase === '') {
             setSeedphraseError('Please enter your seedphrase.');
         }
@@ -45,13 +48,12 @@ function CreateAccount({ goHome, network }: SubMenuProps) {
         try {
             const result = await invoke<IdentityData>('get_identity_data', { seedphrase, idObject: idObjectText });
             setIdentityData(result);
-            setSeedphraseError(null);
-            setIdObjectError(null);
         } catch (e: unknown) {
-            const errString = e as string;
-            if (errString.startsWith('Invalid identity object')) setIdObjectError(errString);
-            else if (errString.startsWith('Invalid seedphrase')) setSeedphraseError(errString);
-            else setGetAccountsError(errString);
+            const err = e as AppError;
+            console.log(err);
+            if (err.type === AppErrorType.InvalidIdObject) setIdObjectError(err.message);
+            else if (err.type == AppErrorType.InvalidSeedphrase) setSeedphraseError(err.message);
+            else setGetAccountsError(err.message);
         } finally {
             setGettingAccounts(false);
         }
@@ -150,7 +152,7 @@ function Accounts({ network, seedphrase, idObject, identityData, goBack, addAcco
             setCreateAccountError(null);
             addAccount(account);
         } catch (e: unknown) {
-            setCreateAccountError(e as string);
+            setCreateAccountError((e as AppError).message);
         } finally {
             setCreatingAccount(false);
         }
@@ -161,7 +163,7 @@ function Accounts({ network, seedphrase, idObject, identityData, goBack, addAcco
         try {
             await invoke('save_keys', { seedphrase, account });
         } catch (e: unknown) {
-            setCreateAccountError(e as string);
+            setCreateAccountError((e as AppError).message);
         } finally {
             setSavingKeys(null);
         }
