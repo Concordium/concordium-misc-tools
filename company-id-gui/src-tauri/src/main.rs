@@ -197,7 +197,7 @@ async fn set_node_and_network(
         return Err(Error::NotCaughtUp);
     }
 
-    * state.node.lock().await = Some(client);
+    *state.node.lock().await = Some(client);
     *state.net.lock().await = Some(net);
 
     Ok(())
@@ -254,7 +254,8 @@ async fn save_request_file(state: tauri::State<'_, State>, net: Net) -> Result<(
 
     let mut file_builder = FileDialogBuilder::new()
         .set_file_name("request.json")
-        .set_title("Save request file");
+        .set_title("Save request file")
+        .add_filter("JSON", &["json"]);
     if let Ok(cd) = std::env::current_dir() {
         file_builder = file_builder.set_directory(cd);
     } else {
@@ -440,6 +441,7 @@ async fn create_account(
     let Some(path) = FileDialogBuilder::new()
         .set_file_name("account-keys.json")
         .set_title("Save account key file")
+        .add_filter("JSON", &["json"])
         .save_file()
     else {
         return Ok(account);
@@ -590,6 +592,7 @@ async fn save_keys(
     let Some(path) = FileDialogBuilder::new()
         .set_file_name("account-keys.json")
         .set_title("Save account key file")
+        .add_filter("JSON", &["json"])
         .save_file()
     else {
         return Ok(());
@@ -720,6 +723,7 @@ async fn generate_recovery_request(
     let Some(path) = FileDialogBuilder::new()
         .set_file_name("recovery-request.json")
         .set_title("Save recovery request file")
+        .add_filter("JSON", &["json"])
         .save_file()
     else {
         return Ok(());
