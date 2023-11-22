@@ -31,6 +31,8 @@ function App() {
             setNodeURLError('Please enter a node URL.');
             return;
         }
+
+        setNodeURLError(null);
         setIsConnecting(true);
         try {
             await invoke('set_node_and_network', { endpoint: actualNodeURL, net: network });

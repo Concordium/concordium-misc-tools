@@ -132,6 +132,8 @@ enum Error {
     FileError(#[from] Box<dyn std::error::Error>),
     #[error("Node is not on the {0} network.")]
     WrongNetwork(Net),
+    #[error("Node is not caught up. Please try again later.")]
+    NotCaughtUp,
     #[error("Invalid identity object: {0}")]
     InvalidIdObject(#[from] serde_json::Error),
     #[error("Invalid seedphrase.")]
@@ -172,7 +174,8 @@ async fn set_node_and_network(
     } else {
         endpoint
     };
-    let mut client = v2::Client::new(endpoint).await?;
+    let ep = endpoint.connect_timeout(std::time::Duration::from_secs(5));
+    let mut client = v2::Client::new(ep).await?;
 
     // Check that the node is on the right network
     let genesis_hash = client.get_consensus_info().await?.genesis_block;
@@ -184,7 +187,17 @@ async fn set_node_and_network(
         return Err(Error::WrongNetwork(net));
     }
 
-    *state.node.lock().await = Some(client);
+    let time_since_last_finalized = client
+        .get_block_info(v2::BlockIdentifier::LastFinal)
+        .await?
+        .response
+        .block_slot_time
+        .signed_duration_since(chrono::Utc::now());
+    if time_since_last_finalized.abs().num_seconds() > 60 {
+        return Err(Error::NotCaughtUp);
+    }
+
+    * state.node.lock().await = Some(client);
     *state.net.lock().await = Some(net);
 
     Ok(())
