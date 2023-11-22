@@ -1,21 +1,18 @@
 use anyhow::{bail, Context};
 use clap::{Args, Parser, Subcommand};
 use concordium::{
-    common::{Versioned, VERSION_0},
+    common::{base16_decode_string, base16_encode_string, Versioned, VERSION_0},
     id::{
         account_holder::generate_id_recovery_request,
         constants::{ArCurve, AttributeKind, IpPairing},
         pedersen_commitment::Value as PedersenValue,
         types::{
-            account_address_from_registration_id, IdRecoveryRequest, IdentityObjectV1, IpInfo,
+            account_address_from_registration_id, GlobalContext, IdRecoveryRequest,
+            IdentityObjectV1, IpInfo,
         },
     },
     v2,
     v2::BlockIdentifier,
-};
-use concordium_base::{
-    common::{base16_decode_string, base16_encode_string},
-    id::types::GlobalContext,
 };
 use concordium_rust_sdk as concordium;
 use key_derivation::{ConcordiumHdWallet, PrfKey};
