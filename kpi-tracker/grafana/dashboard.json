@@ -532,7 +532,7 @@
         "type": "postgres",
         "uid": "${postgres_db}"
       },
-      "description": "The total amount of minted CCD since genesis. This is updated once per payday.",
+      "description": "The amount of minted CCD in a period. This is updated once per payday. Note that since minting is compounded the amount of minted CCD is increased every payday, assuming the mint rate stays constant.",
       "fieldConfig": {
         "defaults": {
           "color": {
