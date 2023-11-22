@@ -49,9 +49,7 @@ function App() {
             <img src="/ccd-logo.svg" className="mb-4" width={100} height={100} alt="Concordium logo" />
             {menuItem === null ? (
                 <>
-                    <div className="d-flex align-items-baseline">
-                        <h1 className="mb-4">Concordium Company ID</h1> <span className="ms-2">v. {version}</span>
-                    </div>
+                    <h1 className="mb-4">Concordium Company ID</h1>
                     <div className="mb-3" style={{ width: 500 }}>
                         <InputGroup className="mb-3">
                             <InputGroup.Text>Network</InputGroup.Text>
@@ -109,6 +107,7 @@ function App() {
                             Identity Recovery
                         </Button>
                     </div>
+                    <span className="ms-auto text-body text-opacity-25">v. {version}</span>
                 </>
             ) : menuItem === MenuItem.RequestIdentity ? (
                 <RequestIdentity goHome={() => setMenuItem(null)} network={network} />
