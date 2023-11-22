@@ -131,7 +131,7 @@ enum Error {
     #[error("Failed to create file: {0}")]
     FileError(#[from] Box<dyn std::error::Error>),
     #[error("Node is not on the {0} network.")]
-    WrongNetwork(Net),
+    WrongNetwork(&'static str),
     #[error("Node is not caught up. Please try again later.")]
     NotCaughtUp,
     #[error("Invalid identity object: {0}")]
@@ -184,7 +184,10 @@ async fn set_node_and_network(
         Net::Testnet => TESTNET_GENESIS_HASH,
     };
     if genesis_hash.to_string() != expected_genesis_hash {
-        return Err(Error::WrongNetwork(net));
+        match net {
+            Net::Mainnet => return Err(Error::WrongNetwork("Mainnet")),
+            Net::Testnet => return Err(Error::WrongNetwork("Testnet")),
+        }
     }
 
     let time_since_last_finalized = client
