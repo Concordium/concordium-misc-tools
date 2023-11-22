@@ -2063,6 +2063,7 @@ dependencies = [
  "chrono",
  "clap",
  "concordium-rust-sdk",
+ "concordium_base",
  "http",
  "key_derivation",
  "reqwest",
