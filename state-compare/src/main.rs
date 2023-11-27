@@ -6,6 +6,7 @@
 //! whether the particular aspect of the state is changed between the two blocks
 //! and/or nodes.
 use anyhow::ensure;
+use indicatif::ProgressBar;
 use clap::Parser;
 use colored::Colorize;
 use concordium_rust_sdk::{
@@ -26,17 +27,17 @@ use std::{
     },
 };
 
-/// Like println!, but print the provided message in yellow.
+/// Like eprintln!, but print the provided message in yellow.
 macro_rules! warn {
     ($($arg:tt)*) => {{
-        println!("{}", format!($($arg)*).yellow());
+        eprintln!("{}", format!($($arg)*).yellow());
     }};
 }
 
-/// Like println!, but print the provided message in red.
+/// Like eprintln!, but print the provided message in red.
 macro_rules! diff {
     ($($arg:tt)*) => {{
-        println!("{}", format!($($arg)*).red());
+        eprintln!("{}", format!($($arg)*).red());
     }};
 }
 
@@ -111,7 +112,6 @@ async fn main() -> anyhow::Result<()> {
         ci1.genesis_block == ci2.genesis_block,
         "Genesis blocks for the two nodes differ."
     );
-
     let block1 = match app.block1 {
         Some(bh) => bh,
         None => {
@@ -127,7 +127,7 @@ async fn main() -> anyhow::Result<()> {
         None => ci1.current_era_genesis_block,
     };
     let (pv1, pv2) = get_protocol_versions(&mut client, &mut client2, block1, block2).await?;
-    println!(
+    eprintln!(
         "Comparings state in blocks {} (protocol version {}) and {} (protocol version {}).",
         block1, pv1, block2, pv2
     );
@@ -153,7 +153,7 @@ async fn main() -> anyhow::Result<()> {
     if found_diff {
         anyhow::bail!(format!("States in the two blocks {} and {} differ.", block1, block2).red());
     } else {
-        println!("{}", "No changes in the state detected.".green());
+        eprintln!("{}", "No changes in the state detected.".green());
     }
     Ok(())
 }
@@ -331,10 +331,14 @@ async fn compare_accounts(
     pv1: ProtocolVersion,
     pv2: ProtocolVersion,
 ) -> anyhow::Result<bool> {
-    println!("Comparing account lists.");
+    eprintln!("Comparing account lists.");
     let (found_diff, accounts1) = compare_account_lists(client1, client2, block1, block2).await?;
 
-    println!("Querying all accounts.");
+    eprintln!("Got {} accounts.", accounts1.len());
+
+    let bar = ProgressBar::new(accounts1.len() as u64);
+
+    eprintln!("Querying and comparing all accounts.");
     let acc_comp = accounts1
         .into_iter()
         .map(|acc| {
@@ -354,6 +358,7 @@ async fn compare_accounts(
 
     acc_comp
         .try_for_each_concurrent(Some(10), |(a1, a2)| {
+            bar.inc(1);
             let flag = flag.clone();
             async move {
                 if a1.response != a2.response {
@@ -461,6 +466,7 @@ async fn compare_accounts(
             }
         })
         .await?;
+    bar.finish_and_clear();
     Ok(found_diff | flag.load(Ordering::Acquire))
 }
 
@@ -470,7 +476,7 @@ async fn compare_modules(
     block1: BlockHash,
     block2: BlockHash,
 ) -> anyhow::Result<bool> {
-    println!("Comparing all modules.");
+    eprintln!("Comparing all modules.");
     let (mut found_diff, ms1) = compare_module_lists(client1, client2, block1, block2).await?;
     for m in ms1 {
         let (m1, m2) = futures::try_join!(
@@ -491,10 +497,13 @@ async fn compare_instances(
     block1: BlockHash,
     block2: BlockHash,
 ) -> anyhow::Result<bool> {
-    println!("Querying all contracts.");
+    eprintln!("Querying all contracts.");
     let (mut found_diff, cs1) = compare_instance_lists(client1, client2, block1, block2).await?;
 
+    let bar = ProgressBar::new(cs1.len() as u64);
+
     for c in cs1 {
+        bar.inc(1);
         let (ci1, ci2) = futures::try_join!(
             client1.get_instance_info(c, block1),
             client2.get_instance_info(c, block2)
@@ -525,6 +534,7 @@ async fn compare_instances(
             found_diff = true;
         }
     }
+    bar.finish_and_clear();
     Ok(found_diff)
 }
 
@@ -536,7 +546,7 @@ async fn compare_passive_delegators(
     pv1: ProtocolVersion,
     pv2: ProtocolVersion,
 ) -> anyhow::Result<bool> {
-    println!("Checking passive delegators.");
+    eprintln!("Checking passive delegators.");
     let mut passive1 = if pv1 >= ProtocolVersion::P4 {
         client1
             .get_passive_delegators(block1)
@@ -575,7 +585,7 @@ async fn compare_active_bakers(
     pv1: ProtocolVersion,
     pv2: ProtocolVersion,
 ) -> anyhow::Result<bool> {
-    println!("Checking active bakers.");
+    eprintln!("Checking active bakers.");
     let mut found_diff = false;
     let (ei1, ei2) = futures::try_join!(
         client1.get_election_info(block1),
@@ -603,7 +613,7 @@ async fn compare_baker_pools(
     pv1: ProtocolVersion,
     pv2: ProtocolVersion,
 ) -> anyhow::Result<bool> {
-    println!("Checking baker pools.");
+    eprintln!("Checking baker pools.");
     let mut pools1 = client1
         .get_baker_list(block1)
         .await?
