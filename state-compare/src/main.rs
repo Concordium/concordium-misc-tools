@@ -6,7 +6,6 @@
 //! whether the particular aspect of the state is changed between the two blocks
 //! and/or nodes.
 use anyhow::ensure;
-use indicatif::ProgressBar;
 use clap::Parser;
 use colored::Colorize;
 use concordium_rust_sdk::{
@@ -19,6 +18,7 @@ use concordium_rust_sdk::{
     v2,
 };
 use futures::{StreamExt, TryStreamExt};
+use indicatif::ProgressBar;
 use std::{
     fmt::Display,
     sync::{
@@ -339,107 +339,82 @@ async fn compare_accounts(
     let bar = ProgressBar::new(accounts1.len() as u64);
 
     eprintln!("Querying and comparing all accounts.");
-    let acc_comp = accounts1
-        .into_iter()
-        .map(|acc| {
-            let mut a_client = client1.clone();
-            let mut a_client2 = client2.clone();
-            async move {
-                let accid = acc.into();
-                futures::try_join!(
-                    a_client.get_account_info(&accid, block1),
-                    a_client2.get_account_info(&accid, block2)
-                )
-            }
-        })
-        .collect::<futures::stream::FuturesUnordered<_>>();
-
     let flag = Arc::new(AtomicBool::new(found_diff));
+    for acc in accounts1 {
+        let mut a_client = client1.clone();
+        let mut a_client2 = client2.clone();
+        let accid = acc.into();
+        let (mut a1, mut a2) = futures::try_join!(
+            a_client.get_account_info(&accid, block1),
+            a_client2.get_account_info(&accid, block2)
+        )?;
 
-    acc_comp
-        .try_for_each_concurrent(Some(10), |(a1, a2)| {
-            bar.inc(1);
-            let flag = flag.clone();
-            async move {
-                if a1.response != a2.response {
-                    match (&a1.response.account_stake, a2.response.account_stake) {
-                        (None, None) => {
-                            diff!(
-                                "Account {} differs. It does not have stake either in {} or {}.",
-                                a1.response.account_address,
-                                block1,
-                                block2
-                            );
-                            flag.store(true, Ordering::Release);
-                        }
-                        (None, Some(_)) => {
-                            diff!(
-                                "Account {} differs. It does not have stake in {} but does in {}.",
-                                a1.response.account_address,
-                                block1,
-                                block2
-                            );
-                            flag.store(true, Ordering::Release);
-                        }
-                        (Some(_), None) => {
-                            diff!(
-                                "Account {} differs. It does have stake in {} but does not in {}.",
-                                a1.response.account_address,
-                                block1,
-                                block2
-                            );
-                            flag.store(true, Ordering::Release);
-                        }
-                        (Some(s1), Some(s2)) => {
-                            // This is special case handling of P3->P4 upgrade.
-                            if pv1 == ProtocolVersion::P3 && pv2 == ProtocolVersion::P4 {
-                                match s1 {
-                                    concordium_rust_sdk::types::AccountStakingInfo::Baker {
-                                        pool_info: None,
-                                        ..
-                                    } => match s2 {
+        bar.inc(1);
+        // We ignore the order of transactions in the release schedules since they are
+        // not guaranteed to be in any specific order.
+        for s in a1.response.account_release_schedule.schedule.iter_mut() {
+            s.transactions.sort_unstable();
+        }
+        for s in a2.response.account_release_schedule.schedule.iter_mut() {
+            s.transactions.sort_unstable();
+        }
+        if a1.response != a2.response {
+            match (&a1.response.account_stake, a2.response.account_stake) {
+                (None, None) => {
+                    diff!(
+                        "Account {} differs. It does not have stake either in {} or {}.",
+                        a1.response.account_address,
+                        block1,
+                        block2
+                    );
+                    flag.store(true, Ordering::Release);
+                }
+                (None, Some(_)) => {
+                    diff!(
+                        "Account {} differs. It does not have stake in {} but does in {}.",
+                        a1.response.account_address,
+                        block1,
+                        block2
+                    );
+                    flag.store(true, Ordering::Release);
+                }
+                (Some(_), None) => {
+                    diff!(
+                        "Account {} differs. It does have stake in {} but does not in {}.",
+                        a1.response.account_address,
+                        block1,
+                        block2
+                    );
+                    flag.store(true, Ordering::Release);
+                }
+                (Some(s1), Some(s2)) => {
+                    // This is special case handling of P3->P4 upgrade.
+                    if pv1 == ProtocolVersion::P3 && pv2 == ProtocolVersion::P4 {
+                        match s1 {
+                            concordium_rust_sdk::types::AccountStakingInfo::Baker {
+                                pool_info: None,
+                                ..
+                            } => match s2 {
+                                concordium_rust_sdk::types::AccountStakingInfo::Baker {
+                                    staked_amount,
+                                    restake_earnings,
+                                    baker_info,
+                                    pending_change,
+                                    pool_info: Some(_),
+                                } => {
+                                    let s2_no_pool =
                                         concordium_rust_sdk::types::AccountStakingInfo::Baker {
                                             staked_amount,
                                             restake_earnings,
                                             baker_info,
                                             pending_change,
-                                            pool_info: Some(_),
-                                        } => {
-                                            let s2_no_pool =
-                                            concordium_rust_sdk::types::AccountStakingInfo::Baker {
-                                                staked_amount,
-                                                restake_earnings,
-                                                baker_info,
-                                                pending_change,
-                                                pool_info: None,
-                                            };
-                                            let a2_no_pool = AccountInfo {
-                                                account_stake: Some(s2_no_pool),
-                                                ..a2.response
-                                            };
-                                            if a1.response != a2_no_pool {
-                                                diff!(
-                                                    "Account {} differs. It does have stake in \
-                                                     both {} and {}.",
-                                                    a1.response.account_address,
-                                                    block1,
-                                                    block2
-                                                );
-                                                flag.store(true, Ordering::Release);
-                                            }
-                                        }
-                                        _ => {
-                                            diff!(
-                                                "Account {} differs. It does have stake in both \
-                                                 {} and {}.",
-                                                a1.response.account_address,
-                                                block1,
-                                                block2
-                                            );
-                                            flag.store(true, Ordering::Release);
-                                        }
-                                    },
-                                    _ => {
+                                            pool_info: None,
+                                        };
+                                    let a2_no_pool = AccountInfo {
+                                        account_stake: Some(s2_no_pool),
+                                        ..a2.response
+                                    };
+                                    if a1.response != a2_no_pool {
                                         diff!(
                                             "Account {} differs. It does have stake in both {} \
                                              and {}.",
@@ -450,7 +425,17 @@ async fn compare_accounts(
                                         flag.store(true, Ordering::Release);
                                     }
                                 }
-                            } else {
+                                _ => {
+                                    diff!(
+                                        "Account {} differs. It does have stake in both {} and {}.",
+                                        a1.response.account_address,
+                                        block1,
+                                        block2
+                                    );
+                                    flag.store(true, Ordering::Release);
+                                }
+                            },
+                            _ => {
                                 diff!(
                                     "Account {} differs. It does have stake in both {} and {}.",
                                     a1.response.account_address,
@@ -460,12 +445,19 @@ async fn compare_accounts(
                                 flag.store(true, Ordering::Release);
                             }
                         }
+                    } else {
+                        diff!(
+                            "Account {} differs. It does have stake in both {} and {}.",
+                            a1.response.account_address,
+                            block1,
+                            block2
+                        );
+                        flag.store(true, Ordering::Release);
                     }
                 }
-                Ok(())
             }
-        })
-        .await?;
+        }
+    }
     bar.finish_and_clear();
     Ok(found_diff | flag.load(Ordering::Acquire))
 }
@@ -478,7 +470,10 @@ async fn compare_modules(
 ) -> anyhow::Result<bool> {
     eprintln!("Comparing all modules.");
     let (mut found_diff, ms1) = compare_module_lists(client1, client2, block1, block2).await?;
+    let bar = ProgressBar::new(ms1.len() as u64);
+
     for m in ms1 {
+        bar.inc(1);
         let (m1, m2) = futures::try_join!(
             client1.get_module_source(&m, block1),
             client2.get_module_source(&m, block2)
@@ -488,6 +483,7 @@ async fn compare_modules(
             diff!("Module {} differs.", m);
         }
     }
+    bar.finish_and_clear();
     Ok(found_diff)
 }
 
