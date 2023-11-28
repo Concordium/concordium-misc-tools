@@ -1,6 +1,6 @@
-## Unreleased changes
+## 1.1.1
 
-- Stop `wccd` mode from minting to everyone faster than the specified TPS.
+Stop `wccd` mode from minting to everyone faster than the specified TPS.
 
 ## 1.1.0
 
