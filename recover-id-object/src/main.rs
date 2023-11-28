@@ -324,7 +324,7 @@ async fn recover_from_secrets(
 ) -> anyhow::Result<()> {
     let request = generate_id_recovery_request(
         &id.ip_info,
-        &crypto_params,
+        crypto_params,
         &id_cred_sec,
         chrono::Utc::now().timestamp() as u64,
     )
