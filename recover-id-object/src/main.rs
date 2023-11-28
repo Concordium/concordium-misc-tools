@@ -176,7 +176,10 @@ async fn generate_secrets(
                 .get_account_info(&address.into(), v2::BlockIdentifier::LastFinal)
                 .await
             {
-                Ok(_) => break 'id_loop,
+                Ok(_) => {
+                    println!("Account with address {address} found.");
+                    break 'id_loop;
+                }
                 Err(e) if e.is_not_found() => {
                     acc_fail_count += 1;
                     if acc_fail_count > MAX_ACCOUNT_FAILURES {
@@ -193,7 +196,7 @@ async fn generate_secrets(
         id_index += 1;
     }
 
-    println!("Found account at identity index {id_index}.");
+    println!("id-index: {id_index}");
     let prf_key = wallet
         .get_prf_key(ip_index, id_index)
         .context("Failed to get PRF key.")?;
@@ -245,7 +248,8 @@ async fn recover_identity(
         let id_cred_sec: PedersenValue<ArCurve> =
             base16_decode_string(&recovery_args.id_cred_sec.context("Missing prf_key")?)?;
         let id_index = recovery_args.id_index.context("Missing id_index")?;
-        let success = recover_from_secrets(
+
+        recover_from_secrets(
             &mut concordium_client,
             &client,
             &id,
@@ -254,12 +258,8 @@ async fn recover_identity(
             id_cred_sec,
             id_index,
         )
-        .await?;
-        if success {
-            Ok(())
-        } else {
-            Err(anyhow::anyhow!("Could not recover identity."))
-        }
+        .await
+        .context("Could not recover identity")
     }
 }
 
@@ -279,7 +279,7 @@ async fn recover_from_wallet(
         let id_cred_sec = wallet.get_id_cred_sec(id.ip_info.ip_identity.0, id_index)?;
         let id_cred_sec = PedersenValue::new(id_cred_sec);
         let prf_key = wallet.get_prf_key(id.ip_info.ip_identity.0, id_index)?;
-        let success = recover_from_secrets(
+        let result = recover_from_secrets(
             &mut concordium_client,
             &client,
             &id,
@@ -288,15 +288,15 @@ async fn recover_from_wallet(
             id_cred_sec,
             id_index,
         )
-        .await?;
+        .await;
 
-        if success {
+        if result.is_ok() {
             failure_count = 0;
         } else {
             failure_count += 1;
         }
         if failure_count > MAX_IDENTITY_FAILURES {
-            break;
+            bail!("Failed to find an identity for wallet.");
         }
     }
     Ok(())
@@ -310,7 +310,7 @@ async fn recover_from_secrets(
     prf_key: PrfKey,
     id_cred_sec: PedersenValue<ArCurve>,
     id_index: u32,
-) -> anyhow::Result<bool> {
+) -> anyhow::Result<()> {
     let request = generate_id_recovery_request(
         &id.ip_info,
         &crypto_params,
@@ -331,12 +331,11 @@ async fn recover_from_secrets(
         .await?;
 
     if !response.status().is_success() {
-        return Ok(false);
+        bail!("Recovery request failed: {}", response.text().await?);
     }
 
-    let id_object = response
-        .json::<Versioned<IdentityObjectV1<IpPairing, ArCurve, AttributeKind>>>()
-        .await?;
+    let id_object: Versioned<IdentityObjectV1<IpPairing, ArCurve, AttributeKind>> =
+        response.json().await?;
     std::fs::write(
         format!("{}-{id_index}.json", id.ip_info.ip_identity.0),
         serde_json::to_string_pretty(&serde_json::json!({
@@ -366,7 +365,7 @@ async fn recover_from_secrets(
         }
     }
 
-    Ok(true)
+    Ok(())
 }
 
 #[derive(serde::Serialize)]
