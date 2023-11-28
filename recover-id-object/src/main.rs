@@ -279,6 +279,7 @@ async fn recover_from_wallet(
 
     // Try to find all identities for this wallet.
     let mut failure_count = 0;
+    let mut success_count = 0;
     for id_index in 0.. {
         let id_cred_sec = wallet.get_id_cred_sec(id.ip_info.ip_identity.0, id_index)?;
         let id_cred_sec = PedersenValue::new(id_cred_sec);
@@ -296,14 +297,20 @@ async fn recover_from_wallet(
 
         if result.is_ok() {
             failure_count = 0;
+            success_count += 1;
         } else {
             failure_count += 1;
         }
         if failure_count > MAX_IDENTITY_FAILURES {
-            bail!("Failed to find an identity for wallet.");
+            break;
         }
     }
-    Ok(())
+
+    if success_count == 0 {
+        Err(anyhow::anyhow!("Failed to find an identity for wallet."))
+    } else {
+        Ok(())
+    }
 }
 
 async fn recover_from_secrets(
