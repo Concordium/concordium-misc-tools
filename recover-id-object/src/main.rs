@@ -43,7 +43,9 @@ struct Api {
 
 #[derive(Debug, Subcommand)]
 enum Command {
+    #[clap(about = "Generate secrets for a given seed phrase.")]
     GenerateSecrets(GenerateSecretsArgs),
+    #[clap(about = "Recover an identity from a seed phrase or generated secrets.")]
     RecoverIdentity(RecoverIdentityArgs),
 }
 
@@ -156,6 +158,7 @@ async fn generate_secrets(
         .await?
         .response;
 
+    // Loop through all identities until we find one with an account.
     let mut id_index = 0;
     let mut id_fail_count = 0;
     'id_loop: loop {
@@ -274,6 +277,7 @@ async fn recover_from_wallet(
     let words = seed_phrase.split_ascii_whitespace().collect::<Vec<_>>();
     let wallet = ConcordiumHdWallet::from_words(&words, key_derivation::Net::Testnet);
 
+    // Try to find all identities for this wallet.
     let mut failure_count = 0;
     for id_index in 0.. {
         let id_cred_sec = wallet.get_id_cred_sec(id.ip_info.ip_identity.0, id_index)?;
@@ -346,6 +350,7 @@ async fn recover_from_secrets(
     )?;
     println!("Got identity object for index {id_index}.");
 
+    // Print all accounts for this identity.
     let mut acc_fail_count = 0;
     for acc_idx in 0u8..=id_object.value.alist.max_accounts {
         let reg_id = prf_key.prf(crypto_params.elgamal_generator(), acc_idx)?;
