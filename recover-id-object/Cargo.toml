@@ -8,8 +8,8 @@ edition = "2021"
 [dependencies]
 clap = { version = "4", features = ["env", "derive"] }
 anyhow = "1"
-tokio = { version = "1.20", features = ["rt-multi-thread", "macros"] }
-tonic = { version = "0.8", features = ["tls", "tls-roots", "tls-webpki-roots"] }
+tokio = {version = "1.20", features = ["rt-multi-thread", "macros"]}
+tonic = {version = "0.8", features = ["tls", "tls-roots", "tls-webpki-roots"]}
 thiserror = "1"
 
 concordium-rust-sdk = { path = "../deps/concordium-rust-sdk", version = "*" }
