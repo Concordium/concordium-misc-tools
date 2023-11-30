@@ -540,10 +540,11 @@ impl Generate for TransferCis2Generator {
 
 /// A generator that makes transactions that wrap, unwrap, and transfer WCCDs.
 pub struct WccdGenerator {
-    client: Cis2Contract,
-    args:   CommonArgs,
-    nonce:  Nonce,
-    count:  usize,
+    client:   Cis2Contract,
+    args:     CommonArgs,
+    nonce:    Nonce,
+    count:    usize,
+    accounts: Vec<AccountAddress>,
 }
 
 #[derive(concordium_std::Serial)]
@@ -596,8 +597,7 @@ impl WccdGenerator {
 
         // Give everyone on the network a wCCD token to increase the size of the state
         // of the contract.
-        println!("Minting wCCD tokens for everyone...");
-        let receivers: Vec<_> = client
+        let accounts: Vec<_> = client
             .get_account_list(BlockIdentifier::LastFinal)
             .await
             .context("Could not obtain a list of accounts.")?
@@ -605,36 +605,14 @@ impl WccdGenerator {
             .try_collect()
             .await?;
 
-        let mut client = Cis2Contract::create(client, contract_address).await?;
-
-        for recv in receivers {
-            let params = WrapParams {
-                to:   Receiver::Account(recv),
-                data: AdditionalData::new(vec![])?,
-            };
-
-            let metadata = ContractTransactionMetadata {
-                sender_address: args.keys.address,
-                nonce:          nonce.nonce,
-                expiry:         TransactionTime::seconds_after(args.expiry),
-                energy:         GivenEnergy::Absolute(Energy::from(3500)),
-                amount:         Amount::from_micro_ccd(1),
-            };
-            let transaction_hash = client
-                .update::<_, anyhow::Error>(&args.keys, &metadata, "wrap", &params)
-                .await?;
-            nonce.nonce.next_mut();
-            println!(
-                "{}: Transferred 1 wCCD to {recv} (hash = {transaction_hash}).",
-                chrono::Utc::now(),
-            );
-        }
+        let client = Cis2Contract::create(client, contract_address).await?;
 
         Ok(Self {
             client,
             args,
             nonce: nonce.nonce,
             count: 0,
+            accounts,
         })
     }
 }
@@ -651,10 +629,32 @@ impl Generate for WccdGenerator {
             amount:         Amount::zero(),
         };
 
+        // Before doing anything else, we transfer a single wCCD to each account on the
+        // network to increase the size of the contract state.
+        if self.count < self.accounts.len() {
+            let recv = self.accounts[self.count];
+            let params = WrapParams {
+                to:   Receiver::Account(recv),
+                data: AdditionalData::new(vec![])?,
+            };
+            metadata.amount = Amount::from_micro_ccd(1);
+
+            let tx = self.client.make_update::<_, anyhow::Error>(
+                &self.args.keys,
+                &metadata,
+                "wrap",
+                &params,
+            )?;
+            self.nonce.next_mut();
+            self.count += 1;
+
+            return Ok(tx);
+        }
+
         // We modulate between wrapping, transferring, and unwrapping. All wCCD are
         // minted for and transferred to our own account, which is fine for testing,
         // since there is no special logic for this in the contract.
-        let tx = match self.count % 3 {
+        let tx = match (self.count - self.accounts.len()) % 3 {
             // Wrap
             0 => {
                 let params = WrapParams {
