@@ -467,7 +467,7 @@ checksum = "acbf1af155f9b9ef647e42cdc158db4b64a1b61f743629225fde6f3e0be2a7c7"
 
 [[package]]
 name = "concordium-contracts-common"
-version = "8.0.0"
+version = "8.1.1"
 dependencies = [
  "base64 0.21.0",
  "bs58",
@@ -487,7 +487,7 @@ dependencies = [
 
 [[package]]
 name = "concordium-contracts-common-derive"
-version = "4.0.0"
+version = "4.0.1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -496,7 +496,7 @@ dependencies = [
 
 [[package]]
 name = "concordium-rust-sdk"
-version = "3.0.1"
+version = "3.2.0"
 dependencies = [
  "aes-gcm",
  "anyhow",
@@ -520,12 +520,13 @@ dependencies = [
  "sha2 0.10.6",
  "thiserror",
  "tokio",
+ "tokio-stream",
  "tonic",
 ]
 
 [[package]]
 name = "concordium-smart-contract-engine"
-version = "3.0.0"
+version = "3.1.0"
 dependencies = [
  "anyhow",
  "byteorder",
@@ -559,11 +560,11 @@ dependencies = [
 
 [[package]]
 name = "concordium_base"
-version = "3.0.1"
+version = "3.2.0"
 dependencies = [
  "aes",
  "anyhow",
- "base64 0.13.1",
+ "base64 0.21.0",
  "bs58",
  "byteorder",
  "cbc",
