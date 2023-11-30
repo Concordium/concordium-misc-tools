@@ -573,11 +573,7 @@ version = "3.2.0"
 dependencies = [
  "aes",
  "anyhow",
-<<<<<<< HEAD
- "base64 0.21.0",
-=======
  "base64 0.21.5",
->>>>>>> origin/main
  "bs58",
  "byteorder",
  "cbc",
