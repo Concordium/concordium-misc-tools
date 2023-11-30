@@ -36,19 +36,14 @@ jobs:
           - wallet-connect-test-bench/smart-contract/Cargo.toml
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
       - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: ${{ env.RUST_FMT }}
-          override: true
-          components: rustfmt
+        run: |
+          rustup default ${{ env.RUST_FMT }}
+          rustup component add rustfmt
       - name: Format
-        uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --manifest-path=${{ matrix.crates }} -- --check
+        run: |
+          cargo fmt --manifest-path=${{ matrix.crates }} -- --check
 
   "lint_clippy":
     name: lint:clippy
@@ -71,20 +66,14 @@ jobs:
           - wallet-connect-test-bench/smart-contract/Cargo.toml
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           submodules: recursive
       - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: ${{ env.RUST_CLIPPY }}
-          override: true
-          target: ${{ env.TARGET }}
-          components: rustfmt, clippy
+        run: |
+          rustup default ${{ env.RUST_CLIPPY }}
+          rustup component add clippy
       - name: Clippy
-        uses: actions-rs/cargo@v1
-        with:
-          command: clippy
-          args: --manifest-path ${{ matrix.crates }} -- -D warnings
+        run: |
+          cargo clippy --manifest-path ${{ matrix.crates }} -- -D warnings
 
