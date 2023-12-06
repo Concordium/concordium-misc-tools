@@ -22,7 +22,7 @@ cargo tauri build
 
 To build a signed version for windows the `src-tauri/tauri.conf.json` has to be updated with the correct thumbprint following the last part of the procedure outline in the [documentation](https://tauri.app/v1/guides/distribution/sign-windows#c-prepare-variables).
 
-To build a signed version for MacOS, you have to add some environment variables to the build command:
+To build a signed version for MacOS, you have to add the following environment variables to the build command:
 * `APPLE_ID` - The apple id used for signing
 * `APPLE_PASSWORD` - The password for the apple ID
 * `APPLE_TEAM_ID` - ID of concordiums Apple developer team
