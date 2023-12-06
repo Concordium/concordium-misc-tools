@@ -29,7 +29,6 @@ jobs:
           - genesis-creator/Cargo.toml
           - id-verifier/Cargo.toml
           - kpi-tracker/Cargo.toml
-          - network-dashboard-proxy/Cargo.toml
           - chain-prometheus-exporter/Cargo.toml
           - recover-id-object/Cargo.toml
           - generator/Cargo.toml
@@ -59,7 +58,6 @@ jobs:
           - genesis-creator/Cargo.toml
           - id-verifier/Cargo.toml
           - kpi-tracker/Cargo.toml
-          - network-dashboard-proxy/Cargo.toml
           - chain-prometheus-exporter/Cargo.toml
           - recover-id-object/Cargo.toml
           - generator/Cargo.toml
