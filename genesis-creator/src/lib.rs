@@ -971,7 +971,7 @@ pub fn handle_assemble(config_path: &Path, verbose: bool) -> anyhow::Result<()> 
                 }
             }
         }
-        ProtocolConfig::P6 { parameters } => {
+        ProtocolConfig::P6 { parameters } | ProtocolConfig::P7 { parameters } => {
             let update_keys = read_json(&make_relative(config_path, &config.governance_keys)?)?;
 
             let initial_state = GenesisStateCPV2 {
@@ -1189,7 +1189,7 @@ pub fn handle_generate(config_path: &Path, verbose: bool) -> anyhow::Result<()> 
                 }
             }
         }
-        ProtocolConfig::P6 { parameters } => {
+        ProtocolConfig::P6 { parameters } | ProtocolConfig::P7 { parameters } => {
             let update_keys = updates_v1(config.out.update_keys, config.updates)?;
 
             let initial_state = GenesisStateCPV2 {
