@@ -131,7 +131,7 @@ enum Error {
     #[error("Failed to create file: {0}")]
     FileError(#[from] Box<dyn std::error::Error>),
     #[error("Node is not on the {0} network.")]
-    WrongNetwork(Net),
+    WrongNetwork(&'static str),
     #[error("Node is not caught up. Please try again later.")]
     NotCaughtUp,
     #[error("Invalid identity object: {0}")]
@@ -184,7 +184,10 @@ async fn set_node_and_network(
         Net::Testnet => TESTNET_GENESIS_HASH,
     };
     if genesis_hash.to_string() != expected_genesis_hash {
-        return Err(Error::WrongNetwork(net));
+        match net {
+            Net::Mainnet => return Err(Error::WrongNetwork("Mainnet")),
+            Net::Testnet => return Err(Error::WrongNetwork("Testnet")),
+        }
     }
 
     let time_since_last_finalized = client
@@ -197,7 +200,7 @@ async fn set_node_and_network(
         return Err(Error::NotCaughtUp);
     }
 
-    * state.node.lock().await = Some(client);
+    *state.node.lock().await = Some(client);
     *state.net.lock().await = Some(net);
 
     Ok(())
@@ -254,7 +257,8 @@ async fn save_request_file(state: tauri::State<'_, State>, net: Net) -> Result<(
 
     let mut file_builder = FileDialogBuilder::new()
         .set_file_name("request.json")
-        .set_title("Save request file");
+        .set_title("Save request file")
+        .add_filter("JSON", &["json"]);
     if let Ok(cd) = std::env::current_dir() {
         file_builder = file_builder.set_directory(cd);
     } else {
@@ -440,6 +444,7 @@ async fn create_account(
     let Some(path) = FileDialogBuilder::new()
         .set_file_name("account-keys.json")
         .set_title("Save account key file")
+        .add_filter("JSON", &["json"])
         .save_file()
     else {
         return Ok(account);
@@ -590,6 +595,7 @@ async fn save_keys(
     let Some(path) = FileDialogBuilder::new()
         .set_file_name("account-keys.json")
         .set_title("Save account key file")
+        .add_filter("JSON", &["json"])
         .save_file()
     else {
         return Ok(());
@@ -720,6 +726,7 @@ async fn generate_recovery_request(
     let Some(path) = FileDialogBuilder::new()
         .set_file_name("recovery-request.json")
         .set_title("Save recovery request file")
+        .add_filter("JSON", &["json"])
         .save_file()
     else {
         return Ok(());

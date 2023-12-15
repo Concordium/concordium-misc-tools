@@ -69,7 +69,7 @@ The transactions are sent in a round robin fashion.
 
 ### `wccd`
 
-The tool first deploys and initializes the [`cis2-wccd`](https://github.com/Concordium/concordium-rust-smart-contracts/tree/fcc668d87207aaf07b43f5a3b02b6d0a634368d0/examples/cis2-wccd) example contract. It then mints 1 (micro) wCCD for each account on the chain in order to increase the size of the state of the contract. The transactions alternate between wrapping, transferring, and unwrapping wCCD. In each case the receiver is the sender, since it is simple and there is no special handling of this in the contract.
+The tool first deploys and initializes the [`cis2-wccd`](https://github.com/Concordium/concordium-rust-smart-contracts/tree/fcc668d87207aaf07b43f5a3b02b6d0a634368d0/examples/cis2-wccd) example contract. It then starts minting 1 (micro) wCCD for each account on the chain in order to increase the size of the state of the contract. After that, the transactions alternate between wrapping, transferring, and unwrapping wCCD. In each case the receiver is the sender, since it is simple and there is no special handling of this in the contract.
 
 ### `register-credentials`
 

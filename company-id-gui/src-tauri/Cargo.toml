@@ -1,6 +1,6 @@
 [package]
 name = "company-id-gui"
-version = "1.0.0"
+version = "1.0.2"
 description = "Concordium Company ID GUI"
 authors = ["Concordium <developers@concordium.com>"]
 license = "Apache-2.0"
