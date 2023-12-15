@@ -6,13 +6,10 @@ use concordium::{
         account_holder::generate_id_recovery_request,
         constants::{ArCurve, AttributeKind, IpPairing},
         pedersen_commitment::Value as PedersenValue,
-        types::{
-            account_address_from_registration_id, GlobalContext, IdRecoveryRequest,
-            IdentityObjectV1, IpInfo,
-        },
+        types::{GlobalContext, IdRecoveryRequest, IdentityObjectV1, IpInfo},
     },
-    v2,
-    v2::BlockIdentifier,
+    types::CredentialRegistrationID,
+    v2::{self, AccountIdentifier, BlockIdentifier},
 };
 use concordium_rust_sdk as concordium;
 use key_derivation::{ConcordiumHdWallet, PrfKey};
@@ -25,18 +22,18 @@ struct Api {
         long = "concordium-api",
         name = "concordium-api",
         help = "GRPC V2 interface of the Concordium node.",
-        default_value = "http://localhost:20000"
+        default_value = "http://localhost:20000",
+        global = true
     )]
     api: concordium::v2::Endpoint,
     /// Request timeout for Concordium node requests.
     #[clap(
         long,
         help = "Timeout for requests to the Concordium node.",
-        default_value = "10"
+        default_value = "10",
+        global = true
     )]
     concordium_request_timeout: u64,
-    #[clap(long = "ip-index", help = "Identity of the identity provider.")]
-    ip_index: u32,
     #[clap(subcommand)]
     command: Command,
 }
@@ -54,10 +51,16 @@ struct GenerateSecretsArgs {
     /// Location of the seed phrase.
     #[clap(long, help = "Path to the seed phrase file.")]
     concordium_wallet: std::path::PathBuf,
+    #[clap(long = "ip-index", help = "Identity of the identity provider.")]
+    ip_index:          u32,
+    #[clap(
+        long = "id-index",
+        help = "Index of the identity to generate secrets for."
+    )]
+    id_index:          u32,
 }
 
 #[derive(Debug, Args)]
-// #[clap(group = ArgGroup::new("recovery-secrets").multiple(true))]
 struct RecoverIdentityArgs {
     /// Recovery URL start.
     #[clap(
@@ -74,6 +77,8 @@ struct RecoverIdentityArgs {
         required_unless_present_all = ["prf_key", "id_cred_sec", "id_index"]
     )]
     concordium_wallet: Option<std::path::PathBuf>,
+    #[clap(long = "ip-index", help = "Identity of the identity provider.")]
+    ip_index:          u32,
     #[clap(
         long,
         help = "Hex encoded id credential secret. Specify either this or --concordium-wallet.",
@@ -127,12 +132,8 @@ async fn main() -> anyhow::Result<()> {
     };
 
     match app.command {
-        Command::GenerateSecrets(args) => {
-            generate_secrets(concordium_client, app.ip_index, args).await
-        }
-        Command::RecoverIdentity(args) => {
-            recover_identity(concordium_client, app.ip_index, args).await
-        }
+        Command::GenerateSecrets(args) => generate_secrets(concordium_client, args).await,
+        Command::RecoverIdentity(args) => recover_identity(concordium_client, args).await,
     }
 }
 
@@ -146,7 +147,6 @@ const MAX_IDENTITY_FAILURES: u8 = 20;
 
 async fn generate_secrets(
     mut concordium_client: v2::Client,
-    ip_index: u32,
     generate_args: GenerateSecretsArgs,
 ) -> anyhow::Result<()> {
     let seed_phrase = std::fs::read_to_string(generate_args.concordium_wallet)?;
@@ -158,48 +158,49 @@ async fn generate_secrets(
         .await?
         .response;
 
+    let ip_index = generate_args.ip_index;
+
     // Loop through all identities until we find one with an account.
-    let mut id_index = 0;
-    let mut id_fail_count = 0;
-    'id_loop: loop {
-        let mut acc_fail_count = 0;
-        for acc_index in 0u8..=255 {
-            let address = {
-                // This needs to be in a separate scope to avoid keeping prf_key across an await
-                // boundary
-                let prf_key = wallet
-                    .get_prf_key(ip_index, id_index)
-                    .context("Failed to get PRF key.")?;
-                let reg_id = prf_key
-                    .prf(crypto_params.elgamal_generator(), acc_index)
-                    .context("Failed to compute PRF.")?;
-                account_address_from_registration_id(&reg_id)
-            };
-            match concordium_client
-                .get_account_info(&address.into(), v2::BlockIdentifier::LastFinal)
-                .await
-            {
-                Ok(_) => {
-                    println!("Account with address {address} found.");
-                    break 'id_loop;
-                }
-                Err(e) if e.is_not_found() => {
-                    acc_fail_count += 1;
-                    if acc_fail_count > MAX_ACCOUNT_FAILURES {
-                        id_fail_count += 1;
-                        if id_fail_count > MAX_IDENTITY_FAILURES {
-                            bail!("Failed to find an identity.");
-                        }
-                        break;
-                    }
-                }
-                Err(e) => bail!("Cannot query the node: {e}"),
+    let id_index = generate_args.id_index;
+    let mut acc_fail_count = 0;
+    let mut accs_found = 0;
+    for acc_index in 0u8..=255 {
+        let reg_id = {
+            // This needs to be in a separate scope to avoid keeping prf_key across an await
+            // boundary
+            let prf_key = wallet
+                .get_prf_key(ip_index, id_index)
+                .context("Failed to get PRF key.")?;
+            let reg_id = prf_key
+                .prf(crypto_params.elgamal_generator(), acc_index)
+                .context("Failed to compute PRF.")?;
+            AccountIdentifier::CredId(CredentialRegistrationID::new(reg_id))
+        };
+        match concordium_client
+            .get_account_info(&reg_id, v2::BlockIdentifier::LastFinal)
+            .await
+        {
+            Ok(info) => {
+                println!(
+                    "Account with address {} found.",
+                    info.response.account_address
+                );
+                accs_found += 1;
             }
+            Err(e) if e.is_not_found() => {
+                acc_fail_count += 1;
+                if acc_fail_count > MAX_ACCOUNT_FAILURES {
+                    break;
+                }
+            }
+            Err(e) => bail!("Cannot query the node: {e}"),
         }
-        id_index += 1;
     }
 
-    println!("id-index: {id_index}");
+    if accs_found == 0 {
+        println!("No accounts were found for the supplied indices.");
+    }
+
     let prf_key = wallet
         .get_prf_key(ip_index, id_index)
         .context("Failed to get PRF key.")?;
@@ -215,7 +216,6 @@ async fn generate_secrets(
 
 async fn recover_identity(
     mut concordium_client: v2::Client,
-    ip_index: u32,
     recovery_args: RecoverIdentityArgs,
 ) -> anyhow::Result<()> {
     let client = reqwest::Client::new();
@@ -226,7 +226,7 @@ async fn recover_identity(
         .json::<Vec<WpIpInfos>>()
         .await?;
 
-    let Some(id) = ids.into_iter().find(|x| x.ip_info.ip_identity == ip_index.into()) else {
+    let Some(id) = ids.into_iter().find(|x| x.ip_info.ip_identity == recovery_args.ip_index.into()) else {
         anyhow::bail!("Identity provider not found.");
     };
     println!("Using identity provider {}", id.ip_info.ip_description.name);
@@ -361,12 +361,15 @@ async fn recover_from_secrets(
     let mut acc_fail_count = 0;
     for acc_idx in 0u8..=id_object.value.alist.max_accounts {
         let reg_id = prf_key.prf(crypto_params.elgamal_generator(), acc_idx)?;
-        let address = account_address_from_registration_id(&reg_id);
+        let address = AccountIdentifier::CredId(CredentialRegistrationID::new(reg_id));
         match concordium_client
-            .get_account_info(&address.into(), BlockIdentifier::LastFinal)
+            .get_account_info(&address, BlockIdentifier::LastFinal)
             .await
         {
-            Ok(_) => println!("Account with address {address} found."),
+            Ok(info) => println!(
+                "Account with address {} found.",
+                info.response.account_address
+            ),
             Err(e) if e.is_not_found() => {
                 acc_fail_count += 1;
                 if acc_fail_count > MAX_ACCOUNT_FAILURES {
