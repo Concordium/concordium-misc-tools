@@ -594,6 +594,10 @@ pub enum GenesisData {
         core:          CoreGenesisParametersV1,
         initial_state: GenesisStateCPV2,
     },
+    P7 {
+        core:          CoreGenesisParametersV1,
+        initial_state: GenesisStateCPV2,
+    },
 }
 
 impl GenesisData {
@@ -661,6 +665,16 @@ impl GenesisData {
                 core.serial(&mut hasher);
                 initial_state.serial(&mut hasher);
             }
+            GenesisData::P7 {
+                core,
+                initial_state,
+            } => {
+                ProtocolVersion::P7.serial(&mut hasher);
+                // tag of initial genesis
+                0u8.serial(&mut hasher);
+                core.serial(&mut hasher);
+                initial_state.serial(&mut hasher);
+            }
         }
         let bytes: [u8; 32] = hasher.finalize().into();
         bytes.into()
@@ -688,6 +702,7 @@ pub fn make_genesis_data_cpv0(
         ProtocolVersion::P4 => None,
         ProtocolVersion::P5 => None,
         ProtocolVersion::P6 => None,
+        ProtocolVersion::P7 => None,
     }
 }
 
@@ -750,6 +765,16 @@ impl Serial for GenesisData {
                 initial_state,
             } => {
                 8u8.serial(out);
+                // tag of initial genesis
+                0u8.serial(out);
+                core.serial(out);
+                initial_state.serial(out)
+            }
+            GenesisData::P7 {
+                core,
+                initial_state,
+            } => {
+                9u8.serial(out);
                 // tag of initial genesis
                 0u8.serial(out);
                 core.serial(out);

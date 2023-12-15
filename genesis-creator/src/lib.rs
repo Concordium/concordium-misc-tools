@@ -971,7 +971,7 @@ pub fn handle_assemble(config_path: &Path, verbose: bool) -> anyhow::Result<()> 
                 }
             }
         }
-        ProtocolConfig::P6 { parameters } => {
+        ProtocolConfig::P6 { parameters } | ProtocolConfig::P7 { parameters } => {
             let update_keys = read_json(&make_relative(config_path, &config.governance_keys)?)?;
 
             let initial_state = GenesisStateCPV2 {
@@ -983,9 +983,17 @@ pub fn handle_assemble(config_path: &Path, verbose: bool) -> anyhow::Result<()> 
                 leadership_election_nonce: parameters.leadership_election_nonce,
                 accounts,
             };
-            GenesisData::P6 {
-                core: parameters.core.try_into()?,
-                initial_state,
+            let core = parameters.core.try_into()?;
+            match protocol_version {
+                ProtocolVersion::P6 => GenesisData::P6 {
+                    core,
+                    initial_state,
+                },
+                ProtocolVersion::P7 => GenesisData::P7 {
+                    core,
+                    initial_state,
+                },
+                _ => unreachable!("Already checked."),
             }
         }
     };
@@ -1189,7 +1197,7 @@ pub fn handle_generate(config_path: &Path, verbose: bool) -> anyhow::Result<()> 
                 }
             }
         }
-        ProtocolConfig::P6 { parameters } => {
+        ProtocolConfig::P6 { parameters } | ProtocolConfig::P7 { parameters } => {
             let update_keys = updates_v1(config.out.update_keys, config.updates)?;
 
             let initial_state = GenesisStateCPV2 {
@@ -1201,9 +1209,17 @@ pub fn handle_generate(config_path: &Path, verbose: bool) -> anyhow::Result<()> 
                 leadership_election_nonce: parameters.leadership_election_nonce,
                 accounts,
             };
-            GenesisData::P6 {
-                core: parameters.core.try_into()?,
-                initial_state,
+            let core = parameters.core.try_into()?;
+            match protocol_version {
+                ProtocolVersion::P6 => GenesisData::P6 {
+                    core,
+                    initial_state,
+                },
+                ProtocolVersion::P7 => GenesisData::P7 {
+                    core,
+                    initial_state,
+                },
+                _ => unreachable!("Already checked."),
             }
         }
     };
