@@ -182,7 +182,7 @@ async fn generate_secrets(
         {
             Ok(info) => {
                 println!(
-                    "Account with address {} found.",
+                    "Account with address {} found at index {acc_index}.",
                     info.response.account_address
                 );
                 accs_found += 1;
@@ -367,7 +367,7 @@ async fn recover_from_secrets(
             .await
         {
             Ok(info) => println!(
-                "Account with address {} found.",
+                "Account with address {} found at index {acc_idx}",
                 info.response.account_address
             ),
             Err(e) if e.is_not_found() => {
