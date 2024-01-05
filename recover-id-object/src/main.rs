@@ -58,6 +58,12 @@ struct GenerateSecretsArgs {
         help = "Index of the identity to generate secrets for."
     )]
     id_index:          u32,
+    #[clap(
+        long,
+        help = "Network to generate secrets for.",
+        default_value = "testnet"
+    )]
+    network:           key_derivation::Net,
 }
 
 #[derive(Debug, Args)]
@@ -100,6 +106,8 @@ struct RecoverIdentityArgs {
         requires_all = ["id_cred_sec", "prf_key"]
     )]
     id_index:          Option<u32>,
+    #[clap(long, help = "Network to recover on.", default_value = "testnet")]
+    network:           key_derivation::Net,
 }
 
 #[tokio::main]
@@ -151,7 +159,7 @@ async fn generate_secrets(
 ) -> anyhow::Result<()> {
     let seed_phrase = std::fs::read_to_string(generate_args.concordium_wallet)?;
     let words = seed_phrase.split_ascii_whitespace().collect::<Vec<_>>();
-    let wallet = ConcordiumHdWallet::from_words(&words, key_derivation::Net::Testnet);
+    let wallet = ConcordiumHdWallet::from_words(&words, generate_args.network)?;
 
     let crypto_params = concordium_client
         .get_cryptographic_parameters(BlockIdentifier::LastFinal)
@@ -243,6 +251,7 @@ async fn recover_identity(
             id,
             crypto_params,
             concordium_wallet,
+            recovery_args.network,
         )
         .await
     } else {
@@ -272,10 +281,11 @@ async fn recover_from_wallet(
     id: WpIpInfos,
     crypto_params: GlobalContext<ArCurve>,
     concordium_wallet: std::path::PathBuf,
+    network: key_derivation::Net,
 ) -> anyhow::Result<()> {
     let seed_phrase = std::fs::read_to_string(concordium_wallet)?;
     let words = seed_phrase.split_ascii_whitespace().collect::<Vec<_>>();
-    let wallet = ConcordiumHdWallet::from_words(&words, key_derivation::Net::Testnet);
+    let wallet = ConcordiumHdWallet::from_words(&words, network)?;
 
     // Try to find all identities for this wallet.
     let mut failure_count = 0;
