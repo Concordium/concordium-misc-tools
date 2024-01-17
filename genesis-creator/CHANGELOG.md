@@ -1,5 +1,7 @@
 # Unreleased
 
+- Support genesis data format of protocol version 7.
+
 ## 0.2.0
 
 - Support genesis data format of protocol version 6.
