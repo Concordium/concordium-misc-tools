@@ -51,3 +51,5 @@ jobs:
         file: ${{ matrix.dockerfile }}
         push: true
         tags: concordium/recover-id-object:latest
+        cache-from: type=registry,ref=concordium/recover-id-object:latest
+        cache-to: type=inline
