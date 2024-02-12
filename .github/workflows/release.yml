@@ -53,7 +53,7 @@ jobs:
         file: ${{ matrix.dockerfile }}
         push: true
         build-args: |
-          build_image=1.70.0
+          build_image=${{ env.RUST_VERSION }}
         tags: concordium/recover-id-object:latest
         cache-from: type=registry,ref=concordium/recover-id-object:latest
         cache-to: type=inline
