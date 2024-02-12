@@ -29,7 +29,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        environment: ${{ fromJSON(needs.changes.outputs.environments) }}
+        environment: ${{ fromJSON(needs.changes.outputs.dockerfiles) }}
     runs-on: ubuntu-latest
     environment: production
     steps:
