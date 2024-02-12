@@ -4,6 +4,10 @@ on:
   pull_request:
     branches: main
 
+env:
+  DOCKER_BASE_IMAGE: debian:buster-slim
+  RUST_VERSION: "1.70.0"
+
 jobs:
   changes:
     runs-on: ubuntu-latest
@@ -48,6 +52,8 @@ jobs:
         context: .
         file: ${{ matrix.dockerfile }}
         push: true
+        build-args:
+          - build_image=${{ env.RUST_VERSION }}
         tags: concordium/recover-id-object:latest
         cache-from: type=registry,ref=concordium/recover-id-object:latest
         cache-to: type=inline
