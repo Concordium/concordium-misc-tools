@@ -52,8 +52,8 @@ jobs:
         context: .
         file: ${{ matrix.dockerfile }}
         push: true
-        build-args:
-          - build_image=${{ env.RUST_VERSION }}
+        build-args: |
+          build_image=${{ env.RUST_VERSION }}
         tags: concordium/recover-id-object:latest
         cache-from: type=registry,ref=concordium/recover-id-object:latest
         cache-to: type=inline
