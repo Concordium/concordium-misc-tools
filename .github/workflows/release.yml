@@ -25,7 +25,7 @@ jobs:
 
   build-and-push:
     needs: [ changes ]
-    if: needs.changes.outputs.environments != '[]'
+    if: needs.changes.outputs.dockerfiles != '[]'
     strategy:
       fail-fast: false
       matrix:
