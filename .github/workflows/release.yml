@@ -1,5 +1,6 @@
 jobs:
-  steps:
-    - name: Format
-      run: |
-        echo "Hello, World!"
+  say_hello:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print Hello World
+        run: echo "Hello World!"
