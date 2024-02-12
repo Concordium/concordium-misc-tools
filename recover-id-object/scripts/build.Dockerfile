@@ -1,4 +1,4 @@
-FROM rust:1.68.2 AS build
+FROM rust:1.70.0 AS build
 
 WORKDIR /usr/app/recover-id-object
 
@@ -7,16 +7,21 @@ COPY deps /usr/app/deps
 RUN mkdir src && echo 'fn main() { println!("Dummy!"); }' > ./src/main.rs
 
 RUN cargo build --release --locked
-RUN rm recover-id-object/src/*.rs
+
+RUN rm src/*.rs
 COPY recover-id-object/src ./src
+RUN cargo build --release --locked
 
-#RUN rm ./target/release/deps/pokemon_api*
-#RUN cargo build --release --locked
-#
-#FROM ${base_image}
-#RUN apt-get update && \
-#    apt-get -y install \
-#      ca-certificates \
-#    && rm -rf /var/lib/apt/lists/*
-#COPY --from=build /build/chain-prometheus-exporter/target/release/chain-prometheus-exporter /usr/local/bin/
+FROM debian:buster-slim
 
+WORKDIR /usr/app
+
+COPY --from=build /usr/app/recover-id-object/target/release/recover-id-object ./recover-id-object
+
+RUN groupadd -g 10001 appuser && \
+   useradd --system --no-create-home -u 10000 -g appuser appuser \
+   && chown -R appuser:appuser /usr/app
+
+USER appuser:appuser
+
+ENTRYPOINT recover-id-object
