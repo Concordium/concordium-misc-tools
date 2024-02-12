@@ -39,7 +39,7 @@ jobs:
         submodules: recursive
     - name: Print Matrix Values
       run: |
-        echo "Matrix ${{ matrix }}"
+        echo "Matrix ${{ matrix.dockerfile }}"
     - name: Log in to DockerHub
       uses: docker/login-action@v3
       with:
