@@ -7,8 +7,6 @@ on:
 jobs:
   changes:
     runs-on: ubuntu-latest
-    permissions:
-      pull-requests: read
     name: 'Detect changes'
     outputs:
       dockerfiles: ${{ steps.filter.outputs.changes }}
