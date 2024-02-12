@@ -1,4 +1,6 @@
-FROM rust:1.70.0 AS build
+ARG build_image=rust:1.70.0
+ARG base_image=debian:buster-slim
+FROM ${build_image} AS build
 
 WORKDIR /usr/app/recover-id-object
 
@@ -12,16 +14,17 @@ RUN rm src/*.rs
 COPY recover-id-object/src ./src
 RUN cargo build --release --locked
 
-FROM debian:buster-slim
+FROM ${base_image}
 
 WORKDIR /usr/app
 
 COPY --from=build /usr/app/recover-id-object/target/release/recover-id-object ./recover-id-object
 
 RUN groupadd -g 10001 appuser && \
-   useradd --system --no-create-home -u 10000 -g appuser appuser \
-   && chown -R appuser:appuser /usr/app
+   useradd --system --no-create-home -u 10000 -g appuser appuser && \
+   chown -R appuser:appuser /usr/app
 
 USER appuser:appuser
+RUN chmod +x recover-id-object
 
-ENTRYPOINT recover-id-object
+ENTRYPOINT ["./recover-id-object"]
