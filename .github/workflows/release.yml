@@ -46,6 +46,6 @@ jobs:
       uses: docker/build-push-action@v5
       with:
         context: .
-        file: recover-id-object/scripts/Dockerfile
+        file: ${{ matrix.dockerfile }}
         push: true
         tags: concordium/recover-id-object:latest
