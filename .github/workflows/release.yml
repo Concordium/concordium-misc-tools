@@ -6,7 +6,6 @@ on:
 
 env:
   RUST_VERSION: rust:1.70-buster
-  ID_RECOVER_TOOL_NAME: id-recover-tool
 
 jobs:
 
@@ -30,10 +29,10 @@ jobs:
       uses: docker/build-push-action@v5
       with:
         context: .
-        file: ${{ env.ID_RECOVER_TOOL_NAME }}/scripts/Dockerfile
+        file: id-recover-tool/scripts/Dockerfile
         push: true
         build-args: |
-          build_image=${{ env.rust_version }}
+          build_image=${{ env.RUST_VERSION }}
         tags: concordium/recover-id-object:latest
         cache-from: type=registry,ref=concordium/recover-id-object:latest
         cache-to: type=inline
