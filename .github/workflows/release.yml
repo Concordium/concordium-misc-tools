@@ -1,8 +1,8 @@
 name: Release workflow
 
 on:
-  release:
-    types: [published]
+  push:
+    branches: [lma/dockerimage]
 
 env:
   RUST_VERSION: rust:1.70-buster
