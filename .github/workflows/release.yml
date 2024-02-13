@@ -12,7 +12,7 @@ jobs:
   build-and-push:
     if: startsWith(github.ref, 'refs/tags/recover-id-object/')
     runs-on: ubuntu-latest
-    environment: production
+    environment: release-recover-id-object
     steps:
     - name: Check out the repo
       uses: actions/checkout@v4
