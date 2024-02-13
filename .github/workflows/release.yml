@@ -11,7 +11,7 @@ env:
 jobs:
 
   build-and-push:
-    if: startsWith(github.ref, "refs/tags/${{ env.ID_RECOVER_TOOL_NAME }}/")
+    if: startsWith(github.ref, 'refs/tags/id-recover-tool/')
     runs-on: ubuntu-latest
     environment: production
     steps:
