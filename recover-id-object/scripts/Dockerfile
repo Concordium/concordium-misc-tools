@@ -1,4 +1,4 @@
-ARG build_image=rust:1.70.0
+ARG build_image=rust:1.70-buster
 ARG base_image=debian:buster-slim
 FROM ${build_image} AS build
 

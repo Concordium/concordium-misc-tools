@@ -1,36 +1,17 @@
 name: Release workflow
 
 on:
-  push:
-    branches: main
+  release:
+    types: [published]
 
 env:
-  RUST_VERSION: rust:1.70.0
+  RUST_VERSION: rust:1.70-buster
+  ID_RECOVER_TOOL_NAME: id-recover-tool
 
 jobs:
-  changes:
-    runs-on: ubuntu-latest
-    name: 'Detect changes'
-    outputs:
-      dockerfiles: ${{ steps.filter.outputs.changes }}
-    steps:
-      - name: Check out the repo
-        uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            recover-id-object/scripts/Dockerfile:
-              - 'deps/concordium-rust-sdk/**'
-              - 'recover-id-object/**'
 
   build-and-push:
-    needs: [ changes ]
-    if: needs.changes.outputs.dockerfiles != '[]'
-    strategy:
-      fail-fast: false
-      matrix:
-        dockerfile: ${{ fromJSON(needs.changes.outputs.dockerfiles) }}
+    if: startsWith(github.ref, "refs/tags/${{ env.ID_RECOVER_TOOL_PREFIX }}/")
     runs-on: ubuntu-latest
     environment: production
     steps:
@@ -49,10 +30,10 @@ jobs:
       uses: docker/build-push-action@v5
       with:
         context: .
-        file: ${{ matrix.dockerfile }}
+        file: ${{ env.ID_RECOVER_TOOL_NAME }}/scripts/Dockerfile
         push: true
         build-args: |
-          build_image=${{ env.RUST_VERSION }}
+          build_image=${{ env.rust_version }}
         tags: concordium/recover-id-object:latest
         cache-from: type=registry,ref=concordium/recover-id-object:latest
         cache-to: type=inline
