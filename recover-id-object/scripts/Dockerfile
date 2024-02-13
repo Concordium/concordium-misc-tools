@@ -5,13 +5,8 @@ FROM ${build_image} AS build
 WORKDIR /usr/app/recover-id-object
 
 COPY recover-id-object/Cargo.toml recover-id-object/Cargo.lock .
-COPY deps /usr/app/deps
-RUN mkdir src && echo 'fn main() { println!("Dummy!"); }' > ./src/main.rs
-
-RUN cargo build --release --locked
-
-RUN rm src/*.rs
 COPY recover-id-object/src ./src
+COPY deps /usr/app/deps
 RUN cargo build --release --locked
 
 FROM ${base_image}
