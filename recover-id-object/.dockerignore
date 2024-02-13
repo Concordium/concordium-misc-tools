@@ -1,0 +1,8 @@
+# Assumes docker context is repository root, i.e. ../../ relative to this file.
+*
+!deps/concordium-rust-sdk
+deps/concordium-rust-sdk/target
+!recover-id-object/*
+recover-id-object/target
+recover-id-object/scripts
+recover-id-object/*.md

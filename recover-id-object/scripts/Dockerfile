@@ -4,7 +4,7 @@ FROM ${build_image} AS build
 
 WORKDIR /usr/app/recover-id-object
 
-COPY recover-id-object/* .
+COPY recover-id-object .
 COPY deps /usr/app/deps
 RUN cargo build --release --locked
 
