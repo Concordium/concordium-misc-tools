@@ -28,6 +28,7 @@ jobs:
     - name: Extract Cargo package version
       id: cargo_version
       run: |
+        cd recover-id-object
         VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
         echo "Extracted version is $VERSION"
         echo "::set-output name=version::$VERSION"
