@@ -3,7 +3,7 @@ name: Release workflow
 on:
   push:
     tags:
-      - 'id-recover-tool/*'
+      - 'recover-id-object/*'
 
 env:
   RUST_VERSION: rust:1.70-buster
@@ -33,7 +33,7 @@ jobs:
       uses: docker/build-push-action@v5
       with:
         context: .
-        file: id-recover-tool/scripts/Dockerfile
+        file: recover-id-tool/scripts/Dockerfile
         push: true
         build-args: |
           build_image=${{ env.RUST_VERSION }}
