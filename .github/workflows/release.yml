@@ -1,9 +1,8 @@
 name: Release workflow
 
 on:
-  push:
-    tags:
-      - 'recover-id-object/*'
+  release:
+    types: [published]
 
 env:
   RUST_VERSION: rust:1.70-buster
