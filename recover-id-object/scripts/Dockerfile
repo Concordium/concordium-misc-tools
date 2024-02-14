@@ -14,11 +14,11 @@ WORKDIR /usr/app
 
 COPY --from=build /usr/app/recover-id-object/target/release/recover-id-object ./recover-id-object
 
-RUN groupadd -g 10001 appuser && \
-   useradd --system --no-create-home -u 10000 -g appuser appuser && \
-   chown -R appuser:appuser /usr/app
+RUN apt-get update && \
+    apt-get -y install \
+      ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
-USER appuser:appuser
 RUN chmod +x recover-id-object
 
 ENTRYPOINT ["./recover-id-object"]
