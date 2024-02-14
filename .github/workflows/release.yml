@@ -1,8 +1,7 @@
 name: Release workflow
 
 on:
-  release:
-    types: [published]
+  workflow_dispatch:
 
 env:
   RUST_VERSION: rust:1.70-buster
