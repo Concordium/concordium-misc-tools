@@ -5,4 +5,3 @@ deps/concordium-rust-sdk/target
 !recover-id-object/*
 recover-id-object/target
 recover-id-object/scripts
-recover-id-object/*.md
