@@ -16,6 +16,7 @@ COPY --from=build /usr/app/recover-id-object/target/release/recover-id-object ./
 
 RUN apt-get update && \
     apt-get -y install \
+    # curl is used to report errors to slack with
       ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
 
