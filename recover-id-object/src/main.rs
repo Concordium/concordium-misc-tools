@@ -78,9 +78,9 @@ struct RecoverIdentityArgs {
     /// Location of the seed phrase.
     #[clap(
         long,
-        help = "Path to the seed phrase file. Specify either this or --id-cred-sec, --prf-key, and --id-index.",
-        conflicts_with_all = ["prf_key", "id_cred_sec", "id_index"],
-        required_unless_present_all = ["prf_key", "id_cred_sec", "id_index"]
+        help = "Path to the seed phrase file. Specify either this or --id-cred-sec, --prf-key.",
+        conflicts_with_all = ["prf_key", "id_cred_sec"],
+        required_unless_present_all = ["prf_key", "id_cred_sec"]
     )]
     concordium_wallet: Option<std::path::PathBuf>,
     #[clap(long = "ip-index", help = "Identity of the identity provider.")]
@@ -89,23 +89,16 @@ struct RecoverIdentityArgs {
         long,
         help = "Hex encoded id credential secret. Specify either this or --concordium-wallet.",
         required_unless_present = "concordium_wallet",
-        requires_all = ["prf_key", "id_index"]
+        requires_all = ["prf_key"]
     )]
     id_cred_sec:       Option<String>,
     #[clap(
         long,
         help = "Hex encoded PRF key. Specify either this or --concordium-wallet.",
         required_unless_present = "concordium_wallet",
-        requires_all = ["id_cred_sec", "id_index"]
+        requires_all = ["id_cred_sec"]
     )]
     prf_key:           Option<String>,
-    #[clap(
-        long,
-        help = "Identity index of account to recover. Specify either this or --concordium-wallet.",
-        required_unless_present = "concordium_wallet",
-        requires_all = ["id_cred_sec", "prf_key"]
-    )]
-    id_index:          Option<u32>,
     #[clap(long, help = "Network to recover on.", default_value = "testnet")]
     network:           key_derivation::Net,
 }
@@ -259,7 +252,6 @@ async fn recover_identity(
             base16_decode_string(&recovery_args.prf_key.context("Missing prf_key")?)?;
         let id_cred_sec: PedersenValue<ArCurve> =
             base16_decode_string(&recovery_args.id_cred_sec.context("Missing prf_key")?)?;
-        let id_index = recovery_args.id_index.context("Missing id_index")?;
 
         recover_from_secrets(
             &mut concordium_client,
@@ -268,7 +260,7 @@ async fn recover_identity(
             &crypto_params,
             prf_key,
             id_cred_sec,
-            id_index,
+            "recovered-from-id-cred-sec",
         )
         .await
         .context("Could not recover identity")
@@ -330,7 +322,8 @@ async fn recover_from_secrets(
     crypto_params: &GlobalContext<ArCurve>,
     prf_key: PrfKey,
     id_cred_sec: PedersenValue<ArCurve>,
-    id_index: u32,
+    id_description: impl std::fmt::Display, /* description of the identity, e.g., index of the
+                                             * identity. */
 ) -> anyhow::Result<()> {
     let request = generate_id_recovery_request(
         &id.ip_info,
@@ -357,15 +350,15 @@ async fn recover_from_secrets(
 
     let id_object: Versioned<IdentityObjectV1<IpPairing, ArCurve, AttributeKind>> =
         response.json().await?;
+    let id_descr = id_description.to_string();
     std::fs::write(
-        format!("{}-{id_index}.json", id.ip_info.ip_identity.0),
+        format!("{}-{id_description}.json", id.ip_info.ip_identity.0),
         serde_json::to_string_pretty(&serde_json::json!({
-            "identityIndex": id_index,
             "ipInfo": &id.ip_info,
             "idObject": id_object.value
         }))?,
     )?;
-    println!("Got identity object for index {id_index}.");
+    println!("Got identity object for index {id_descr}.");
 
     // Print all accounts for this identity.
     let mut acc_fail_count = 0;
