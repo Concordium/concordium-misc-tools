@@ -19,7 +19,7 @@ It outputs the secrets to standard output.
 E.g.
 
 ```bash
-recover-id-object generate-secrets --concordium-api <NODE-ENDPOINT> --concordium-wallet <PATH_TO_SEED_PHRASE> --concordium-api <NODE-ENDPOINT> --ip-index <INDEX> --id-index <INDEX> --network <NETWORK>
+recover-id-object generate-secrets --concordium-wallet <PATH_TO_SEED_PHRASE> --concordium-api <NODE-ENDPOINT> --ip-index <INDEX> --id-index <INDEX> --network <NETWORK>
 ```
 
 ### Recover identity
