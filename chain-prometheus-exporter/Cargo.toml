@@ -11,7 +11,7 @@ tokio = {version = "1.20", features = ["rt-multi-thread", "macros"]}
 clap = { version = "4", features = ["derive", "env"] }
 futures = "0.3"
 axum = "0.6"
-tonic = {version = "0.8", features = ["tls", "tls-roots", "tls-webpki-roots"]}
+tonic = {version = "0.10", features = ["tls", "tls-roots", "tls-webpki-roots"]}
 tracing-subscriber = { version = "0.3" }
 tracing = { version = "0.1" }
 tower-http = {version = "0.4", features = ["trace", "timeout", "limit", "cors"]}

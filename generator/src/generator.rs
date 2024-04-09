@@ -283,7 +283,7 @@ impl CcdGenerator {
 impl Generate for CcdGenerator {
     fn generate(&mut self) -> anyhow::Result<AccountTransaction<EncodedPayload>> {
         let next_account = if self.random {
-            let n = self.rng.gen_range(0, self.accounts.len());
+            let n = self.rng.gen_range(0..self.accounts.len());
             self.accounts[n]
         } else {
             self.accounts[self.count % self.accounts.len()]
@@ -748,7 +748,7 @@ impl RegisterCredentialsGenerator {
             .await?;
 
         let mut rng = StdRng::from_entropy();
-        let issuer_public_key = KeyPair::generate(&mut rng).public;
+        let issuer_public_key = KeyPair::generate(&mut rng).public();
 
         let info = ContractDeploymentInfo {
             module:      REGISTER_CREDENTIALS_MODULE,
@@ -795,7 +795,7 @@ impl RegisterCredentialsGenerator {
 impl Generate for RegisterCredentialsGenerator {
     fn generate(&mut self) -> anyhow::Result<AccountTransaction<EncodedPayload>> {
         // Create 32 byte holder id.
-        let public_key = KeyPair::generate(&mut self.rng).public;
+        let public_key = KeyPair::generate(&mut self.rng).public();
 
         let cred_info = CredentialInfo {
             holder_id:        CredentialHolderId::new(public_key),
