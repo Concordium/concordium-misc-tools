@@ -138,8 +138,8 @@ fn identity_providers(
                             &mut csprng,
                         );
                     let ip_verify_key = (&ip_secret_key).into();
-                    let ip_cdi_kp = ed25519_dalek::Keypair::generate(&mut csprng);
-                    let ip_cdi_verify_key = ip_cdi_kp.public;
+                    let ip_cdi_kp_secret = ed25519_dalek::SigningKey::generate(&mut csprng);
+                    let ip_cdi_verify_key = ip_cdi_kp_secret.verifying_key();
                     let ip_data = IpData {
                         public_ip_info: IpInfo {
                             ip_identity,
@@ -148,7 +148,7 @@ fn identity_providers(
                             ip_cdi_verify_key,
                         },
                         ip_secret_key,
-                        ip_cdi_secret_key: ip_cdi_kp.secret,
+                        ip_cdi_secret_key: ip_cdi_kp_secret.to_bytes(),
                     };
                     {
                         let mut path = idp_out.clone();
@@ -290,7 +290,7 @@ fn read_or_generate_update_keys<R: rand::Rng + rand::CryptoRng>(
                         std::fs::write(path, serde_json::to_string_pretty(&new_key).unwrap())
                             .context(format!("Unable to write {} key.", ctx))?;
                     }
-                    out.push(new_key.public);
+                    out.push((&new_key).into());
                 }
             }
         }

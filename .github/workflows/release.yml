@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 env:
-  RUST_VERSION: rust:1.70-buster
+  RUST_VERSION: rust:1.74-buster
 
 jobs:
 
