@@ -862,6 +862,10 @@ async fn process_payday_block(
         .try_for_each_concurrent(Some(max_concurrent), |baker| {
             let node = node.clone();
             async {
+                // Clippy is not clever enough to see that this redefinition is necessary due to
+                // ownership. The baker must be moved into this async block, and this is the way
+                // to achieve it.
+                #[allow(clippy::redundant_locals)]
                 let baker = baker;
                 let mut node = node;
                 pool_count.fetch_add(1, Ordering::AcqRel);

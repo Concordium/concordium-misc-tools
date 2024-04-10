@@ -146,6 +146,7 @@ async fn main() -> anyhow::Result<()> {
     } else {
         app.endpoint
     }
+    .keep_alive_while_idle(true)
     .connect_timeout(std::time::Duration::from_secs(10))
     .timeout(std::time::Duration::from_millis(app.request_timeout));
 
