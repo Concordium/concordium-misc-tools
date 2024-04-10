@@ -146,9 +146,11 @@ async fn main() -> anyhow::Result<()> {
     } else {
         app.endpoint
     }
-    .keep_alive_while_idle(true)
     .connect_timeout(std::time::Duration::from_secs(10))
-    .timeout(std::time::Duration::from_millis(app.request_timeout));
+    .timeout(std::time::Duration::from_millis(app.request_timeout))
+    .http2_keep_alive_interval(std::time::Duration::from_secs(300))
+    .keep_alive_timeout(std::time::Duration::from_secs(10))
+    .keep_alive_while_idle(true);
 
     let client = v2::Client::new(endpoint)
         .await
