@@ -1,5 +1,6 @@
 use anyhow::{ensure, Context};
 use clap::Parser;
+use sha2::Digest;
 use concordium_rust_sdk::{
     cis2::{
         self, AdditionalData, Cis2TransactionMetadata, OperatorUpdate, Receiver, TokenAmount,
@@ -7,7 +8,7 @@ use concordium_rust_sdk::{
     },
     common::types::{Amount, TransactionTime},
     types::{
-        hashes::{BlockHash, TransactionHash},
+        hashes::{BlockHash, TransactionHash, Hash},
         smart_contracts::OwnedReceiveName,
         transactions::send::GivenEnergy,
         Address, ContractAddress, WalletAccount,
@@ -253,19 +254,29 @@ async fn handle_contract_command(
                 .token_metadata_single(&block, token_id.clone())
                 .await
                 .context("Unable to get token metadata URL.")?;
-            println!(
-                "Metadata URL for token {} in contract {} is {}.",
-                token_id,
-                contract,
-                metadata_url.url(),
-            );
+            if let Some(hash) = metadata_url.hash() {
+                println!(
+                    "Metadata URL for token {} in contract {} is {} with hash {hash}",
+                    token_id,
+                    contract,
+                    metadata_url.url()
+                );
+            } else {
+                println!(
+                    "Metadata URL for token {} in contract {} is {} without hash.",
+                    token_id,
+                    contract,
+                    metadata_url.url()
+                );
+            };
 
             let resp = reqwest::get(metadata_url.url())
                 .await
                 .context("Cannot get metadata.")?;
-            let r = resp
-                .json::<serde_json::Value>()
-                .await
+            let bytes = resp.bytes().await?;
+            let computed_hash: Hash = <[u8; 32]>::from(sha2::Sha256::digest(&bytes)).into();
+            println!("Computed hash {computed_hash}");
+            let r: serde_json::Value = serde_json::from_slice(&bytes)
                 .context("Unable to parse metadata as JSON.")?;
             println!("{}", serde_json::to_string_pretty(&r)?)
         }
