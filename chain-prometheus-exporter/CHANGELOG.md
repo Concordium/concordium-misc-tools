@@ -1,5 +1,13 @@
 ## Unreleased changes
 
+## 1.1.2
+
+- Retry requests to the node once.
+
+## 1.1.1
+
+- Add keep-alive to node connection.
+
 ## 1.1.0
 
 - Support protocol version 6.

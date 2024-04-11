@@ -1,5 +1,10 @@
 # Unreleased
 
+## 2.0.1
+
+- Remove the id-index argument when recovering from secrets. The generated file
+  name is just named with a `recovered-from-id-cred-sec` instead of id-index.
+
 ## 2.0.0
 
 - Add command to generate secrets and ability to recover from specific secrets only.

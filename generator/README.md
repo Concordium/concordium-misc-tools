@@ -59,7 +59,7 @@ The tool first deploys and initializes the [`cis2-nft`](https://github.com/Conco
 
 ### `transfer-cis2`
 
-The tool first deploys and initializes the [`cis2-multi`](https://github.com/Concordium/concordium-rust-smart-contracts/tree/fcc668d87207aaf07b43f5a3b02b6d0a634368d0/examples/cis2-nft) example contract. It then mints `u64::MAX` CIS2 tokens for the sender. The transactions are then transfers of these tokens to a list of receivers that is either
+The tool first deploys and initializes the [`cis2-multi`](https://github.com/Concordium/concordium-rust-smart-contracts/tree/fcc668d87207aaf07b43f5a3b02b6d0a634368d0/examples/cis2-multi) example contract. It then mints `u64::MAX` CIS2 tokens for the sender. The transactions are then transfers of these tokens to a list of receivers that is either
 
 - accounts specified using the `--receivers` argument which should point
   to a file with a list of account addresses,
