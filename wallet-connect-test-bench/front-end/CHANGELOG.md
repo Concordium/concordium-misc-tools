@@ -1,5 +1,9 @@
 ## Unreleased changes
 
+## 1.5.2
+
+- Update dependencies.
+
 ## 1.5.1
 
 - Fix parameter schema of function `set_address`.

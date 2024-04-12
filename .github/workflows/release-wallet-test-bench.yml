@@ -27,14 +27,14 @@ jobs:
       - name: Extract version tag from package.json
         id: meta
         run: |
-          export VERSION=$(jq -r .version wallet-connect-test-bench/frontend/package.json)
+          export VERSION=$(jq -r .version wallet-connect-test-bench/front-end/package.json)
           export FULL_IMAGE_TAG="${{ env.REGISTRY }}/concordium/$IMAGE_NAME:$VERSION"
           echo "::notice FULL_IMAGE_TAG=${FULL_IMAGE_TAG}"
           # Make sure the image does not exist. Abort if we can retrieve any metadata.
           if docker manifest inspect ${FULL_IMAGE_TAG} > /dev/null; then
              echo "::error ${FULL_IMAGE_TAG} already exists"
              exit 1
-          elif [ ! "${{ github.ref_name }}" = wallet-connect-test-bench/${VERSION}" ]; then
+          elif [ ! "${{ github.ref_name }}" = "wallet-connect-test-bench/${VERSION}" ]; then
              echo "::error Expected tag ${EXPECTED_TAG} does not match the version ${VERSION}."
              exit 1
           else
@@ -45,7 +45,7 @@ jobs:
         uses: docker/build-push-action@f2a1d5e99d037542a71f64918e516c093c6f3fc4
         with:
           context: .
-          file: ./wallet-connect-test-bench/frontend/Dockerfile
+          file: ./wallet-connect-test-bench/front-end/Dockerfile
           push: true
           platforms: linux/amd64
           tags: ${{ steps.meta.outputs.tag }}
