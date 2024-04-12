@@ -1,5 +1,9 @@
 ## Unreleased changes
 
+## 1.5.2
+
+- Update dependencies.
+
 ## 1.5.1
 
 - Fix parameter schema of function `set_address`.
@@ -15,7 +19,7 @@
 ## 1.4.0
 
 - Add link to source code
-- Change that selected switch option is in bold font 
+- Change that selected switch option is in bold font
 
 ## 1.2.0
 

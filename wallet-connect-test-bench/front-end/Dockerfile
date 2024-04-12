@@ -1,10 +1,8 @@
 # This dockerfile is meant to be run from the **root of the repository**.
 
-ARG build_image=node:16-slim
+ARG build_image=node:20-slim
 
 FROM ${build_image} AS build
-
-RUN yarn set version 3.2.0
 
 # Copy front end files
 WORKDIR /app
