@@ -86,7 +86,7 @@ export const BASE_64_TEST_BENCH_SMART_CONTRACT_MODULE =
 
 export const CONTRACT_NAME = "smart_contract_test_bench";
 
-export const CONTRACT_INDEX = 4726n;
+export const CONTRACT_INDEX = 8649n;
 
 export const CONTRACT_SUB_INDEX = 0n;
 
@@ -95,7 +95,7 @@ const WALLET_CONNECT_OPTS: SignClientTypes.Options = {
   metadata: {
     name: "Test_Bench",
     description: "Example dApp for testing.",
-    url: "#",
+    url: "https://wallet-test-bench.testnet.concordium.com/",
     icons: ["https://walletconnect.com/walletconnect-logo.png"],
   },
 };

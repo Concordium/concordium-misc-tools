@@ -1,5 +1,9 @@
 ## Unreleased changes
 
+## 1.5.3
+
+Update smart contract to be more efficient.
+
 ## 1.5.2
 
 - Update dependencies.
