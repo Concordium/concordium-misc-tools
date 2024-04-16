@@ -1,10 +1,6 @@
-ARG build_image
-ARG base_image
+ARG build_image=rust:1.74-bookworm
+ARG base_image=debian:bookworm
 FROM ${build_image} AS build
-# Install protoc
-RUN wget https://github.com/protocolbuffers/protobuf/releases/download/v3.15.3/protoc-3.15.3-linux-x86_64.zip
-RUN unzip protoc-3.15.3-linux-x86_64.zip
-RUN mv ./bin/protoc /usr/bin/protoc
 
 WORKDIR /build
 COPY ./kpi-tracker ./src
