@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 import { useEffect, useState, ChangeEvent, PropsWithChildren } from "react";
 import Switch from "react-switch";
 import { toBuffer, serializeTypeValue } from "@concordium/web-sdk";
@@ -179,7 +178,7 @@ export default function Main(props: WalletConnectionProps) {
   };
 
   // Refresh accountInfo periodically.
-  // eslint-disable-next-line consistent-return
+
   useEffect(() => {
     if (grpcClient && account) {
       const interval = setInterval(() => {
@@ -201,7 +200,7 @@ export default function Main(props: WalletConnectionProps) {
   }, [grpcClient, account]);
 
   // Refresh smartContractInfo periodically.
-  // eslint-disable-next-line consistent-return
+
   useEffect(() => {
     if (grpcClient) {
       const interval = setInterval(() => {
@@ -223,7 +222,7 @@ export default function Main(props: WalletConnectionProps) {
   }, [grpcClient, account]);
 
   // Refresh view periodically.
-  // eslint-disable-next-line consistent-return
+
   useEffect(() => {
     if (grpcClient && account) {
       const interval = setInterval(() => {
@@ -258,10 +257,10 @@ export default function Main(props: WalletConnectionProps) {
           setAccountBalance("");
         });
     }
-  }, [grpcClient]);
+  }, [grpcClient, account]);
 
   useEffect(() => {
-    if (grpcClient && account) {
+    if (grpcClient) {
       smartContractInfo(grpcClient)
         .then((value) => {
           if (value !== undefined) {
@@ -277,7 +276,7 @@ export default function Main(props: WalletConnectionProps) {
   }, [grpcClient]);
 
   useEffect(() => {
-    if (grpcClient && account) {
+    if (grpcClient) {
       view(grpcClient)
         .then((value) => {
           if (value !== undefined) {

@@ -26,15 +26,8 @@ cd ../wallet-connect-test-bench/front-end
 
 To start the front end locally, do the following:
 
-- Run `yarn build` in this folder.
-- Run `yarn start` in this folder.
-- Open URL logged in console (typically http://127.0.0.1:8080).
-
-To have hot-reload (useful for development), do the following instead:
-
-- Run `yarn watch` in this folder in a terminal.
-- Run `yarn start` in this folder in another terminal.
-- Open URL logged in console (typically http://127.0.0.1:8080).
+- Run `yarn dev` in this folder.
+- Open URL logged in console (typically http://localhost:5174/).
 
 ## Using yarn (on Unix/macOS systems)
 

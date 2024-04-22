@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 import { useCallback } from "react";
 import {
   ConnectorType,
@@ -32,7 +30,7 @@ export function WalletConnectionTypeButton(props: Props) {
   const onClick = useCallback(() => {
     setWaitingForUser(false);
     select();
-  }, [select]);
+  }, [select, setWaitingForUser]);
   return (
     <button
       className="btn btn-primary"

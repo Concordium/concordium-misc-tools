@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 import { createContext } from "react";
 import { SmartContractParameters } from "@concordium/browser-wallet-api-helpers";
 import {
