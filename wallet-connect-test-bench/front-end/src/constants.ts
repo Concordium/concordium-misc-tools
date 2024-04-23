@@ -11,18 +11,6 @@ import { SignClientTypes } from "@walletconnect/types";
 import moment from "moment";
 
 export const REFRESH_INTERVAL = moment.duration(10, "seconds");
-// This `PARTIAL_WALLET_CONNECT_NAMESPACE_CONFIG` currently excludes the `RequestVerifiablePresentation` method compared to the default `FULL_WALLET_CONNECT_NAMESPACE_CONFIG`. This method is not supported by legacy wallets. To continue testing legacy wallets it is excluded here.
-export const PARTIAL_WALLET_CONNECT_NAMESPACE_CONFIG: WalletConnectNamespaceConfig =
-  {
-    methods: [
-      WalletConnectMethod.SignMessage,
-      WalletConnectMethod.SignAndSendTransaction,
-    ],
-    events: [
-      WalletConnectEvent.AccountsChanged,
-      WalletConnectEvent.ChainChanged,
-    ],
-  };
 
 // The 'PARAMETER'/'RETURN_VALUE' schemas are created by running the command `cargo concordium --schema-json-out ./` in the `smart-contract` folder.
 // This produces an output file in the same folder which those schemas.
@@ -115,9 +103,24 @@ const WALLET_CONNECT_OPTS: SignClientTypes.Options = {
   },
 };
 
+// This `WALLET_CONNECT_SCOPE` currently excludes the `RequestVerifiablePresentation` method compared to the default `FULL_WALLET_CONNECT_NAMESPACE_CONFIG`. This method is not supported by legacy wallets. To continue testing legacy wallets it is excluded here.
+export const WALLET_CONNECT_SCOPE: WalletConnectNamespaceConfig = {
+  methods: [
+    WalletConnectMethod.SignMessage,
+    WalletConnectMethod.SignAndSendTransaction,
+  ],
+  events: [WalletConnectEvent.AccountsChanged, WalletConnectEvent.ChainChanged],
+};
+
 export const BROWSER_WALLET = ephemeralConnectorType(
   BrowserWalletConnector.create
 );
-export const WALLET_CONNECT = ephemeralConnectorType(
-  WalletConnectConnector.create.bind(undefined, WALLET_CONNECT_OPTS)
+
+export const WALLET_CONNECT = ephemeralConnectorType((delegate, network) =>
+  WalletConnectConnector.create(
+    WALLET_CONNECT_OPTS,
+    delegate,
+    network,
+    WALLET_CONNECT_SCOPE
+  )
 );

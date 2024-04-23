@@ -63,13 +63,13 @@ __metadata:
 
 "@concordium/react-components@file:../../deps/concordium-dapp-libraries/packages/react-components::locator=test-bench-for-wallets%40workspace%3A.":
   version: 0.5.1
-  resolution: "@concordium/react-components@file:../../deps/concordium-dapp-libraries/packages/react-components#../../deps/concordium-dapp-libraries/packages/react-components::hash=c57ddb&locator=test-bench-for-wallets%40workspace%3A."
+  resolution: "@concordium/react-components@file:../../deps/concordium-dapp-libraries/packages/react-components#../../deps/concordium-dapp-libraries/packages/react-components::hash=d2e1f9&locator=test-bench-for-wallets%40workspace%3A."
   dependencies:
     "@concordium/wallet-connectors": ^0.5.1
   peerDependencies:
     "@concordium/web-sdk": 7.x
     react: ^18
-  checksum: 3f455dc5757349beff86dfd07bbfe96cb3f64f86e2a1c41120e448bf0ad9d9a7c78524151de9aebaac66a9e15a5b68f823299fd13bbe42249c58be5438e4bdfc
+  checksum: 007d432069c363e1b59f5bfa30743184b71593399624b599b99126f9f29b3303fb428540bb9a9273afa0e5fa6c9daac82307b37799890024151a240dc4b2f0a3
   languageName: node
   linkType: hard
 
@@ -82,7 +82,7 @@ __metadata:
 
 "@concordium/wallet-connectors@file:../../deps/concordium-dapp-libraries/packages/wallet-connectors::locator=test-bench-for-wallets%40workspace%3A.":
   version: 0.5.1
-  resolution: "@concordium/wallet-connectors@file:../../deps/concordium-dapp-libraries/packages/wallet-connectors#../../deps/concordium-dapp-libraries/packages/wallet-connectors::hash=6d56a4&locator=test-bench-for-wallets%40workspace%3A."
+  resolution: "@concordium/wallet-connectors@file:../../deps/concordium-dapp-libraries/packages/wallet-connectors#../../deps/concordium-dapp-libraries/packages/wallet-connectors::hash=d3d191&locator=test-bench-for-wallets%40workspace%3A."
   dependencies:
     "@concordium/browser-wallet-api-helpers": ^3.0.0
     "@walletconnect/modal": ^2.6.2
@@ -90,7 +90,7 @@ __metadata:
     "@walletconnect/sign-client": ^2.1.4
   peerDependencies:
     "@concordium/web-sdk": 7.x
-  checksum: 83503e855f970017e43a6126af6578a309761ab07156a65f287ddc7ddb0ba31c49fc666c2d0d7c8ec79dc82c5857ad61d60446b81111d387a5495e416d6a7416
+  checksum: b38d470ce156edcbce421ac52e0f49ce0ef2bee2b66ec0f5fc98061bec615faf7aa4d89264002b5532e8b058a3effef2093ca2f939804f80b38bcb8455736a11
   languageName: node
   linkType: hard
 

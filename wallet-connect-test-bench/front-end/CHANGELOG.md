@@ -2,6 +2,7 @@
 
 ## 1.5.4
 
+- Update `@concordium/web-sdk` dependency to version 7.0.0.
 - Update `dapp-library` dependency.
 - Enable tests for signing of byte messages in the mobile wallets.
 
