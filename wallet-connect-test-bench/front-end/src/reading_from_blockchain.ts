@@ -4,7 +4,13 @@ import {
   deserializeReceiveReturnValue,
   ConcordiumGRPCClient,
   AccountAddress,
+  ContractAddress,
+  ContractName,
+  ReceiveName,
+  EntrypointName,
 } from "@concordium/web-sdk";
+
+import JSONbig from "json-bigint";
 
 import {
   CONTRACT_NAME,
@@ -75,8 +81,8 @@ export async function getValue(
   }
 
   const res = await rpcClient.invokeContract({
-    method: entrypointName,
-    contract: { index: CONTRACT_INDEX, subindex: CONTRACT_SUB_INDEX },
+    method: ReceiveName.fromString(entrypointName),
+    contract: ContractAddress.create(CONTRACT_INDEX, CONTRACT_SUB_INDEX),
   });
 
   if (!res || res.tag === "failure" || !res.returnValue) {
@@ -152,11 +158,13 @@ export async function getValue(
   if (useModuleSchema) {
     try {
       returnValue = deserializeReceiveReturnValue(
-        toBuffer(res.returnValue, "hex"),
+        res.returnValue.buffer,
         toBuffer(schema, "base64"),
-        `${CONTRACT_NAME}`,
+        ContractName.fromString(`${CONTRACT_NAME}`),
         // If dropDown === 'wrong_schema', we called the `get_u8` function but now use the `timestamp` schema trying to deserialize the return value.
-        `get_${dropDown !== "wrong_schema" ? dropDown : "timestamp"}`
+        EntrypointName.fromString(
+          `get_${dropDown !== "wrong_schema" ? dropDown : "timestamp"}`
+        )
       );
     } catch (err) {
       throw new Error((err as Error).message);
@@ -164,7 +172,7 @@ export async function getValue(
   } else {
     try {
       returnValue = deserializeTypeValue(
-        toBuffer(res.returnValue, "hex"),
+        res.returnValue.buffer,
         toBuffer(schema, "base64")
       );
     } catch (err) {
@@ -183,8 +191,8 @@ export async function getValue(
 
 export async function view(rpcClient: ConcordiumGRPCClient) {
   const res = await rpcClient.invokeContract({
-    method: `${CONTRACT_NAME}.view`,
-    contract: { index: CONTRACT_INDEX, subindex: CONTRACT_SUB_INDEX },
+    method: ReceiveName.fromString(`${CONTRACT_NAME}.view`),
+    contract: ContractAddress.create(CONTRACT_INDEX, CONTRACT_SUB_INDEX),
   });
 
   if (!res || res.tag === "failure" || !res.returnValue) {
@@ -194,7 +202,7 @@ export async function view(rpcClient: ConcordiumGRPCClient) {
   }
 
   const state = deserializeTypeValue(
-    toBuffer(res.returnValue, "hex"),
+    res.returnValue.buffer,
     toBuffer(VIEW_RETURN_VALUE_SCHEMA, "base64")
   );
 
@@ -203,7 +211,7 @@ export async function view(rpcClient: ConcordiumGRPCClient) {
       `Deserializing the returnValue from the '${CONTRACT_NAME}.view' method of contract '${CONTRACT_INDEX}' failed`
     );
   } else {
-    return JSON.stringify(state);
+    return JSONbig.stringify(state);
   }
 }
 
@@ -211,12 +219,11 @@ export async function accountInfo(
   rpcClient: ConcordiumGRPCClient,
   account: string
 ) {
-  return rpcClient.getAccountInfo(new AccountAddress(account));
+  return rpcClient.getAccountInfo(AccountAddress.fromBase58(account));
 }
 
 export async function smartContractInfo(rpcClient: ConcordiumGRPCClient) {
-  return rpcClient.getInstanceInfo({
-    index: CONTRACT_INDEX,
-    subindex: CONTRACT_SUB_INDEX,
-  });
+  return rpcClient.getInstanceInfo(
+    ContractAddress.create(CONTRACT_INDEX, CONTRACT_SUB_INDEX)
+  );
 }

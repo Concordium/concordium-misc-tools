@@ -1,5 +1,7 @@
 import { useEffect, useState, ChangeEvent, PropsWithChildren } from "react";
 import Switch from "react-switch";
+import JSONbig from "json-bigint";
+import { Buffer } from "buffer/";
 import { toBuffer, serializeTypeValue } from "@concordium/web-sdk";
 import {
   useGrpcClient,
@@ -186,7 +188,7 @@ export default function Main(props: WalletConnectionProps) {
         accountInfo(grpcClient, account)
           .then((value) => {
             if (value !== undefined) {
-              setAccountBalance(value.accountAmount.toString());
+              setAccountBalance(value.accountAmount.microCcdAmount.toString());
             }
             setViewError("");
           })
@@ -248,7 +250,7 @@ export default function Main(props: WalletConnectionProps) {
       accountInfo(grpcClient, account)
         .then((value) => {
           if (value !== undefined) {
-            setAccountBalance(value.accountAmount.toString());
+            setAccountBalance(value.accountAmount.microCcdAmount.toString());
           }
           setViewError("");
         })
@@ -576,7 +578,7 @@ export default function Main(props: WalletConnectionProps) {
                         getValue(grpcClient, useModuleSchema, readDropDown)
                           .then((value) => {
                             if (value !== undefined) {
-                              setReturnValue(JSON.stringify(value));
+                              setReturnValue(JSONbig.stringify(value));
                             }
                           })
                           .catch((e) => {
@@ -1112,7 +1114,7 @@ export default function Main(props: WalletConnectionProps) {
                       setByteSignature("");
                       const promise = connection.signMessage(account, {
                         type: "BinaryMessage",
-                        value: serializedMessage,
+                        value: Buffer.from(serializedMessage.buffer),
                         schema: {
                           type: "TypeSchema",
                           value: toBuffer(
@@ -1237,7 +1239,7 @@ export default function Main(props: WalletConnectionProps) {
               <br />
               <div className="label">Smart contract state:</div>
               <pre className="largeText">
-                {JSON.stringify(record, null, "\t")}
+                {JSONbig.stringify(record, null, "\t")}
               </pre>
             </div>
           </div>
