@@ -1,15 +1,15 @@
-/* eslint-disable no-console */
 import { createContext } from "react";
 import { SmartContractParameters } from "@concordium/browser-wallet-api-helpers";
 import {
   AccountAddress,
   AccountTransactionType,
   CcdAmount,
-  DeployModulePayload,
-  InitContractPayload,
   ModuleReference,
-  UpdateContractPayload,
   toBuffer,
+  ReceiveName,
+  Energy,
+  ContractName,
+  ContractAddress,
 } from "@concordium/web-sdk";
 import { WalletConnection } from "@concordium/react-components";
 import {
@@ -43,13 +43,13 @@ export async function initializeWithoutAmountWithoutParameter(
   account: string
 ) {
   const payload = {
-    amount: new CcdAmount(BigInt(0)),
-    moduleRef: new ModuleReference(
+    amount: CcdAmount.fromMicroCcd(0),
+    moduleRef: ModuleReference.fromHexString(
       "4f013778fc2ab2136d12ae994303bcc941619a16f6c80f22e189231781c087c7"
     ),
-    initName: "smart_contract_test_bench",
+    initName: ContractName.fromString("smart_contract_test_bench"),
     param: toBuffer(""),
-    maxContractExecutionEnergy: 30000n,
+    maxContractExecutionEnergy: Energy.create(30000n),
   };
 
   console.debug("Sending init transaction:");
@@ -62,7 +62,7 @@ export async function initializeWithoutAmountWithoutParameter(
   return connection.signAndSendTransaction(
     account,
     AccountTransactionType.InitContract,
-    payload as InitContractPayload
+    payload
   );
 }
 
@@ -72,13 +72,13 @@ export async function initializeWithAmount(
   cCDAmount: string
 ) {
   const payload = {
-    amount: new CcdAmount(BigInt(cCDAmount)),
-    moduleRef: new ModuleReference(
+    amount: CcdAmount.fromMicroCcd(cCDAmount ? cCDAmount : 0),
+    moduleRef: ModuleReference.fromHexString(
       "4f013778fc2ab2136d12ae994303bcc941619a16f6c80f22e189231781c087c7"
     ),
-    initName: "smart_contract_test_bench",
+    initName: ContractName.fromString("smart_contract_test_bench"),
     param: toBuffer(""),
-    maxContractExecutionEnergy: 30000n,
+    maxContractExecutionEnergy: Energy.create(30000n),
   };
 
   console.debug("Sending init transaction:");
@@ -91,7 +91,7 @@ export async function initializeWithAmount(
   return connection.signAndSendTransaction(
     account,
     AccountTransactionType.InitContract,
-    payload as InitContractPayload
+    payload
   );
 }
 
@@ -112,13 +112,13 @@ export async function initializeWithParameter(
       };
 
   const payload = {
-    amount: new CcdAmount(BigInt(0)),
-    moduleRef: new ModuleReference(
+    amount: CcdAmount.fromMicroCcd(0),
+    moduleRef: ModuleReference.fromHexString(
       "4f013778fc2ab2136d12ae994303bcc941619a16f6c80f22e189231781c087c7"
     ),
-    initName: "smart_contract_test_bench",
+    initName: ContractName.fromString("smart_contract_test_bench"),
     param: toBuffer(""),
-    maxContractExecutionEnergy: 30000n,
+    maxContractExecutionEnergy: Energy.create(30000n),
   };
 
   console.debug("Sending init transaction:");
@@ -133,7 +133,7 @@ export async function initializeWithParameter(
   return connection.signAndSendTransaction(
     account,
     AccountTransactionType.InitContract,
-    payload as InitContractPayload,
+    payload,
     schema
   );
 }
@@ -153,7 +153,7 @@ export async function deploy(connection: WalletConnection, account: string) {
   return connection.signAndSendTransaction(
     account,
     AccountTransactionType.DeployModule,
-    payload as DeployModulePayload
+    payload
   );
 }
 
@@ -167,74 +167,100 @@ export async function setValue(
   cCDAmount: string,
   maxEnergy: string
 ) {
-  let receiveName = `${CONTRACT_NAME}.set_u8_payable`;
+  let receiveName = ReceiveName.fromString(`${CONTRACT_NAME}.set_u8_payable`);
 
   switch (dropDown) {
     case "u8":
-      receiveName = isPayable
-        ? `${CONTRACT_NAME}.set_u8_payable`
-        : `${CONTRACT_NAME}.set_u8`;
+      receiveName = ReceiveName.fromString(
+        isPayable
+          ? `${CONTRACT_NAME}.set_u8_payable`
+          : `${CONTRACT_NAME}.set_u8`
+      );
       break;
     case "u16":
-      receiveName = isPayable
-        ? `${CONTRACT_NAME}.set_u16_payable`
-        : `${CONTRACT_NAME}.set_u16`;
+      receiveName = ReceiveName.fromString(
+        isPayable
+          ? `${CONTRACT_NAME}.set_u16_payable`
+          : `${CONTRACT_NAME}.set_u16`
+      );
       break;
     case "address":
-      receiveName = isPayable
-        ? `${CONTRACT_NAME}.set_address_payable`
-        : `${CONTRACT_NAME}.set_address`;
+      receiveName = ReceiveName.fromString(
+        isPayable
+          ? `${CONTRACT_NAME}.set_address_payable`
+          : `${CONTRACT_NAME}.set_address`
+      );
       break;
     case "contract_address":
-      receiveName = isPayable
-        ? `${CONTRACT_NAME}.set_contract_address_payable`
-        : `${CONTRACT_NAME}.set_contract_address`;
+      receiveName = ReceiveName.fromString(
+        isPayable
+          ? `${CONTRACT_NAME}.set_contract_address_payable`
+          : `${CONTRACT_NAME}.set_contract_address`
+      );
       break;
     case "account_address":
-      receiveName = isPayable
-        ? `${CONTRACT_NAME}.set_account_address_payable`
-        : `${CONTRACT_NAME}.set_account_address`;
+      receiveName = ReceiveName.fromString(
+        isPayable
+          ? `${CONTRACT_NAME}.set_account_address_payable`
+          : `${CONTRACT_NAME}.set_account_address`
+      );
       break;
     case "hash":
-      receiveName = isPayable
-        ? `${CONTRACT_NAME}.set_hash_payable`
-        : `${CONTRACT_NAME}.set_hash`;
+      receiveName = ReceiveName.fromString(
+        isPayable
+          ? `${CONTRACT_NAME}.set_hash_payable`
+          : `${CONTRACT_NAME}.set_hash`
+      );
       break;
     case "public_key":
-      receiveName = isPayable
-        ? `${CONTRACT_NAME}.set_public_key_payable`
-        : `${CONTRACT_NAME}.set_public_key`;
+      receiveName = ReceiveName.fromString(
+        isPayable
+          ? `${CONTRACT_NAME}.set_public_key_payable`
+          : `${CONTRACT_NAME}.set_public_key`
+      );
       break;
     case "signature":
-      receiveName = isPayable
-        ? `${CONTRACT_NAME}.set_signature_payable`
-        : `${CONTRACT_NAME}.set_signature`;
+      receiveName = ReceiveName.fromString(
+        isPayable
+          ? `${CONTRACT_NAME}.set_signature_payable`
+          : `${CONTRACT_NAME}.set_signature`
+      );
       break;
     case "timestamp":
-      receiveName = isPayable
-        ? `${CONTRACT_NAME}.set_timestamp_payable`
-        : `${CONTRACT_NAME}.set_timestamp`;
+      receiveName = ReceiveName.fromString(
+        isPayable
+          ? `${CONTRACT_NAME}.set_timestamp_payable`
+          : `${CONTRACT_NAME}.set_timestamp`
+      );
       break;
     case "string":
-      receiveName = isPayable
-        ? `${CONTRACT_NAME}.set_string_payable`
-        : `${CONTRACT_NAME}.set_string`;
+      receiveName = ReceiveName.fromString(
+        isPayable
+          ? `${CONTRACT_NAME}.set_string_payable`
+          : `${CONTRACT_NAME}.set_string`
+      );
       break;
     case "option_u8_none":
-      receiveName = isPayable
-        ? `${CONTRACT_NAME}.set_option_u8_payable`
-        : `${CONTRACT_NAME}.set_option_u8`;
+      receiveName = ReceiveName.fromString(
+        isPayable
+          ? `${CONTRACT_NAME}.set_option_u8_payable`
+          : `${CONTRACT_NAME}.set_option_u8`
+      );
       break;
     case "option_u8_some":
-      receiveName = isPayable
-        ? `${CONTRACT_NAME}.set_option_u8_payable`
-        : `${CONTRACT_NAME}.set_option_u8`;
+      receiveName = ReceiveName.fromString(
+        isPayable
+          ? `${CONTRACT_NAME}.set_option_u8_payable`
+          : `${CONTRACT_NAME}.set_option_u8`
+      );
       break;
     // We try to call the `set_u8` function but input a string as the input parameter.
     case "wrong_schema":
-      receiveName = isPayable
-        ? `${CONTRACT_NAME}.set_u8_payable`
-        : `${CONTRACT_NAME}.set_u8`;
+      receiveName = ReceiveName.fromString(
+        isPayable
+          ? `${CONTRACT_NAME}.set_u8_payable`
+          : `${CONTRACT_NAME}.set_u8`
+      );
       break;
     default:
       throw new Error(`Dropdown option does not exist`);
@@ -395,13 +421,12 @@ export async function setValue(
   }
 
   const payload = {
-    amount: new CcdAmount(BigInt(cCDAmount)),
-    address: {
-      index: CONTRACT_INDEX,
-      subindex: CONTRACT_SUB_INDEX,
-    },
+    amount: CcdAmount.fromMicroCcd(cCDAmount ? cCDAmount : 0),
+    address: ContractAddress.create(CONTRACT_INDEX, CONTRACT_SUB_INDEX),
     receiveName,
-    maxContractExecutionEnergy: BigInt(maxEnergy),
+    maxContractExecutionEnergy: Energy.create(
+      BigInt(maxEnergy ? maxEnergy : 30000)
+    ),
   };
 
   console.debug("Sending update transaction:");
@@ -416,7 +441,7 @@ export async function setValue(
   return connection.signAndSendTransaction(
     account,
     AccountTransactionType.Update,
-    payload as UpdateContractPayload,
+    payload,
     schema
   );
 }
@@ -452,18 +477,17 @@ export async function setArray(
         schema: typeSchemaFromBase64(SET_ADDRESS_ARRAY_PARAMETER_SCHEMA),
       };
 
-  const receiveName = isPayable
-    ? `${CONTRACT_NAME}.set_address_array_payable`
-    : `${CONTRACT_NAME}.set_address_array`;
+  const receiveName = ReceiveName.fromString(
+    isPayable
+      ? `${CONTRACT_NAME}.set_address_array_payable`
+      : `${CONTRACT_NAME}.set_address_array`
+  );
 
   const payload = {
-    amount: new CcdAmount(BigInt(cCDAmount)),
-    address: {
-      index: CONTRACT_INDEX,
-      subindex: CONTRACT_SUB_INDEX,
-    },
+    amount: CcdAmount.fromMicroCcd(cCDAmount ? cCDAmount : 0),
+    address: ContractAddress.create(CONTRACT_INDEX, CONTRACT_SUB_INDEX),
     receiveName,
-    maxContractExecutionEnergy: 30000n,
+    maxContractExecutionEnergy: Energy.create(30000n),
   };
 
   console.debug("Sending update transaction:");
@@ -532,18 +556,17 @@ export async function setObject(
         schema: typeSchemaFromBase64(SET_OBJECT_PARAMETER_SCHEMA),
       };
 
-  const receiveName = isPayable
-    ? `${CONTRACT_NAME}.set_object_payable`
-    : `${CONTRACT_NAME}.set_object`;
+  const receiveName = ReceiveName.fromString(
+    isPayable
+      ? `${CONTRACT_NAME}.set_object_payable`
+      : `${CONTRACT_NAME}.set_object`
+  );
 
   const payload = {
-    amount: new CcdAmount(BigInt(cCDAmount)),
-    address: {
-      index: CONTRACT_INDEX,
-      subindex: CONTRACT_SUB_INDEX,
-    },
+    amount: CcdAmount.fromMicroCcd(cCDAmount ? cCDAmount : 0),
+    address: ContractAddress.create(CONTRACT_INDEX, CONTRACT_SUB_INDEX),
     receiveName,
-    maxContractExecutionEnergy: 30000n,
+    maxContractExecutionEnergy: Energy.create(30000n),
   };
 
   console.debug("Sending update transaction:");
@@ -558,7 +581,7 @@ export async function setObject(
   return connection.signAndSendTransaction(
     account,
     AccountTransactionType.Update,
-    payload as UpdateContractPayload,
+    payload,
     schema
   );
 }
@@ -570,8 +593,8 @@ export async function simpleCCDTransfer(
   cCDAmount: string
 ) {
   const payload = {
-    amount: new CcdAmount(BigInt(cCDAmount)),
-    toAddress: new AccountAddress(toAccount),
+    amount: CcdAmount.fromMicroCcd(cCDAmount ? cCDAmount : 0),
+    toAddress: AccountAddress.fromBase58(toAccount),
   };
 
   console.debug("Sending simple ccd transfer transaction:");
@@ -593,8 +616,8 @@ export async function simpleCCDTransferToNonExistingAccountAddress(
   account: string
 ) {
   const payload = {
-    amount: new CcdAmount(BigInt(1n)),
-    toAddress: new AccountAddress(
+    amount: CcdAmount.fromMicroCcd(1),
+    toAddress: AccountAddress.fromBase58(
       "35CJPZohio6Ztii2zy1AYzJKvuxbGG44wrBn7hLHiYLoF2nxnh"
     ),
   };
@@ -615,13 +638,10 @@ export async function simpleCCDTransferToNonExistingAccountAddress(
 
 export async function reverts(connection: WalletConnection, account: string) {
   const payload = {
-    amount: new CcdAmount(BigInt(0)),
-    address: {
-      index: CONTRACT_INDEX,
-      subindex: CONTRACT_SUB_INDEX,
-    },
-    receiveName: `${CONTRACT_NAME}.reverts`,
-    maxContractExecutionEnergy: 30000n,
+    amount: CcdAmount.fromMicroCcd(0),
+    address: ContractAddress.create(CONTRACT_INDEX, CONTRACT_SUB_INDEX),
+    receiveName: ReceiveName.fromString(`${CONTRACT_NAME}.reverts`),
+    maxContractExecutionEnergy: Energy.create(30000n),
   };
 
   console.debug("Sending update transaction:");
@@ -634,7 +654,7 @@ export async function reverts(connection: WalletConnection, account: string) {
   return connection.signAndSendTransaction(
     account,
     AccountTransactionType.Update,
-    payload as UpdateContractPayload
+    payload
   );
 }
 
@@ -643,13 +663,12 @@ export async function internalCallReverts(
   account: string
 ) {
   const payload = {
-    amount: new CcdAmount(BigInt(0)),
-    address: {
-      index: CONTRACT_INDEX,
-      subindex: CONTRACT_SUB_INDEX,
-    },
-    receiveName: `${CONTRACT_NAME}.internal_call_reverts`,
-    maxContractExecutionEnergy: 30000n,
+    amount: CcdAmount.fromMicroCcd(0),
+    address: ContractAddress.create(CONTRACT_INDEX, CONTRACT_SUB_INDEX),
+    receiveName: ReceiveName.fromString(
+      `${CONTRACT_NAME}.internal_call_reverts`
+    ),
+    maxContractExecutionEnergy: Energy.create(30000n),
   };
 
   console.debug("Sending update transaction:");
@@ -662,7 +681,7 @@ export async function internalCallReverts(
   return connection.signAndSendTransaction(
     account,
     AccountTransactionType.Update,
-    payload as UpdateContractPayload
+    payload
   );
 }
 
@@ -671,13 +690,12 @@ export async function internalCallSuccess(
   account: string
 ) {
   const payload = {
-    amount: new CcdAmount(BigInt(0)),
-    address: {
-      index: CONTRACT_INDEX,
-      subindex: CONTRACT_SUB_INDEX,
-    },
-    receiveName: `${CONTRACT_NAME}.internal_call_success`,
-    maxContractExecutionEnergy: 30000n,
+    amount: CcdAmount.fromMicroCcd(0),
+    address: ContractAddress.create(CONTRACT_INDEX, CONTRACT_SUB_INDEX),
+    receiveName: ReceiveName.fromString(
+      `${CONTRACT_NAME}.internal_call_success`
+    ),
+    maxContractExecutionEnergy: Energy.create(30000n),
   };
 
   console.debug("Sending update transaction:");
@@ -690,7 +708,7 @@ export async function internalCallSuccess(
   return connection.signAndSendTransaction(
     account,
     AccountTransactionType.Update,
-    payload as UpdateContractPayload
+    payload
   );
 }
 
@@ -704,13 +722,10 @@ export async function notExistingEntrypoint(
   };
 
   const payload = {
-    amount: new CcdAmount(BigInt(0)),
-    address: {
-      index: CONTRACT_INDEX,
-      subindex: CONTRACT_SUB_INDEX,
-    },
-    receiveName: `${CONTRACT_NAME}.does_not_exist`,
-    maxContractExecutionEnergy: 30000n,
+    amount: CcdAmount.fromMicroCcd(0),
+    address: ContractAddress.create(CONTRACT_INDEX, CONTRACT_SUB_INDEX),
+    receiveName: ReceiveName.fromString(`${CONTRACT_NAME}.does_not_exist`),
+    maxContractExecutionEnergy: Energy.create(30000n),
   };
 
   console.debug("Sending update transaction:");
@@ -725,7 +740,7 @@ export async function notExistingEntrypoint(
   return connection.signAndSendTransaction(
     account,
     AccountTransactionType.Update,
-    payload as UpdateContractPayload,
+    payload,
     schema
   );
 }
