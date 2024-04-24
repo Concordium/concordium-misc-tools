@@ -12,9 +12,7 @@
     "@concordium/react-components": "../../deps/concordium-dapp-libraries/packages/react-components",
     "@concordium/wallet-connectors": "../../deps/concordium-dapp-libraries/packages/wallet-connectors",
     "@concordium/web-sdk": "^7.0.0",
-    "@types/json-bigint": "^1.0.4",
     "@walletconnect/types": "^2.1.4",
-    "eslint": "^8.37.0",
     "json-bigint": "^1.0.0",
     "moment": "^2.29.4",
     "react": "^18.1.0",
@@ -27,6 +25,7 @@
     "@concordium/web-sdk": "^7.0.0"
   },
   "devDependencies": {
+    "@types/json-bigint": "^1.0.4",
     "@types/react": "^18.0.9",
     "@types/react-dom": "^18.0.5",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
