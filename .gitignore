@@ -5,6 +5,7 @@
 /id-demo/dist/*
 /wallet-connect-test-bench/front-end/node_modules
 /wallet-connect-test-bench/front-end/.yarn
+/id-verifier/frontend/.yarn
 
 # dependencies
 node_modules
