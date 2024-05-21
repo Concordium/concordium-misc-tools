@@ -8,10 +8,10 @@
     "node": ">=16.x"
   },
   "dependencies": {
-    "@concordium/browser-wallet-api-helpers": "^3.0.0",
+    "@concordium/browser-wallet-api-helpers": "^3.0.1",
     "@concordium/react-components": "../../deps/concordium-dapp-libraries/packages/react-components",
     "@concordium/wallet-connectors": "../../deps/concordium-dapp-libraries/packages/wallet-connectors",
-    "@concordium/web-sdk": "^7.0.0",
+    "@concordium/web-sdk": "^7.4.0",
     "@walletconnect/types": "^2.1.4",
     "json-bigint": "^1.0.0",
     "moment": "^2.29.4",
@@ -22,7 +22,7 @@
   "resolutions": {
     "@concordium/wallet-connectors": "../../deps/concordium-dapp-libraries/packages/wallet-connectors",
     "@concordium/react-components": "../../deps/concordium-dapp-libraries/packages/react-components",
-    "@concordium/web-sdk": "^7.0.0"
+    "@concordium/web-sdk": "^7.4.0"
   },
   "devDependencies": {
     "@types/json-bigint": "^1.0.4",
