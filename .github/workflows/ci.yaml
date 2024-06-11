@@ -33,7 +33,7 @@ jobs:
           - recover-id-object/Cargo.toml
           - generator/Cargo.toml
           - wallet-connect-test-bench/smart-contract/Cargo.toml
-          - notification-service/Cargo.toml
+          - notification-server/Cargo.toml
     steps:
       - name: Checkout
         uses: actions/checkout@v4
