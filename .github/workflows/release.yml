@@ -4,13 +4,17 @@ on:
   workflow_dispatch:
 
 env:
-  RUST_VERSION: rust:1.70-buster
+  RUST_VERSION: rust:1.73-buster
 
 jobs:
 
   build-and-push:
     runs-on: ubuntu-latest
     environment: release-recover-id-object
+    strategy:
+      matrix:
+        service_name:
+          - recover-id-object
     steps:
     - name: Check out the repo
       uses: actions/checkout@v4
@@ -26,16 +30,15 @@ jobs:
     - name: Extract Cargo package version
       id: cargo_version
       run: |
-        cd recover-id-object
+        cd ${{ matrix.service_name }}
         VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
-        echo "Extracted version is $VERSION"
-        echo "::set-output name=version::$VERSION"
+        echo "VERSION=$VERSION" >> $GITHUB_ENV
     - name: Build and push Docker image
       uses: docker/build-push-action@v5
       with:
         context: .
-        file: recover-id-object/scripts/Dockerfile
+        file: ${{ matrix.service_name }}/scripts/Dockerfile
         push: true
         build-args: |
           build_image=${{ env.RUST_VERSION }}
-        tags: concordium/recover-id-object:${{ steps.cargo_version.outputs.version }}
+        tags: concordium/${{ matrix.service_name }}:$VERSION

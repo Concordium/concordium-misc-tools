@@ -1,0 +1,11 @@
+[package]
+name = "notification-server"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+
+concordium-rust-sdk = { version = "*", path = "../deps/concordium-rust-sdk" }
+gcloud-sdk = "0.24.7"
