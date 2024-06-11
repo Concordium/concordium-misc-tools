@@ -37,8 +37,25 @@ const HASH: HashSha2256 = concordium_std::HashSha2256([2u8; 32]);
 const STRING: &str = "abc";
 
 /// The contract state.
-#[derive(Serial, Deserial, Clone, SchemaType)]
-struct State {
+#[derive(Serial, DeserialWithState)]
+#[concordium(state_parameter = "S")]
+struct State<S: HasStateApi> {
+    u8_value:               u8,
+    u16_value:              u16,
+    address_array:          StateBox<Vec<Address>, S>,
+    address_value:          Address,
+    account_address_value:  AccountAddress,
+    contract_address_value: ContractAddress,
+    hash_value:             HashSha2256,
+    signature_value:        SignatureEd25519,
+    public_key_value:       PublicKeyEd25519,
+    timestamp_value:        Timestamp,
+    option_value:           Option<u8>,
+    string_value:           StateBox<String, S>,
+}
+
+#[derive(Serial, Deserial, SchemaType)]
+struct ReturnState {
     u8_value:               u8,
     u16_value:              u16,
     address_array:          Vec<Address>,
@@ -54,13 +71,47 @@ struct State {
     string_value:           String,
 }
 
+impl<'a, S: HasStateApi> From<&'a State<S>> for ReturnState {
+    fn from(
+        State {
+            u8_value,
+            u16_value,
+            address_array,
+            address_value,
+            account_address_value,
+            contract_address_value,
+            hash_value,
+            signature_value,
+            public_key_value,
+            timestamp_value,
+            option_value,
+            string_value,
+        }: &'a State<S>,
+    ) -> Self {
+        Self {
+            u8_value:               *u8_value,
+            u16_value:              *u16_value,
+            address_array:          address_array.to_vec(),
+            address_value:          *address_value,
+            account_address_value:  *account_address_value,
+            contract_address_value: *contract_address_value,
+            hash_value:             *hash_value,
+            signature_value:        *signature_value,
+            public_key_value:       *public_key_value,
+            timestamp_value:        *timestamp_value,
+            option_value:           *option_value,
+            string_value:           String::from(string_value.as_str()),
+        }
+    }
+}
+
 /// Init function that creates this smart_contract_test_bench.
 #[init(contract = "smart_contract_test_bench", parameter = "u16", payable)]
 fn contract_init<S: HasStateApi>(
     ctx: &impl HasInitContext,
-    _state_builder: &mut StateBuilder<S>,
+    state_builder: &mut StateBuilder<S>,
     _amount: Amount,
-) -> InitResult<State> {
+) -> InitResult<State<S>> {
     let size = ctx.parameter_cursor().size();
     let mut u16_value: u16 = 0u16;
 
@@ -71,7 +122,7 @@ fn contract_init<S: HasStateApi>(
     Ok(State {
         u8_value: 0u8,
         u16_value,
-        address_array: vec![],
+        address_array: state_builder.new_box(vec![]),
         address_value: Address::Account(AccountAddress([0u8; 32])),
         account_address_value: AccountAddress([0u8; 32]),
         contract_address_value: ContractAddress {
@@ -83,7 +134,7 @@ fn contract_init<S: HasStateApi>(
         public_key_value: PUBLIC_KEY,
         timestamp_value: Timestamp::from_timestamp_millis(11),
         option_value: None,
-        string_value: STRING.to_string(),
+        string_value: state_builder.new_box(STRING.to_string()),
     })
 }
 
@@ -96,7 +147,7 @@ fn contract_init<S: HasStateApi>(
 )]
 fn set_u8<S: HasStateApi>(
     ctx: &impl HasReceiveContext,
-    host: &mut impl HasHost<State, StateApiType = S>,
+    host: &mut impl HasHost<State<S>, StateApiType = S>,
 ) -> Result<(), ContractError> {
     let value: u8 = ctx.parameter_cursor().get()?;
     host.state_mut().u8_value = value;
@@ -114,7 +165,7 @@ fn set_u8<S: HasStateApi>(
 )]
 fn set_u8_payable<S: HasStateApi>(
     ctx: &impl HasReceiveContext,
-    host: &mut impl HasHost<State, StateApiType = S>,
+    host: &mut impl HasHost<State<S>, StateApiType = S>,
     _amount: Amount,
 ) -> Result<(), ContractError> {
     let value: u8 = ctx.parameter_cursor().get()?;
@@ -132,7 +183,7 @@ fn set_u8_payable<S: HasStateApi>(
 )]
 fn get_u8<S: HasStateApi>(
     _ctx: &impl HasReceiveContext,
-    host: &mut impl HasHost<State, StateApiType = S>,
+    host: &mut impl HasHost<State<S>, StateApiType = S>,
 ) -> Result<u8, ContractError> {
     Ok(host.state_mut().u8_value)
 }
@@ -146,7 +197,7 @@ fn get_u8<S: HasStateApi>(
 )]
 fn set_u16<S: HasStateApi>(
     ctx: &impl HasReceiveContext,
-    host: &mut impl HasHost<State, StateApiType = S>,
+    host: &mut impl HasHost<State<S>, StateApiType = S>,
 ) -> Result<(), ContractError> {
     let value: u16 = ctx.parameter_cursor().get()?;
     host.state_mut().u16_value = value;
@@ -164,7 +215,7 @@ fn set_u16<S: HasStateApi>(
 )]
 fn set_u16_payable<S: HasStateApi>(
     ctx: &impl HasReceiveContext,
-    host: &mut impl HasHost<State, StateApiType = S>,
+    host: &mut impl HasHost<State<S>, StateApiType = S>,
     _amount: Amount,
 ) -> Result<(), ContractError> {
     let value: u16 = ctx.parameter_cursor().get()?;
@@ -182,7 +233,7 @@ fn set_u16_payable<S: HasStateApi>(
 )]
 fn get_u16<S: HasStateApi>(
     _ctx: &impl HasReceiveContext,
-    host: &mut impl HasHost<State, StateApiType = S>,
+    host: &mut impl HasHost<State<S>, StateApiType = S>,
 ) -> Result<u16, ContractError> {
     Ok(host.state_mut().u16_value)
 }
@@ -196,7 +247,7 @@ fn get_u16<S: HasStateApi>(
 )]
 fn set_address<S: HasStateApi>(
     ctx: &impl HasReceiveContext,
-    host: &mut impl HasHost<State, StateApiType = S>,
+    host: &mut impl HasHost<State<S>, StateApiType = S>,
 ) -> Result<(), ContractError> {
     let value: Address = ctx.parameter_cursor().get()?;
     host.state_mut().address_value = value;
@@ -214,7 +265,7 @@ fn set_address<S: HasStateApi>(
 )]
 fn set_address_payable<S: HasStateApi>(
     ctx: &impl HasReceiveContext,
-    host: &mut impl HasHost<State, StateApiType = S>,
+    host: &mut impl HasHost<State<S>, StateApiType = S>,
     _amount: Amount,
 ) -> Result<(), ContractError> {
     let value: Address = ctx.parameter_cursor().get()?;
@@ -232,7 +283,7 @@ fn set_address_payable<S: HasStateApi>(
 )]
 fn get_address<S: HasStateApi>(
     _ctx: &impl HasReceiveContext,
-    host: &mut impl HasHost<State, StateApiType = S>,
+    host: &mut impl HasHost<State<S>, StateApiType = S>,
 ) -> Result<Address, ContractError> {
     Ok(host.state_mut().address_value)
 }
@@ -246,7 +297,7 @@ fn get_address<S: HasStateApi>(
 )]
 fn set_contract_address<S: HasStateApi>(
     ctx: &impl HasReceiveContext,
-    host: &mut impl HasHost<State, StateApiType = S>,
+    host: &mut impl HasHost<State<S>, StateApiType = S>,
 ) -> Result<(), ContractError> {
     let value: ContractAddress = ctx.parameter_cursor().get()?;
     host.state_mut().contract_address_value = value;
@@ -264,7 +315,7 @@ fn set_contract_address<S: HasStateApi>(
 )]
 fn set_contract_address_payable<S: HasStateApi>(
     ctx: &impl HasReceiveContext,
-    host: &mut impl HasHost<State, StateApiType = S>,
+    host: &mut impl HasHost<State<S>, StateApiType = S>,
     _amount: Amount,
 ) -> Result<(), ContractError> {
     let value: ContractAddress = ctx.parameter_cursor().get()?;
@@ -282,7 +333,7 @@ fn set_contract_address_payable<S: HasStateApi>(
 )]
 fn get_contract_address<S: HasStateApi>(
     _ctx: &impl HasReceiveContext,
-    host: &mut impl HasHost<State, StateApiType = S>,
+    host: &mut impl HasHost<State<S>, StateApiType = S>,
 ) -> Result<ContractAddress, ContractError> {
     Ok(host.state_mut().contract_address_value)
 }
@@ -296,7 +347,7 @@ fn get_contract_address<S: HasStateApi>(
 )]
 fn set_account_address<S: HasStateApi>(
     ctx: &impl HasReceiveContext,
-    host: &mut impl HasHost<State, StateApiType = S>,
+    host: &mut impl HasHost<State<S>, StateApiType = S>,
 ) -> Result<(), ContractError> {
     let value: AccountAddress = ctx.parameter_cursor().get()?;
     host.state_mut().account_address_value = value;
@@ -314,7 +365,7 @@ fn set_account_address<S: HasStateApi>(
 )]
 fn set_account_address_payable<S: HasStateApi>(
     ctx: &impl HasReceiveContext,
-    host: &mut impl HasHost<State, StateApiType = S>,
+    host: &mut impl HasHost<State<S>, StateApiType = S>,
     _amount: Amount,
 ) -> Result<(), ContractError> {
     let value: AccountAddress = ctx.parameter_cursor().get()?;
@@ -332,7 +383,7 @@ fn set_account_address_payable<S: HasStateApi>(
 )]
 fn get_account_address<S: HasStateApi>(
     _ctx: &impl HasReceiveContext,
-    host: &mut impl HasHost<State, StateApiType = S>,
+    host: &mut impl HasHost<State<S>, StateApiType = S>,
 ) -> Result<AccountAddress, ContractError> {
     Ok(host.state_mut().account_address_value)
 }
@@ -346,7 +397,7 @@ fn get_account_address<S: HasStateApi>(
 )]
 fn set_hash<S: HasStateApi>(
     ctx: &impl HasReceiveContext,
-    host: &mut impl HasHost<State, StateApiType = S>,
+    host: &mut impl HasHost<State<S>, StateApiType = S>,
 ) -> Result<(), ContractError> {
     let value: HashSha2256 = ctx.parameter_cursor().get()?;
     host.state_mut().hash_value = value;
@@ -364,7 +415,7 @@ fn set_hash<S: HasStateApi>(
 )]
 fn set_hash_payable<S: HasStateApi>(
     ctx: &impl HasReceiveContext,
-    host: &mut impl HasHost<State, StateApiType = S>,
+    host: &mut impl HasHost<State<S>, StateApiType = S>,
     _amount: Amount,
 ) -> Result<(), ContractError> {
     let value: HashSha2256 = ctx.parameter_cursor().get()?;
@@ -382,7 +433,7 @@ fn set_hash_payable<S: HasStateApi>(
 )]
 fn get_hash<S: HasStateApi>(
     _ctx: &impl HasReceiveContext,
-    host: &mut impl HasHost<State, StateApiType = S>,
+    host: &mut impl HasHost<State<S>, StateApiType = S>,
 ) -> Result<HashSha2256, ContractError> {
     Ok(host.state_mut().hash_value)
 }
@@ -396,7 +447,7 @@ fn get_hash<S: HasStateApi>(
 )]
 fn set_public_key<S: HasStateApi>(
     ctx: &impl HasReceiveContext,
-    host: &mut impl HasHost<State, StateApiType = S>,
+    host: &mut impl HasHost<State<S>, StateApiType = S>,
 ) -> Result<(), ContractError> {
     let value: PublicKeyEd25519 = ctx.parameter_cursor().get()?;
     host.state_mut().public_key_value = value;
@@ -414,7 +465,7 @@ fn set_public_key<S: HasStateApi>(
 )]
 fn set_public_key_payable<S: HasStateApi>(
     ctx: &impl HasReceiveContext,
-    host: &mut impl HasHost<State, StateApiType = S>,
+    host: &mut impl HasHost<State<S>, StateApiType = S>,
     _amount: Amount,
 ) -> Result<(), ContractError> {
     let value: PublicKeyEd25519 = ctx.parameter_cursor().get()?;
@@ -432,7 +483,7 @@ fn set_public_key_payable<S: HasStateApi>(
 )]
 fn get_public_key<S: HasStateApi>(
     _ctx: &impl HasReceiveContext,
-    host: &mut impl HasHost<State, StateApiType = S>,
+    host: &mut impl HasHost<State<S>, StateApiType = S>,
 ) -> Result<PublicKeyEd25519, ContractError> {
     Ok(host.state_mut().public_key_value)
 }
@@ -446,7 +497,7 @@ fn get_public_key<S: HasStateApi>(
 )]
 fn set_signature<S: HasStateApi>(
     ctx: &impl HasReceiveContext,
-    host: &mut impl HasHost<State, StateApiType = S>,
+    host: &mut impl HasHost<State<S>, StateApiType = S>,
 ) -> Result<(), ContractError> {
     let value: SignatureEd25519 = ctx.parameter_cursor().get()?;
     host.state_mut().signature_value = value;
@@ -464,7 +515,7 @@ fn set_signature<S: HasStateApi>(
 )]
 fn set_signature_payable<S: HasStateApi>(
     ctx: &impl HasReceiveContext,
-    host: &mut impl HasHost<State, StateApiType = S>,
+    host: &mut impl HasHost<State<S>, StateApiType = S>,
     _amount: Amount,
 ) -> Result<(), ContractError> {
     let value: SignatureEd25519 = ctx.parameter_cursor().get()?;
@@ -482,7 +533,7 @@ fn set_signature_payable<S: HasStateApi>(
 )]
 fn get_signature<S: HasStateApi>(
     _ctx: &impl HasReceiveContext,
-    host: &mut impl HasHost<State, StateApiType = S>,
+    host: &mut impl HasHost<State<S>, StateApiType = S>,
 ) -> Result<SignatureEd25519, ContractError> {
     Ok(host.state_mut().signature_value)
 }
@@ -496,7 +547,7 @@ fn get_signature<S: HasStateApi>(
 )]
 fn set_timestamp<S: HasStateApi>(
     ctx: &impl HasReceiveContext,
-    host: &mut impl HasHost<State, StateApiType = S>,
+    host: &mut impl HasHost<State<S>, StateApiType = S>,
 ) -> Result<(), ContractError> {
     let value: Timestamp = ctx.parameter_cursor().get()?;
     host.state_mut().timestamp_value = value;
@@ -514,7 +565,7 @@ fn set_timestamp<S: HasStateApi>(
 )]
 fn set_timestamp_payable<S: HasStateApi>(
     ctx: &impl HasReceiveContext,
-    host: &mut impl HasHost<State, StateApiType = S>,
+    host: &mut impl HasHost<State<S>, StateApiType = S>,
     _amount: Amount,
 ) -> Result<(), ContractError> {
     let value: Timestamp = ctx.parameter_cursor().get()?;
@@ -532,7 +583,7 @@ fn set_timestamp_payable<S: HasStateApi>(
 )]
 fn get_timestamp<S: HasStateApi>(
     _ctx: &impl HasReceiveContext,
-    host: &mut impl HasHost<State, StateApiType = S>,
+    host: &mut impl HasHost<State<S>, StateApiType = S>,
 ) -> Result<Timestamp, ContractError> {
     Ok(host.state_mut().timestamp_value)
 }
@@ -546,10 +597,10 @@ fn get_timestamp<S: HasStateApi>(
 )]
 fn set_string<S: HasStateApi>(
     ctx: &impl HasReceiveContext,
-    host: &mut impl HasHost<State, StateApiType = S>,
+    host: &mut impl HasHost<State<S>, StateApiType = S>,
 ) -> Result<(), ContractError> {
     let value: String = ctx.parameter_cursor().get()?;
-    host.state_mut().string_value = value;
+    drop(host.state_mut().string_value.replace(value));
 
     Ok(())
 }
@@ -564,11 +615,11 @@ fn set_string<S: HasStateApi>(
 )]
 fn set_string_payable<S: HasStateApi>(
     ctx: &impl HasReceiveContext,
-    host: &mut impl HasHost<State, StateApiType = S>,
+    host: &mut impl HasHost<State<S>, StateApiType = S>,
     _amount: Amount,
 ) -> Result<(), ContractError> {
     let value: String = ctx.parameter_cursor().get()?;
-    host.state_mut().string_value = value;
+    drop(host.state_mut().string_value.replace(value));
 
     Ok(())
 }
@@ -582,7 +633,7 @@ fn set_string_payable<S: HasStateApi>(
 )]
 fn get_string<S: HasStateApi>(
     _ctx: &impl HasReceiveContext,
-    host: &mut impl HasHost<State, StateApiType = S>,
+    host: &mut impl HasHost<State<S>, StateApiType = S>,
 ) -> Result<String, ContractError> {
     Ok(host.state_mut().string_value.clone())
 }
@@ -596,7 +647,7 @@ fn get_string<S: HasStateApi>(
 )]
 fn set_option_u8<S: HasStateApi>(
     ctx: &impl HasReceiveContext,
-    host: &mut impl HasHost<State, StateApiType = S>,
+    host: &mut impl HasHost<State<S>, StateApiType = S>,
 ) -> Result<(), ContractError> {
     let value: Option<u8> = ctx.parameter_cursor().get()?;
     host.state_mut().option_value = value;
@@ -614,7 +665,7 @@ fn set_option_u8<S: HasStateApi>(
 )]
 fn set_option_u8_payable<S: HasStateApi>(
     ctx: &impl HasReceiveContext,
-    host: &mut impl HasHost<State, StateApiType = S>,
+    host: &mut impl HasHost<State<S>, StateApiType = S>,
     _amount: Amount,
 ) -> Result<(), ContractError> {
     let value: Option<u8> = ctx.parameter_cursor().get()?;
@@ -632,7 +683,7 @@ fn set_option_u8_payable<S: HasStateApi>(
 )]
 fn get_option_u8<S: HasStateApi>(
     _ctx: &impl HasReceiveContext,
-    host: &mut impl HasHost<State, StateApiType = S>,
+    host: &mut impl HasHost<State<S>, StateApiType = S>,
 ) -> Result<Option<u8>, ContractError> {
     Ok(host.state_mut().option_value)
 }
@@ -646,10 +697,10 @@ fn get_option_u8<S: HasStateApi>(
 )]
 fn set_address_array<S: HasStateApi>(
     ctx: &impl HasReceiveContext,
-    host: &mut impl HasHost<State, StateApiType = S>,
+    host: &mut impl HasHost<State<S>, StateApiType = S>,
 ) -> Result<(), ContractError> {
     let value: Vec<Address> = ctx.parameter_cursor().get()?;
-    host.state_mut().address_array = value;
+    drop(host.state_mut().address_array.replace(value));
 
     Ok(())
 }
@@ -664,11 +715,11 @@ fn set_address_array<S: HasStateApi>(
 )]
 fn set_address_array_payable<S: HasStateApi>(
     ctx: &impl HasReceiveContext,
-    host: &mut impl HasHost<State, StateApiType = S>,
+    host: &mut impl HasHost<State<S>, StateApiType = S>,
     _amount: Amount,
 ) -> Result<(), ContractError> {
     let value: Vec<Address> = ctx.parameter_cursor().get()?;
-    host.state_mut().address_array = value;
+    drop(host.state_mut().address_array.replace(value));
 
     Ok(())
 }
@@ -682,7 +733,7 @@ fn set_address_array_payable<S: HasStateApi>(
 )]
 fn get_address_array<S: HasStateApi>(
     _ctx: &impl HasReceiveContext,
-    host: &mut impl HasHost<State, StateApiType = S>,
+    host: &mut impl HasHost<State<S>, StateApiType = S>,
 ) -> Result<Vec<Address>, ContractError> {
     Ok(host.state_mut().address_array.clone())
 }
@@ -690,27 +741,27 @@ fn get_address_array<S: HasStateApi>(
 #[receive(
     contract = "smart_contract_test_bench",
     name = "set_object",
-    parameter = "State",
+    parameter = "ReturnState",
     error = "ContractError",
     mutable
 )]
 fn set_object<S: HasStateApi>(
     ctx: &impl HasReceiveContext,
-    host: &mut impl HasHost<State, StateApiType = S>,
+    host: &mut impl HasHost<State<S>, StateApiType = S>,
 ) -> Result<(), ContractError> {
-    let value: State = ctx.parameter_cursor().get()?;
+    let value: ReturnState = ctx.parameter_cursor().get()?;
     host.state_mut().account_address_value = value.account_address_value;
     host.state_mut().contract_address_value = value.contract_address_value;
     host.state_mut().address_value = value.address_value;
     host.state_mut().u8_value = value.u8_value;
     host.state_mut().u16_value = value.u16_value;
-    host.state_mut().address_array = value.address_array;
+    drop(host.state_mut().address_array.replace(value.address_array));
     host.state_mut().hash_value = value.hash_value;
     host.state_mut().signature_value = value.signature_value;
     host.state_mut().public_key_value = value.public_key_value;
     host.state_mut().timestamp_value = value.timestamp_value;
     host.state_mut().option_value = value.option_value;
-    host.state_mut().string_value = value.string_value;
+    drop(host.state_mut().string_value.replace(value.string_value));
 
     Ok(())
 }
@@ -718,29 +769,29 @@ fn set_object<S: HasStateApi>(
 #[receive(
     contract = "smart_contract_test_bench",
     name = "set_object_payable",
-    parameter = "State",
+    parameter = "ReturnState",
     error = "ContractError",
     mutable,
     payable
 )]
 fn set_object_payable<S: HasStateApi>(
     ctx: &impl HasReceiveContext,
-    host: &mut impl HasHost<State, StateApiType = S>,
+    host: &mut impl HasHost<State<S>, StateApiType = S>,
     _amount: Amount,
 ) -> Result<(), ContractError> {
-    let value: State = ctx.parameter_cursor().get()?;
+    let value: ReturnState = ctx.parameter_cursor().get()?;
     host.state_mut().account_address_value = value.account_address_value;
     host.state_mut().contract_address_value = value.contract_address_value;
     host.state_mut().address_value = value.address_value;
     host.state_mut().u8_value = value.u8_value;
     host.state_mut().u16_value = value.u16_value;
-    host.state_mut().address_array = value.address_array;
+    drop(host.state_mut().address_array.replace(value.address_array));
     host.state_mut().hash_value = value.hash_value;
     host.state_mut().signature_value = value.signature_value;
     host.state_mut().public_key_value = value.public_key_value;
     host.state_mut().timestamp_value = value.timestamp_value;
     host.state_mut().option_value = value.option_value;
-    host.state_mut().string_value = value.string_value;
+    drop(host.state_mut().string_value.replace(value.string_value));
 
     Ok(())
 }
@@ -748,15 +799,15 @@ fn set_object_payable<S: HasStateApi>(
 #[receive(
     contract = "smart_contract_test_bench",
     name = "get_object",
-    return_value = "State",
+    return_value = "ReturnState",
     error = "ContractError",
     mutable
 )]
 fn get_object<S: HasStateApi>(
     _ctx: &impl HasReceiveContext,
-    host: &mut impl HasHost<State, StateApiType = S>,
-) -> Result<State, ContractError> {
-    Ok(host.state().clone())
+    host: &mut impl HasHost<State<S>, StateApiType = S>,
+) -> Result<ReturnState, ContractError> {
+    Ok(host.state().into())
 }
 
 #[receive(
@@ -767,7 +818,7 @@ fn get_object<S: HasStateApi>(
 )]
 fn success<S: HasStateApi>(
     _ctx: &impl HasReceiveContext,
-    _host: &mut impl HasHost<State, StateApiType = S>,
+    _host: &mut impl HasHost<State<S>, StateApiType = S>,
 ) -> Result<(), ContractError> {
     Ok(())
 }
@@ -780,7 +831,7 @@ fn success<S: HasStateApi>(
 )]
 fn reverts<S: HasStateApi>(
     _ctx: &impl HasReceiveContext,
-    _host: &mut impl HasHost<State, StateApiType = S>,
+    _host: &mut impl HasHost<State<S>, StateApiType = S>,
 ) -> Result<(), ContractError> {
     bail!(ContractError::SmartContractReverts);
 }
@@ -793,7 +844,7 @@ fn reverts<S: HasStateApi>(
 )]
 fn internal_call_reverts<S: HasStateApi>(
     ctx: &impl HasReceiveContext,
-    host: &mut impl HasHost<State, StateApiType = S>,
+    host: &mut impl HasHost<State<S>, StateApiType = S>,
 ) -> Result<(), ContractError> {
     host.invoke_contract(
         &ctx.self_address(),
@@ -813,7 +864,7 @@ fn internal_call_reverts<S: HasStateApi>(
 )]
 fn internal_call_success<S: HasStateApi>(
     ctx: &impl HasReceiveContext,
-    host: &mut impl HasHost<State, StateApiType = S>,
+    host: &mut impl HasHost<State<S>, StateApiType = S>,
 ) -> Result<(), ContractError> {
     host.invoke_contract(
         &ctx.self_address(),
@@ -830,53 +881,11 @@ fn internal_call_success<S: HasStateApi>(
     name = "view",
     parameter = "HashSha2256",
     error = "ContractError",
-    return_value = "State"
+    return_value = "ReturnState"
 )]
 fn view<S: HasStateApi>(
     _ctx: &impl HasReceiveContext,
-    host: &impl HasHost<State, StateApiType = S>,
-) -> ReceiveResult<State> {
-    Ok(host.state().clone())
-}
-
-#[concordium_cfg_test]
-mod tests {
-    use super::*;
-    use test_infrastructure::*;
-
-    const VALUE: u16 = 34u16;
-    const AMOUNT: concordium_std::Amount = Amount::from_micro_ccd(0);
-
-    #[concordium_test]
-    /// Test that the smart-contract initialization sets the state correctly
-    /// without parameter.
-    fn test_init_without_parameter() {
-        let mut ctx = TestInitContext::empty();
-
-        ctx.set_parameter(&[]);
-        let mut state_builder = TestStateBuilder::new();
-
-        let state_result = contract_init(&ctx, &mut state_builder, AMOUNT);
-        let state = state_result.expect_report("Contract initialization results in error");
-
-        claim_eq!(0u16, state.u16_value, "u16 value should not be set");
-    }
-
-    #[concordium_test]
-    /// Test that the smart-contract initialization sets the state correctly
-    /// with parameter.
-    fn test_init_with_parameter() {
-        let mut ctx = TestInitContext::empty();
-
-        let parameter_bytes = to_bytes(&VALUE);
-
-        ctx.set_parameter(&parameter_bytes);
-
-        let mut state_builder = TestStateBuilder::new();
-
-        let state_result = contract_init(&ctx, &mut state_builder, AMOUNT);
-        let state = state_result.expect_report("Contract initialization results in error");
-
-        claim_eq!(VALUE, state.u16_value, "u16 value should be set");
-    }
+    host: &impl HasHost<State<S>, StateApiType = S>,
+) -> ReceiveResult<ReturnState> {
+    Ok(host.state().into())
 }

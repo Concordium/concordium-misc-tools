@@ -7,7 +7,7 @@ use axum::{
 use clap::Parser;
 use concordium_rust_sdk::{
     endpoints::QueryError,
-    smart_contracts::common::AccountAddress,
+    smart_contracts::common::{AccountAddress, Amount},
     v2::{self, BlockIdentifier},
 };
 use futures::{stream::FuturesOrdered, TryStreamExt};
@@ -147,7 +147,10 @@ async fn main() -> anyhow::Result<()> {
         app.endpoint
     }
     .connect_timeout(std::time::Duration::from_secs(10))
-    .timeout(std::time::Duration::from_millis(app.request_timeout));
+    .timeout(std::time::Duration::from_millis(app.request_timeout))
+    .http2_keep_alive_interval(std::time::Duration::from_secs(300))
+    .keep_alive_timeout(std::time::Duration::from_secs(10))
+    .keep_alive_while_idle(true);
 
     let client = v2::Client::new(endpoint)
         .await
@@ -184,12 +187,12 @@ type ServiceState = (
     Arc<Vec<(AccountAddress, GenericGauge<AtomicU64>)>>,
 );
 
-#[tracing::instrument(level = "debug", skip(client, registry))]
-async fn text_metrics(
-    axum::extract::State((client, registry, gauges)): axum::extract::State<ServiceState>,
-) -> Result<String, axum::response::ErrorResponse> {
+async fn get_data(
+    client: v2::Client,
+    gauges: impl Iterator<Item = AccountAddress>,
+) -> Result<Vec<Amount>, QueryError> {
     let mut futures = FuturesOrdered::new();
-    for acc in gauges.iter().map(|x| x.0) {
+    for acc in gauges {
         let mut client = client.clone();
         futures.push_back(async move {
             let acc = client
@@ -199,15 +202,27 @@ async fn text_metrics(
             Ok::<_, QueryError>(acc.account_amount)
         })
     }
-    match futures.try_collect::<Vec<_>>().await {
-        Ok(balances) => {
-            for (balance, gauge) in balances.into_iter().zip(gauges.iter()) {
-                gauge.1.set(balance.micro_ccd())
-            }
-        }
-        Err(e) => return Err(Error::Query(e).into()),
-    }
+    futures.try_collect::<Vec<_>>().await
+}
 
+#[tracing::instrument(level = "debug", skip(client, registry))]
+async fn text_metrics(
+    axum::extract::State((client, registry, gauges)): axum::extract::State<ServiceState>,
+) -> Result<String, axum::response::ErrorResponse> {
+    let result = get_data(client.clone(), gauges.iter().map(|x| x.0)).await;
+    let balances = match result {
+        Ok(balances) => balances,
+        Err(e) => {
+            tracing::warn!("Query failed (retrying): {e:#}");
+            // Sometimes we get a GoAway from the node. We retry the request once.
+            get_data(client.clone(), gauges.iter().map(|x| x.0))
+                .await
+                .map_err(Error::Query)?
+        }
+    };
+    for (balance, gauge) in balances.into_iter().zip(gauges.iter()) {
+        gauge.1.set(balance.micro_ccd())
+    }
     let encoder = TextEncoder::new();
     let metric_families = registry.gather();
     Ok(encoder
