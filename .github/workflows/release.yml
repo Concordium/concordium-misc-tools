@@ -24,12 +24,10 @@ jobs:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
     - name: Extract Cargo package version
-      id: cargo_version
       run: |
         cd recover-id-object
         VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
-        echo "Extracted version is $VERSION"
-        echo "::set-output name=version::$VERSION"
+        echo "VERSION=$VERSION" >> $GITHUB_ENV
     - name: Build and push Docker image
       uses: docker/build-push-action@v5
       with:
@@ -38,4 +36,4 @@ jobs:
         push: true
         build-args: |
           build_image=${{ env.RUST_VERSION }}
-        tags: concordium/recover-id-object:${{ steps.cargo_version.outputs.version }}
+        tags: concordium/recover-id-object:${{ env.VERSION}}
