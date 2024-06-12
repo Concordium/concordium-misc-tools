@@ -11,10 +11,6 @@ jobs:
   build-and-push:
     runs-on: ubuntu-latest
     environment: release-recover-id-object
-    strategy:
-      matrix:
-        service_name:
-          - recover-id-object
     steps:
     - name: Check out the repo
       uses: actions/checkout@v4
@@ -30,15 +26,15 @@ jobs:
     - name: Extract Cargo package version
       id: cargo_version
       run: |
-        cd ${{ matrix.service_name }}
+        cd recover-id-object
         VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
         echo "VERSION=$VERSION" >> $GITHUB_ENV
     - name: Build and push Docker image
       uses: docker/build-push-action@v5
       with:
         context: .
-        file: ${{ matrix.service_name }}/scripts/Dockerfile
+        file: recover-id-object/scripts/Dockerfile
         push: true
         build-args: |
           build_image=${{ env.RUST_VERSION }}
-        tags: concordium/${{ matrix.service_name }}:$VERSION
+        tags: concordium/recover-id-object:${{ env.VERSION}}
