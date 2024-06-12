@@ -1,6 +1,6 @@
 [package]
 authors = ["Concordium AG developers@concordium.com"]
-edition = "2024"
+edition = "2021"
 name = "notification-server"
 version = "0.1.0"
 
