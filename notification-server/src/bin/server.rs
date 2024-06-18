@@ -1,11 +1,11 @@
 use clap::Parser;
 use concordium_rust_sdk::v2::{Client, Endpoint};
 use futures::StreamExt;
+use serde::Deserialize;
 use tonic::codegen::http;
 use tonic::transport::ClientTlsConfig;
-use warp::{Filter, Reply};
-use serde::Deserialize;
 use warp::http::StatusCode;
+use warp::{Filter, Reply};
 
 #[derive(Debug, Parser)]
 struct Args {
@@ -14,14 +14,13 @@ struct Args {
         default_value = "host=localhost dbname=kpi-tracker user=postgres password=password \
                          port=5432",
         help = "A connection string detailing the connection to the database used by the \
-                application.",
+                application."
     )]
-    db_connection:   tokio_postgres::config::Config,
-   /// Logging level of the application
+    db_connection: tokio_postgres::config::Config,
+    /// Logging level of the application
     #[arg(long = "log-level", default_value_t = log::LevelFilter::Info)]
-    log_level:       log::LevelFilter,
+    log_level: log::LevelFilter,
 }
-
 
 #[derive(Deserialize)]
 struct DeviceMapping {
@@ -31,7 +30,10 @@ pub async fn upsert_account_device(
     account: String,
     device_mapping: DeviceMapping,
 ) -> Result<impl Reply, warp::Rejection> {
-    println!("Upserting account {} with device id {}", account, device_mapping.device_id);
+    println!(
+        "Upserting account {} with device id {}",
+        account, device_mapping.device_id
+    );
     Ok(StatusCode::OK)
 }
 
