@@ -16,15 +16,13 @@ struct Args {
     /// Database connection string.
     #[arg(
         long = "db-connection",
-        default_value = "host=localhost dbname=kpi-tracker user=postgres password=password \
+        default_value = "host=localhost dbname=kpi-tracker user=postgres password=$DBPASSWORD \
                          port=5432",
         help = "A connection string detailing the connection to the database used by the \
                 application.",
     )]
     db_connection:   tokio_postgres::config::Config,
 }
-
-
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> anyhow::Result<()> {
