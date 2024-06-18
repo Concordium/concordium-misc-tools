@@ -1,8 +1,5 @@
 use clap::Parser;
-use concordium_rust_sdk::v2::{Client, Endpoint};
-use futures::StreamExt;
 use serde::Deserialize;
-use tonic::{codegen::http, transport::ClientTlsConfig};
 use warp::{http::StatusCode, Filter, Reply};
 
 #[derive(Debug, Parser)]
@@ -24,7 +21,7 @@ struct Args {
 struct DeviceMapping {
     device_id: String,
 }
-pub async fn upsert_account_device(
+async fn upsert_account_device(
     account: String,
     device_mapping: DeviceMapping,
 ) -> Result<impl Reply, warp::Rejection> {
