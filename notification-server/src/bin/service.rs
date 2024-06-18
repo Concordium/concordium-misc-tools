@@ -1,5 +1,6 @@
 use clap::Parser;
 use concordium_rust_sdk::v2::{Client, Endpoint};
+use log::info;
 use tonic::codegen::http;
 use tonic::codegen::tokio_stream::StreamExt;
 use tonic::transport::ClientTlsConfig;
@@ -48,13 +49,17 @@ async fn main() -> anyhow::Result<()> {
         .await?;
     let mut receiver = client.get_finalized_blocks().await?;
     while let Some(v) = receiver.next().await {
-        println!("Blockhash: {:?}", v.clone()?.block_hash);
-        let transactions = client.get_block_transaction_events(v?.block_hash).await?.response;
+        let block_hash = v?.block_hash;
+        println!("Blockhash: {:?}", block_hash);
+        let transactions = client.get_block_transaction_events(block_hash).await?.response;
         let addresses: Vec<String> = transactions
             .filter_map(|t| {
                 match t {
-                    Ok(t) => Some(t.affected_addresses().into_iter().map(|addr| addr.to_string()).collect::<Vec<String>>()),
-                    Err(_) => None
+                    Ok(t) => Some(t.affected_addresses().into_iter().map(|addr| addr.to_string()).collect::<Vec<_>>()),
+                    Err(_) => {
+                        info!("Not found block {}", block_hash);
+                        None
+                    }
                 }
             })
             .collect::<Vec<Vec<String>>>()
