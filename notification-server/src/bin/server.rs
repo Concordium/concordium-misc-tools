@@ -2,10 +2,8 @@ use clap::Parser;
 use concordium_rust_sdk::v2::{Client, Endpoint};
 use futures::StreamExt;
 use serde::Deserialize;
-use tonic::codegen::http;
-use tonic::transport::ClientTlsConfig;
-use warp::http::StatusCode;
-use warp::{Filter, Reply};
+use tonic::{codegen::http, transport::ClientTlsConfig};
+use warp::{http::StatusCode, Filter, Reply};
 
 #[derive(Debug, Parser)]
 struct Args {
@@ -19,7 +17,7 @@ struct Args {
     db_connection: tokio_postgres::config::Config,
     /// Logging level of the application
     #[arg(long = "log-level", default_value_t = log::LevelFilter::Info)]
-    log_level: log::LevelFilter,
+    log_level:     log::LevelFilter,
 }
 
 #[derive(Deserialize)]

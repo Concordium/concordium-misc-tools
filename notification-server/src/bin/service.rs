@@ -1,9 +1,10 @@
 use clap::Parser;
 use concordium_rust_sdk::v2::{Client, Endpoint};
 use log::info;
-use tonic::codegen::http;
-use tonic::codegen::tokio_stream::StreamExt;
-use tonic::transport::ClientTlsConfig;
+use tonic::{
+    codegen::{http, tokio_stream::StreamExt},
+    transport::ClientTlsConfig,
+};
 
 #[derive(Debug, Parser)]
 struct Args {
@@ -13,7 +14,7 @@ struct Args {
         help = "The endpoints are expected to point to concordium node grpc v2 API's.",
         default_value = "https://grpc.testnet.concordium.com:20000"
     )]
-    endpoint: Endpoint,
+    endpoint:      Endpoint,
     /// Database connection string.
     #[arg(
         long = "db-connection",
