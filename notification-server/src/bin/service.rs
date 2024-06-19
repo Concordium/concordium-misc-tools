@@ -68,16 +68,23 @@ async fn main() -> anyhow::Result<()> {
             .response;
         let addresses: Vec<String> = transactions
             .filter_map(Result::ok)
-            .filter(|t| {
+            .filter_map(|t| {
                 match t.details {
-                    AccountTransaction(ref account_transaction) => is_notification_emitting_transaction_effect(&account_transaction.effects),
-                    _ => false,
+                    AccountTransaction(ref account_transaction) => {
+                        if is_notification_emitting_transaction_effect(&account_transaction.effects) {
+                            Some(
+                                t.affected_addresses()
+                                    .into_iter()
+                                    .map(|addr| addr.to_string())
+                                    .collect::<Vec<_>>(),
+                            )
+                        } else {
+                            None
+                        }
+                    }
+                    _ => None,
                 }
             })
-            .map(|t| t.affected_addresses()
-                        .into_iter()
-                        .map(|addr| addr.to_string())
-                        .collect::<Vec<_>>())
             .collect::<Vec<Vec<String>>>()
             .await
             .into_iter()
