@@ -1,10 +1,10 @@
 use clap::Parser;
 use deadpool_postgres::{Manager, ManagerConfig, Pool, RecyclingMethod};
 use log::info;
-use warp::{Filter, Reply};
 use serde::Deserialize;
 use tokio_postgres::{Config, NoTls};
 use warp::http::StatusCode;
+use warp::{Filter, Reply};
 
 #[derive(Debug, Parser)]
 struct Args {
