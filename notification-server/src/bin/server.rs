@@ -1,24 +1,23 @@
 use clap::Parser;
 use deadpool_postgres::{Manager, ManagerConfig, Pool, RecyclingMethod};
+use dotenv::dotenv;
 use log::info;
 use serde::Deserialize;
 use tokio_postgres::{Config, NoTls};
-use warp::http::StatusCode;
-use warp::{Filter, Reply};
+use warp::{http::StatusCode, Filter, Reply};
 
 #[derive(Debug, Parser)]
 struct Args {
     #[arg(
         long = "db-connection",
-        default_value = "host=localhost dbname=kpi-tracker user=postgres password=password \
-                         port=5432",
         help = "A connection string detailing the connection to the database used by the \
                 application.",
+        env = "DB_CONNECTION"
     )]
-    db_connection:   tokio_postgres::config::Config,
-   /// Logging level of the application
+    db_connection: tokio_postgres::config::Config,
+    /// Logging level of the application
     #[arg(long = "log-level", default_value_t = log::LevelFilter::Info)]
-    log_level:       log::LevelFilter,
+    log_level:     log::LevelFilter,
 }
 
 #[derive(Deserialize)]
@@ -54,6 +53,7 @@ async fn init_db(config: Config) -> Pool {
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> anyhow::Result<()> {
+    dotenv().ok();
     let args = Args::parse();
     env_logger::Builder::new()
         .filter_module(module_path!(), args.log_level) // Only log the current module (main).
