@@ -4,7 +4,8 @@ all: setup-env docker-up wait-for-db create-tables
 
 setup-env:
 	@echo "Setting default password"
-	export DB_PASSWORD=$(openssl rand -base64 12)
+	@DB_PASSWORD=$$(openssl rand -base64 12) && \
+	export DB_PASSWORD=$$DB_PASSWORD && \
 	cat .env.template | envsubst > .env
 
 docker-up:
