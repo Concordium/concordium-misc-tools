@@ -9,6 +9,7 @@ edition = "2021"
 anyhow = "1.0.86"
 clap = { version = "4.5.7", features = ["derive"] }
 concordium-rust-sdk = { version = "*", path = "../deps/concordium-rust-sdk" }
+deadpool-postgres = "0.14.0"
 env_logger = "0.10"
 futures = "0.3.30"
 log = "0.4.21"

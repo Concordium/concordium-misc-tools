@@ -1,10 +1,9 @@
 use clap::Parser;
-use concordium_rust_sdk::v2::{Client, Endpoint};
-use futures::StreamExt;
-use tonic::codegen::http;
-use tonic::transport::ClientTlsConfig;
+use deadpool_postgres::{Manager, ManagerConfig, Pool, RecyclingMethod};
+use log::info;
 use warp::{Filter, Reply};
 use serde::Deserialize;
+use tokio_postgres::{Config, NoTls};
 use warp::http::StatusCode;
 
 #[derive(Debug, Parser)]
@@ -22,17 +21,35 @@ struct Args {
     log_level:       log::LevelFilter,
 }
 
-
 #[derive(Deserialize)]
-struct DeviceMapping {
+struct Device {
     device_id: String,
 }
-pub async fn upsert_account_device(
+async fn upsert_account_device(
     account: String,
-    device_mapping: DeviceMapping,
+    device_mapping: Device,
+    pool: Pool
 ) -> Result<impl Reply, warp::Rejection> {
-    println!("Upserting account {} with device id {}", account, device_mapping.device_id);
+    info!("Creating device: {} for account {}", account, device_mapping.device_id);
+        let query = "
+        INSERT INTO account_device_mapping (address, device_id)
+        VALUES ($1, $2)
+        ON CONFLICT (address) DO UPDATE SET device_id = EXCLUDED.device_id
+    ";
+    // TODO fix unwrap
+    let db_client = pool.get().await.unwrap();
+    db_client.execute(query, &[&account, &device_mapping.device_id])
+        .await.unwrap();
     Ok(StatusCode::OK)
+}
+
+
+async fn init_db(config: Config) -> Pool {
+    let mgr_config = ManagerConfig {
+        recycling_method: RecyclingMethod::Fast
+    };
+    let mgr = Manager::from_config(config, NoTls, mgr_config);
+    Pool::builder(mgr).max_size(16).build().expect("Failing on initialising the database pool.")
 }
 
 #[tokio::main(flavor = "multi_thread")]
@@ -41,9 +58,11 @@ async fn main() -> anyhow::Result<()> {
     env_logger::Builder::new()
         .filter_module(module_path!(), args.log_level) // Only log the current module (main).
         .init();
+    let pool = init_db(args.db_connection).await;
     let account_device_route = warp::path!("api" / "v1" / "account" / String / "device_map")
         .and(warp::put())
         .and(warp::body::json())
+        .and(warp::any().map(move || pool.clone()))
         .and_then(upsert_account_device);
     let routes = account_device_route;
     warp::serve(routes).run(([127, 0, 0, 1], 3030)).await;
