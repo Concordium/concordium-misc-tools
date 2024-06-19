@@ -22,14 +22,14 @@ struct Args {
 
 #[derive(Deserialize)]
 struct Device {
-    device_id: String,
+    id: String,
 }
 async fn upsert_account_device(
     account: String,
-    device_mapping: Device,
+    device: Device,
     pool: Pool
 ) -> Result<impl Reply, warp::Rejection> {
-    info!("Creating device: {} for account {}", account, device_mapping.device_id);
+    info!("Creating device: {} for account {}", account, device.id);
         let query = "
         INSERT INTO account_device_mapping (address, device_id)
         VALUES ($1, $2)
@@ -37,7 +37,7 @@ async fn upsert_account_device(
     ";
     // TODO fix unwrap
     let db_client = pool.get().await.unwrap();
-    db_client.execute(query, &[&account, &device_mapping.device_id])
+    db_client.execute(query, &[&account, &device.id])
         .await.unwrap();
     Ok(StatusCode::OK)
 }
