@@ -1,7 +1,8 @@
 use clap::Parser;
+use concordium_rust_sdk::types::AccountTransactionEffects;
+use concordium_rust_sdk::types::BlockItemSummaryDetails::AccountTransaction;
 use concordium_rust_sdk::v2::{Client, Endpoint};
 use dotenv::dotenv;
-use log::info;
 use tonic::{
     codegen::{http, tokio_stream::StreamExt},
     transport::ClientTlsConfig,
@@ -24,6 +25,16 @@ struct Args {
         env = "DB_CONNECTION"
     )]
     db_connection: tokio_postgres::config::Config,
+}
+
+fn is_notification_emitting_transaction_effect(effect: &AccountTransactionEffects) -> bool {
+    match effect {
+        AccountTransactionEffects::AccountTransfer { .. }
+        | AccountTransactionEffects::AccountTransferWithMemo { .. }
+        | AccountTransactionEffects::TransferredWithSchedule { .. }
+        | AccountTransactionEffects::TransferredWithScheduleAndMemo { .. } => true,
+        _ => false,
+    }
 }
 
 #[tokio::main(flavor = "multi_thread")]
@@ -56,18 +67,17 @@ async fn main() -> anyhow::Result<()> {
             .await?
             .response;
         let addresses: Vec<String> = transactions
-            .filter_map(|t| match t {
-                Ok(t) => Some(
-                    t.affected_addresses()
-                        .into_iter()
-                        .map(|addr| addr.to_string())
-                        .collect::<Vec<_>>(),
-                ),
-                Err(_) => {
-                    info!("Not found block {}", block_hash);
-                    None
+            .filter_map(Result::ok)
+            .filter(|t| {
+                match t.details {
+                    AccountTransaction(ref account_transaction) => is_notification_emitting_transaction_effect(&account_transaction.effects),
+                    _ => false,
                 }
             })
+            .map(|t| t.affected_addresses()
+                        .into_iter()
+                        .map(|addr| addr.to_string())
+                        .collect::<Vec<_>>())
             .collect::<Vec<Vec<String>>>()
             .await
             .into_iter()
