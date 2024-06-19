@@ -10,6 +10,7 @@ struct Args {
                          port=5432",
         help = "A connection string detailing the connection to the database used by the \
                 application."
+        env = "DB_CONNECTION"
     )]
     db_connection: tokio_postgres::config::Config,
     /// Logging level of the application
