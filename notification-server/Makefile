@@ -2,7 +2,7 @@
 
 all: docker-up wait-for-db create-tables
 
-setup-env:
+setup:
 	@echo "Setting default password"
 	@DB_PASSWORD=$$(openssl rand -base64 12) && \
 	export DB_PASSWORD=$$DB_PASSWORD && \
