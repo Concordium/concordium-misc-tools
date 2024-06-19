@@ -1,5 +1,6 @@
 use clap::Parser;
 use concordium_rust_sdk::v2::{Client, Endpoint};
+use dotenv::dotenv;
 use log::info;
 use tonic::{
     codegen::{http, tokio_stream::StreamExt},
@@ -19,7 +20,7 @@ struct Args {
     #[arg(
         long = "db-connection",
         help = "A connection string detailing the connection to the database used by the \
-                application."
+                application.",
         env = "DB_CONNECTION"
     )]
     db_connection: tokio_postgres::config::Config,
@@ -27,6 +28,7 @@ struct Args {
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> anyhow::Result<()> {
+    dotenv().ok();
     let args = Args::parse();
     let endpoint = if args
         .endpoint

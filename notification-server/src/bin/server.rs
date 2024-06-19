@@ -1,4 +1,5 @@
 use clap::Parser;
+use dotenv::dotenv;
 use serde::Deserialize;
 use warp::{http::StatusCode, Filter, Reply};
 
@@ -7,7 +8,7 @@ struct Args {
     #[arg(
         long = "db-connection",
         help = "A connection string detailing the connection to the database used by the \
-                application."
+                application.",
         env = "DB_CONNECTION"
     )]
     db_connection: tokio_postgres::config::Config,
@@ -33,6 +34,7 @@ async fn upsert_account_device(
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> anyhow::Result<()> {
+    dotenv().ok();
     let args = Args::parse();
     env_logger::Builder::new()
         .filter_module(module_path!(), args.log_level) // Only log the current module (main).

@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := all
 
-all: setup-env docker-up wait-for-db create-tables
+all: docker-up wait-for-db create-tables
 
 setup-env:
 	@echo "Setting default password"
