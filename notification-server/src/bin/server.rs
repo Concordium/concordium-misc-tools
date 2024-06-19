@@ -6,8 +6,6 @@ use warp::{http::StatusCode, Filter, Reply};
 struct Args {
     #[arg(
         long = "db-connection",
-        default_value = "host=localhost dbname=kpi-tracker user=postgres password=password \
-                         port=5432",
         help = "A connection string detailing the connection to the database used by the \
                 application."
         env = "DB_CONNECTION"
