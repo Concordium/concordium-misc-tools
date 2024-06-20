@@ -58,13 +58,10 @@ fn get_cis2_events_addresses(effects: &AccountTransactionEffects) -> Option<Vec<
 }
 
 fn is_notification_emitting_transaction_effect(effects: &AccountTransactionEffects) -> bool {
-    match effects {
-        AccountTransactionEffects::AccountTransfer { .. }
+    matches!(effects, AccountTransactionEffects::AccountTransfer { .. }
         | AccountTransactionEffects::AccountTransferWithMemo { .. }
         | AccountTransactionEffects::TransferredWithSchedule { .. }
-        | AccountTransactionEffects::TransferredWithScheduleAndMemo { .. } => true,
-        _ => false,
-    }
+        | AccountTransactionEffects::TransferredWithScheduleAndMemo { .. })
 }
 
 #[tokio::main(flavor = "multi_thread")]
