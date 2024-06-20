@@ -23,7 +23,7 @@ struct Args {
     db_connection: String, // Changed to String for axum, will parse later
     /// Logging level of the application
     #[arg(long = "log-level", default_value_t = log::LevelFilter::Info)]
-    log_level: log::LevelFilter,
+    log_level:     log::LevelFilter,
 }
 
 #[derive(Deserialize)]
@@ -41,7 +41,10 @@ async fn upsert_account_device(
     State(state): State<Arc<AppState>>,
     Json(device_mapping): Json<DeviceMapping>,
 ) -> Result<impl axum::response::IntoResponse, axum::response::Response> {
-    info!("Upserting account {} with device id {}", account, device_mapping.device_id);
+    info!(
+        "Upserting account {} with device id {}",
+        account, device_mapping.device_id
+    );
 
     // Example of how you might use the state
     let _ = &state.db_connection;
