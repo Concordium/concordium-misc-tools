@@ -20,7 +20,6 @@ tokio-postgres = "0.7"
 tonic = {version = "0.10", features = ["tls", "tls-roots"]} # Use system trust roots.
 tracing-subscriber = { version = "0.3" }
 tracing = { version = "0.1" }
-warp = "0.3"
 serde = { version = "1.0.203", features = ["derive"] }
 
 [[bin]]
