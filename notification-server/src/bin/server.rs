@@ -11,7 +11,6 @@ use std::sync::Arc;
 use tokio_postgres::Config;
 use tracing::info;
 
-
 #[derive(Debug, Parser)]
 struct Args {
     #[arg(
