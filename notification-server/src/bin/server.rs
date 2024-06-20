@@ -6,7 +6,6 @@ use axum::{
 };
 use clap::Parser;
 use dotenv::dotenv;
-use serde::Deserialize;
 use std::sync::Arc;
 use tokio_postgres::Config;
 use tracing::info;
@@ -19,15 +18,10 @@ struct Args {
                 application.",
         env = "NOTIFICATION_SERVER_DB_CONNECTION"
     )]
-    db_connection: String, // Changed to String for axum, will parse later
+    db_connection: String,
     /// Logging level of the application
     #[arg(long = "log-level", default_value_t = log::LevelFilter::Info)]
     log_level:     log::LevelFilter,
-}
-
-#[derive(Deserialize)]
-struct DeviceMapping {
-    device_id: String,
 }
 
 #[derive(Clone)]
@@ -36,16 +30,15 @@ struct AppState {
 }
 
 async fn upsert_account_device(
-    Path(account): Path<String>,
+    Path(device): Path<String>,
     State(state): State<Arc<AppState>>,
-    Json(device_mapping): Json<DeviceMapping>,
+    Json(account): Json<Vec<String>>,
 ) -> Result<impl axum::response::IntoResponse, axum::response::Response> {
     info!(
-        "Upserting account {} with device id {}",
-        account, device_mapping.device_id
+        "Subscribing accounts {:?} to device {}",
+        account, device
     );
 
-    // Example of how you might use the state
     let _ = &state.db_connection;
 
     Ok(StatusCode::OK)
@@ -58,14 +51,12 @@ async fn main() -> anyhow::Result<()> {
 
     tracing_subscriber::fmt::init();
 
-    // Parse the database connection string into a tokio_postgres::Config
     let db_connection: Config = args.db_connection.parse()?;
     let app_state = Arc::new(AppState { db_connection });
 
-    // Define the router
     let app = Router::new()
         .route(
-            "/api/v1/account/:account/device_map",
+            "/api/v1/device/:device/subscriptions",
             put(upsert_account_device),
         )
         .with_state(app_state);
