@@ -34,11 +34,7 @@ async fn upsert_account_device(
     State(state): State<Arc<AppState>>,
     Json(account): Json<Vec<String>>,
 ) -> Result<impl axum::response::IntoResponse, axum::response::Response> {
-    info!(
-        "Subscribing accounts {:?} to device {}",
-        account, device
-    );
-
+    info!("Subscribing accounts {:?} to device {}", account, device);
     let _ = &state.db_connection;
 
     Ok(StatusCode::OK)
