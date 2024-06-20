@@ -1,7 +1,12 @@
-use concordium_rust_sdk::{cis2, types};
-use concordium_rust_sdk::cis2::Event;
-use concordium_rust_sdk::types::{AccountTransactionEffects, ContractTraceElement};
-use concordium_rust_sdk::types::BlockItemSummaryDetails::AccountTransaction;
+use concordium_rust_sdk::{
+    cis2,
+    cis2::Event,
+    types,
+    types::{
+        AccountTransactionEffects, BlockItemSummaryDetails::AccountTransaction,
+        ContractTraceElement,
+    },
+};
 use futures::{Stream, StreamExt};
 
 fn get_cis2_events_addresses(effects: &AccountTransactionEffects) -> Option<Vec<String>> {
@@ -38,7 +43,9 @@ fn is_notification_emitting_transaction_effect(effects: &AccountTransactionEffec
     )
 }
 
-pub async fn process(transactions: impl Stream<Item = Result<types::BlockItemSummary, tonic::Status>>) -> Vec<String> {
+pub async fn process(
+    transactions: impl Stream<Item = Result<types::BlockItemSummary, tonic::Status>>,
+) -> Vec<String> {
     transactions
         .filter_map(|result| async move { result.ok() })
         .filter_map(|t| async move {
@@ -56,6 +63,11 @@ pub async fn process(transactions: impl Stream<Item = Result<types::BlockItemSum
                     }
                 }
                 _ => None,
-        }})
-        .collect::<Vec<Vec<String>>>().await.into_iter().flatten().collect()
+            }
+        })
+        .collect::<Vec<Vec<String>>>()
+        .await
+        .into_iter()
+        .flatten()
+        .collect()
 }

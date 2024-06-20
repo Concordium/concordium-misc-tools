@@ -1,13 +1,11 @@
 use clap::Parser;
-use concordium_rust_sdk::{
-    v2::{Client, Endpoint},
-};
+use concordium_rust_sdk::v2::{Client, Endpoint};
 use dotenv::dotenv;
+use notification_server::processor::process;
 use tonic::{
     codegen::{http, tokio_stream::StreamExt},
     transport::ClientTlsConfig,
 };
-use notification_server::processor::process;
 
 #[derive(Debug, Parser)]
 struct Args {
