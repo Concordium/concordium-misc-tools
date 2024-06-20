@@ -47,7 +47,7 @@ fn get_cis2_events_addresses(effects: &AccountTransactionEffects) -> Option<Vec<
                             Ok(Event::Mint { amount, .. }) => Some(amount.to_string()),
                             _ => None,
                         })
-                        .filter(|t| Option::is_some(t))
+                        .filter(Option::is_some)
                         .collect(),
                     _ => None,
                 })

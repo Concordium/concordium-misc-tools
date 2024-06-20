@@ -10,7 +10,7 @@ use serde::Deserialize;
 use std::sync::Arc;
 use tokio_postgres::Config;
 use tracing::info;
-use tracing_subscriber;
+
 
 #[derive(Debug, Parser)]
 struct Args {
