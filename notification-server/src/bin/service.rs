@@ -1,5 +1,7 @@
 use clap::Parser;
-use concordium_rust_sdk::types::AccountTransactionEffects;
+use concordium_rust_sdk::cis2;
+use concordium_rust_sdk::cis2::Event;
+use concordium_rust_sdk::types::{AccountTransactionEffects, ContractTraceElement};
 use concordium_rust_sdk::types::BlockItemSummaryDetails::AccountTransaction;
 use concordium_rust_sdk::v2::{Client, Endpoint};
 use dotenv::dotenv;
@@ -27,8 +29,34 @@ struct Args {
     db_connection: tokio_postgres::config::Config,
 }
 
-fn is_notification_emitting_transaction_effect(effect: &AccountTransactionEffects) -> bool {
-    match effect {
+fn get_cis2_events_addresses(effects: &AccountTransactionEffects) -> Option<Vec<String>> {
+     match &effects {
+         AccountTransactionEffects::ContractUpdateIssued { effects } => {
+             Some(effects.iter().flat_map(|effect| match effect {
+                 ContractTraceElement::Updated { data } => {
+                     data.events.iter().map(|event| {
+                         match cis2::Event::try_from(event) {
+                             Ok(Event::Transfer {  to, .. }) => {
+                                Some(to.to_string())
+                             },
+                             Ok(Event::Mint { amount, .. }) => {
+                                Some(amount.to_string())
+                             },
+                             _ => None
+                         }
+                     }).filter(|t| Option::is_some(t)).collect()
+                 },
+                 _ => None,
+             }).collect())
+         }
+         _ => None,
+     }
+}
+
+
+
+fn is_notification_emitting_transaction_effect(effects: &AccountTransactionEffects) -> bool {
+    match effects {
         AccountTransactionEffects::AccountTransfer { .. }
         | AccountTransactionEffects::AccountTransferWithMemo { .. }
         | AccountTransactionEffects::TransferredWithSchedule { .. }
@@ -79,7 +107,7 @@ async fn main() -> anyhow::Result<()> {
                                     .collect::<Vec<_>>(),
                             )
                         } else {
-                            None
+                            get_cis2_events_addresses(&account_transaction.effects)
                         }
                     }
                     _ => None,
