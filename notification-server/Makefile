@@ -34,4 +34,4 @@ create-tables:
 		docker-compose exec -T db psql --username=postgres < $$sql_file; \
 	done
 
-.PHONY: setup-env all docker-up wait-for-db create-tables
+.PHONY: setup all docker-up wait-for-db create-tables
