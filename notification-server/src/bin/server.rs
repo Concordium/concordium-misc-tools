@@ -1,7 +1,16 @@
+use axum::{
+    extract::{Json, Path, State},
+    http::StatusCode,
+    routing::put,
+    Router,
+};
 use clap::Parser;
 use dotenv::dotenv;
 use serde::Deserialize;
-use warp::{http::StatusCode, Filter, Reply};
+use std::sync::Arc;
+use tokio_postgres::Config;
+use tracing::info;
+use tracing_subscriber;
 
 #[derive(Debug, Parser)]
 struct Args {
@@ -11,39 +20,54 @@ struct Args {
                 application.",
         env = "DB_CONNECTION"
     )]
-    db_connection: tokio_postgres::config::Config,
+    db_connection: String, // Changed to String for axum, will parse later
     /// Logging level of the application
     #[arg(long = "log-level", default_value_t = log::LevelFilter::Info)]
-    log_level:     log::LevelFilter,
+    log_level: log::LevelFilter,
 }
 
 #[derive(Deserialize)]
 struct DeviceMapping {
     device_id: String,
 }
+
+#[derive(Clone)]
+struct AppState {
+    db_connection: Config,
+}
+
 async fn upsert_account_device(
-    account: String,
-    device_mapping: DeviceMapping,
-) -> Result<impl Reply, warp::Rejection> {
-    println!(
-        "Upserting account {} with device id {}",
-        account, device_mapping.device_id
-    );
+    Path(account): Path<String>,
+    State(state): State<Arc<AppState>>,
+    Json(device_mapping): Json<DeviceMapping>,
+) -> Result<impl axum::response::IntoResponse, axum::response::Response> {
+    info!("Upserting account {} with device id {}", account, device_mapping.device_id);
+
+    // Example of how you might use the state
+    let _ = &state.db_connection;
+
     Ok(StatusCode::OK)
 }
 
-#[tokio::main(flavor = "multi_thread")]
+#[tokio::main]
 async fn main() -> anyhow::Result<()> {
     dotenv().ok();
     let args = Args::parse();
-    env_logger::Builder::new()
-        .filter_module(module_path!(), args.log_level) // Only log the current module (main).
-        .init();
-    let account_device_route = warp::path!("api" / "v1" / "account" / String / "device_map")
-        .and(warp::put())
-        .and(warp::body::json())
-        .and_then(upsert_account_device);
-    let routes = account_device_route;
-    warp::serve(routes).run(([127, 0, 0, 1], 3030)).await;
+
+    tracing_subscriber::fmt::init();
+
+    // Parse the database connection string into a tokio_postgres::Config
+    let db_connection: Config = args.db_connection.parse()?;
+    let app_state = Arc::new(AppState { db_connection });
+
+    // Define the router
+    let app = Router::new()
+        .route(
+            "/api/v1/account/:account/device_map",
+            put(upsert_account_device),
+        )
+        .with_state(app_state);
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3030").await?;
+    axum::serve(listener, app).await?;
     Ok(())
 }
