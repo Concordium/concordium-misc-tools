@@ -17,7 +17,7 @@ struct Args {
         long = "db-connection",
         help = "A connection string detailing the connection to the database used by the \
                 application.",
-        env = "DB_CONNECTION"
+        env = "NOTIFICATION_SERVER_DB_CONNECTION"
     )]
     db_connection: String, // Changed to String for axum, will parse later
     /// Logging level of the application
