@@ -11,9 +11,9 @@ use concordium_rust_sdk::base::contracts_common::AccountAddress;
 use concordium_rust_sdk::types::Address::Account;
 use futures::{Stream, StreamExt};
 
-fn get_cis2_events_addresses(effects: &AccountTransactionEffects) -> Option<Vec<AccountAddress>> {
+fn get_cis2_events_addresses(effects: &AccountTransactionEffects) -> Vec<AccountAddress> {
     match &effects {
-        AccountTransactionEffects::ContractUpdateIssued { effects } => Some(
+        AccountTransactionEffects::ContractUpdateIssued { effects } =>
             effects
                 .iter()
                 .flat_map(|effect| match effect {
@@ -33,8 +33,7 @@ fn get_cis2_events_addresses(effects: &AccountTransactionEffects) -> Option<Vec<
                     _ => vec![],
                 })
                 .collect(),
-        ),
-        _ => None,
+        _ => vec![]
     }
 }
 
@@ -53,26 +52,18 @@ pub async fn process(
 ) -> Vec<AccountAddress> {
     transactions
         .filter_map(|result| async move { result.ok() })
-        .filter_map(|t| async move {
-            match t.details {
+        .map(|t| futures::stream::iter(match t.details {
                 AccountTransaction(ref account_transaction) => {
                     if is_notification_emitting_transaction_effect(&account_transaction.effects) {
-                        Some(
-                            t.affected_addresses()
-                                .into_iter()
-                                .map(|addr| addr)
-                                .collect::<Vec<_>>(),
-                        )
+                        t.affected_addresses()
                     } else {
                         get_cis2_events_addresses(&account_transaction.effects)
                     }
                 }
-                _ => None,
+                _ => vec![],
             }
-        })
-        .collect::<Vec<Vec<AccountAddress>>>()
-        .await
-        .into_iter()
+        ))
         .flatten()
-        .collect()
+        .collect::<Vec<AccountAddress>>()
+        .await
 }
