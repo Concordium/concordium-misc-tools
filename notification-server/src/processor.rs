@@ -17,6 +17,7 @@ fn get_cis2_events_addresses(effects: &AccountTransactionEffects) -> Vec<Account
             effects
                 .iter()
                 .flat_map(|effect| match effect {
+                    ContractTraceElement::Transferred { to, .. } => vec![*to],
                     ContractTraceElement::Updated { data } => data
                         .events
                         .iter()
