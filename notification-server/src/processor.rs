@@ -52,7 +52,7 @@ pub async fn process(
 ) -> Vec<AccountAddress> {
     transactions
         .filter_map(|result| async move { result.ok() })
-        .map(|t| futures::stream::iter(match t.details {
+        .flat_map(|t| futures::stream::iter(match t.details {
                 AccountTransaction(ref account_transaction) => {
                     if is_notification_emitting_transaction_effect(&account_transaction.effects) {
                         t.affected_addresses()
@@ -63,7 +63,6 @@ pub async fn process(
                 _ => vec![],
             }
         ))
-        .flatten()
         .collect::<Vec<AccountAddress>>()
         .await
 }
