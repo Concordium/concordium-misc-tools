@@ -7,9 +7,11 @@ use concordium_rust_sdk::{
         ContractTraceElement,
     },
 };
+use concordium_rust_sdk::base::contracts_common::AccountAddress;
+use concordium_rust_sdk::types::Address::Account;
 use futures::{Stream, StreamExt};
 
-fn get_cis2_events_addresses(effects: &AccountTransactionEffects) -> Option<Vec<String>> {
+fn get_cis2_events_addresses(effects: &AccountTransactionEffects) -> Option<Vec<AccountAddress>> {
     match &effects {
         AccountTransactionEffects::ContractUpdateIssued { effects } => Some(
             effects
@@ -19,13 +21,16 @@ fn get_cis2_events_addresses(effects: &AccountTransactionEffects) -> Option<Vec<
                         .events
                         .iter()
                         .map(|event| match cis2::Event::try_from(event) {
-                            Ok(Event::Transfer { to, .. }) => Some(to.to_string()),
-                            Ok(Event::Mint { amount, .. }) => Some(amount.to_string()),
+                            Ok(Event::Transfer { to, .. }) => Some(to),
+                            Ok(Event::Mint { owner, .. }) => Some(owner),
                             _ => None,
                         })
-                        .filter(Option::is_some)
+                        .filter_map(|addr| match addr {
+                            Some(Account(addr)) => Some(addr),
+                            _ => None,
+                        })
                         .collect(),
-                    _ => None,
+                    _ => vec![],
                 })
                 .collect(),
         ),
@@ -45,7 +50,7 @@ fn is_notification_emitting_transaction_effect(effects: &AccountTransactionEffec
 
 pub async fn process(
     transactions: impl Stream<Item = Result<types::BlockItemSummary, tonic::Status>>,
-) -> Vec<String> {
+) -> Vec<AccountAddress> {
     transactions
         .filter_map(|result| async move { result.ok() })
         .filter_map(|t| async move {
@@ -55,7 +60,7 @@ pub async fn process(
                         Some(
                             t.affected_addresses()
                                 .into_iter()
-                                .map(|addr| addr.to_string())
+                                .map(|addr| addr)
                                 .collect::<Vec<_>>(),
                         )
                     } else {
@@ -65,7 +70,7 @@ pub async fn process(
                 _ => None,
             }
         })
-        .collect::<Vec<Vec<String>>>()
+        .collect::<Vec<Vec<AccountAddress>>>()
         .await
         .into_iter()
         .flatten()
