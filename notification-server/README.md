@@ -4,7 +4,7 @@ Server to obtain information about particular account to device mappings and sto
 
 # Notification service
 
-Service running to browse the CCD chain and given incoming transactions, emit a notification to the device
+Service indexing the CCD chain and given incoming transactions, emit a notification to the device
 associated with the account that received the transaction.
 
 ## Setting up local dev
