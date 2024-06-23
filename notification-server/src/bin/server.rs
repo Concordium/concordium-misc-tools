@@ -22,7 +22,6 @@ struct Args {
     /// Logging level of the application
     #[arg(long = "log-level", default_value_t = log::LevelFilter::Info)]
     log_level:     log::LevelFilter,
-
 }
 
 #[derive(Clone)]

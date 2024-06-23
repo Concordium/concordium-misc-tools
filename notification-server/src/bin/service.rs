@@ -12,7 +12,7 @@ struct Args {
     /// The node used for querying
     #[arg(
         long = "node",
-        help = "The endpoint is expected to point to concordium node grpc v2 API's.",
+        help = "The endpoint is expected to point to a concordium node grpc v2 API's.",
         default_value = "https://grpc.testnet.concordium.com:20000"
     )]
     endpoint:      Endpoint,
