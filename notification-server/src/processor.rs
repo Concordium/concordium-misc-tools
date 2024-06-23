@@ -14,12 +14,12 @@ use std::fmt::Debug;
 
 #[derive(Debug)]
 pub struct NotificationInformation {
-    effects: AccountAddress,
-    amount:  BigInt,
+    pub address: AccountAddress,
+    pub amount:  BigInt,
 }
 
 impl NotificationInformation {
-    pub fn new(effects: AccountAddress, amount: BigInt) -> Self { Self { effects, amount } }
+    pub fn new(address: AccountAddress, amount: BigInt) -> Self { Self { address, amount } }
 }
 
 fn convert<T: Into<BigInt>>(

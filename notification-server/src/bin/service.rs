@@ -55,8 +55,10 @@ async fn main() -> anyhow::Result<()> {
             .get_block_transaction_events(block_hash)
             .await?
             .response;
-        let addresses = process(transactions).await;
-        println!("Addresses: {:#?}", addresses);
+        let results = process(transactions).await;
+        results.iter().for_each(|result| {
+            println!("address: {}, amount: {}", result.address, result.amount);
+        });
     }
     Ok(())
 }
