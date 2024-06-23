@@ -1729,6 +1729,7 @@ dependencies = [
  "env_logger",
  "futures",
  "log",
+ "num-bigint",
  "serde",
  "tokio",
  "tokio-postgres",
