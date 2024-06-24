@@ -24,8 +24,8 @@ serde = { version = "1.0.203", features = ["derive"] }
 num-bigint = "0.4.5"
 
 [[bin]]
-path = "src/bin/server.rs"
-name = "notification-server"
+path = "src/bin/api.rs"
+name = "notification-api"
 
 [[bin]]
 path = "src/bin/service.rs"
