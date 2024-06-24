@@ -21,7 +21,7 @@ struct Args {
         long = "db-connection",
         help = "A connection string detailing the connection to the database used by the \
                 application.",
-    env = "NOTIFICATION_SERVER_DB_CONNECTION"
+        env = "NOTIFICATION_SERVER_DB_CONNECTION"
     )]
     db_connection: tokio_postgres::config::Config,
 }
