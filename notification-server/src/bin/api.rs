@@ -16,13 +16,13 @@ struct Args {
         long = "db-connection",
         help = "A connection string detailing the connection to the database used by the \
                 application.",
-        env = "NOTIFICATION_API_DB_CONNECTION"
+        env = "NOTIFICATION_SERVER_DB_CONNECTION"
     )]
     db_connection:  String,
     #[arg(
         long = "listen-address",
         help = "Listen address for the server.",
-        env = "NOTIFICATION_API_LISTEN_ADDRESS",
+        env = "NOTIFICATION_SERVER_LISTEN_ADDRESS",
         default_value = "0.0.0.0:3030"
     )]
     listen_address: std::net::SocketAddr,
