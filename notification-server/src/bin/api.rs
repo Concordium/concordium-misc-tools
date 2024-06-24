@@ -18,7 +18,7 @@ struct Args {
                 application.",
         env = "NOTIFICATION_API_DB_CONNECTION"
     )]
-    db_connection: String,
+    db_connection:  String,
     #[arg(
         long = "listen-address",
         help = "Listen address for the server.",
@@ -28,7 +28,7 @@ struct Args {
     listen_address: std::net::SocketAddr,
     /// Logging level of the application
     #[arg(long = "log-level", default_value_t = log::LevelFilter::Info)]
-    log_level:     log::LevelFilter,
+    log_level:      log::LevelFilter,
 }
 
 #[derive(Clone)]
