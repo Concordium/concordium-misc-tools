@@ -4,14 +4,16 @@ Server to obtain information about particular account to device mappings and sto
 
 # Notification service
 
-Service running to browse the CCD chain and given incoming transactions, emit a notification to the device
+Service indexing the CCD chain and given incoming transactions, emit a notification to the device
 associated with the account that received the transaction.
 
 ## Setting up local dev
 
 ```shell
-make
+make setup && make
 ```
+
+where `make setup` will be a onetime setup and `make` will be continuously used to ensure containers are valid.
 
 and run the application with 
 

@@ -1,7 +1,7 @@
 use clap::Parser;
 use concordium_rust_sdk::v2::{Client, Endpoint};
 use dotenv::dotenv;
-use log::info;
+use notification_server::processor::process;
 use tonic::{
     codegen::{http, tokio_stream::StreamExt},
     transport::ClientTlsConfig,
@@ -12,7 +12,7 @@ struct Args {
     /// The node used for querying
     #[arg(
         long = "node",
-        help = "The endpoints are expected to point to concordium node grpc v2 API's.",
+        help = "The endpoint is expected to point to a concordium node grpc v2 API's.",
         default_value = "https://grpc.testnet.concordium.com:20000"
     )]
     endpoint:      Endpoint,
@@ -21,7 +21,7 @@ struct Args {
         long = "db-connection",
         help = "A connection string detailing the connection to the database used by the \
                 application.",
-        env = "DB_CONNECTION"
+        env = "NOTIFICATION_SERVER_DB_CONNECTION"
     )]
     db_connection: tokio_postgres::config::Config,
 }
@@ -55,25 +55,10 @@ async fn main() -> anyhow::Result<()> {
             .get_block_transaction_events(block_hash)
             .await?
             .response;
-        let addresses: Vec<String> = transactions
-            .filter_map(|t| match t {
-                Ok(t) => Some(
-                    t.affected_addresses()
-                        .into_iter()
-                        .map(|addr| addr.to_string())
-                        .collect::<Vec<_>>(),
-                ),
-                Err(_) => {
-                    info!("Not found block {}", block_hash);
-                    None
-                }
-            })
-            .collect::<Vec<Vec<String>>>()
-            .await
-            .into_iter()
-            .flatten()
-            .collect();
-        println!("Addresses: {:#?}", addresses);
+        let results = process(transactions).await;
+        results.iter().for_each(|result| {
+            println!("address: {}, amount: {}", result.address, result.amount);
+        });
     }
     Ok(())
 }

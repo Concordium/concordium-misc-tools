@@ -8,11 +8,12 @@ version = "0.1.0"
 
 [dependencies]
 anyhow = "1.0.86"
+axum = "0.7.5"
 clap = { version = "4.5.7", features = ["derive", "env"] }
 concordium-rust-sdk = { version = "*", path = "../deps/concordium-rust-sdk" }
 deadpool-postgres = "0.14.0"
 dotenv = "0.15"
-env_logger = "0.10"
+env_logger = "0.11.3"
 futures = "0.3.30"
 log = "0.4.21"
 tokio = { version = "1.23", features = ["rt-multi-thread", "signal"] }
@@ -20,12 +21,12 @@ tokio-postgres = "0.7"
 tonic = {version = "0.10", features = ["tls", "tls-roots"]} # Use system trust roots.
 tracing-subscriber = { version = "0.3" }
 tracing = { version = "0.1" }
-warp = "0.3"
 serde = { version = "1.0.203", features = ["derive"] }
+num-bigint = "0.4.5"
 
 [[bin]]
-path = "src/bin/server.rs"
-name = "notification-server"
+path = "src/bin/api.rs"
+name = "notification-api"
 
 [[bin]]
 path = "src/bin/service.rs"
