@@ -43,7 +43,7 @@ async fn upsert_account_device(
 ) -> Result<impl axum::response::IntoResponse, axum::response::Response> {
     info!("Subscribing accounts {:?} to device {}", account, device);
     let _ = &state.db_connection;
-
+    // TODO write to the database
     Ok(StatusCode::OK)
 }
 
@@ -56,7 +56,7 @@ async fn main() -> anyhow::Result<()> {
 
     let db_connection: Config = args.db_connection.parse()?;
     let app_state = Arc::new(AppState { db_connection });
-
+    // TODO add authentication middleware
     let app = Router::new()
         .route(
             "/api/v1/device/:device/subscription",
