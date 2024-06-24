@@ -59,7 +59,7 @@ async fn main() -> anyhow::Result<()> {
     // TODO add authentication middleware
     let app = Router::new()
         .route(
-            "/api/v1/device/:device/subscribe",
+            "/api/v1/device/:device/subscription",
             put(upsert_account_device),
         )
         .with_state(app_state);
