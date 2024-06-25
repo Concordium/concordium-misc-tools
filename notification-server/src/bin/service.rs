@@ -57,7 +57,10 @@ async fn main() -> anyhow::Result<()> {
             .response;
         let results = process(transactions).await;
         results.iter().for_each(|result| {
-            println!("address: {}, amount: {}", result.address, result.amount);
+            println!(
+                "address: {}, amount: {}, tokenid: {:?}",
+                result.address, result.amount, result.token_id
+            );
         });
     }
     Ok(())
