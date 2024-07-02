@@ -899,7 +899,7 @@ async fn process_payday_block(
             let closed_pool_count = &closed_pool_count;
             async move {
                 let pi = node.get_pool_info(block_ident, baker_id).await?.response;
-                let pool_info = pi.pool_info;
+                let pool_info = pi.active_baker_pool_status.expect("pool info missing").pool_info;
                 match pool_info.open_status {
                     OpenStatus::OpenForAll => open_pool_count.fetch_add(1, Ordering::AcqRel),
                     OpenStatus::ClosedForNew => {

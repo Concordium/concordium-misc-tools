@@ -1,3 +1,6 @@
+## Unreleased changes
+- Updated the Concordium Rust SDK to support the changes introduced in protocol 7.
+
 ## 1.1.1
 
 Stop `wccd` mode from minting to everyone faster than the specified TPS.
