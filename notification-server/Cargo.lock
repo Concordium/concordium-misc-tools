@@ -1743,6 +1743,7 @@ dependencies = [
  "quickcheck_macros",
  "rand",
  "serde",
+ "serde_json",
  "sha2",
  "tokio",
  "tokio-postgres",
