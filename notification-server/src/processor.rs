@@ -134,23 +134,30 @@ pub async fn process(
 
 #[cfg(test)]
 mod tests {
+    use bls12_381::{G1Projective};
     use std::fmt::Debug;
     use std::str::FromStr;
     use concordium_rust_sdk::base::contracts_common::AccountAddress;
+    use concordium_rust_sdk::base::curve_arithmetic::arkworks_instances::ArkGroup;
+    use concordium_rust_sdk::base::curve_arithmetic::Curve;
+    use concordium_rust_sdk::base::elgamal::Cipher;
     use concordium_rust_sdk::base::hashes::HashBytes;
     use concordium_rust_sdk::cis2::{Event, TokenAmount, TokenId};
-    use concordium_rust_sdk::common::types::{Amount, Timestamp};
-    use concordium_rust_sdk::id::constants::ArCurve;
-    use concordium_rust_sdk::types::{AccountCreationDetails, AccountTransactionDetails, AccountTransactionEffects, BlockItemSummary, BlockItemSummaryDetails, CredentialRegistrationID, CredentialType, Energy, hashes, Memo, TransactionIndex};
+    use concordium_rust_sdk::common::types::{Amount, Timestamp, TransactionTime};
+    use concordium_rust_sdk::id::test::test_create_ars;
+    use concordium_rust_sdk::types::{AccountCreationDetails, AccountTransactionDetails, AccountTransactionEffects, BlockItemSummary, BlockItemSummaryDetails, CredentialRegistrationID, CredentialType, EncryptedSelfAmountAddedEvent, Energy, ExchangeRate, hashes, Memo, RejectReason, TransactionIndex, TransactionType, UpdateDetails, UpdatePayload};
     use concordium_rust_sdk::types::Address::Account;
     use futures::stream;
     use num_bigint::BigInt;
     use quickcheck::{Arbitrary, Gen};
     use quickcheck_macros::quickcheck;
     use rand::{random, Rng, thread_rng};
+    use rand::rngs::OsRng;
     use sha2::Digest;
 
     use crate::processor::{NotificationInformation, process};
+
+    type SomeCurve = ArkGroup<G1Projective>;
 
     #[derive(Clone, Debug)]
     struct ArbitraryTransactionIndex(pub TransactionIndex);
@@ -263,13 +270,13 @@ mod tests {
                 amount: TokenAmount(amount.micro_ccd.into()),
                 owner: Account(address),
             }];
-        events[usize::arbitrary(g) % events.len()].clone()
+        g.choose(&events).unwrap().clone()
     }
 
     #[derive(Clone, Debug)]
-    struct ValidBlockItemSummaryPair(pub BlockItemSummary, pub NotificationInformation);
+    struct EmittingBlockItemSummaryPair(pub BlockItemSummary, pub NotificationInformation);
 
-    impl Arbitrary for ValidBlockItemSummaryPair {
+    impl Arbitrary for EmittingBlockItemSummaryPair {
     fn arbitrary(g: &mut Gen) -> Self {
         let amount = Amount { micro_ccd: u64::arbitrary(g) };
         let receiver_address = AccountAddress(random_account_address());
@@ -321,7 +328,7 @@ mod tests {
             //}
         ];
 
-        let effect = effects[usize::arbitrary(g) % effects.len()].clone();
+        let effect = g.choose(&effects).unwrap().clone();
 
         let summary = BlockItemSummary {
             index: random_transaction_index(),
@@ -335,43 +342,94 @@ mod tests {
             amount: BigInt::from(amount.micro_ccd),
         };
 
-        ValidBlockItemSummaryPair(summary, notification)
+        EmittingBlockItemSummaryPair(summary, notification)
         }
     }
 
     #[derive(Clone, Debug)]
-    struct InvalidBlockItemSummary(pub BlockItemSummary);
+    struct SilentBlockItemSummary(pub BlockItemSummary);
+    fn get_set_vector<C: Curve>(the_set: &[u64]) -> Vec<C::Scalar> {
+        the_set.iter().copied().map(C::scalar_from_u64).collect()
+    }
 
-    impl Arbitrary for InvalidBlockItemSummary {
+
+    impl Arbitrary for SilentBlockItemSummary {
         fn arbitrary(g: &mut Gen) -> Self {
             let amount = Amount { micro_ccd: u64::arbitrary(g) };
             let receiver_address = AccountAddress(random_account_address());
+            let the_set = get_set_vector::<SomeCurve>(&[1, 7, 3, 5]);
+            let v = SomeCurve::scalar_from_u64(4);
+            let cipher1 = Cipher(v.clone(), v.clone());
 
-            let summary = BlockItemSummary {
-                index: random_transaction_index(),
-                energy_cost: ArbitraryEnergy::arbitrary(g).0,
-                hash: fixed_hash(),
-                details: BlockItemSummaryDetails::AccountCreation(AccountCreationDetails {
-                    credential_type: ArbitraryCredentialType::arbitrary(g).0,
-                    address: receiver_address,
-                    reg_id: CredentialRegistrationID::from_str("8a3a87f3f38a7a507d1e85dc02a92b8bcaa859f5cf56accb3c1bc7c40e1789b4933875a38dd4c0646ca3e940a02c42d8").unwrap(),
-                }),
+            let account_transaction_details = |effects| AccountTransactionDetails {
+                cost: amount.clone(),
+                effects,
+                sender: receiver_address.clone(),
             };
-            InvalidBlockItemSummary(summary)
+
+            let silent_block_summaries = vec![
+                BlockItemSummary {
+                    index: random_transaction_index(),
+                    energy_cost: ArbitraryEnergy::arbitrary(g).0,
+                    hash: fixed_hash(),
+                    details: BlockItemSummaryDetails::AccountCreation(AccountCreationDetails {
+                        credential_type: ArbitraryCredentialType::arbitrary(g).0,
+                        address: receiver_address,
+                        reg_id: CredentialRegistrationID::from_str("8a3a87f3f38a7a507d1e85dc02a92b8bcaa859f5cf56accb3c1bc7c40e1789b4933875a38dd4c0646ca3e940a02c42d8").unwrap(),
+                    }),
+                },
+                BlockItemSummary {
+                    index: random_transaction_index(),
+                    energy_cost: ArbitraryEnergy::arbitrary(g).0,
+                    hash: fixed_hash(),
+                    details: BlockItemSummaryDetails::Update(UpdateDetails {
+                        effective_time: TransactionTime {
+                            seconds: u64::arbitrary(g),
+                        },
+                        payload: UpdatePayload::EuroPerEnergy(ExchangeRate::new(7, 9).unwrap())
+                    }),
+                },
+                BlockItemSummary {
+                    index: random_transaction_index(),
+                    energy_cost: ArbitraryEnergy::arbitrary(g).0,
+                    hash: fixed_hash(),
+                    details: BlockItemSummaryDetails::AccountTransaction(account_transaction_details(AccountTransactionEffects::None {
+                        reject_reason: RejectReason::OutOfEnergy,
+                        transaction_type: Some(TransactionType::Update),
+                    })),
+                },
+                BlockItemSummary {
+                    index: random_transaction_index(),
+                    energy_cost: ArbitraryEnergy::arbitrary(g).0,
+                    hash: fixed_hash(),
+                    details: BlockItemSummaryDetails::AccountTransaction(account_transaction_details(AccountTransactionEffects::TransferredToEncrypted {
+                        data: Box::new(EncryptedSelfAmountAddedEvent {
+                            amount: amount.clone(),
+                            account: receiver_address.clone(),
+                            new_amount: EncryptedAmount {},
+                        })
+                        reject_reason: RejectReason::OutOfEnergy,
+                        transaction_type: Some(TransactionType::Update),
+                    })),
+                }
+            ];
+
+
+            SilentBlockItemSummary(g.choose(&silent_block_summaries).unwrap().clone())
         }
     }
         #[derive(Clone, Debug)]
     enum BlockItemSummaryWrapper {
-        Valid(ValidBlockItemSummaryPair),
-        Invalid(InvalidBlockItemSummary),
+        Emitting(EmittingBlockItemSummaryPair),
+        Silent(SilentBlockItemSummary),
     }
 
     impl Arbitrary for BlockItemSummaryWrapper {
         fn arbitrary(g: &mut Gen) -> Self {
             if bool::arbitrary(g) {
-                BlockItemSummaryWrapper::Valid(ValidBlockItemSummaryPair::arbitrary(g))
+                BlockItemSummaryWrapper::Emitting(EmittingBlockItemSummaryPair::arbitrary(g))
             } else {
-                BlockItemSummaryWrapper::Invalid(InvalidBlockItemSummary::arbitrary(g))
+                BlockItemSummaryWrapper::Silent(SilentBlockItemSummary::arbitrary(g))
             }
         }
     }
@@ -384,15 +442,15 @@ mod tests {
     impl TestableBlockItemSummary for BlockItemSummaryWrapper {
         fn get_block_item_summary(&self) -> &BlockItemSummary {
             match self {
-                BlockItemSummaryWrapper::Valid(pair) => &pair.0,
-                BlockItemSummaryWrapper::Invalid(summary) => &summary.0,
+                BlockItemSummaryWrapper::Emitting(pair) => &pair.0,
+                BlockItemSummaryWrapper::Silent(summary) => &summary.0,
             }
         }
 
         fn get_expected_notification(&self) -> Option<NotificationInformation> {
             match self {
-                BlockItemSummaryWrapper::Valid(pair) => Some(pair.1.clone()),
-                BlockItemSummaryWrapper::Invalid(_) => None,
+                BlockItemSummaryWrapper::Emitting(pair) => Some(pair.1.clone()),
+                BlockItemSummaryWrapper::Silent(_) => None,
             }
         }
     }
