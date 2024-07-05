@@ -217,7 +217,10 @@ async fn text_metrics(
             // Sometimes we get a GoAway from the node. We retry the request once.
             get_data(client.clone(), gauges.iter().map(|x| x.0))
                 .await
-                .map_err(Error::Query)?
+                .map_err(|e| {
+                    tracing::error!("Query failed: {e:#}");
+                    Error::Query(e)
+                })?
         }
     };
     for (balance, gauge) in balances.into_iter().zip(gauges.iter()) {
