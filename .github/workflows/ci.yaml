@@ -64,6 +64,7 @@ jobs:
     name: lint:fmt
     runs-on: ubuntu-latest
     if: needs.changes.outputs.crates != '[]'
+    needs: [changes]
     strategy:
       fail-fast: false
       matrix:
