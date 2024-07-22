@@ -134,17 +134,15 @@ pub async fn process(
 
 #[cfg(test)]
 mod tests {
-    use bls12_381::{G1Projective};
     use std::fmt::Debug;
     use std::str::FromStr;
     use concordium_rust_sdk::base::contracts_common::AccountAddress;
-    use concordium_rust_sdk::base::curve_arithmetic::arkworks_instances::ArkGroup;
-    use concordium_rust_sdk::base::curve_arithmetic::Curve;
-    use concordium_rust_sdk::base::elgamal::Cipher;
+    use concordium_rust_sdk::base::elgamal::{Cipher, Message, PublicKey, SecretKey};
     use concordium_rust_sdk::base::hashes::HashBytes;
     use concordium_rust_sdk::cis2::{Event, TokenAmount, TokenId};
     use concordium_rust_sdk::common::types::{Amount, Timestamp, TransactionTime};
-    use concordium_rust_sdk::id::test::test_create_ars;
+    use concordium_rust_sdk::constants::EncryptedAmountsCurve;
+    use concordium_rust_sdk::encrypted_transfers::types::EncryptedAmount;
     use concordium_rust_sdk::types::{AccountCreationDetails, AccountTransactionDetails, AccountTransactionEffects, BlockItemSummary, BlockItemSummaryDetails, CredentialRegistrationID, CredentialType, EncryptedSelfAmountAddedEvent, Energy, ExchangeRate, hashes, Memo, RejectReason, TransactionIndex, TransactionType, UpdateDetails, UpdatePayload};
     use concordium_rust_sdk::types::Address::Account;
     use futures::stream;
@@ -152,12 +150,9 @@ mod tests {
     use quickcheck::{Arbitrary, Gen};
     use quickcheck_macros::quickcheck;
     use rand::{random, Rng, thread_rng};
-    use rand::rngs::OsRng;
     use sha2::Digest;
 
     use crate::processor::{NotificationInformation, process};
-
-    type SomeCurve = ArkGroup<G1Projective>;
 
     #[derive(Clone, Debug)]
     struct ArbitraryTransactionIndex(pub TransactionIndex);
@@ -348,18 +343,19 @@ mod tests {
 
     #[derive(Clone, Debug)]
     struct SilentBlockItemSummary(pub BlockItemSummary);
-    fn get_set_vector<C: Curve>(the_set: &[u64]) -> Vec<C::Scalar> {
-        the_set.iter().copied().map(C::scalar_from_u64).collect()
-    }
 
+    fn get_random_cipher() -> Cipher<EncryptedAmountsCurve> {
+        let mut csprng = thread_rng();
+        let sk: SecretKey<EncryptedAmountsCurve> = SecretKey::generate_all(&mut csprng);
+        let pk = PublicKey::from(&sk);
+        let m = Message::generate(&mut csprng);
+        pk.encrypt(&mut csprng, &m)
+    }
 
     impl Arbitrary for SilentBlockItemSummary {
         fn arbitrary(g: &mut Gen) -> Self {
             let amount = Amount { micro_ccd: u64::arbitrary(g) };
             let receiver_address = AccountAddress(random_account_address());
-            let the_set = get_set_vector::<SomeCurve>(&[1, 7, 3, 5]);
-            let v = SomeCurve::scalar_from_u64(4);
-            let cipher1 = Cipher(v.clone(), v.clone());
 
             let account_transaction_details = |effects| AccountTransactionDetails {
                 cost: amount.clone(),
@@ -406,10 +402,10 @@ mod tests {
                         data: Box::new(EncryptedSelfAmountAddedEvent {
                             amount: amount.clone(),
                             account: receiver_address.clone(),
-                            new_amount: EncryptedAmount {},
-                        })
-                        reject_reason: RejectReason::OutOfEnergy,
-                        transaction_type: Some(TransactionType::Update),
+                            new_amount: EncryptedAmount {
+                                encryptions: [get_random_cipher(), get_random_cipher()],
+                            },
+                        }),
                     })),
                 }
             ];
