@@ -77,3 +77,24 @@ jobs:
         run: |
           cargo clippy --manifest-path ${{ matrix.crates }} --locked -- -D warnings
 
+  "tests":
+    name: lint:clippy
+    needs: "lint_fmt"
+    # Don't run on draft pull requests
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        crates:
+          - notification-server/Cargo.toml
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install Rust
+        run: |
+          rustup default ${{ env.RUST_CLIPPY }}
+      - name: Clippy
+        run: |
+          cargo test --manifest-path ${{ matrix.crates }} --locked -- -D warnings
