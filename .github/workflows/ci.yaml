@@ -25,7 +25,6 @@ jobs:
     outputs:
       crates: ${{ steps.filter.outputs.changes }}
     steps:
-      # For pull requests it's not necessary to checkout the code
       - uses: dorny/paths-filter@v2
         id: filter
         with:
@@ -54,7 +53,7 @@ jobs:
             generator/Cargo.toml:
               - 'generator/**'
               - '.github/**'
-            wallet-connect-test-bench/smart-contract/Cargo.toml
+            wallet-connect-test-bench/smart-contract/Cargo.toml:
               - 'wallet-connect-test-bench/**'
               - '.github/**'
             notification-server/Cargo.toml:
