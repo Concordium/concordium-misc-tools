@@ -105,10 +105,11 @@ jobs:
   tests:
     name: tests
     runs-on: ubuntu-latest
+    needs: [changes, lint_fmt]
     strategy:
+      fail-fast: false
       matrix:
-        crates:
-          - notification-server/Cargo.toml
+        crates: ${{ fromJSON(needs.changes.outputs.crates) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -119,4 +120,4 @@ jobs:
           rustup default ${{ env.RUST_CLIPPY }}
       - name: Clippy
         run: |
-          cargo test --manifest-path ${{ matrix.crates }} --locked -- -D warnings
+          cargo test --manifest-path ${{ matrix.crates }} --locked
