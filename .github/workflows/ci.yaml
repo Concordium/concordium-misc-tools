@@ -77,11 +77,8 @@ jobs:
         run: |
           cargo clippy --manifest-path ${{ matrix.crates }} --locked -- -D warnings
 
-  "tests":
-    name: lint:clippy
-    needs: "lint_fmt"
-    # Don't run on draft pull requests
-    if: ${{ !github.event.pull_request.draft }}
+  tests:
+    name: tests
     runs-on: ubuntu-latest
     strategy:
       matrix:
