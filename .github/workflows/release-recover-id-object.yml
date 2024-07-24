@@ -47,7 +47,6 @@ jobs:
              # Store the full image tag into a tag variable for the following step.
              echo "tag=${FULL_IMAGE_TAG}" > "$GITHUB_OUTPUT"
           fi
-          echo "tag=$FULL_IMAGE_TAG" >> $GITHUB_ENV
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
