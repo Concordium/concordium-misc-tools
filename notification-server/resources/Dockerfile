@@ -18,6 +18,11 @@ FROM ${base_image}
 
 WORKDIR /usr/app
 
+RUN apt-get update && \
+    apt-get -y install \
+      ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY --from=build /usr/app/notification-server/target/release/notification-api /usr/app/notification-server/target/release/notification-service ./
 
 RUN chmod +x notification-api notification-service
