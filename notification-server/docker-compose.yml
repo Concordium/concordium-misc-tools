@@ -10,3 +10,23 @@ services:
       - "5432:5432"
     environment:
       POSTGRES_PASSWORD: ${PGPASSWORD}
+
+  service:
+    build:
+      context: ..
+      dockerfile: notification-server/resources/Dockerfile
+    restart: always
+    entrypoint: ["./notification-service"]
+    environment:
+      NOTIFICATION_SERVER_DB_CONNECTION: postgres://postgres:${PGPASSWORD}@db:5432/postgres
+
+  api:
+    build:
+      context: ..
+      dockerfile: notification-server/resources/Dockerfile
+    restart: always
+    ports:
+      - "13030:3030"
+    entrypoint: ["./notification-api"]
+    environment:
+      NOTIFICATION_SERVER_DB_CONNECTION: postgres://postgres:${PGPASSWORD}@db:5432/postgres
