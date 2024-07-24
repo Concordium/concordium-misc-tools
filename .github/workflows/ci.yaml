@@ -63,7 +63,7 @@ jobs:
   "lint_fmt":
     name: lint:fmt
     runs-on: ubuntu-latest
-    if: needs.changes.outputs.crates != '[]' && !github.event.pull_request.draft
+    if: needs.changes.outputs.crates != '[]'
     needs: [changes]
     strategy:
       fail-fast: false
@@ -83,7 +83,7 @@ jobs:
   "lint_clippy":
     name: lint:clippy
     needs: [changes, lint_fmt]
-    if: needs.changes.outputs.crates != '[]' && !github.event.pull_request.draft
+    if: needs.changes.outputs.crates != '[]'
     strategy:
       fail-fast: false
       matrix:
