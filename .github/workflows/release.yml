@@ -1,39 +1,93 @@
-name: Release workflow
+name: Publish Docker Images
 
 on:
-  workflow_dispatch:
+  push:
+    tags:
+      - 'kpi-tracker/*.*.*'
+      - 'recover-id-object/*.*.*'
+      - 'wallet-connect-test-bench/*.*.*'
 
 env:
-  RUST_VERSION: rust:1.74-buster
+  REGISTRY: docker.io
 
 jobs:
-
-  build-and-push:
+  publish-docker-image:
     runs-on: ubuntu-latest
-    environment: release-recover-id-object
+    strategy:
+      matrix:
+        include:
+          - IMAGE_NAME: 'kpi-tracker'
+            CONTEXT_DIR: 'kpi-tracker'
+            DOCKERFILE_PATH: 'scripts/Dockerfile'
+            PROJECT_TYPE: 'rust'
+            ENVIRONMENT: 'testnet-deployments'
+
+          - IMAGE_NAME: 'recover-id-object'
+            CONTEXT_DIR: 'recover-id-object'
+            DOCKERFILE_PATH: 'scripts/Dockerfile'
+            BUILD_ARGS: ['BUILD_IMAGE=rust:1.74-buster']
+            PROJECT_TYPE: 'rust'
+            ENVIRONMENT: 'release-recover-id-object'
+
+          - IMAGE_NAME: 'wallet-connect-test-bench'
+            CONTEXT_DIR: 'wallet-connect-test-bench/front-end'
+            DOCKERFILE_PATH: 'Dockerfile'
+            PROJECT_TYPE: 'frontend'
+            ENVIRONMENT: 'testnet-deployments'
+
+    if: contains(github.ref_name, matrix.IMAGE_NAME)
+    environment: ${{ matrix.ENVIRONMENT }}
     steps:
-    - name: Check out the repo
-      uses: actions/checkout@v4
-      with:
-        submodules: recursive
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-    - name: Log in to DockerHub
-      uses: docker/login-action@v3
-      with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_TOKEN }}
-    - name: Extract Cargo package version
-      run: |
-        cd recover-id-object
-        VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
-        echo "VERSION=$VERSION" >> $GITHUB_ENV
-    - name: Build and push Docker image
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        file: recover-id-object/scripts/Dockerfile
-        push: true
-        build-args: |
-          build_image=${{ env.RUST_VERSION }}
-        tags: concordium/recover-id-object:${{ env.VERSION}}
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Extract version
+        run: |
+          if [ ${{ matrix.PROJECT_TYPE }} == 'rust' ]; then
+            VERSION=$(yq .package.version ${{ matrix.CONTEXT_DIR }}/Cargo.toml)
+          elif [ ${{ matrix.PROJECT_TYPE }} == 'frontend' ]; then
+            VERSION=$(jq -r .version ${{ matrix.CONTEXT_DIR }}/package.json)
+          else
+            echo "::error Unknown project type"
+            exit 1
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+
+      - name: Extract version tag from manifest
+        id: meta
+        run: |
+          FULL_IMAGE_TAG="${{ env.REGISTRY }}/concordium/${{ matrix.IMAGE_NAME }}:$VERSION"
+          echo "::notice FULL_IMAGE_TAG=$FULL_IMAGE_TAG"
+          echo "tag=$FULL_IMAGE_TAG" >> $GITHUB_ENV
+          if docker manifest inspect $FULL_IMAGE_TAG > /dev/null; then
+             echo "::error $FULL_IMAGE_TAG already exists"
+             exit 1
+          elif [ ! "${{ github.ref_name }}" = "${{ matrix.IMAGE_NAME }}/$VERSION" ]; then
+             echo "::error Expected tag ${EXPECTED_TAG} does not match the version ${VERSION}."
+             exit 1
+          else
+             # Store the full image tag into a tag variable for the following step.
+             echo "tag=${FULL_IMAGE_TAG}" > "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v3
+        with:
+          context: ${{ matrix.CONTEXT_DIR }}
+          file: ${{ matrix.IMAGE_NAME }}/${{ matrix.DOCKERFILE_PATH }}
+          push: true
+          tags: ${{ steps.meta.outputs.tag }}
+          build-args: fromJSON(${{ matrix.BUILD_ARGS }})

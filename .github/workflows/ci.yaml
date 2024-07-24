@@ -12,34 +12,69 @@ on:
   workflow_dispatch: # allows manual trigger
 
 env:
-  RUST_FMT: nightly-2023-04-01-x86_64-unknown-linux-gnu
-  RUST_CLIPPY: "1.74"
+  RUST_FMT_VERSION: nightly-2023-04-01-x86_64-unknown-linux-gnu
+  RUST_VERSION: "1.74"
 
 jobs:
+
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    name: 'Detect changes'
+    outputs:
+      crates: ${{ steps.filter.outputs.changes }}
+    steps:
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            wallet-proxy-load-simulator/Cargo.toml:
+              - 'wallet-proxy-load-simulator/**'
+              - '.github/**'
+            state-compare/Cargo.toml:
+              - 'state-compare/**'
+              - '.github/**'
+            genesis-creator/Cargo.toml:
+              - 'genesis-creator/**'
+              - '.github/**'
+            id-verifier/Cargo.toml:
+              - 'id-verifier/**'
+              - '.github/**'
+            kpi-tracker/Cargo.toml:
+              - 'kpi-tracker/**'
+              - '.github/**'
+            chain-prometheus-exporter/Cargo.toml:
+              - 'chain-prometheus-exporter/**'
+              - '.github/**'
+            recover-id-object/Cargo.toml:
+              - 'recover-id-object/**'
+              - '.github/**'
+            generator/Cargo.toml:
+              - 'generator/**'
+              - '.github/**'
+            wallet-connect-test-bench/smart-contract/Cargo.toml:
+              - 'wallet-connect-test-bench/**'
+              - '.github/**'
+            notification-server/Cargo.toml:
+              - 'notification-server/**'
+              - '.github/**'
+
   "lint_fmt":
     name: lint:fmt
-    # Don't run on draft pull requests
-    if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
+    if: needs.changes.outputs.crates != '[]' && !github.event.pull_request.draft
+    needs: [changes]
     strategy:
+      fail-fast: false
       matrix:
-        crates:
-          - wallet-proxy-load-simulator/Cargo.toml
-          - state-compare/Cargo.toml
-          - genesis-creator/Cargo.toml
-          - id-verifier/Cargo.toml
-          - kpi-tracker/Cargo.toml
-          - chain-prometheus-exporter/Cargo.toml
-          - recover-id-object/Cargo.toml
-          - generator/Cargo.toml
-          - wallet-connect-test-bench/smart-contract/Cargo.toml
-          - notification-server/Cargo.toml
+        crates: ${{ fromJSON(needs.changes.outputs.crates) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Install Rust
         run: |
-          rustup default ${{ env.RUST_FMT }}
+          rustup default ${{ env.RUST_FMT_VERSION }}
           rustup component add rustfmt
       - name: Format
         run: |
@@ -47,23 +82,13 @@ jobs:
 
   "lint_clippy":
     name: lint:clippy
-    needs: "lint_fmt"
-    # Don't run on draft pull requests
-    if: ${{ !github.event.pull_request.draft }}
-    runs-on: ubuntu-latest
+    needs: [changes, lint_fmt]
+    if: needs.changes.outputs.crates != '[]' && !github.event.pull_request.draft
     strategy:
+      fail-fast: false
       matrix:
-        crates:
-          - wallet-proxy-load-simulator/Cargo.toml
-          - state-compare/Cargo.toml
-          - genesis-creator/Cargo.toml
-          - id-verifier/Cargo.toml
-          - kpi-tracker/Cargo.toml
-          - chain-prometheus-exporter/Cargo.toml
-          - recover-id-object/Cargo.toml
-          - generator/Cargo.toml
-          - wallet-connect-test-bench/smart-contract/Cargo.toml
-          - notification-server/Cargo.toml
+        crates: ${{ fromJSON(needs.changes.outputs.crates) }}
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -71,7 +96,7 @@ jobs:
           submodules: recursive
       - name: Install Rust
         run: |
-          rustup default ${{ env.RUST_CLIPPY }}
+          rustup default ${{ env.RUST_VERSION }}
           rustup component add clippy
       - name: Clippy
         run: |
