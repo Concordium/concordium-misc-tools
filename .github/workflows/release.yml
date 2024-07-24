@@ -32,7 +32,7 @@ jobs:
 
           - IMAGE_NAME: 'notification-server'
             CONTEXT_DIR: 'notification-server'
-            DOCKERFILE_PATH: 'resources/Dockerfile'
+            DOCKERFILE_PATH: 'scripts/Dockerfile'
             BUILD_ARGS: ['BUILD_IMAGE=rust:1.74-buster']
             PROJECT_TYPE: 'rust'
             ENVIRONMENT: 'release-notification-server'

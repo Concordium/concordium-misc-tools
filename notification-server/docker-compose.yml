@@ -14,7 +14,7 @@ services:
   service:
     build:
       context: ..
-      dockerfile: notification-server/resources/Dockerfile
+      dockerfile: scripts/Dockerfile
     restart: always
     entrypoint: ["./notification-service"]
     environment:
@@ -23,7 +23,7 @@ services:
   api:
     build:
       context: ..
-      dockerfile: notification-server/resources/Dockerfile
+      dockerfile: scripts/Dockerfile
     restart: always
     ports:
       - "13030:3030"
