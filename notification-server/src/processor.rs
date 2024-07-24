@@ -155,13 +155,6 @@ mod tests {
     }
 
     #[derive(Clone, Debug)]
-    struct ArbitraryTransactionHash(pub hashes::TransactionHash);
-
-    impl Arbitrary for ArbitraryTransactionHash {
-        fn arbitrary(_g: &mut Gen) -> Self { ArbitraryTransactionHash(fixed_hash()) }
-    }
-
-    #[derive(Clone, Debug)]
     struct ArbitraryCredentialType(pub CredentialType);
     impl Arbitrary for ArbitraryCredentialType {
         fn arbitrary(g: &mut Gen) -> Self {

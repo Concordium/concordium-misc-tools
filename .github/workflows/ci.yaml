@@ -118,6 +118,6 @@ jobs:
       - name: Install Rust
         run: |
           rustup default ${{ env.RUST_CLIPPY }}
-      - name: Clippy
+      - name: Cargo tests
         run: |
           cargo test --manifest-path ${{ matrix.crates }} --locked
