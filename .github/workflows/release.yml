@@ -35,7 +35,7 @@ jobs:
             PROJECT_TYPE: 'frontend'
             ENVIRONMENT: 'testnet-deployments'
 
-    if: contains(github.ref_name, matrix.IMAGE_NAME)
+    if: startsWith(github.ref_name, format('{0}/', matrix.IMAGE_NAME))
     environment: ${{ matrix.ENVIRONMENT }}
     steps:
       - name: Checkout repository
