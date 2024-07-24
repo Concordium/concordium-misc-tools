@@ -15,17 +15,12 @@ use num_bigint::BigInt;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NotificationInformation {
-    pub address:  AccountAddress,
-    pub amount:   BigInt,
+    pub address: AccountAddress,
+    pub amount:  BigInt,
 }
 
 impl NotificationInformation {
-    pub fn new(address: AccountAddress, amount: BigInt) -> Self {
-        Self {
-            address,
-            amount,
-        }
-    }
+    pub fn new(address: AccountAddress, amount: BigInt) -> Self { Self { address, amount } }
 }
 
 fn convert<T: Into<BigInt>>(
@@ -39,10 +34,7 @@ fn convert<T: Into<BigInt>>(
     }
 
     match address {
-        Account(address) => Some(NotificationInformation::new(
-            address,
-            amount,
-        )),
+        Account(address) => Some(NotificationInformation::new(address, amount)),
         _ => None,
     }
 }
@@ -50,45 +42,24 @@ fn convert<T: Into<BigInt>>(
 fn get_cis2_events_addresses(effects: &AccountTransactionEffects) -> Vec<NotificationInformation> {
     match &effects {
         AccountTransactionEffects::AccountTransfer { to, amount } => {
-            vec![NotificationInformation::new(
-                *to,
-                amount.micro_ccd.into(),
-            )]
+            vec![NotificationInformation::new(*to, amount.micro_ccd.into())]
         }
         AccountTransactionEffects::AccountTransferWithMemo { to, amount, .. } => {
-            vec![NotificationInformation::new(
-                *to,
-                amount.micro_ccd.into(),
-            )]
+            vec![NotificationInformation::new(*to, amount.micro_ccd.into())]
         }
         AccountTransactionEffects::ContractUpdateIssued { effects } => effects
             .iter()
             .flat_map(|effect| match effect {
                 ContractTraceElement::Transferred { to, amount, .. } => {
-                    vec![NotificationInformation::new(
-                        *to,
-                        amount.micro_ccd.into(),
-                    )]
+                    vec![NotificationInformation::new(*to, amount.micro_ccd.into())]
                 }
                 ContractTraceElement::Updated { data } => data
                     .events
                     .iter()
                     .filter_map(|event| match cis2::Event::try_from(event) {
-                        Ok(Event::Transfer {
-                            to,
-                            amount,
-                            ..
-                        }) => convert(to, amount.0, true),
-                        Ok(Event::Mint {
-                            owner,
-                            amount,
-                            ..
-                        }) => convert(owner, amount.0, true),
-                        Ok(Event::Burn {
-                            owner,
-                            amount,
-                            ..
-                        }) => convert(owner, amount.0, false),
+                        Ok(Event::Transfer { to, amount, .. }) => convert(to, amount.0, true),
+                        Ok(Event::Mint { owner, amount, .. }) => convert(owner, amount.0, true),
+                        Ok(Event::Burn { owner, amount, .. }) => convert(owner, amount.0, false),
                         _ => None,
                     })
                     .collect(),
@@ -134,25 +105,32 @@ pub async fn process(
 
 #[cfg(test)]
 mod tests {
-    use std::fmt::Debug;
-    use std::str::FromStr;
-    use concordium_rust_sdk::base::contracts_common::AccountAddress;
-    use concordium_rust_sdk::base::elgamal::{Cipher, Message, PublicKey, SecretKey};
-    use concordium_rust_sdk::base::hashes::HashBytes;
-    use concordium_rust_sdk::cis2::{Event, TokenAmount, TokenId};
-    use concordium_rust_sdk::common::types::{Amount, Timestamp, TransactionTime};
-    use concordium_rust_sdk::constants::EncryptedAmountsCurve;
-    use concordium_rust_sdk::encrypted_transfers::types::EncryptedAmount;
-    use concordium_rust_sdk::types::{AccountCreationDetails, AccountTransactionDetails, AccountTransactionEffects, BlockItemSummary, BlockItemSummaryDetails, CredentialRegistrationID, CredentialType, EncryptedSelfAmountAddedEvent, Energy, ExchangeRate, hashes, Memo, RejectReason, TransactionIndex, TransactionType, UpdateDetails, UpdatePayload};
-    use concordium_rust_sdk::types::Address::Account;
+    use concordium_rust_sdk::{
+        base::{
+            contracts_common::AccountAddress,
+            elgamal::{Cipher, Message, PublicKey, SecretKey},
+            hashes::HashBytes,
+        },
+        cis2::{Event, TokenAmount, TokenId},
+        common::types::{Amount, Timestamp, TransactionTime},
+        constants::EncryptedAmountsCurve,
+        encrypted_transfers::types::EncryptedAmount,
+        types::{
+            hashes, AccountCreationDetails, AccountTransactionDetails, AccountTransactionEffects,
+            Address::Account, BlockItemSummary, BlockItemSummaryDetails, CredentialRegistrationID,
+            CredentialType, EncryptedSelfAmountAddedEvent, Energy, ExchangeRate, Memo,
+            RejectReason, TransactionIndex, TransactionType, UpdateDetails, UpdatePayload,
+        },
+    };
     use futures::stream;
     use num_bigint::BigInt;
     use quickcheck::{Arbitrary, Gen};
     use quickcheck_macros::quickcheck;
-    use rand::{random, Rng, thread_rng};
+    use rand::{random, thread_rng, Rng};
     use sha2::Digest;
+    use std::{fmt::Debug, str::FromStr};
 
-    use crate::processor::{NotificationInformation, process};
+    use crate::processor::{process, NotificationInformation};
 
     #[derive(Clone, Debug)]
     struct ArbitraryTransactionIndex(pub TransactionIndex);
@@ -170,11 +148,9 @@ mod tests {
 
     impl Arbitrary for ArbitraryEnergy {
         fn arbitrary(g: &mut Gen) -> Self {
-            ArbitraryEnergy(
-                Energy {
-                    energy: u64::arbitrary(g),
-                }
-            )
+            ArbitraryEnergy(Energy {
+                energy: u64::arbitrary(g),
+            })
         }
     }
 
@@ -182,32 +158,25 @@ mod tests {
     struct ArbitraryTransactionHash(pub hashes::TransactionHash);
 
     impl Arbitrary for ArbitraryTransactionHash {
-        fn arbitrary(_g: &mut Gen) -> Self {
-            ArbitraryTransactionHash(fixed_hash())
-        }
+        fn arbitrary(_g: &mut Gen) -> Self { ArbitraryTransactionHash(fixed_hash()) }
     }
 
     #[derive(Clone, Debug)]
     struct ArbitraryCredentialType(pub CredentialType);
     impl Arbitrary for ArbitraryCredentialType {
-    fn arbitrary(g: &mut Gen) -> Self {
-
-        ArbitraryCredentialType(
-            *g.choose(&[CredentialType::Initial, CredentialType::Normal]).unwrap()
-        )
-    }
-}
-
-    fn random_transaction_index() -> TransactionIndex {
-        TransactionIndex {
-            index: random(),
+        fn arbitrary(g: &mut Gen) -> Self {
+            ArbitraryCredentialType(
+                *g.choose(&[CredentialType::Initial, CredentialType::Normal])
+                    .unwrap(),
+            )
         }
     }
 
+    fn random_transaction_index() -> TransactionIndex { TransactionIndex { index: random() } }
 
     fn random_memo() -> Memo {
         let mut rng = thread_rng();
-        let size: usize = rng.gen_range(0..= 256);
+        let size: usize = rng.gen_range(0..=256);
         let bytes: Vec<u8> = (0..size).map(|_| rng.gen()).collect();
 
         Memo::try_from(bytes).expect("Generated memo exceeds the maximum size")
@@ -228,7 +197,11 @@ mod tests {
         address
     }
 
-    fn split_u64_to_random_vec(mut value: u64, max_elements: usize, g: &mut Gen) -> Vec<(Timestamp, Amount)> {
+    fn split_u64_to_random_vec(
+        mut value: u64,
+        max_elements: usize,
+        g: &mut Gen,
+    ) -> Vec<(Timestamp, Amount)> {
         let mut rng = thread_rng();
         let mut result = Vec::new();
 
@@ -251,20 +224,21 @@ mod tests {
         let events = vec![
             Event::Transfer {
                 token_id: token_id.clone(),
-                amount: TokenAmount(amount.micro_ccd.into()),
-                from: Account(AccountAddress(random_account_address())),
-                to: Account(address),
+                amount:   TokenAmount(amount.micro_ccd.into()),
+                from:     Account(AccountAddress(random_account_address())),
+                to:       Account(address),
             },
             Event::Mint {
                 token_id: token_id.clone(),
-                amount: TokenAmount(amount.micro_ccd.into()),
-                owner: Account(address),
+                amount:   TokenAmount(amount.micro_ccd.into()),
+                owner:    Account(address),
             },
             Event::Burn {
                 token_id: token_id.clone(),
-                amount: TokenAmount(amount.micro_ccd.into()),
-                owner: Account(address),
-            }];
+                amount:   TokenAmount(amount.micro_ccd.into()),
+                owner:    Account(address),
+            },
+        ];
         g.choose(&events).unwrap().clone()
     }
 
@@ -272,72 +246,74 @@ mod tests {
     struct EmittingBlockItemSummaryPair(pub BlockItemSummary, pub NotificationInformation);
 
     impl Arbitrary for EmittingBlockItemSummaryPair {
-    fn arbitrary(g: &mut Gen) -> Self {
-        let amount = Amount { micro_ccd: u64::arbitrary(g) };
-        let receiver_address = AccountAddress(random_account_address());
+        fn arbitrary(g: &mut Gen) -> Self {
+            let amount = Amount {
+                micro_ccd: u64::arbitrary(g),
+            };
+            let receiver_address = AccountAddress(random_account_address());
 
-        let details = |effects| AccountTransactionDetails {
-            cost: amount.clone(),
-            effects,
-            sender: receiver_address.clone(),
-        };
-        //let event = get_random_cis2_event(g, amount.clone(), receiver_address.clone());
-        //let serialised_event = serde_json::to_vec(&event).expect("Failed to serialize Event");
+            let details = |effects| AccountTransactionDetails {
+                cost: amount.clone(),
+                effects,
+                sender: receiver_address.clone(),
+            };
+            // let event = get_random_cis2_event(g, amount.clone(),
+            // receiver_address.clone()); let serialised_event =
+            // serde_json::to_vec(&event).expect("Failed to serialize Event");
 
+            let effects = vec![
+                AccountTransactionEffects::AccountTransfer {
+                    amount: amount.clone(),
+                    to:     receiver_address.clone(),
+                },
+                AccountTransactionEffects::AccountTransferWithMemo {
+                    amount: amount.clone(),
+                    to:     receiver_address.clone(),
+                    memo:   random_memo(),
+                },
+                AccountTransactionEffects::TransferredWithSchedule {
+                    to:     receiver_address.clone(),
+                    amount: split_u64_to_random_vec(amount.clone().micro_ccd, 2, g),
+                },
+                AccountTransactionEffects::TransferredWithScheduleAndMemo {
+                    to:     receiver_address.clone(),
+                    amount: split_u64_to_random_vec(amount.clone().micro_ccd, 2, g),
+                    memo:   random_memo(),
+                },
+                // AccountTransactionEffects::ContractUpdateIssued {
+                //    effects: vec! [
+                //        ContractTraceElement::Updated {
+                //            data: InstanceUpdatedEvent {
+                //                contract_version: WasmVersion::V1,
+                //                address: ContractAddress::new(1, 0),
+                //                instigator: receiver_address.clone().into(),
+                //                amount: amount.clone(),
+                //                message: OwnedParameter::empty(),
+                //                receive_name:
+                // OwnedReceiveName::new("foo.bar".to_string()).unwrap(),
+                //                events: vec![
+                //                ]
+                //            }
+                //        }
+                //    ]
+                //}
+            ];
 
+            let effect = g.choose(&effects).unwrap().clone();
 
-        let effects = vec![
-            AccountTransactionEffects::AccountTransfer {
-                amount: amount.clone(),
-                to: receiver_address.clone(),
-            },
-            AccountTransactionEffects::AccountTransferWithMemo {
-                amount: amount.clone(),
-                to: receiver_address.clone(),
-                memo: random_memo(),
-            },
-            AccountTransactionEffects::TransferredWithSchedule {
-                to: receiver_address.clone(),
-                amount: split_u64_to_random_vec(amount.clone().micro_ccd,  2, g),
-            },
-            AccountTransactionEffects::TransferredWithScheduleAndMemo {
-                to: receiver_address.clone(),
-                amount: split_u64_to_random_vec(amount.clone().micro_ccd,  2, g),
-                memo: random_memo(),
-            },
-            //AccountTransactionEffects::ContractUpdateIssued {
-            //    effects: vec! [
-            //        ContractTraceElement::Updated {
-            //            data: InstanceUpdatedEvent {
-            //                contract_version: WasmVersion::V1,
-            //                address: ContractAddress::new(1, 0),
-            //                instigator: receiver_address.clone().into(),
-            //                amount: amount.clone(),
-            //                message: OwnedParameter::empty(),
-            //                receive_name: OwnedReceiveName::new("foo.bar".to_string()).unwrap(),
-            //                events: vec![
-            //                ]
-            //            }
-            //        }
-            //    ]
-            //}
-        ];
+            let summary = BlockItemSummary {
+                index:       random_transaction_index(),
+                energy_cost: ArbitraryEnergy::arbitrary(g).0,
+                hash:        fixed_hash(),
+                details:     BlockItemSummaryDetails::AccountTransaction(details(effect.clone())),
+            };
 
-        let effect = g.choose(&effects).unwrap().clone();
+            let notification = NotificationInformation {
+                address: receiver_address,
+                amount:  BigInt::from(amount.micro_ccd),
+            };
 
-        let summary = BlockItemSummary {
-            index: random_transaction_index(),
-            energy_cost: ArbitraryEnergy::arbitrary(g).0,
-            hash: fixed_hash(),
-            details: BlockItemSummaryDetails::AccountTransaction(details(effect.clone())),
-        };
-
-        let notification = NotificationInformation {
-            address: receiver_address,
-            amount: BigInt::from(amount.micro_ccd),
-        };
-
-        EmittingBlockItemSummaryPair(summary, notification)
+            EmittingBlockItemSummaryPair(summary, notification)
         }
     }
 
@@ -354,7 +330,9 @@ mod tests {
 
     impl Arbitrary for SilentBlockItemSummary {
         fn arbitrary(g: &mut Gen) -> Self {
-            let amount = Amount { micro_ccd: u64::arbitrary(g) };
+            let amount = Amount {
+                micro_ccd: u64::arbitrary(g),
+            };
             let receiver_address = AccountAddress(random_account_address());
 
             let account_transaction_details = |effects| AccountTransactionDetails {
@@ -410,11 +388,10 @@ mod tests {
                 }
             ];
 
-
             SilentBlockItemSummary(g.choose(&silent_block_summaries).unwrap().clone())
         }
     }
-        #[derive(Clone, Debug)]
+    #[derive(Clone, Debug)]
     enum BlockItemSummaryWrapper {
         Emitting(EmittingBlockItemSummaryPair),
         Silent(SilentBlockItemSummary),
@@ -430,7 +407,7 @@ mod tests {
         }
     }
 
-        trait TestableBlockItemSummary {
+    trait TestableBlockItemSummary {
         fn get_block_item_summary(&self) -> &BlockItemSummary;
         fn get_expected_notification(&self) -> Option<NotificationInformation>;
     }
@@ -453,10 +430,17 @@ mod tests {
 
     #[quickcheck]
     fn test_random_block_item_summary(summaries: Vec<BlockItemSummaryWrapper>) -> bool {
-        let summary_stream = stream::iter(summaries.clone().into_iter().map(|summary| Ok(summary.get_block_item_summary().clone())).collect::<Vec<_>>());
+        let summary_stream = stream::iter(
+            summaries
+                .clone()
+                .into_iter()
+                .map(|summary| Ok(summary.get_block_item_summary().clone()))
+                .collect::<Vec<_>>(),
+        );
         let runtime = tokio::runtime::Runtime::new().unwrap();
         let result = runtime.block_on(process(summary_stream));
-        let expected: Vec<NotificationInformation> = summaries.into_iter()
+        let expected: Vec<NotificationInformation> = summaries
+            .into_iter()
             .filter_map(|summary| summary.get_expected_notification())
             .collect();
         result == expected
