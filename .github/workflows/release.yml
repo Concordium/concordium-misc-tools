@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - 'kpi-tracker/*.*.*'
+      - 'notification-server/*.*.*'
       - 'recover-id-object/*.*.*'
       - 'wallet-connect-test-bench/*.*.*'
 
@@ -28,6 +29,13 @@ jobs:
             BUILD_ARGS: ['BUILD_IMAGE=rust:1.74-buster']
             PROJECT_TYPE: 'rust'
             ENVIRONMENT: 'release-recover-id-object'
+
+          - IMAGE_NAME: 'notification-server'
+            CONTEXT_DIR: 'notification-server'
+            DOCKERFILE_PATH: 'resources/Dockerfile'
+            BUILD_ARGS: ['BUILD_IMAGE=rust:1.74-buster']
+            PROJECT_TYPE: 'rust'
+            ENVIRONMENT: 'release-notification-server'
 
           - IMAGE_NAME: 'wallet-connect-test-bench'
             CONTEXT_DIR: 'wallet-connect-test-bench/front-end'
