@@ -5,13 +5,8 @@ FROM ${build_image} AS build
 WORKDIR /usr/app/notification-server
 
 COPY notification-server/Cargo.toml notification-server/Cargo.lock ./
-COPY deps /usr/app/deps
-RUN mkdir -p src/bin
-RUN echo 'fn main() { println!("Dummy!"); }' | tee ./src/bin/api.rs ./src/bin/service.rs
-RUN cargo build --release --locked
-RUN rm src/bin/*.rs
-
 COPY notification-server/src ./src
+COPY deps /usr/app/deps
 RUN cargo build --release --locked
 
 FROM ${base_image}
