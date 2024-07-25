@@ -43,6 +43,7 @@ async fn upsert_account_device(
 ) -> Result<impl axum::response::IntoResponse, axum::response::Response> {
     info!("Subscribing accounts {:?} to device {}", account, device);
     let _ = &state.db_connection;
+
     // TODO write to the database
     Ok(StatusCode::OK)
 }

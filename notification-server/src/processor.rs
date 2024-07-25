@@ -12,16 +12,8 @@ use concordium_rust_sdk::{
 };
 use futures::{Stream, StreamExt};
 use num_bigint::BigInt;
+use crate::notification_information::NotificationInformation;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NotificationInformation {
-    pub address: AccountAddress,
-    pub amount:  BigInt,
-}
-
-impl NotificationInformation {
-    pub fn new(address: AccountAddress, amount: BigInt) -> Self { Self { address, amount } }
-}
 
 fn convert<T: Into<BigInt>>(
     address: Address,
