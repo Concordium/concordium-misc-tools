@@ -210,29 +210,6 @@ mod tests {
         result
     }
 
-    fn _get_random_cis2_event(g: &mut Gen, amount: Amount, address: AccountAddress) -> Event {
-        let token_id = TokenId::new("wCCD".as_bytes().to_vec()).unwrap();
-        let events = vec![
-            Event::Transfer {
-                token_id: token_id.clone(),
-                amount:   TokenAmount(amount.micro_ccd.into()),
-                from:     Account(AccountAddress(random_account_address())),
-                to:       Account(address),
-            },
-            Event::Mint {
-                token_id: token_id.clone(),
-                amount:   TokenAmount(amount.micro_ccd.into()),
-                owner:    Account(address),
-            },
-            Event::Burn {
-                token_id: token_id.clone(),
-                amount:   TokenAmount(amount.micro_ccd.into()),
-                owner:    Account(address),
-            },
-        ];
-        g.choose(&events).unwrap().clone()
-    }
-
     #[derive(Clone, Debug)]
     struct EmittingBlockItemSummaryPair(pub BlockItemSummary, pub NotificationInformation);
 
