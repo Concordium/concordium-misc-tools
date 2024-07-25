@@ -1,0 +1,60 @@
+name: Publish Docker image for notification-server to DockerHub
+
+on:
+  push:
+    tags:
+      - 'notification-server/*.*.*'
+
+  workflow_dispatch:
+
+env:
+  REGISTRY: docker.io
+  IMAGE_NAME: notification-server
+  RUST_VERSION: rust:1.74-buster  # Define the Rust version here
+
+jobs:
+  publish-docker-image:
+    runs-on: ubuntu-latest
+    environment: release-recover-id-object
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+
+      - name: Extract version tag from Cargo.toml manifest
+        id: meta
+        run: |
+          VERSION=$(yq .package.version notification-server/Cargo.toml)
+          FULL_IMAGE_TAG="${{ env.REGISTRY }}/concordium/${{ env.IMAGE_NAME }}:$VERSION"
+          echo "::notice FULL_IMAGE_TAG=${FULL_IMAGE_TAG}"
+          # Make sure the image does not exist. Abort if we can retrieve any metadata.
+          if docker manifest inspect $FULL_IMAGE_TAG > /dev/null; then
+            echo "::error $FULL_IMAGE_TAG already exists"
+            exit 1
+          elif [ ! "${{ github.ref_name }}" = "notification-server/$VERSION" ]; then
+             echo "::error ${{ github.ref_name }} does not match notification-server/${VERSION}."
+             exit 1
+          else
+             # Store the full image tag into a tag variable for the following step.
+             echo "tag=${FULL_IMAGE_TAG}" > "$GITHUB_OUTPUT"
+          fi
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: notification-server/scripts/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tag }}
+          build-args: |
+            build_image=${{ env.RUST_VERSION }}
