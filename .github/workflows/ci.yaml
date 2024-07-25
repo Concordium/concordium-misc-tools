@@ -25,6 +25,8 @@ jobs:
     outputs:
       crates: ${{ steps.filter.outputs.changes }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
         id: filter
         with:
