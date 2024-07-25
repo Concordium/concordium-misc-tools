@@ -57,4 +57,4 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tag }}
           build-args: |
-            BUILD_IMAGE=${{ env.RUST_VERSION }}
+            build_image=${{ env.RUST_VERSION }}
