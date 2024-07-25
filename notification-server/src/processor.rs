@@ -97,20 +97,21 @@ pub async fn process(
 
 #[cfg(test)]
 mod tests {
+    use std::{fmt::Debug, str::FromStr};
+
     use concordium_rust_sdk::{
         base::{
             contracts_common::AccountAddress,
             elgamal::{Cipher, Message, PublicKey, SecretKey},
             hashes::HashBytes,
         },
-        cis2::{Event, TokenAmount, TokenId},
         common::types::{Amount, Timestamp, TransactionTime},
         constants::EncryptedAmountsCurve,
         encrypted_transfers::types::EncryptedAmount,
         types::{
-            hashes, AccountCreationDetails, AccountTransactionDetails, AccountTransactionEffects,
-            Address::Account, BlockItemSummary, BlockItemSummaryDetails, CredentialRegistrationID,
-            CredentialType, EncryptedSelfAmountAddedEvent, Energy, ExchangeRate, Memo,
+            AccountCreationDetails, AccountTransactionDetails, AccountTransactionEffects, BlockItemSummary
+            , BlockItemSummaryDetails, CredentialRegistrationID, CredentialType,
+            EncryptedSelfAmountAddedEvent, Energy, ExchangeRate, hashes, Memo,
             RejectReason, TransactionIndex, TransactionType, UpdateDetails, UpdatePayload,
         },
     };
@@ -118,11 +119,10 @@ mod tests {
     use num_bigint::BigInt;
     use quickcheck::{Arbitrary, Gen};
     use quickcheck_macros::quickcheck;
-    use rand::{random, thread_rng, Rng};
+    use rand::{random, Rng, thread_rng};
     use sha2::Digest;
-    use std::{fmt::Debug, str::FromStr};
 
-    use crate::processor::{process, NotificationInformation};
+    use crate::processor::{NotificationInformation, process};
 
     #[derive(Clone, Debug)]
     struct ArbitraryTransactionIndex(pub TransactionIndex);
