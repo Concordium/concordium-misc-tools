@@ -3,9 +3,6 @@ name: Fmt and Clippy
 # This job runs rustfmt and clippy linting,
 
 on:
-  push:
-    branches: main
-
   pull_request:
     branches: main
 
@@ -25,8 +22,6 @@ jobs:
     outputs:
       crates: ${{ steps.filter.outputs.changes }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
         id: filter
         with:
