@@ -1,7 +1,5 @@
-use std::fmt::Debug;
-
+use crate::notification_information::NotificationInformation;
 use concordium_rust_sdk::{
-    base::contracts_common::AccountAddress,
     cis2,
     cis2::Event,
     types,
@@ -12,8 +10,6 @@ use concordium_rust_sdk::{
 };
 use futures::{Stream, StreamExt};
 use num_bigint::BigInt;
-use crate::notification_information::NotificationInformation;
-
 
 fn convert<T: Into<BigInt>>(
     address: Address,
@@ -109,20 +105,20 @@ mod tests {
         constants::EncryptedAmountsCurve,
         encrypted_transfers::types::EncryptedAmount,
         types::{
-            AccountCreationDetails, AccountTransactionDetails, AccountTransactionEffects, BlockItemSummary
-            , BlockItemSummaryDetails, CredentialRegistrationID, CredentialType,
-            EncryptedSelfAmountAddedEvent, Energy, ExchangeRate, hashes, Memo,
-            RejectReason, TransactionIndex, TransactionType, UpdateDetails, UpdatePayload,
+            hashes, AccountCreationDetails, AccountTransactionDetails, AccountTransactionEffects,
+            BlockItemSummary, BlockItemSummaryDetails, CredentialRegistrationID, CredentialType,
+            EncryptedSelfAmountAddedEvent, Energy, ExchangeRate, Memo, RejectReason,
+            TransactionIndex, TransactionType, UpdateDetails, UpdatePayload,
         },
     };
     use futures::stream;
     use num_bigint::BigInt;
     use quickcheck::{Arbitrary, Gen};
     use quickcheck_macros::quickcheck;
-    use rand::{random, Rng, thread_rng};
+    use rand::{random, thread_rng, Rng};
     use sha2::Digest;
 
-    use crate::processor::{NotificationInformation, process};
+    use crate::processor::{process, NotificationInformation};
 
     #[derive(Clone, Debug)]
     struct ArbitraryTransactionIndex(pub TransactionIndex);

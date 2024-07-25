@@ -1307,6 +1307,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "gcp_auth"
+version = "0.12.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "536c79e79dde296a800738474691e97031769bed9b54e6dd0401b169d35d693d"
+dependencies = [
+ "async-trait",
+ "base64 0.22.1",
+ "bytes",
+ "chrono",
+ "home",
+ "http 1.1.0",
+ "http-body-util",
+ "hyper 1.3.1",
+ "hyper-rustls",
+ "hyper-util",
+ "ring",
+ "rustls-pemfile 2.1.2",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "tracing-futures",
+ "url",
+]
+
+[[package]]
 name = "generic-array"
 version = "0.14.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1454,6 +1481,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "home"
+version = "0.5.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e3d1354bf6b7235cb4a0576c2619fd4ed18183f689b12b006a0ee7329eeff9a5"
+dependencies = [
+ "windows-sys 0.52.0",
+]
+
+[[package]]
 name = "http"
 version = "0.2.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1583,6 +1619,7 @@ dependencies = [
  "hyper 1.3.1",
  "hyper-util",
  "rustls 0.23.12",
+ "rustls-native-certs 0.7.1",
  "rustls-pki-types",
  "tokio",
  "tokio-rustls 0.26.0",
@@ -1890,11 +1927,13 @@ dependencies = [
  "anyhow",
  "axum 0.7.5",
  "bls12_381",
+ "bytes",
  "clap",
  "concordium-rust-sdk",
  "dotenv",
  "env_logger 0.11.3",
  "futures",
+ "gcp_auth",
  "log",
  "num-bigint",
  "quickcheck",
@@ -2681,6 +2720,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c58f8c84392efc0a126acce10fa59ff7b3d2ac06ab451a33f2741989b806b044"
 dependencies = [
  "once_cell",
+ "ring",
  "rustls-pki-types",
  "rustls-webpki 0.102.6",
  "subtle",
@@ -2695,6 +2735,19 @@ checksum = "a9aace74cb666635c918e9c12bc0d348266037aa8eb599b5cba565709a8dff00"
 dependencies = [
  "openssl-probe",
  "rustls-pemfile 1.0.4",
+ "schannel",
+ "security-framework",
+]
+
+[[package]]
+name = "rustls-native-certs"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a88d6d420651b496bdd98684116959239430022a115c1240e6c3993be0b15fba"
+dependencies = [
+ "openssl-probe",
+ "rustls-pemfile 2.1.2",
+ "rustls-pki-types",
  "schannel",
  "security-framework",
 ]
@@ -3372,7 +3425,7 @@ dependencies = [
  "pin-project",
  "prost",
  "rustls 0.21.12",
- "rustls-native-certs",
+ "rustls-native-certs 0.6.3",
  "rustls-pemfile 1.0.4",
  "tokio",
  "tokio-rustls 0.24.1",
@@ -3446,6 +3499,16 @@ checksum = "c06d3da6113f116aaee68e4d601191614c9053067f9ab7f6edbcb161237daa54"
 dependencies = [
  "once_cell",
  "valuable",
+]
+
+[[package]]
+name = "tracing-futures"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "97d095ae15e245a057c8e8451bab9b3ee1e1f68e9ba2b4fbc18d0ac5237835f2"
+dependencies = [
+ "pin-project",
+ "tracing",
 ]
 
 [[package]]

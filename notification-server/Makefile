@@ -31,7 +31,7 @@ create-tables:
 	@echo "Creating tables from SQL files..."
 	@for sql_file in resources/*.sql; do \
 		echo "Processing $$sql_file..."; \
-		docker-compose exec -T db psql --username=postgres < $$sql_file; \
+		docker compose exec -T db psql --username=postgres < $$sql_file; \
 	done
 
 .PHONY: setup all docker-up wait-for-db create-tables
