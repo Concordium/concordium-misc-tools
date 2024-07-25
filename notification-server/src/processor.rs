@@ -248,10 +248,6 @@ mod tests {
                 effects,
                 sender: receiver_address.clone(),
             };
-            // let event = get_random_cis2_event(g, amount.clone(),
-            // receiver_address.clone()); let serialised_event =
-            // serde_json::to_vec(&event).expect("Failed to serialize Event");
-
             let effects = vec![
                 AccountTransactionEffects::AccountTransfer {
                     amount: amount.clone(),
