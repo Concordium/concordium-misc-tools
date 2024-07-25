@@ -199,13 +199,11 @@ mod tests {
         let mut result = Vec::new();
 
         while value > 0 && result.len() < max_elements {
-            // Generate a random value between 1 and the remaining value
             let part = rng.gen_range(0..=value);
             result.push((u64::arbitrary(g).into(), Amount { micro_ccd: part }));
             value -= part;
         }
 
-        // Add the remaining value to the result to ensure the exact sum
         if value > 0 {
             result.push((u64::arbitrary(g).into(), Amount { micro_ccd: value }));
         }
@@ -273,23 +271,6 @@ mod tests {
                     amount: split_u64_to_random_vec(amount.clone().micro_ccd, 2, g),
                     memo:   random_memo(),
                 },
-                // AccountTransactionEffects::ContractUpdateIssued {
-                //    effects: vec! [
-                //        ContractTraceElement::Updated {
-                //            data: InstanceUpdatedEvent {
-                //                contract_version: WasmVersion::V1,
-                //                address: ContractAddress::new(1, 0),
-                //                instigator: receiver_address.clone().into(),
-                //                amount: amount.clone(),
-                //                message: OwnedParameter::empty(),
-                //                receive_name:
-                // OwnedReceiveName::new("foo.bar".to_string()).unwrap(),
-                //                events: vec![
-                //                ]
-                //            }
-                //        }
-                //    ]
-                //}
             ];
 
             let effect = g.choose(&effects).unwrap().clone();
