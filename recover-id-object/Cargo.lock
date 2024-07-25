@@ -2149,7 +2149,7 @@ dependencies = [
 
 [[package]]
 name = "recover-id-object"
-version = "2.0.1"
+version = "0.0.4"
 dependencies = [
  "anyhow",
  "chrono",
