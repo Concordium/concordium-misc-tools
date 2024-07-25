@@ -5,6 +5,8 @@ on:
     tags:
       - 'recover-id-object/*.*.*'
 
+  workflow_dispatch:
+
 env:
   REGISTRY: docker.io
   IMAGE_NAME: recover-id-object
