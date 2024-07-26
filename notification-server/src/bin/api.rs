@@ -4,11 +4,13 @@ use axum::{
     routing::put,
     Router,
 };
+use base64::prelude::*;
 use clap::Parser;
 use dotenv::dotenv;
 use std::sync::Arc;
 use tokio_postgres::Config;
 use tracing::info;
+use notification_server::database::DatabaseConnection;
 
 #[derive(Debug, Parser)]
 struct Args {
@@ -31,20 +33,14 @@ struct Args {
     log_level:      log::LevelFilter,
 }
 
-#[derive(Clone)]
-struct AppState {
-    db_connection: Config,
-}
-
 async fn upsert_account_device(
     Path(device): Path<String>,
-    State(state): State<Arc<AppState>>,
-    Json(account): Json<Vec<String>>,
+    State(db_connection): State<Arc<DatabaseConnection>>,
+    Json(account): Json<String>,
 ) -> Result<impl axum::response::IntoResponse, axum::response::Response> {
     info!("Subscribing accounts {:?} to device {}", account, device);
-    let _ = &state.db_connection;
-
-    // TODO write to the database
+    let decoded_account = BASE64_STANDARD.decode(device.as_bytes()).map_err(|_| StatusCode::BAD_REQUEST)?;
+    let _ = &db_connection.prepared.upsert_device(&decoded_account, &account).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(StatusCode::OK)
 }
 
@@ -56,7 +52,9 @@ async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 
     let db_connection: Config = args.db_connection.parse()?;
-    let app_state = Arc::new(AppState { db_connection });
+
+    let app_state = Arc::new(db_connection);
+
     // TODO add authentication middleware
     let app = Router::new()
         .route(

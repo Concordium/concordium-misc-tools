@@ -2,6 +2,7 @@ use tokio_postgres::{Client, NoTls};
 
 pub struct PreparedStatements {
     get_devices_from_account: tokio_postgres::Statement,
+    upsert_device: tokio_postgres::Statement,
     client:                   Client,
 }
 
@@ -10,8 +11,12 @@ impl PreparedStatements {
         let get_devices_from_account = client
             .prepare("SELECT device_id FROM account_device_mapping WHERE address = $1")
             .await?;
+        let upsert_device = client
+            .prepare("INSERT INTO account_device_mapping (address, device_id) VALUES ($1, $2) ON CONFLICT (address, device_id) DO NOTHING")
+            .await?;
         Ok(PreparedStatements {
             get_devices_from_account,
+            upsert_device,
             client,
         })
     }
@@ -27,6 +32,12 @@ impl PreparedStatements {
             .map(|row| row.try_get::<_, String>(0))
             .collect::<Result<Vec<String>, _>>()?;
         Ok(devices)
+    }
+
+    pub async fn upsert_device(&self, address: &[u8], device_id: &str) -> anyhow::Result<()> {
+        let params: &[&(dyn tokio_postgres::types::ToSql + Sync)] = &[&address, device_id];
+        &self.client.execute(&self.upsert_device, params).await?;
+        Ok(())
     }
 }
 
