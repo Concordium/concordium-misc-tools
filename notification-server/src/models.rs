@@ -1,6 +1,7 @@
 use concordium_rust_sdk::base::contracts_common::AccountAddress;
 use num_bigint::BigInt;
 use std::collections::HashMap;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NotificationInformation {
@@ -17,6 +18,25 @@ impl NotificationInformation {
         let mut map = HashMap::new();
         map.insert("amount".to_string(), self.amount.to_string());
         map.insert("sender".to_string(), self.address.to_string());
-        HashMap::new()
+        map
     }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct DeviceSubscription {
+    pub preferences: Vec<Preference>,
+    pub accounts: Vec<String>,
+}
+
+impl DeviceSubscription {
+    pub fn new(preferences: Vec<Preference>, accounts: Vec<String>) -> Self {
+        Self { preferences, accounts }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub enum Preference {
+    CIS2,
+    CCDTransaction,
 }

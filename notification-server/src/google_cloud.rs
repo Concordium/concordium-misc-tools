@@ -1,4 +1,4 @@
-use crate::notification_information::NotificationInformation;
+use crate::models::NotificationInformation;
 use anyhow::anyhow;
 use gcp_auth::{CustomServiceAccount, TokenProvider};
 use reqwest::Client;

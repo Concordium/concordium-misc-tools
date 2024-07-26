@@ -22,3 +22,16 @@ cargo run --bin <BINARY_NAME>
 ```
 
 where `<BINARY_NAME>` is the name of the binary you want to run.
+
+## API subscribe documentation
+
+Example:
+
+```shell
+❯ curl -X PUT "http://localhost:3030/api/v1/device/example-device/subscription" \
+    -H "Content-Type: application/json" \
+    -d '{
+        "preferences": ["CIS2", "CCDTransaction"],
+        "accounts": ["6zLVntGxRRgFnwQf4HBZTwK2qWrg3"]
+    }'
+```

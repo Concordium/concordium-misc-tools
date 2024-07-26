@@ -1,4 +1,4 @@
-use crate::notification_information::NotificationInformation;
+use crate::models::NotificationInformation;
 use concordium_rust_sdk::{
     cis2,
     cis2::Event,

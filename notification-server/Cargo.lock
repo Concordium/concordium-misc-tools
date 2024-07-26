@@ -1926,8 +1926,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum 0.7.5",
- "base64 0.21.7",
  "bls12_381",
+ "bs58",
  "bytes",
  "clap",
  "concordium-rust-sdk",
@@ -1937,6 +1937,7 @@ dependencies = [
  "gcp_auth",
  "log",
  "num-bigint",
+ "once_cell",
  "quickcheck",
  "quickcheck_macros",
  "rand",

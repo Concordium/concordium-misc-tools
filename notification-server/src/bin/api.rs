@@ -4,13 +4,14 @@ use axum::{
     routing::put,
     Router,
 };
-use base64::prelude::*;
 use clap::Parser;
 use dotenv::dotenv;
 use std::sync::Arc;
+use axum::response::{IntoResponse, Response};
 use tokio_postgres::Config;
-use tracing::info;
+use tracing::{error, info};
 use notification_server::database::DatabaseConnection;
+use notification_server::models::DeviceSubscription;
 
 #[derive(Debug, Parser)]
 struct Args {
@@ -20,7 +21,7 @@ struct Args {
                 application.",
         env = "NOTIFICATION_SERVER_DB_CONNECTION"
     )]
-    db_connection:  String,
+    db_connection: Config,
     #[arg(
         long = "listen-address",
         help = "Listen address for the server.",
@@ -36,12 +37,30 @@ struct Args {
 async fn upsert_account_device(
     Path(device): Path<String>,
     State(db_connection): State<Arc<DatabaseConnection>>,
-    Json(account): Json<String>,
-) -> Result<impl axum::response::IntoResponse, axum::response::Response> {
-    info!("Subscribing accounts {:?} to device {}", account, device);
-    let decoded_account = BASE64_STANDARD.decode(device.as_bytes()).map_err(|_| StatusCode::BAD_REQUEST)?;
-    let _ = &db_connection.prepared.upsert_device(&decoded_account, &account).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    Ok(StatusCode::OK)
+    Json(subscription): Json<DeviceSubscription>,
+) -> Result<impl IntoResponse, Response> {
+    info!("Subscribing accounts {:?} to device {}", subscription, device);
+    let decoded_accounts: Result<Vec<Vec<u8>>, Response> = subscription.accounts.iter()
+        .map(|account| {
+            bs58::decode(account.as_bytes()).into_vec().map_err(
+                |e| {
+                    error!("Failed to decode Base58: {}", e);
+                    (
+                        StatusCode::BAD_REQUEST,
+                        "Failed to decode Base32 encoded account"
+                    ).into_response()
+                }
+            )
+        })
+        .collect();
+    db_connection.prepared.upsert_subscription(decoded_accounts?, subscription.preferences, &device).await.map_err(|e| {
+        error!("Database error: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to write subscriptions to database"
+        ).into_response()
+    })?;
+    Ok((StatusCode::OK, "Subscribed accounts to device"))
 }
 
 #[tokio::main]
@@ -51,9 +70,9 @@ async fn main() -> anyhow::Result<()> {
 
     tracing_subscriber::fmt::init();
 
-    let db_connection: Config = args.db_connection.parse()?;
+    let database_connection = DatabaseConnection::create(args.db_connection).await?;
 
-    let app_state = Arc::new(db_connection);
+    let app_state = Arc::new(database_connection);
 
     // TODO add authentication middleware
     let app = Router::new()
