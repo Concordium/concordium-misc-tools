@@ -3,6 +3,7 @@ use anyhow::anyhow;
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
 use tokio_postgres::{Client, NoTls};
+use lazy_static::lazy_static;
 
 pub struct PreparedStatements {
     get_devices_from_account: tokio_postgres::Statement,
@@ -89,15 +90,12 @@ impl DatabaseConnection {
     }
 }
 
-fn preference_bit_positions() -> HashMap<Preference, i32> {
-    let mut map = HashMap::new();
-    map.insert(Preference::CIS2, 1);
-    map.insert(Preference::CCDTransaction, 2);
-    map
+lazy_static!{
+    static ref PREFERENCE_MAP: HashMap<Preference, i32> = vec![
+        (Preference::CIS2, 1),
+        (Preference::CCDTransaction, 2),
+    ].into_iter().collect();
 }
-
-const PREFERENCE_MAP: once_cell::sync::Lazy<HashMap<Preference, i32>> =
-    once_cell::sync::Lazy::new(preference_bit_positions);
 
 pub fn preferences_to_bitmask(preferences: &[Preference]) -> i32 {
     preferences
