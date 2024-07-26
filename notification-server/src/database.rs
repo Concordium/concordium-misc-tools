@@ -1,4 +1,3 @@
-use tokio::task::JoinHandle;
 use tokio_postgres::{Client, NoTls};
 
 pub struct PreparedStatements {
@@ -33,14 +32,13 @@ impl PreparedStatements {
 
 pub struct DatabaseConnection {
     pub prepared:      PreparedStatements,
-    connection_handle: JoinHandle<()>,
 }
 
 impl DatabaseConnection {
     pub async fn create(conn_string: tokio_postgres::config::Config) -> anyhow::Result<Self> {
         let (client, connection) = conn_string.connect(NoTls).await?;
 
-        let connection_handle = tokio::spawn(async move {
+        tokio::spawn(async move {
             if let Err(e) = connection.await {
                 log::error!("Connection error: {}", e);
             }
@@ -49,7 +47,6 @@ impl DatabaseConnection {
         let prepared = PreparedStatements::new(client).await?;
         Ok(DatabaseConnection {
             prepared,
-            connection_handle,
         })
     }
 }
