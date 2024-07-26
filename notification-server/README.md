@@ -25,7 +25,15 @@ where `<BINARY_NAME>` is the name of the binary you want to run.
 
 ## API subscribe documentation
 
-Example:
+The subscription endpoint is idempotent.
+
+All account to device mapping being registered under a single endpoint call will have the same preferences
+
+At most 1000 preferences and accounts can be registered at once.
+
+Should conflicts occur upon subscription updates, then only the preferences becomes updates.
+
+### Example:
 
 ```shell
 ❯ curl -X PUT "http://localhost:3030/api/v1/device/example-device/subscription" \

@@ -33,6 +33,8 @@ struct Args {
     log_level:      log::LevelFilter,
 }
 
+const MAX_RESOURCES_LENGTH : usize = 1000;
+
 async fn upsert_account_device(
     Path(device): Path<String>,
     State(db_connection): State<Arc<DatabaseConnection>>,
@@ -42,12 +44,18 @@ async fn upsert_account_device(
         "Subscribing accounts {:?} to device {}",
         subscription, device
     );
+        // Validate lengths
+    if subscription.preferences.len() > MAX_RESOURCES_LENGTH || subscription.accounts.len() > MAX_RESOURCES_LENGTH {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("Preferences or accounts exceed maximum length of {}", MAX_RESOURCES_LENGTH)
+        ).into_response())?;
+    }
     let decoded_accounts: Result<Vec<Vec<u8>>, Response> = subscription
         .accounts
         .iter()
         .map(|account| {
             bs58::decode(account.as_bytes()).into_vec().map_err(|e| {
-                error!("Failed to decode Base58: {}", e);
                 (
                     StatusCode::BAD_REQUEST,
                     "Failed to decode Base32 encoded account",
