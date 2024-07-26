@@ -29,7 +29,7 @@ The subscription endpoint is idempotent.
 
 All account to device mapping being registered under a single endpoint call will have the same preferences
 
-At most 1000 preferences and accounts can be registered at once.
+At most 1000 preferences and accounts can be registered in one call and only a 1000 accounts be queried at once.
 
 Should conflicts occur upon subscription updates, then only the preferences becomes updates.
 
