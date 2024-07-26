@@ -1,32 +1,35 @@
-use std::collections::HashMap;
-use std::sync::Arc;
+use crate::models::Preference;
 use anyhow::anyhow;
+use std::{collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
 use tokio_postgres::{Client, NoTls};
-use crate::models::Preference;
 
 pub struct PreparedStatements {
     get_devices_from_account: tokio_postgres::Statement,
-    upsert_device: tokio_postgres::Statement,
-    client: Arc<Mutex<Client>>,
+    upsert_device:            tokio_postgres::Statement,
+    client:                   Arc<Mutex<Client>>,
 }
 
 impl PreparedStatements {
     async fn new(client: Client) -> anyhow::Result<Self> {
         let client_mutex = Arc::new(Mutex::new(client));
         let (get_devices_from_account, upsert_device) = {
-            let client_guard = client_mutex.lock().await;  // MutexGuard is scoped
+            let client_guard = client_mutex.lock().await; // MutexGuard is scoped
             let get_devices_from_account = client_guard
                 .prepare("SELECT device_id FROM account_device_mapping WHERE address = $1")
-                .await.map_err(|e| anyhow!("Failed to create account device mapping: {}", e))?;
+                .await
+                .map_err(|e| anyhow!("Failed to create account device mapping: {}", e))?;
             let upsert_device = client_guard
-                .prepare("INSERT INTO account_device_mapping (address, device_id, preferences) \
-                VALUES ($1, $2, $3) \
-                ON CONFLICT (address, device_id) \
-                DO UPDATE SET preferences = EXCLUDED.preferences;")
-                .await.map_err(|e| anyhow!("Failed to create account device mapping: {}", e))?;
+                .prepare(
+                    "INSERT INTO account_device_mapping (address, device_id, preferences) VALUES \
+                     ($1, $2, $3) ON CONFLICT (address, device_id) DO UPDATE SET preferences = \
+                     EXCLUDED.preferences;",
+                )
+                .await
+                .map_err(|e| anyhow!("Failed to create account device mapping: {}", e))?;
 
-            (get_devices_from_account, upsert_device)  // Return prepared statements
+            (get_devices_from_account, upsert_device) // Return prepared
+                                                      // statements
         };
         Ok(PreparedStatements {
             get_devices_from_account,
@@ -38,9 +41,7 @@ impl PreparedStatements {
     pub async fn get_devices_from_account(&self, address: &[u8]) -> anyhow::Result<Vec<String>> {
         let client = self.client.lock().await;
         let params: &[&(dyn tokio_postgres::types::ToSql + Sync)] = &[&address];
-        let rows = client
-            .query(&self.get_devices_from_account, params)
-            .await?;
+        let rows = client.query(&self.get_devices_from_account, params).await?;
         let devices: Vec<String> = rows
             .iter()
             .map(|row| row.try_get::<_, String>(0))
@@ -48,12 +49,18 @@ impl PreparedStatements {
         Ok(devices)
     }
 
-    pub async fn upsert_subscription(&self, address: Vec<Vec<u8>>, preferences: Vec<Preference>, device_id: &str) -> anyhow::Result<()> {
+    pub async fn upsert_subscription(
+        &self,
+        address: Vec<Vec<u8>>,
+        preferences: Vec<Preference>,
+        device_id: &str,
+    ) -> anyhow::Result<()> {
         let mut client = self.client.lock().await;
         let preferences_mask = preferences_to_bitmask(&preferences);
         let transaction = client.transaction().await?;
         for account in address {
-            let params: &[&(dyn tokio_postgres::types::ToSql + Sync)] = &[&account, &device_id, &preferences_mask];
+            let params: &[&(dyn tokio_postgres::types::ToSql + Sync)] =
+                &[&account, &device_id, &preferences_mask];
             if let Err(e) = transaction.execute(&self.upsert_device, params).await {
                 let _ = transaction.rollback().await;
                 return Err(e.into());
@@ -64,7 +71,7 @@ impl PreparedStatements {
 }
 
 pub struct DatabaseConnection {
-    pub prepared:      PreparedStatements,
+    pub prepared: PreparedStatements,
 }
 
 impl DatabaseConnection {
@@ -78,9 +85,7 @@ impl DatabaseConnection {
         });
 
         let prepared = PreparedStatements::new(client).await?;
-        Ok(DatabaseConnection {
-            prepared,
-        })
+        Ok(DatabaseConnection { prepared })
     }
 }
 
@@ -91,22 +96,32 @@ fn preference_bit_positions() -> HashMap<Preference, i32> {
     map
 }
 
-const PREFERENCE_MAP: once_cell::sync::Lazy<HashMap<Preference, i32>> = once_cell::sync::Lazy::new(preference_bit_positions);
+const PREFERENCE_MAP: once_cell::sync::Lazy<HashMap<Preference, i32>> =
+    once_cell::sync::Lazy::new(preference_bit_positions);
 
 pub fn preferences_to_bitmask(preferences: &[Preference]) -> i32 {
-    preferences.iter().fold(0, |acc, &pref| acc | PREFERENCE_MAP[&pref])
+    preferences
+        .iter()
+        .fold(0, |acc, &pref| acc | PREFERENCE_MAP[&pref])
 }
 
 pub fn bitmask_to_preferences(bitmask: i32) -> Vec<Preference> {
-    PREFERENCE_MAP.iter().filter_map(|(&key, &value)| {
-        if bitmask & value != 0 { Some(key) } else { None }
-    }).collect()
+    PREFERENCE_MAP
+        .iter()
+        .filter_map(|(&key, &value)| {
+            if bitmask & value != 0 {
+                Some(key)
+            } else {
+                None
+            }
+        })
+        .collect()
 }
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
     use super::*;
+    use std::collections::HashSet;
 
     #[test]
     fn test_preferences_to_bitmask_and_back() {

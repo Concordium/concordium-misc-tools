@@ -1,17 +1,16 @@
 use axum::{
     extract::{Json, Path, State},
     http::StatusCode,
+    response::{IntoResponse, Response},
     routing::put,
     Router,
 };
 use clap::Parser;
 use dotenv::dotenv;
+use notification_server::{database::DatabaseConnection, models::DeviceSubscription};
 use std::sync::Arc;
-use axum::response::{IntoResponse, Response};
 use tokio_postgres::Config;
 use tracing::{error, info};
-use notification_server::database::DatabaseConnection;
-use notification_server::models::DeviceSubscription;
 
 #[derive(Debug, Parser)]
 struct Args {
@@ -21,7 +20,7 @@ struct Args {
                 application.",
         env = "NOTIFICATION_SERVER_DB_CONNECTION"
     )]
-    db_connection: Config,
+    db_connection:  Config,
     #[arg(
         long = "listen-address",
         help = "Listen address for the server.",
@@ -39,27 +38,36 @@ async fn upsert_account_device(
     State(db_connection): State<Arc<DatabaseConnection>>,
     Json(subscription): Json<DeviceSubscription>,
 ) -> Result<impl IntoResponse, Response> {
-    info!("Subscribing accounts {:?} to device {}", subscription, device);
-    let decoded_accounts: Result<Vec<Vec<u8>>, Response> = subscription.accounts.iter()
+    info!(
+        "Subscribing accounts {:?} to device {}",
+        subscription, device
+    );
+    let decoded_accounts: Result<Vec<Vec<u8>>, Response> = subscription
+        .accounts
+        .iter()
         .map(|account| {
-            bs58::decode(account.as_bytes()).into_vec().map_err(
-                |e| {
-                    error!("Failed to decode Base58: {}", e);
-                    (
-                        StatusCode::BAD_REQUEST,
-                        "Failed to decode Base32 encoded account"
-                    ).into_response()
-                }
-            )
+            bs58::decode(account.as_bytes()).into_vec().map_err(|e| {
+                error!("Failed to decode Base58: {}", e);
+                (
+                    StatusCode::BAD_REQUEST,
+                    "Failed to decode Base32 encoded account",
+                )
+                    .into_response()
+            })
         })
         .collect();
-    db_connection.prepared.upsert_subscription(decoded_accounts?, subscription.preferences, &device).await.map_err(|e| {
-        error!("Database error: {}", e);
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Failed to write subscriptions to database"
-        ).into_response()
-    })?;
+    db_connection
+        .prepared
+        .upsert_subscription(decoded_accounts?, subscription.preferences, &device)
+        .await
+        .map_err(|e| {
+            error!("Database error: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to write subscriptions to database",
+            )
+                .into_response()
+        })?;
     Ok((StatusCode::OK, "Subscribed accounts to device"))
 }
 

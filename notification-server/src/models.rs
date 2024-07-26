@@ -1,7 +1,7 @@
 use concordium_rust_sdk::base::contracts_common::AccountAddress;
 use num_bigint::BigInt;
-use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NotificationInformation {
@@ -25,12 +25,15 @@ impl NotificationInformation {
 #[derive(Debug, Deserialize)]
 pub struct DeviceSubscription {
     pub preferences: Vec<Preference>,
-    pub accounts: Vec<String>,
+    pub accounts:    Vec<String>,
 }
 
 impl DeviceSubscription {
     pub fn new(preferences: Vec<Preference>, accounts: Vec<String>) -> Self {
-        Self { preferences, accounts }
+        Self {
+            preferences,
+            accounts,
+        }
     }
 }
 
