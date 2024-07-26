@@ -55,7 +55,7 @@ async fn upsert_account_device(
         .accounts
         .iter()
         .map(|account| {
-            bs58::decode(account.as_bytes()).into_vec().map_err(|e| {
+            bs58::decode(account.as_bytes()).into_vec().map_err(|_| {
                 (
                     StatusCode::BAD_REQUEST,
                     "Failed to decode Base32 encoded account",
