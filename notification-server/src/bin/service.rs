@@ -29,7 +29,7 @@ struct Args {
     db_connection: tokio_postgres::config::Config,
     #[arg(
         long = "google-application-credentials",
-        help = "",
+        help = "Credentials used for permitting the application to send push notifications.",
         env = "NOTIFICATION_SERVER_GOOGLE_APPLICATION_CREDENTIALS_PATH"
     )]
     google_application_credentials_path: String,
