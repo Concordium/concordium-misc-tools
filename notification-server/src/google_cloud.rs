@@ -59,7 +59,6 @@ impl GoogleCloud {
             .await?;
 
         if res.status().is_success() {
-            println!("{}", res.text().await.unwrap());
             Ok(())
         } else {
             Err(anyhow!(
