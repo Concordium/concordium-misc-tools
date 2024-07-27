@@ -5,6 +5,7 @@ use tokio::sync::Mutex;
 use tokio_postgres::{Client, NoTls};
 use lazy_static::lazy_static;
 
+#[derive(Clone)]
 pub struct PreparedStatements {
     get_devices_from_account: tokio_postgres::Statement,
     upsert_device:            tokio_postgres::Statement,
@@ -71,6 +72,7 @@ impl PreparedStatements {
     }
 }
 
+#[derive(Clone)]
 pub struct DatabaseConnection {
     pub prepared: PreparedStatements,
 }

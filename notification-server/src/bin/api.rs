@@ -33,11 +33,16 @@ struct Args {
     log_level:      log::LevelFilter,
 }
 
+#[derive(Clone)]
+struct AppState {
+    db_connection: DatabaseConnection,
+}
+
 const MAX_RESOURCES_LENGTH : usize = 1000;
 
 async fn upsert_account_device(
     Path(device): Path<String>,
-    State(db_connection): State<Arc<DatabaseConnection>>,
+    State(state): State<Arc<AppState>>,
     Json(subscription): Json<DeviceSubscription>,
 ) -> Result<impl IntoResponse, Response> {
     info!(
@@ -64,7 +69,8 @@ async fn upsert_account_device(
             })
         })
         .collect();
-    db_connection
+    state
+        .db_connection
         .prepared
         .upsert_subscription(decoded_accounts?, subscription.preferences, &device)
         .await
@@ -86,9 +92,9 @@ async fn main() -> anyhow::Result<()> {
 
     tracing_subscriber::fmt::init();
 
-    let database_connection = DatabaseConnection::create(args.db_connection).await?;
-
-    let app_state = Arc::new(database_connection);
+    let app_state = Arc::new(AppState {
+        db_connection: DatabaseConnection::create(args.db_connection).await?
+    });
 
     // TODO add authentication middleware
     let app = Router::new()
