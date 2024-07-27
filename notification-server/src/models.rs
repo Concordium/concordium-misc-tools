@@ -17,7 +17,7 @@ impl NotificationInformation {
     pub fn into_hashmap(self) -> HashMap<String, String> {
         let mut map = HashMap::new();
         map.insert("amount".to_string(), self.amount.to_string());
-        map.insert("sender".to_string(), self.address.to_string());
+        map.insert("recipient".to_string(), self.address.to_string());
         map
     }
 }
