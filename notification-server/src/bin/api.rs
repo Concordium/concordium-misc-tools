@@ -64,6 +64,7 @@ async fn upsert_account_device(
             })
         })
         .collect();
+
     db_connection
         .prepared
         .upsert_subscription(decoded_accounts?, subscription.preferences, &device)

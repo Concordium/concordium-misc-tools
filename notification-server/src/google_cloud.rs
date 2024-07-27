@@ -33,7 +33,6 @@ impl GoogleCloud {
         device_token: &str,
         information: NotificationInformation,
         validate_only: bool,
-
     ) -> anyhow::Result<()> {
         let client = Client::new();
         let access_token = &self.service_account.token(SCOPES).await?;
