@@ -10,6 +10,7 @@ use concordium_rust_sdk::{
 };
 use futures::{Stream, StreamExt};
 use num_bigint::BigInt;
+use std::fmt::Debug;
 
 fn convert<T: Into<BigInt>>(
     address: Address,
@@ -178,22 +179,25 @@ mod tests {
         address
     }
 
-    fn split_u64_to_random_vec(
-        mut value: u64,
+    /// Split the `ccd_amount` into `num_parts` and create a random release
+    /// schedule timestamp for each of them. The parts are not of equal size and
+    /// might even be of size 0.
+    fn create_random_release_schedules_from_amount(
+        mut amount: u64,
         max_elements: usize,
         g: &mut Gen,
     ) -> Vec<(Timestamp, Amount)> {
         let mut rng = thread_rng();
         let mut result = Vec::new();
 
-        while value > 0 && result.len() < max_elements {
-            let part = rng.gen_range(0..=value);
+        while amount > 0 && result.len() < max_elements {
+            let part = rng.gen_range(0..=amount);
             result.push((u64::arbitrary(g).into(), Amount { micro_ccd: part }));
-            value -= part;
+            amount -= part;
         }
 
-        if value > 0 {
-            result.push((u64::arbitrary(g).into(), Amount { micro_ccd: value }));
+        if amount > 0 {
+            result.push((u64::arbitrary(g).into(), Amount { micro_ccd: amount }));
         }
         result
     }
@@ -225,11 +229,19 @@ mod tests {
                 },
                 AccountTransactionEffects::TransferredWithSchedule {
                     to:     receiver_address.clone(),
-                    amount: split_u64_to_random_vec(amount.clone().micro_ccd, 2, g),
+                    amount: create_random_release_schedules_from_amount(
+                        amount.clone().micro_ccd,
+                        2,
+                        g,
+                    ),
                 },
                 AccountTransactionEffects::TransferredWithScheduleAndMemo {
                     to:     receiver_address.clone(),
-                    amount: split_u64_to_random_vec(amount.clone().micro_ccd, 2, g),
+                    amount: create_random_release_schedules_from_amount(
+                        amount.clone().micro_ccd,
+                        2,
+                        g,
+                    ),
                     memo:   random_memo(),
                 },
             ];
