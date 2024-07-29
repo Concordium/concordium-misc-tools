@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use axum::{
     extract::{Json, Path, State},
     http::StatusCode,
@@ -11,6 +12,7 @@ use notification_server::{database::DatabaseConnection, models::DeviceSubscripti
 use std::sync::Arc;
 use tokio_postgres::Config;
 use tracing::{error, info};
+use notification_server::google_cloud::GoogleCloud;
 
 #[derive(Debug, Parser)]
 struct Args {
@@ -31,13 +33,24 @@ struct Args {
     /// Logging level of the application
     #[arg(long = "log-level", default_value_t = log::LevelFilter::Info)]
     log_level:      log::LevelFilter,
+    #[arg(
+        long = "google-application-credentials",
+        help = "Credentials used for verifying the device token.",
+        env = "NOTIFICATION_SERVER_GOOGLE_APPLICATION_CREDENTIALS_PATH"
+    )]
+    google_application_credentials_path: String,
+}
+
+struct AppState {
+    db_connection: DatabaseConnection,
+    google_cloud: GoogleCloud,
 }
 
 const MAX_RESOURCES_LENGTH : usize = 1000;
 
 async fn upsert_account_device(
     Path(device): Path<String>,
-    State(db_connection): State<Arc<DatabaseConnection>>,
+    State(state): State<Arc<AppState>>,
     Json(subscription): Json<DeviceSubscription>,
 ) -> Result<impl IntoResponse, Response> {
     info!(
@@ -51,6 +64,7 @@ async fn upsert_account_device(
             format!("Preferences or accounts exceed maximum length of {}", MAX_RESOURCES_LENGTH)
         ).into_response())?;
     }
+
     let decoded_accounts: Result<Vec<Vec<u8>>, Response> = subscription
         .accounts
         .iter()
@@ -64,8 +78,16 @@ async fn upsert_account_device(
             })
         })
         .collect();
+    if state.google_cloud.validate_device_token(&device).await {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "Invalid device token",
+        )
+        .into_response());
+    }
 
-    db_connection
+    state
+        .db_connection
         .prepared
         .upsert_subscription(decoded_accounts?, subscription.preferences, &device)
         .await
@@ -87,9 +109,10 @@ async fn main() -> anyhow::Result<()> {
 
     tracing_subscriber::fmt::init();
 
-    let database_connection = DatabaseConnection::create(args.db_connection).await?;
-
-    let app_state = Arc::new(database_connection);
+    let app_state = Arc::new(AppState {
+        db_connection: DatabaseConnection::create(args.db_connection).await?,
+        google_cloud: GoogleCloud::new(PathBuf::from(args.google_application_credentials_path))?,
+    });
 
     // TODO add authentication middleware
     let app = Router::new()

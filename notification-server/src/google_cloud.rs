@@ -28,11 +28,44 @@ impl GoogleCloud {
         })
     }
 
+
+    pub async fn validate_device_token(
+        &self,
+        device_token: &str,
+    ) -> anyhow::Result<()> {
+        let client = Client::new();
+        let access_token = &self.service_account.token(SCOPES).await?;
+
+        let entity_data: HashMap<String, String> = HashMap::new();
+
+        let payload = json!({
+            "message": {
+                "token": device_token,
+                "data": entity_data
+            },
+            "validate_only": true
+        });
+
+        let res = client
+            .post(&self.url)
+            .bearer_auth(access_token.as_str())
+            .json(&payload)
+            .send()
+            .await?;
+        if res.status().is_success() {
+            Ok(())
+        } else {
+            Err(anyhow!(
+                "Failed to validate device token: {}",
+                res.text().await?
+            ))
+        }
+    }
+
     pub async fn send_push_notification(
         &self,
         device_token: &str,
         information: NotificationInformation,
-        validate_only: bool,
     ) -> anyhow::Result<()> {
         let client = Client::new();
         let access_token = &self.service_account.token(SCOPES).await?;
@@ -45,10 +78,6 @@ impl GoogleCloud {
                 "data": entity_data
             }
         });
-
-        if validate_only {
-            payload["validate_only"] = json!(validate_only);
-        }
 
         let res = client
             .post(&self.url)
