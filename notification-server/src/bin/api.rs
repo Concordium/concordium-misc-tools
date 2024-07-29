@@ -33,7 +33,6 @@ struct Args {
     log_level:      log::LevelFilter,
 }
 
-#[derive(Clone)]
 struct AppState {
     db_connection: DatabaseConnection,
 }
