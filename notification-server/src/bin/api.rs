@@ -78,7 +78,8 @@ async fn upsert_account_device(
             })
         })
         .collect();
-    if state.google_cloud.validate_device_token(&device).await {
+    if let Err(err) = state.google_cloud.validate_device_token(&device).await {
+        error!("Unexpected response provided by gcm service while validating device_token: {}", err);
         return Err((
             StatusCode::BAD_REQUEST,
             "Invalid device token",

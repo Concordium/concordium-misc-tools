@@ -1,9 +1,11 @@
 use crate::models::NotificationInformation;
 use anyhow::anyhow;
 use gcp_auth::{CustomServiceAccount, TokenProvider};
-use reqwest::Client;
+use reqwest::{Client, StatusCode};
 use serde_json::json;
 use std::{collections::HashMap, path::PathBuf};
+use log::info;
+use tracing::error;
 
 const SCOPES: &[&str; 1] = &["https://www.googleapis.com/auth/firebase.messaging"];
 
@@ -34,7 +36,7 @@ impl GoogleCloud {
     pub async fn validate_device_token(
         &self,
         device_token: &str,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<bool> {
         let client = Client::new();
         let access_token = &self.service_account.token(SCOPES).await?;
 
@@ -55,12 +57,29 @@ impl GoogleCloud {
             .send()
             .await?;
         if res.status().is_success() {
-            Ok(())
+            Ok(true)
         } else {
-            Err(anyhow!(
-                "Failed to validate device token: {}",
-                res.text().await?
-            ))
+            let status_code = res.status();
+            let error_text = res.text().await.map_err(|e| {
+                error!("Failed to read error response: {}", e);
+                e
+            })?;
+            if status_code == StatusCode::BAD_REQUEST {
+                match serde_json::from_str(&error_text) {
+                    Ok(json) => {
+                        if let Some(error) = json["error"]["status"] == "INVALID_ARGUMENT" {
+                            Ok(false)
+                        } else {
+                            Err(anyhow!("Invalid response code returned from service: {}", error_text))
+                        }
+                    },
+                    Err(err) => {
+                        Err(anyhow!("Failed to parse error response: {}", err))
+                    }
+                }
+            } else {
+                Err(anyhow!("Invalid status code received: {} with text {}", status_code, error_text))
+            }
         }
     }
 
