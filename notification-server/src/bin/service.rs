@@ -33,6 +33,21 @@ struct Args {
         env = "NOTIFICATION_SERVER_GOOGLE_APPLICATION_CREDENTIALS_PATH"
     )]
     google_application_credentials_path: String,
+    #[arg(
+        long = "google-client-timeout",
+        help = "Credentials used for permitting the application to send push notifications.",
+        env = "NOTIFICATION_SERVER_GOOGLE_CLIENT_TIMEOUT",
+        default_value = "30s"
+    )]
+    google_client_timeout: std::time::Duration,
+    #[arg(
+        long = "google-client-timeout",
+        help = "Credentials used for permitting the application to send push notifications.",
+        env = "NOTIFICATION_SERVER_GOOGLE_CLIENT_TIMEOUT",
+        default_value = "5s"
+    )]
+    google_client_connection_timeout: std::time::Duration,
+
 }
 
 #[tokio::main(flavor = "multi_thread")]
@@ -55,15 +70,20 @@ async fn main() -> anyhow::Result<()> {
     .keep_alive_timeout(std::time::Duration::from_secs(10))
     .keep_alive_while_idle(true);
 
-    let gcloud = GoogleCloud::new(PathBuf::from(args.google_application_credentials_path))?;
+    let http_client = reqwest::Client::builder()
+        .connect_timeout(args.google_client_connection_timeout)
+        .timeout(args.google_client_timeout)
+        .build()?;
+
+    let gcloud = GoogleCloud::new(PathBuf::from(args.google_application_credentials_path), http_client)?;
     let database_connection = DatabaseConnection::create(args.db_connection).await?;
 
-    let mut client = Client::new(endpoint).await?;
-    let mut receiver = client.get_finalized_blocks().await?;
+    let mut concordium_client = Client::new(endpoint).await?;
+    let mut receiver = concordium_client.get_finalized_blocks().await?;
     while let Some(v) = receiver.next().await {
         let block_hash = v?.block_hash;
         println!("Blockhash: {:?}", block_hash);
-        let transactions = client
+        let transactions = concordium_client
             .get_block_transaction_events(block_hash)
             .await?
             .response;

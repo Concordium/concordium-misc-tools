@@ -14,7 +14,7 @@ pub struct GoogleCloud {
 }
 
 impl GoogleCloud {
-    pub fn new(credentials_path: PathBuf) -> anyhow::Result<Self> {
+    pub fn new(credentials_path: PathBuf, client: Client) -> anyhow::Result<Self> {
         let service_account = CustomServiceAccount::from_file(credentials_path)?;
         let project_id = service_account
             .project_id()
