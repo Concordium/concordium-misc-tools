@@ -189,8 +189,10 @@ mod tests {
         address
     }
 
-    //Split the `ccd_amount` into `num_parts` and create a random release schedule timestamp for each of them. The parts are not of equal size and might even be of size 0.
-   fn create_random_release_schedules_from_amount(
+    /// Split the `ccd_amount` into `num_parts` and create a random release
+    /// schedule timestamp for each of them. The parts are not of equal size and
+    /// might even be of size 0.
+    fn create_random_release_schedules_from_amount(
         mut amount: u64,
         max_elements: usize,
         g: &mut Gen,
