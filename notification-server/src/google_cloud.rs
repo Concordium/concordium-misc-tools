@@ -2,11 +2,9 @@ use crate::models::NotificationInformation;
 use anyhow::anyhow;
 use backoff::{future::retry, ExponentialBackoff};
 use gcp_auth::{CustomServiceAccount, TokenProvider};
-use log::info;
 use reqwest::{Client, StatusCode};
 use serde_json::json;
 use std::{collections::HashMap, path::PathBuf};
-use tracing::error;
 
 const SCOPES: &[&str; 1] = &["https://www.googleapis.com/auth/firebase.messaging"];
 
