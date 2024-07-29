@@ -53,7 +53,7 @@ struct Args {
         long = "google-client-max-elapsed-time-secs",
         help = "Max elapsed time for connecting to the Google API in seconds.",
         env = "NOTIFICATION_SERVER_GOOGLE_CLIENT_MAX_ELAPSED_TIME_SECS",
-        default_value_t = 60  // 15 minutes
+        default_value_t = 900  // 15 minutes
     )]
     google_client_max_elapsed_time_secs: u64,
 
@@ -61,7 +61,7 @@ struct Args {
         long = "google-client-max-interval-time-secs",
         help = "Max interval time for retries when connecting to the Google API in seconds.",
         env = "NOTIFICATION_SERVER_GOOGLE_CLIENT_MAX_INTERVAL_TIME_SECS",
-        default_value_t = 3  // 3 minutes
+        default_value_t = 180  // 3 minutes
     )]
     google_client_max_interval_time_secs: u64,
 }
