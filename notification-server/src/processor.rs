@@ -10,7 +10,6 @@ use concordium_rust_sdk::{
 };
 use futures::{Stream, StreamExt};
 use num_bigint::BigInt;
-use std::fmt::Debug;
 
 fn convert<T: Into<BigInt>>(
     address: Address,
