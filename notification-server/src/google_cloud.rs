@@ -41,7 +41,7 @@ impl GoogleCloud {
 
     pub async fn validate_device_token(&self, device_token: &str) -> anyhow::Result<bool> {
         let client = Client::new();
-        let access_token = &self.service_account.token(SCOPES).await?;
+        let access_token = self.service_account.token(SCOPES).await?;
 
         let entity_data: HashMap<String, String> = HashMap::new();
 
@@ -53,42 +53,50 @@ impl GoogleCloud {
             "validate_only": true
         });
 
-        let res = client
-            .post(&self.url)
-            .bearer_auth(access_token.as_str())
-            .json(&payload)
-            .send()
-            .await?;
-        if res.status().is_success() {
-            Ok(true)
-        } else {
-            let status_code = res.status();
-            let error_text = res.text().await.map_err(|e| {
-                error!("Failed to read error response: {}", e);
-                e
-            })?;
-            if status_code == StatusCode::BAD_REQUEST {
-                match serde_json::from_str(&error_text) {
-                    Ok(json) => {
-                        if let Some(error) = json["error"]["status"] == "INVALID_ARGUMENT" {
-                            Ok(false)
-                        } else {
-                            Err(anyhow!(
-                                "Invalid response code returned from service: {}",
-                                error_text
-                            ))
-                        }
+        let backoff = ExponentialBackoff::default();
+
+        let operation = || async {
+            let response = client
+                .post(&self.url)
+                .bearer_auth(access_token.as_str())
+                .json(&payload)
+                .send()
+                .await;
+
+            match response {
+                Ok(res) if res.status().is_success() => Ok(true),
+                Ok(res) if res.status() == StatusCode::BAD_REQUEST => {
+                    let error_text = res.text().await.unwrap_or_default();
+                    if error_text.contains("INVALID_ARGUMENT") {
+                        Ok(false)
+                    } else {
+                        Err(backoff::Error::permanent(anyhow!(
+                            "Invalid response code returned from service: {}",
+                            error_text
+                        )))
                     }
-                    Err(err) => Err(anyhow!("Failed to parse error response: {}", err)),
                 }
-            } else {
-                Err(anyhow!(
-                    "Invalid status code received: {} with text {}",
-                    status_code,
-                    error_text
-                ))
+                Ok(res) => {
+                    let status = res.status();
+                    let error_text = res.text().await.unwrap_or_default();
+                    if status.is_server_error() {
+                        Err(backoff::Error::transient(anyhow!(
+                            "Google API responded with server error: {}",
+                            status
+                        )))
+                    } else {
+                        Err(backoff::Error::permanent(anyhow!(
+                            "Invalid status code received: {} with text {}",
+                            status,
+                            error_text
+                        )))
+                    }
+                }
+                Err(e) => Err(backoff::Error::transient(anyhow!("Network error: {}", e))),
             }
-        }
+        };
+
+        retry(backoff, operation).await
     }
 
     pub async fn send_push_notification(
