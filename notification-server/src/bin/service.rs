@@ -5,6 +5,8 @@ use notification_server::{
     database::DatabaseConnection, google_cloud::GoogleCloud, processor::process,
 };
 use std::path::PathBuf;
+use std::time::Duration;
+use backoff::ExponentialBackoff;
 use tonic::{
     codegen::{http, tokio_stream::StreamExt},
     transport::ClientTlsConfig,
@@ -34,19 +36,35 @@ struct Args {
     )]
     google_application_credentials_path: String,
     #[arg(
-        long = "google-client-timeout",
-        help = "Credentials used for permitting the application to send push notifications.",
-        env = "NOTIFICATION_SERVER_GOOGLE_CLIENT_TIMEOUT",
-        default_value = "30s"
+        long = "google-client-timeout-secs",
+        help = "Request timeout connecting to the Google API in seconds.",
+        env = "NOTIFICATION_SERVER_GOOGLE_CLIENT_TIMEOUT_SECS",
+        default_value_t = 30
     )]
-    google_client_timeout: std::time::Duration,
+    google_client_timeout_secs: u64,
     #[arg(
-        long = "google-client-timeout",
-        help = "Credentials used for permitting the application to send push notifications.",
-        env = "NOTIFICATION_SERVER_GOOGLE_CLIENT_TIMEOUT",
-        default_value = "5s"
+        long = "google-client-connection-timeout-secs",
+        help = "Request connection timeout connecting to the Google API in seconds.",
+        env = "NOTIFICATION_SERVER_GOOGLE_CLIENT_CONNECTION_TIMEOUT_SECS",
+        default_value_t = 5
     )]
-    google_client_connection_timeout: std::time::Duration,
+    google_client_connection_timeout_secs: u64,
+
+    #[arg(
+        long = "google-client-max-elapsed-time-secs",
+        help = "Max elapsed time for connecting to the Google API in seconds.",
+        env = "NOTIFICATION_SERVER_GOOGLE_CLIENT_MAX_ELAPSED_TIME_SECS",
+        default_value_t = 900  // 15 minutes
+    )]
+    google_client_max_elapsed_time_secs: u64,
+
+    #[arg(
+        long = "google-client-max-interval-time-secs",
+        help = "Max interval time for retries when connecting to the Google API in seconds.",
+        env = "NOTIFICATION_SERVER_GOOGLE_CLIENT_MAX_INTERVAL_TIME_SECS",
+        default_value_t = 180  // 3 minutes
+    )]
+    google_client_max_interval_time_secs: u64,
 
 }
 
@@ -64,18 +82,24 @@ async fn main() -> anyhow::Result<()> {
     } else {
         args.endpoint
     }
-    .connect_timeout(std::time::Duration::from_secs(10))
-    .timeout(std::time::Duration::from_secs(300))
-    .http2_keep_alive_interval(std::time::Duration::from_secs(300))
-    .keep_alive_timeout(std::time::Duration::from_secs(10))
+    .connect_timeout(Duration::from_secs(10))
+    .timeout(Duration::from_secs(300))
+    .http2_keep_alive_interval(Duration::from_secs(300))
+    .keep_alive_timeout(Duration::from_secs(10))
     .keep_alive_while_idle(true);
 
+    let retry_policy = ExponentialBackoff {
+        max_elapsed_time: Some(Duration::from_secs(args.google_client_max_elapsed_time_secs)),
+        max_interval: Duration::from_secs(args.google_client_max_interval_time_secs),
+        ..ExponentialBackoff::default()
+    };
+
     let http_client = reqwest::Client::builder()
-        .connect_timeout(args.google_client_connection_timeout)
-        .timeout(args.google_client_timeout)
+        .connect_timeout(Duration::from_secs(args.google_client_connection_timeout_secs))
+        .timeout(Duration::from_secs(args.google_client_timeout_secs))
         .build()?;
 
-    let gcloud = GoogleCloud::new(PathBuf::from(args.google_application_credentials_path), http_client)?;
+    let gcloud = GoogleCloud::new(PathBuf::from(args.google_application_credentials_path), http_client, retry_policy)?;
     let database_connection = DatabaseConnection::create(args.db_connection).await?;
 
     let mut concordium_client = Client::new(endpoint).await?;

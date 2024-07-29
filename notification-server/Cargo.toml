@@ -9,6 +9,7 @@ version = "0.1.0"
 [dependencies]
 anyhow = "1.0.86"
 axum = "0.7.5"
+backoff = { version = "0.4.0", features = ["tokio"] }
 bs58 = "0.5.1"
 clap = { version = "4.5.7", features = ["derive", "env"] }
 concordium-rust-sdk = { version = "*", path = "../deps/concordium-rust-sdk" }
