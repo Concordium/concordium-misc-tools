@@ -1,22 +1,28 @@
 use crate::models::NotificationInformation;
 use anyhow::anyhow;
+use backoff::{future::retry, ExponentialBackoff};
 use gcp_auth::{CustomServiceAccount, TokenProvider};
+use log::info;
 use reqwest::{Client, StatusCode};
 use serde_json::json;
 use std::{collections::HashMap, path::PathBuf};
-use log::info;
 use tracing::error;
 
 const SCOPES: &[&str; 1] = &["https://www.googleapis.com/auth/firebase.messaging"];
 
 pub struct GoogleCloud {
-    client: Client,
+    client:          Client,
     service_account: CustomServiceAccount,
     url:             String,
+    backoff_policy:  ExponentialBackoff,
 }
 
 impl GoogleCloud {
-    pub fn new(credentials_path: PathBuf) -> anyhow::Result<Self> {
+    pub fn new(
+        credentials_path: PathBuf,
+        client: Client,
+        backoff_policy: ExponentialBackoff,
+    ) -> anyhow::Result<Self> {
         let service_account = CustomServiceAccount::from_file(credentials_path)?;
         let project_id = service_account
             .project_id()
@@ -26,17 +32,14 @@ impl GoogleCloud {
             project_id
         );
         Ok(Self {
-            client: Client::new(),
+            client,
             service_account,
             url,
+            backoff_policy,
         })
     }
 
-
-    pub async fn validate_device_token(
-        &self,
-        device_token: &str,
-    ) -> anyhow::Result<bool> {
+    pub async fn validate_device_token(&self, device_token: &str) -> anyhow::Result<bool> {
         let client = Client::new();
         let access_token = &self.service_account.token(SCOPES).await?;
 
@@ -70,15 +73,20 @@ impl GoogleCloud {
                         if let Some(error) = json["error"]["status"] == "INVALID_ARGUMENT" {
                             Ok(false)
                         } else {
-                            Err(anyhow!("Invalid response code returned from service: {}", error_text))
+                            Err(anyhow!(
+                                "Invalid response code returned from service: {}",
+                                error_text
+                            ))
                         }
-                    },
-                    Err(err) => {
-                        Err(anyhow!("Failed to parse error response: {}", err))
                     }
+                    Err(err) => Err(anyhow!("Failed to parse error response: {}", err)),
                 }
             } else {
-                Err(anyhow!("Invalid status code received: {} with text {}", status_code, error_text))
+                Err(anyhow!(
+                    "Invalid status code received: {} with text {}",
+                    status_code,
+                    error_text
+                ))
             }
         }
     }
@@ -97,21 +105,27 @@ impl GoogleCloud {
                 "data": entity_data
             }
         });
+        retry(self.backoff_policy.clone(), || async {
+            let response = self
+                .client
+                .post(&self.url)
+                .bearer_auth(access_token.as_str())
+                .json(&payload)
+                .send()
+                .await;
 
-        let res = self.client
-            .post(&self.url)
-            .bearer_auth(access_token.as_str())
-            .json(&payload)
-            .send()
-            .await?;
-
-        if res.status().is_success() {
-            Ok(())
-        } else {
-            Err(anyhow!(
-                "Failed to send push notification: {}",
-                res.text().await?
-            ))
-        }
+            match response {
+                Ok(res) if res.status().is_success() => Ok(()),
+                Ok(res) if res.status().is_server_error() => Err(backoff::Error::transient(
+                    anyhow!("Server error: {}", res.status()),
+                )),
+                Ok(res) => Err(backoff::Error::permanent(anyhow!(
+                    "Failed with status: {}",
+                    res.status()
+                ))),
+                Err(err) => Err(backoff::Error::transient(anyhow!("Network error: {}", err))),
+            }
+        })
+        .await
     }
 }
