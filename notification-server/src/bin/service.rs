@@ -1,12 +1,11 @@
+use backoff::ExponentialBackoff;
 use clap::Parser;
 use concordium_rust_sdk::v2::{Client, Endpoint};
 use dotenv::dotenv;
 use notification_server::{
     database::DatabaseConnection, google_cloud::GoogleCloud, processor::process,
 };
-use std::path::PathBuf;
-use std::time::Duration;
-use backoff::ExponentialBackoff;
+use std::{path::PathBuf, time::Duration};
 use tonic::{
     codegen::{http, tokio_stream::StreamExt},
     transport::ClientTlsConfig,
@@ -65,7 +64,6 @@ struct Args {
         default_value_t = 180  // 3 minutes
     )]
     google_client_max_interval_time_secs: u64,
-
 }
 
 #[tokio::main(flavor = "multi_thread")]
@@ -89,17 +87,25 @@ async fn main() -> anyhow::Result<()> {
     .keep_alive_while_idle(true);
 
     let retry_policy = ExponentialBackoff {
-        max_elapsed_time: Some(Duration::from_secs(args.google_client_max_elapsed_time_secs)),
+        max_elapsed_time: Some(Duration::from_secs(
+            args.google_client_max_elapsed_time_secs,
+        )),
         max_interval: Duration::from_secs(args.google_client_max_interval_time_secs),
         ..ExponentialBackoff::default()
     };
 
     let http_client = reqwest::Client::builder()
-        .connect_timeout(Duration::from_secs(args.google_client_connection_timeout_secs))
+        .connect_timeout(Duration::from_secs(
+            args.google_client_connection_timeout_secs,
+        ))
         .timeout(Duration::from_secs(args.google_client_timeout_secs))
         .build()?;
 
-    let gcloud = GoogleCloud::new(PathBuf::from(args.google_application_credentials_path), http_client, retry_policy)?;
+    let gcloud = GoogleCloud::new(
+        PathBuf::from(args.google_application_credentials_path),
+        http_client,
+        retry_policy,
+    )?;
     let database_connection = DatabaseConnection::create(args.db_connection).await?;
 
     let mut concordium_client = Client::new(endpoint).await?;

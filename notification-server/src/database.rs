@@ -1,9 +1,9 @@
 use crate::models::Preference;
 use anyhow::anyhow;
+use lazy_static::lazy_static;
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
 use tokio_postgres::{Client, NoTls};
-use lazy_static::lazy_static;
 
 #[derive(Clone)]
 pub struct PreparedStatements {
@@ -18,7 +18,9 @@ impl PreparedStatements {
         let (get_devices_from_account, upsert_device) = {
             let client_guard = client_mutex.lock().await; // MutexGuard is scoped
             let get_devices_from_account = client_guard
-                .prepare("SELECT device_id FROM account_device_mapping WHERE address = $1 LIMIT 1000")
+                .prepare(
+                    "SELECT device_id FROM account_device_mapping WHERE address = $1 LIMIT 1000",
+                )
                 .await
                 .map_err(|e| anyhow!("Failed to create account device mapping: {}", e))?;
             let upsert_device = client_guard
@@ -92,11 +94,11 @@ impl DatabaseConnection {
     }
 }
 
-lazy_static!{
-    static ref PREFERENCE_MAP: HashMap<Preference, i32> = vec![
-        (Preference::CIS2, 1),
-        (Preference::CCDTransaction, 2),
-    ].into_iter().collect();
+lazy_static! {
+    static ref PREFERENCE_MAP: HashMap<Preference, i32> =
+        vec![(Preference::CIS2, 1), (Preference::CCDTransaction, 2),]
+            .into_iter()
+            .collect();
 }
 
 pub fn preferences_to_bitmask(preferences: &[Preference]) -> i32 {

@@ -37,7 +37,7 @@ struct AppState {
     db_connection: DatabaseConnection,
 }
 
-const MAX_RESOURCES_LENGTH : usize = 1000;
+const MAX_RESOURCES_LENGTH: usize = 1000;
 
 async fn upsert_account_device(
     Path(device): Path<String>,
@@ -48,12 +48,18 @@ async fn upsert_account_device(
         "Subscribing accounts {:?} to device {}",
         subscription, device
     );
-        // Validate lengths
-    if subscription.preferences.len() > MAX_RESOURCES_LENGTH || subscription.accounts.len() > MAX_RESOURCES_LENGTH {
+    // Validate lengths
+    if subscription.preferences.len() > MAX_RESOURCES_LENGTH
+        || subscription.accounts.len() > MAX_RESOURCES_LENGTH
+    {
         return Err((
             StatusCode::BAD_REQUEST,
-            format!("Preferences or accounts exceed maximum length of {}", MAX_RESOURCES_LENGTH)
-        ).into_response())?;
+            format!(
+                "Preferences or accounts exceed maximum length of {}",
+                MAX_RESOURCES_LENGTH
+            ),
+        )
+            .into_response())?;
     }
     let decoded_accounts: Result<Vec<Vec<u8>>, Response> = subscription
         .accounts
@@ -92,7 +98,7 @@ async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 
     let app_state = Arc::new(AppState {
-        db_connection: DatabaseConnection::create(args.db_connection).await?
+        db_connection: DatabaseConnection::create(args.db_connection).await?,
     });
 
     // TODO add authentication middleware
