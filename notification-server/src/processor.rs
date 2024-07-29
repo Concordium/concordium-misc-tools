@@ -1,5 +1,3 @@
-use std::fmt::Debug;
-
 use concordium_rust_sdk::{
     base::contracts_common::AccountAddress,
     cis2,
@@ -12,6 +10,7 @@ use concordium_rust_sdk::{
 };
 use futures::{Stream, StreamExt};
 use num_bigint::BigInt;
+use std::fmt::Debug;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NotificationInformation {
