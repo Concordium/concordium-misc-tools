@@ -15,7 +15,7 @@ env:
 jobs:
   publish-docker-image:
     runs-on: ubuntu-latest
-    environment: release-recover-id-object
+    environment: release
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
