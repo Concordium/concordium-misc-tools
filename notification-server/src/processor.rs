@@ -239,11 +239,11 @@ mod tests {
                 },
                 AccountTransactionEffects::TransferredWithSchedule {
                     to:     receiver_address.clone(),
-                    amount: split_u64_to_random_vec(amount.clone().micro_ccd, 2, g),
+                    amount: create_random_release_schedules_from_amount(amount.clone().micro_ccd, 2, g),
                 },
                 AccountTransactionEffects::TransferredWithScheduleAndMemo {
                     to:     receiver_address.clone(),
-                    amount: split_u64_to_random_vec(amount.clone().micro_ccd, 2, g),
+                    amount: create_random_release_schedules_from_amount(amount.clone().micro_ccd, 2, g),
                     memo:   random_memo(),
                 },
             ];
