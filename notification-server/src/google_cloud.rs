@@ -8,6 +8,7 @@ use std::{collections::HashMap, path::PathBuf};
 const SCOPES: &[&str; 1] = &["https://www.googleapis.com/auth/firebase.messaging"];
 
 pub struct GoogleCloud {
+    client: Client,
     service_account: CustomServiceAccount,
     url:             String,
 }
@@ -23,6 +24,7 @@ impl GoogleCloud {
             project_id
         );
         Ok(Self {
+            client: Client::new(),
             service_account,
             url,
         })
@@ -67,9 +69,7 @@ impl GoogleCloud {
         device_token: &str,
         information: NotificationInformation,
     ) -> anyhow::Result<()> {
-        let client = Client::new();
         let access_token = &self.service_account.token(SCOPES).await?;
-
         let entity_data: HashMap<String, String> = information.into_hashmap();
 
         let payload = json!({
@@ -79,7 +79,7 @@ impl GoogleCloud {
             }
         });
 
-        let res = client
+        let res = self.client
             .post(&self.url)
             .bearer_auth(access_token.as_str())
             .json(&payload)
