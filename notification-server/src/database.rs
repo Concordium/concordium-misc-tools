@@ -96,7 +96,7 @@ impl DatabaseConnection {
 
 lazy_static! {
     static ref PREFERENCE_MAP: HashMap<Preference, i32> =
-        vec![(Preference::CIS2, 1), (Preference::CCDTransaction, 2),]
+        vec![(Preference::CIS2Transaction, 1), (Preference::CCDTransaction, 2),]
             .into_iter()
             .collect();
 }
@@ -124,10 +124,35 @@ pub fn bitmask_to_preferences(bitmask: i32) -> Vec<Preference> {
 mod tests {
     use super::*;
     use std::collections::HashSet;
+    use enum_iterator::all;
+
+    #[test]
+    fn test_preference_map_coverage_and_uniqueness() {
+        let expected_variants = all::<Preference>().collect::<Vec<_>>();
+
+        // Check for coverage
+        for variant in &expected_variants {
+            assert!(PREFERENCE_MAP.contains_key(variant),
+                "PREFERENCE_MAP is missing the variant {:?}", variant);
+        }
+
+        // Check for uniqueness of indices
+        let mut indices = vec![];
+        for &index in PREFERENCE_MAP.values() {
+            assert!(!indices.contains(&index),
+                "Duplicate index found: {}", index);
+            indices.push(index);
+        }
+
+        // Ensure all variants are accounted for
+        assert_eq!(PREFERENCE_MAP.len(), expected_variants.len(),
+            "PREFERENCE_MAP does not match the number of variants in Preference enum");
+    }
+
 
     #[test]
     fn test_preferences_to_bitmask_and_back() {
-        let preferences = vec![Preference::CIS2, Preference::CCDTransaction];
+        let preferences = vec![Preference::CIS2Transaction, Preference::CCDTransaction];
         let bitmask = preferences_to_bitmask(&preferences);
 
         let decoded_preferences = bitmask_to_preferences(bitmask);
@@ -139,16 +164,16 @@ mod tests {
 
     #[test]
     fn test_single_preference_to_bitmask_and_back() {
-        let preferences = vec![Preference::CIS2];
+        let preferences = vec![Preference::CIS2Transaction];
         let bitmask = preferences_to_bitmask(&preferences);
-        assert_eq!(bitmask, 1); // Only CIS2
+        assert_eq!(bitmask, 1);
 
         let decoded_preferences = bitmask_to_preferences(bitmask);
         assert_eq!(decoded_preferences, preferences);
 
         let preferences2 = vec![Preference::CCDTransaction];
         let bitmask2 = preferences_to_bitmask(&preferences2);
-        assert_eq!(bitmask2, 2); // Only CCDTransaction
+        assert_eq!(bitmask2, 2);
 
         let decoded_preferences2 = bitmask_to_preferences(bitmask2);
         assert_eq!(decoded_preferences2, preferences2);

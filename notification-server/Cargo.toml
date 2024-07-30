@@ -14,6 +14,7 @@ bs58 = "0.5.1"
 clap = { version = "4.5.7", features = ["derive", "env"] }
 concordium-rust-sdk = { version = "*", path = "../deps/concordium-rust-sdk" }
 dotenv = "0.15"
+enum-iterator = "2.1.0"
 env_logger = "0.11.3"
 futures = "0.3.30"
 gcp_auth = "0.12.2"
