@@ -41,6 +41,6 @@ curl -X PUT "http://localhost:3030/api/v1/device/<device_token>/subscription" \
     -H "Content-Type: application/json" \
     -d '{
         "preferences": ["cis2-tx", "ccd-tx"],
-        "accounts": ["6zLVntGxRRgFnwQf4HBZTwK2qWrg3"]
+        "accounts": ["4FmiTW2L2AccyR9VjzsnpWFSAcohXWf7Vf797i36y526mqiEcp"]
     }'
 ```

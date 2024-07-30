@@ -6,6 +6,7 @@ use axum::{
     Router,
 };
 use clap::Parser;
+use concordium_rust_sdk::base::contracts_common::{AccountAddress, AccountAddressParseError};
 use dotenv::dotenv;
 use enum_iterator::all;
 use lazy_static::lazy_static;
@@ -14,7 +15,7 @@ use notification_server::{
     models::{DeviceSubscription, Preference},
 };
 use serde_json::json;
-use std::{collections::HashSet, sync::Arc};
+use std::{collections::HashSet, str::FromStr, sync::Arc};
 use tokio_postgres::Config;
 use tracing::{error, info};
 
@@ -86,13 +87,14 @@ async fn upsert_account_device(
         .accounts
         .iter()
         .map(|account| {
-            bs58::decode(account.as_bytes()).into_vec().map_err(|_| {
-                (
-                    StatusCode::BAD_REQUEST,
-                    "Failed to decode Base58 encoded account",
-                )
-                    .into_response()
-            })
+            let account_address: Result<AccountAddress, AccountAddressParseError> =
+                AccountAddress::from_str(account);
+            account_address
+                .map_err(|e| {
+                    error!("Failed to parse account address: {}", e);
+                    (StatusCode::BAD_REQUEST, "Failed to parse account address").into_response()
+                })
+                .map(|value| value.0.to_vec())
         })
         .collect();
     state
