@@ -39,6 +39,7 @@ struct AppState {
 
 const MAX_RESOURCES_LENGTH: usize = 1000;
 
+#[tracing::instrument]
 async fn upsert_account_device(
     Path(device): Path<String>,
     State(state): State<Arc<AppState>>,
@@ -48,7 +49,6 @@ async fn upsert_account_device(
         "Subscribing accounts {:?} to device {}",
         subscription, device
     );
-    // Validate lengths
     if subscription.preferences.len() > MAX_RESOURCES_LENGTH
         || subscription.accounts.len() > MAX_RESOURCES_LENGTH
     {
