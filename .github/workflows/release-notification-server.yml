@@ -1,15 +1,15 @@
-name: Publish Docker image for recover-id-object to DockerHub
+name: Publish Docker image for notification-server to DockerHub
 
 on:
   push:
     tags:
-      - 'recover-id-object/*.*.*'
+      - 'notification-server/*.*.*'
 
   workflow_dispatch:
 
 env:
   REGISTRY: docker.io
-  IMAGE_NAME: recover-id-object
+  IMAGE_NAME: notification-server
   RUST_VERSION: rust:1.74-buster  # Define the Rust version here
 
 jobs:
@@ -35,15 +35,15 @@ jobs:
       - name: Extract version tag from Cargo.toml manifest
         id: meta
         run: |
-          VERSION=$(yq .package.version recover-id-object/Cargo.toml)
+          VERSION=$(yq .package.version notification-server/Cargo.toml)
           FULL_IMAGE_TAG="${{ env.REGISTRY }}/concordium/${{ env.IMAGE_NAME }}:$VERSION"
           echo "::notice FULL_IMAGE_TAG=${FULL_IMAGE_TAG}"
           # Make sure the image does not exist. Abort if we can retrieve any metadata.
           if docker manifest inspect $FULL_IMAGE_TAG > /dev/null; then
             echo "::error $FULL_IMAGE_TAG already exists"
             exit 1
-          elif [ ! "${{ github.ref_name }}" = "recover-id-object/$VERSION" ]; then
-             echo "::error ${{ github.ref_name }} does not match recover-id-object/${VERSION}."
+          elif [ ! "${{ github.ref_name }}" = "notification-server/$VERSION" ]; then
+             echo "::error ${{ github.ref_name }} does not match notification-server/${VERSION}."
              exit 1
           else
              # Store the full image tag into a tag variable for the following step.
@@ -53,7 +53,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: recover-id-object/scripts/Dockerfile
+          file: notification-server/scripts/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tag }}
           build-args: |
