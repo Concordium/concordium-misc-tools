@@ -6,6 +6,7 @@ use notification_server::{
     database::DatabaseConnection, google_cloud::GoogleCloud, processor::process,
 };
 use std::{path::PathBuf, time::Duration};
+use anyhow::anyhow;
 use gcp_auth::CustomServiceAccount;
 use tonic::{
     codegen::{http, tokio_stream::StreamExt},
@@ -104,10 +105,12 @@ async fn main() -> anyhow::Result<()> {
 
     let path = PathBuf::from(args.google_application_credentials_path);
     let service_account = CustomServiceAccount::from_file(path)?;
+    let project_id = service_account.project_id().ok_or(anyhow!("Project ID not found in service account"))?;
     let gcloud = GoogleCloud::new(
         http_client,
         retry_policy,
-        service_account
+        service_account,
+        project_id
     )?;
     let database_connection = DatabaseConnection::create(args.db_connection).await?;
 

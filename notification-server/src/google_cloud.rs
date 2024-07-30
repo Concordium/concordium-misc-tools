@@ -1,10 +1,10 @@
 use crate::models::NotificationInformation;
 use anyhow::anyhow;
 use backoff::{future::retry, ExponentialBackoff};
-use gcp_auth::{CustomServiceAccount, TokenProvider};
+use gcp_auth::TokenProvider;
 use reqwest::{Client, StatusCode};
 use serde_json::{json, Value};
-use std::{collections::HashMap, path::PathBuf};
+use std::collections::HashMap;
 
 const SCOPES: &[&str; 1] = &["https://www.googleapis.com/auth/firebase.messaging"];
 
@@ -24,10 +24,8 @@ where
         client: Client,
         backoff_policy: ExponentialBackoff,
         service_account: T,
+        project_id: &str
     ) -> anyhow::Result<Self> {
-        let project_id = service_account
-            .project_id()
-            .ok_or(anyhow!("Project ID not found in service account"))?;
         let url = format!(
             "https://fcm.googleapis.com/v1/projects/{}/messages:send",
             project_id
@@ -127,3 +125,68 @@ where
         retry(self.backoff_policy.clone(), operation).await
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use reqwest::Client;
+    use async_trait::async_trait;
+    use backoff::ExponentialBackoff;
+    use std::sync::Arc;
+    use anyhow::{Result};
+    use gcp_auth::Token;
+
+    pub struct MockTokenProvider {
+        pub token_response: Arc<String>,
+    }
+
+    fn generate_mock_token() -> Token {
+        let json_data = json!({
+            "access_token": "abc123xyz",
+            "expires_in": 3600
+        });
+
+        let token: Token = serde_json::from_value(json_data).unwrap();
+        token
+    }
+
+    #[async_trait]
+    impl TokenProvider for MockTokenProvider {
+        async fn token(&self, _scopes: &[&str]) -> Result<Arc<Token>, gcp_auth::Error> {
+            Ok(Arc::new(generate_mock_token()))
+        }
+
+        async fn project_id(&self) -> Result<Arc<str>, gcp_auth::Error> {
+            Err(gcp_auth::Error::Str("Project id cannot be called in this test"))
+        }
+    }
+
+
+    #[tokio::test]
+    async fn test_validate_device_token_success() {
+        let mut server = mockito::Server::new_async().await;
+        let mock_provider = MockTokenProvider {
+            token_response: Arc::new("mock_token".to_string()),
+        };
+        let _mock = server.mock("POST", "/v1/projects/fake_project_id/messages:send")
+            .with_status(200)
+            .with_body(json!({"success": true}).to_string())
+            .create_async().await;
+
+        let client = Client::new();
+        let backoff_policy = ExponentialBackoff::default();
+        let mut gc = GoogleCloud::new(
+            client,
+            backoff_policy,
+            mock_provider,
+            "mock_project_id",
+        ).unwrap();
+        gc.url = format!("{}{}", server.url(), "/v1/projects/fake_project_id/messages:send".to_string());
+        match gc.validate_device_token("valid_device_token").await {
+            Ok(value) => assert!(value),
+            Err(_) => assert!(false),
+        }
+    }
+
+}
+

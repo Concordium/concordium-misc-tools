@@ -12,6 +12,7 @@ use notification_server::{
     database::DatabaseConnection, google_cloud::GoogleCloud, models::DeviceSubscription,
 };
 use std::{path, path::PathBuf, sync::Arc, time::Duration};
+use anyhow::anyhow;
 use gcp_auth::CustomServiceAccount;
 use tokio_postgres::Config;
 use tracing::{error, info};
@@ -163,12 +164,14 @@ async fn main() -> anyhow::Result<()> {
 
     let path = PathBuf::from(args.google_application_credentials_path);
     let service_account = CustomServiceAccount::from_file(path)?;
+    let project_id = service_account.project_id().ok_or(anyhow!("Project ID not found in service account"))?;
     let app_state = Arc::new(AppState {
         db_connection: DatabaseConnection::create(args.db_connection).await?,
         google_cloud:  GoogleCloud::new(
             http_client,
             retry_policy,
             service_account,
+            project_id
         )?,
     });
 
