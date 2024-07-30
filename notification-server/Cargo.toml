@@ -14,7 +14,7 @@ bs58 = "0.5.1"
 bytes = "1.6.0"
 clap = { version = "4.5.7", features = ["derive", "env"] }
 concordium-rust-sdk = { version = "*", path = "../deps/concordium-rust-sdk" }
-deadpool-postgres = "0.12.1"
+deadpool-postgres = "0.11.0"
 dotenv = "0.15"
 enum-iterator = "2.1.0"
 env_logger = "0.11.3"
