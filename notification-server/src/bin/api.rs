@@ -50,6 +50,7 @@ lazy_static! {
     static ref MAX_PREFERENCES_LENGTH: usize = all::<Preference>().collect::<Vec<_>>().len();
 }
 
+#[tracing::instrument]
 async fn upsert_account_device(
     Path(device): Path<String>,
     State(state): State<Arc<AppState>>,
