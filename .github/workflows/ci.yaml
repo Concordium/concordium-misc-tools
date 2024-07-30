@@ -99,7 +99,7 @@ jobs:
           submodules: recursive
       - name: Install Rust
         run: |
-          RUST_VERSION=$(echo "${{ env.CRATE_TO_RUST_VERSION_MAP }}" | jq -r '.["${{ matrix.crates }}"] // "${{ env.DEFAULT_RUST_VERSION }}"')
+          RUST_VERSION=$(echo '${{ env.CRATE_TO_RUST_VERSION_MAP }}' | jq -r '.["${{ matrix.crates }}"] // "${{ env.DEFAULT_RUST_VERSION }}"')
           rustup default $RUST_VERSION
           rustup component add clippy
       - name: Clippy
@@ -121,7 +121,7 @@ jobs:
           submodules: recursive
       - name: Install Rust
         run: |
-          RUST_VERSION=$(echo "${{ env.CRATE_TO_RUST_VERSION_MAP }}" | jq -r '.["${{ matrix.crates }}"] // "${{ env.DEFAULT_RUST_VERSION }}"')
+          RUST_VERSION=$(echo '${{ env.CRATE_TO_RUST_VERSION_MAP }}' | jq -r '.["${{ matrix.crates }}"] // "${{ env.DEFAULT_RUST_VERSION }}"')
           rustup default $RUST_VERSION
       - name: Cargo tests
         run: |
