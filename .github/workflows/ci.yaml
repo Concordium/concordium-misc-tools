@@ -13,7 +13,8 @@ on:
 
 env:
   RUST_FMT_VERSION: nightly-2023-04-01-x86_64-unknown-linux-gnu
-  RUST_VERSION: "1.74"
+  CRATE_TO_RUST_VERSION_MAP: '{"notification-server/Cargo.toml": "1.76"}'
+  DEFAULT_RUST_VERSION: "1.74"
 
 jobs:
 
@@ -98,7 +99,8 @@ jobs:
           submodules: recursive
       - name: Install Rust
         run: |
-          rustup default ${{ env.RUST_VERSION }}
+          RUST_VERSION=$(echo "${{ env.CRATE_TO_RUST_VERSION_MAP }}" | jq -r '.["${{ matrix.crates }}"] // "${{ env.DEFAULT_RUST_VERSION }}"')
+          rustup default $RUST_VERSION
           rustup component add clippy
       - name: Clippy
         run: |
@@ -119,7 +121,8 @@ jobs:
           submodules: recursive
       - name: Install Rust
         run: |
-          rustup default ${{ env.RUST_VERSION }}
+          RUST_VERSION=$(echo "${{ env.CRATE_TO_RUST_VERSION_MAP }}" | jq -r '.["${{ matrix.crates }}"] // "${{ env.DEFAULT_RUST_VERSION }}"')
+          rustup default $RUST_VERSION
       - name: Cargo tests
         run: |
           cargo test --manifest-path ${{ matrix.crates }} --locked
