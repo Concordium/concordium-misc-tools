@@ -13,7 +13,7 @@ use notification_server::{
     database::DatabaseConnection,
     models::{DeviceSubscription, Preference},
 };
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 use tokio_postgres::Config;
 use tracing::{error, info};
 
@@ -57,13 +57,23 @@ async fn upsert_account_device(
         "Subscribing accounts {:?} to device {}",
         subscription, device
     );
-    if subscription.preferences.len() > *MAX_PREFERENCES_LENGTH
-        || subscription.accounts.len() > MAX_RESOURCES_LENGTH
-    {
+    if subscription.preferences.len() > *MAX_PREFERENCES_LENGTH {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("Preferences exceeded length of {}", *MAX_PREFERENCES_LENGTH),
+        )
+            .into_response())?;
+    }
+    let unique_preferences: HashSet<_> = subscription.preferences.iter().collect();
+    if unique_preferences.len() != subscription.preferences.len() {
+        return Err((StatusCode::BAD_REQUEST, "Duplicate preferences found").into_response());
+    }
+
+    if subscription.accounts.len() > MAX_RESOURCES_LENGTH {
         return Err((
             StatusCode::BAD_REQUEST,
             format!(
-                "Preferences or accounts exceed maximum length of {}",
+                "Preferences exceed maximum length of {}",
                 MAX_RESOURCES_LENGTH
             ),
         )
