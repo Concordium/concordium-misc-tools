@@ -3,50 +3,45 @@ use anyhow::anyhow;
 use lazy_static::lazy_static;
 use std::{
     collections::{HashMap, HashSet},
-    sync::Arc,
 };
-use tokio::sync::Mutex;
-use tokio_postgres::{Client, NoTls};
+use deadpool_postgres::{Manager, ManagerConfig, Pool, RecyclingMethod};
+use tokio_postgres::{NoTls};
 
 #[derive(Clone, Debug)]
 pub struct PreparedStatements {
     get_devices_from_account: tokio_postgres::Statement,
     upsert_device:            tokio_postgres::Statement,
-    client:                   Arc<Mutex<Client>>,
+    pool:                     Pool,
 }
 
 impl PreparedStatements {
-    async fn new(client: Client) -> anyhow::Result<Self> {
-        let client_mutex = Arc::new(Mutex::new(client));
-        let (get_devices_from_account, upsert_device) = {
-            let client_guard = client_mutex.lock().await; // MutexGuard is scoped
-            let get_devices_from_account = client_guard
-                .prepare(
-                    "SELECT device_id FROM account_device_mapping WHERE address = $1 LIMIT 1000",
-                )
-                .await
-                .map_err(|e| anyhow!("Failed to create account device mapping: {}", e))?;
-            let upsert_device = client_guard
-                .prepare(
-                    "INSERT INTO account_device_mapping (address, device_id, preferences) VALUES \
-                     ($1, $2, $3) ON CONFLICT (address, device_id) DO UPDATE SET preferences = \
-                     EXCLUDED.preferences;",
-                )
-                .await
-                .map_err(|e| anyhow!("Failed to create account device mapping: {}", e))?;
-
-            (get_devices_from_account, upsert_device) // Return prepared
-                                                      // statements
-        };
+    async fn new(pool: Pool) -> anyhow::Result<Self> {
+        let mut client = pool.get().await.map_err(|e| anyhow!("Failed to get client: {}", e))?;
+        let transaction = client.transaction().await.map_err(|e| anyhow!("Failed to start a transaction: {}", e))?;
+        let get_devices_from_account = transaction
+            .prepare(
+                "SELECT device_id FROM account_device_mapping WHERE address = $1 LIMIT 1000",
+            )
+            .await
+            .map_err(|e| anyhow!("Failed to create account device mapping: {}", e))?;
+        let upsert_device = transaction
+            .prepare(
+                "INSERT INTO account_device_mapping (address, device_id, preferences) VALUES \
+                 ($1, $2, $3) ON CONFLICT (address, device_id) DO UPDATE SET preferences = \
+                 EXCLUDED.preferences;",
+            )
+            .await
+            .map_err(|e| anyhow!("Failed to create account device mapping: {}", e))?;
+        transaction.commit().await.map_err(|e| anyhow!("Failed to commit transaction: {}", e))?;
         Ok(PreparedStatements {
             get_devices_from_account,
             upsert_device,
-            client: client_mutex,
+            pool,
         })
     }
 
     pub async fn get_devices_from_account(&self, address: &[u8]) -> anyhow::Result<Vec<String>> {
-        let client = self.client.lock().await;
+        let client = self.pool.get().await.map_err(|e| anyhow!("Failed to get client: {}", e))?;
         let params: &[&(dyn tokio_postgres::types::ToSql + Sync)] = &[&address];
         let rows = client.query(&self.get_devices_from_account, params).await?;
         let devices: Vec<String> = rows
@@ -62,7 +57,7 @@ impl PreparedStatements {
         preferences: Vec<Preference>,
         device_id: &str,
     ) -> anyhow::Result<()> {
-        let mut client = self.client.lock().await;
+        let mut client = self.pool.get().await.map_err(|e| anyhow!("Failed to get client: {}", e))?;
         let preferences_mask = preferences_to_bitmask(&preferences);
         let transaction = client.transaction().await?;
         for account in address {
@@ -83,16 +78,13 @@ pub struct DatabaseConnection {
 }
 
 impl DatabaseConnection {
-    pub async fn create(conn_string: tokio_postgres::config::Config) -> anyhow::Result<Self> {
-        let (client, connection) = conn_string.connect(NoTls).await?;
-
-        tokio::spawn(async move {
-            if let Err(e) = connection.await {
-                log::error!("Connection error: {}", e);
-            }
-        });
-
-        let prepared = PreparedStatements::new(client).await?;
+    pub async fn create(config: tokio_postgres::config::Config) -> anyhow::Result<Self> {
+        let mgr_config = ManagerConfig {
+            recycling_method: RecyclingMethod::Fast,
+        };
+        let mgr = Manager::from_config(config, NoTls, mgr_config);
+        let pool = Pool::builder(mgr).max_size(16).build().unwrap();
+        let prepared = PreparedStatements::new(pool).await?;
         Ok(DatabaseConnection { prepared })
     }
 }
