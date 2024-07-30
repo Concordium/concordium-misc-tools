@@ -40,6 +40,8 @@ impl DeviceSubscription {
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub enum Preference {
-    CIS2,
-    CCDTransaction,
+    #[serde(rename = "cis2-tx")]
+    CIS2Transaction,
+    #[serde(rename = "ccd-tx")]
+    CCDTransaction
 }
