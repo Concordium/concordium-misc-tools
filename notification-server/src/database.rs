@@ -95,10 +95,12 @@ impl DatabaseConnection {
 }
 
 lazy_static! {
-    static ref PREFERENCE_MAP: HashMap<Preference, i32> =
-        vec![(Preference::CIS2Transaction, 1), (Preference::CCDTransaction, 2),]
-            .into_iter()
-            .collect();
+    static ref PREFERENCE_MAP: HashMap<Preference, i32> = vec![
+        (Preference::CIS2Transaction, 1),
+        (Preference::CCDTransaction, 2),
+    ]
+    .into_iter()
+    .collect();
 }
 
 pub fn preferences_to_bitmask(preferences: &[Preference]) -> i32 {
@@ -123,8 +125,8 @@ pub fn bitmask_to_preferences(bitmask: i32) -> Vec<Preference> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashSet;
     use enum_iterator::all;
+    use std::collections::HashSet;
 
     #[test]
     fn test_preference_map_coverage_and_uniqueness() {
@@ -132,23 +134,31 @@ mod tests {
 
         // Check for coverage
         for variant in &expected_variants {
-            assert!(PREFERENCE_MAP.contains_key(variant),
-                "PREFERENCE_MAP is missing the variant {:?}", variant);
+            assert!(
+                PREFERENCE_MAP.contains_key(variant),
+                "PREFERENCE_MAP is missing the variant {:?}",
+                variant
+            );
         }
 
         // Check for uniqueness of indices
         let mut indices = vec![];
         for &index in PREFERENCE_MAP.values() {
-            assert!(!indices.contains(&index),
-                "Duplicate index found: {}", index);
+            assert!(
+                !indices.contains(&index),
+                "Duplicate index found: {}",
+                index
+            );
             indices.push(index);
         }
 
         // Ensure all variants are accounted for
-        assert_eq!(PREFERENCE_MAP.len(), expected_variants.len(),
-            "PREFERENCE_MAP does not match the number of variants in Preference enum");
+        assert_eq!(
+            PREFERENCE_MAP.len(),
+            expected_variants.len(),
+            "PREFERENCE_MAP does not match the number of variants in Preference enum"
+        );
     }
-
 
     #[test]
     fn test_preferences_to_bitmask_and_back() {

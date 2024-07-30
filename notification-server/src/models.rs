@@ -1,8 +1,8 @@
 use concordium_rust_sdk::base::contracts_common::AccountAddress;
+use enum_iterator::Sequence;
 use num_bigint::BigInt;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use enum_iterator::Sequence;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NotificationInformation {
@@ -44,5 +44,5 @@ pub enum Preference {
     #[serde(rename = "cis2-tx")]
     CIS2Transaction,
     #[serde(rename = "ccd-tx")]
-    CCDTransaction
+    CCDTransaction,
 }
