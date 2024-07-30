@@ -97,10 +97,11 @@ async fn upsert_account_device(
                 .map(|value| value.0.to_vec())
         })
         .collect();
+    let decoded_accounts = decoded_accounts?;
     state
         .db_connection
         .prepared
-        .upsert_subscription(decoded_accounts?, subscription.preferences, &device)
+        .upsert_subscription(decoded_accounts, subscription.preferences, &device)
         .await
         .map_err(|e| {
             error!("Database error: {}", e);
