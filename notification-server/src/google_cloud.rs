@@ -38,7 +38,8 @@ impl GoogleCloud {
     }
 
     pub async fn validate_device_token(&self, device_token: &str) -> anyhow::Result<bool> {
-        self.send_push_notification_with_validate(device_token, None).await
+        self.send_push_notification_with_validate(device_token, None)
+            .await
     }
 
     pub async fn send_push_notification(
@@ -46,12 +47,16 @@ impl GoogleCloud {
         device_token: &str,
         information: NotificationInformation,
     ) -> anyhow::Result<()> {
-        self.send_push_notification_with_validate(device_token, Some(information)).await.map(|_| ())
+        self.send_push_notification_with_validate(device_token, Some(information))
+            .await
+            .map(|_| ())
     }
 
-    async fn send_push_notification_with_validate(&self,
+    async fn send_push_notification_with_validate(
+        &self,
         device_token: &str,
-        information: Option<NotificationInformation>) -> anyhow::Result<bool> {
+        information: Option<NotificationInformation>,
+    ) -> anyhow::Result<bool> {
         let access_token = self.service_account.token(SCOPES).await?;
         let mut payload = json!({});
         if Option::is_none(&information) {
@@ -68,7 +73,8 @@ impl GoogleCloud {
         });
 
         let operation = || async {
-            let response = self.client
+            let response = self
+                .client
                 .post(&self.url)
                 .bearer_auth(access_token.as_str())
                 .json(&payload)
@@ -84,13 +90,15 @@ impl GoogleCloud {
                                 Ok(false)
                             } else {
                                 Err(backoff::Error::permanent(anyhow!(
-                                    "Bad request sent to Google API: {}", &payload
+                                    "Bad request sent to Google API: {}",
+                                    &payload
                                 )))
                             }
-                        },
+                        }
                         Err(err) => Err(backoff::Error::permanent(anyhow!(
-                            "Content returned from Google API is not valid json: {}", err
-                        )))
+                            "Content returned from Google API is not valid json: {}",
+                            err
+                        ))),
                     }
                 }
                 Ok(res) => {
@@ -116,4 +124,3 @@ impl GoogleCloud {
         retry(self.backoff_policy.clone(), operation).await
     }
 }
-

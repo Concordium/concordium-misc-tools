@@ -162,7 +162,7 @@ async fn main() -> anyhow::Result<()> {
 
     let app_state = Arc::new(AppState {
         db_connection: DatabaseConnection::create(args.db_connection).await?,
-        google_cloud: GoogleCloud::new(
+        google_cloud:  GoogleCloud::new(
             PathBuf::from(args.google_application_credentials_path),
             http_client,
             retry_policy,
