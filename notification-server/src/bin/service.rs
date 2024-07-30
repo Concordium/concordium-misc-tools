@@ -6,6 +6,7 @@ use notification_server::{
     database::DatabaseConnection, google_cloud::GoogleCloud, processor::process,
 };
 use std::{path::PathBuf, time::Duration};
+use gcp_auth::CustomServiceAccount;
 use tonic::{
     codegen::{http, tokio_stream::StreamExt},
     transport::ClientTlsConfig,
@@ -101,10 +102,12 @@ async fn main() -> anyhow::Result<()> {
         .timeout(Duration::from_secs(args.google_client_timeout_secs))
         .build()?;
 
+    let path = PathBuf::from(args.google_application_credentials_path);
+    let service_account = CustomServiceAccount::from_file(path)?;
     let gcloud = GoogleCloud::new(
-        PathBuf::from(args.google_application_credentials_path),
         http_client,
         retry_policy,
+        service_account
     )?;
     let database_connection = DatabaseConnection::create(args.db_connection).await?;
 

@@ -11,7 +11,8 @@ use dotenv::dotenv;
 use notification_server::{
     database::DatabaseConnection, google_cloud::GoogleCloud, models::DeviceSubscription,
 };
-use std::{path::PathBuf, sync::Arc, time::Duration};
+use std::{path, path::PathBuf, sync::Arc, time::Duration};
+use gcp_auth::CustomServiceAccount;
 use tokio_postgres::Config;
 use tracing::{error, info};
 
@@ -73,7 +74,7 @@ struct Args {
 
 struct AppState {
     db_connection: DatabaseConnection,
-    google_cloud:  GoogleCloud,
+    google_cloud:  GoogleCloud<CustomServiceAccount>,
 }
 
 const MAX_RESOURCES_LENGTH: usize = 1000;
@@ -160,12 +161,14 @@ async fn main() -> anyhow::Result<()> {
         .timeout(Duration::from_secs(args.google_client_timeout_secs))
         .build()?;
 
+    let path = PathBuf::from(args.google_application_credentials_path);
+    let service_account = CustomServiceAccount::from_file(path)?;
     let app_state = Arc::new(AppState {
         db_connection: DatabaseConnection::create(args.db_connection).await?,
         google_cloud:  GoogleCloud::new(
-            PathBuf::from(args.google_application_credentials_path),
             http_client,
             retry_policy,
+            service_account,
         )?,
     });
 

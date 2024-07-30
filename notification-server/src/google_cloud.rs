@@ -8,20 +8,23 @@ use std::{collections::HashMap, path::PathBuf};
 
 const SCOPES: &[&str; 1] = &["https://www.googleapis.com/auth/firebase.messaging"];
 
-pub struct GoogleCloud {
+pub struct GoogleCloud<T> where
+    T: TokenProvider,
+{
     client:          Client,
-    service_account: CustomServiceAccount,
+    service_account: T,
     url:             String,
     backoff_policy:  ExponentialBackoff,
 }
 
-impl GoogleCloud {
+impl<T> GoogleCloud<T>
+where
+    T: TokenProvider, {
     pub fn new(
-        credentials_path: PathBuf,
         client: Client,
         backoff_policy: ExponentialBackoff,
+        service_account: T,
     ) -> anyhow::Result<Self> {
-        let service_account = CustomServiceAccount::from_file(credentials_path)?;
         let project_id = service_account
             .project_id()
             .ok_or(anyhow!("Project ID not found in service account"))?;
