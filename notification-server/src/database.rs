@@ -1,7 +1,10 @@
 use crate::models::Preference;
 use anyhow::anyhow;
 use lazy_static::lazy_static;
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 use tokio::sync::Mutex;
 use tokio_postgres::{Client, NoTls};
 
@@ -104,7 +107,8 @@ lazy_static! {
 }
 
 pub fn preferences_to_bitmask(preferences: &[Preference]) -> i32 {
-    preferences
+    let unique_preferences: HashSet<Preference> = preferences.iter().copied().collect();
+    unique_preferences
         .iter()
         .fold(0, |acc, &pref| acc | PREFERENCE_MAP[&pref])
 }

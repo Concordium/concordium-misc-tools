@@ -7,7 +7,12 @@ use axum::{
 };
 use clap::Parser;
 use dotenv::dotenv;
-use notification_server::{database::DatabaseConnection, models::DeviceSubscription};
+use enum_iterator::all;
+use lazy_static::lazy_static;
+use notification_server::{
+    database::DatabaseConnection,
+    models::{DeviceSubscription, Preference},
+};
 use std::sync::Arc;
 use tokio_postgres::Config;
 use tracing::{error, info};
@@ -39,7 +44,10 @@ struct AppState {
 
 const MAX_RESOURCES_LENGTH: usize = 1000;
 
-#[tracing::instrument]
+lazy_static! {
+    static ref MAX_PREFERENCES_LENGTH: usize = all::<Preference>().collect::<Vec<_>>().len();
+}
+
 async fn upsert_account_device(
     Path(device): Path<String>,
     State(state): State<Arc<AppState>>,
@@ -49,7 +57,7 @@ async fn upsert_account_device(
         "Subscribing accounts {:?} to device {}",
         subscription, device
     );
-    if subscription.preferences.len() > MAX_RESOURCES_LENGTH
+    if subscription.preferences.len() > *MAX_PREFERENCES_LENGTH
         || subscription.accounts.len() > MAX_RESOURCES_LENGTH
     {
         return Err((
