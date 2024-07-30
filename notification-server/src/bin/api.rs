@@ -13,6 +13,7 @@ use notification_server::{
     database::DatabaseConnection,
     models::{DeviceSubscription, Preference},
 };
+use serde_json::json;
 use std::{collections::HashSet, sync::Arc};
 use tokio_postgres::Config;
 use tracing::{error, info};
@@ -38,6 +39,7 @@ struct Args {
     log_level:      log::LevelFilter,
 }
 
+#[derive(Debug)]
 struct AppState {
     db_connection: DatabaseConnection,
 }
@@ -105,7 +107,7 @@ async fn upsert_account_device(
             )
                 .into_response()
         })?;
-    Ok((StatusCode::OK, "Subscribed accounts to device"))
+    Ok(Json(json!({"message": "Subscribed accounts to device"})))
 }
 
 #[tokio::main]

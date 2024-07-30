@@ -8,7 +8,7 @@ use std::{
 use tokio::sync::Mutex;
 use tokio_postgres::{Client, NoTls};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct PreparedStatements {
     get_devices_from_account: tokio_postgres::Statement,
     upsert_device:            tokio_postgres::Statement,
@@ -77,7 +77,7 @@ impl PreparedStatements {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct DatabaseConnection {
     pub prepared: PreparedStatements,
 }
