@@ -40,14 +40,14 @@ struct Args {
         env = "NOTIFICATION_SERVER_GOOGLE_CLIENT_TIMEOUT_SECS",
         default_value_t = 30
     )]
-    google_client_timeout_secs: u32,
+    google_client_timeout_secs: u64,
     #[arg(
         long = "google-client-connection-timeout-secs",
         help = "Request connection timeout connecting to the Google API in seconds.",
         env = "NOTIFICATION_SERVER_GOOGLE_CLIENT_CONNECTION_TIMEOUT_SECS",
         default_value_t = 5
     )]
-    google_client_connection_timeout_secs: u32,
+    google_client_connection_timeout_secs: u64,
 
     #[arg(
         long = "google-client-max-elapsed-time-secs",
@@ -55,7 +55,7 @@ struct Args {
         env = "NOTIFICATION_SERVER_GOOGLE_CLIENT_MAX_ELAPSED_TIME_SECS",
         default_value_t = 900  // 15 minutes
     )]
-    google_client_max_elapsed_time_secs: u32,
+    google_client_max_elapsed_time_secs: u64,
 
     #[arg(
         long = "google-client-max-interval-time-secs",
@@ -63,7 +63,7 @@ struct Args {
         env = "NOTIFICATION_SERVER_GOOGLE_CLIENT_MAX_INTERVAL_TIME_SECS",
         default_value_t = 180  // 3 minutes
     )]
-    google_client_max_interval_time_secs: u32,
+    google_client_max_interval_time_secs: u64,
 }
 
 #[tokio::main(flavor = "multi_thread")]
