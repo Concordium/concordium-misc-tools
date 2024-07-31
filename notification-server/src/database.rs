@@ -1,5 +1,5 @@
 use crate::models::Preference;
-use anyhow::anyhow;
+use anyhow::{anyhow, Context};
 use deadpool_postgres::{Manager, ManagerConfig, Pool, RecyclingMethod};
 use lazy_static::lazy_static;
 use std::collections::{HashMap, HashSet};
@@ -14,18 +14,15 @@ pub struct PreparedStatements {
 
 impl PreparedStatements {
     async fn new(pool: Pool) -> anyhow::Result<Self> {
-        let mut client = pool
-            .get()
-            .await
-            .map_err(|e| anyhow!("Failed to get client: {}", e))?;
+        let mut client = pool.get().await.context("Failed to get client")?;
         let transaction = client
             .transaction()
             .await
-            .map_err(|e| anyhow!("Failed to start a transaction: {}", e))?;
+            .context("Failed to start a transaction")?;
         let get_devices_from_account = transaction
             .prepare("SELECT device_id FROM account_device_mapping WHERE address = $1 LIMIT 1000")
             .await
-            .map_err(|e| anyhow!("Failed to create account device mapping: {}", e))?;
+            .context("Failed to create account device mapping")?;
         let upsert_device = transaction
             .prepare(
                 "INSERT INTO account_device_mapping (address, device_id, preferences) VALUES ($1, \
@@ -33,11 +30,11 @@ impl PreparedStatements {
                  EXCLUDED.preferences;",
             )
             .await
-            .map_err(|e| anyhow!("Failed to create account device mapping: {}", e))?;
+            .context("Failed to create account device mapping")?;
         transaction
             .commit()
             .await
-            .map_err(|e| anyhow!("Failed to commit transaction: {}", e))?;
+            .context("Failed to commit transaction")?;
         Ok(PreparedStatements {
             get_devices_from_account,
             upsert_device,
