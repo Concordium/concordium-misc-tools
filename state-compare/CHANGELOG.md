@@ -2,6 +2,7 @@
 
 ## Unreleased changes
 - Updated the Concordium Rust SDK to support the changes introduced in protocol 7.
+- Updated clap to version 4.
 
 ## 1.1.1
 

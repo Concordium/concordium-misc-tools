@@ -5,6 +5,15 @@
 //! of the state. Each of these functions returns a boolean that indicates
 //! whether the particular aspect of the state is changed between the two blocks
 //! and/or nodes.
+
+use std::{
+    fmt::Display,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+};
+
 use anyhow::ensure;
 use clap::Parser;
 use colored::Colorize;
@@ -19,13 +28,6 @@ use concordium_rust_sdk::{
 };
 use futures::{StreamExt, TryStreamExt};
 use indicatif::ProgressBar;
-use std::{
-    fmt::Display,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-};
 
 /// Like eprintln!, but print the provided message in yellow.
 macro_rules! warn {
@@ -41,34 +43,33 @@ macro_rules! diff {
     }};
 }
 
-#[derive(clap::Parser, Debug)]
+#[derive(Parser, Debug)]
 #[clap(version, author)]
-struct App {
-    #[clap(
-        long = "node1",
-        help = "GRPC V2 interface of the node.",
-        default_value = "http://localhost:20000",
-        env = "STATE_COMPARE_NODE1"
-    )]
-    endpoint:  endpoints::Endpoint,
-    #[clap(
-        long = "node2",
-        help = "Optionally, a GRPC V2 interface of a second node to compare state with. If not \
-                provided the first node is used.",
-        env = "STATE_COMPARE_NODE2"
-    )]
-    endpoint2: Option<endpoints::Endpoint>,
-    #[clap(
+struct Args {
+    /// GRPC V2 interface of the node.
+    #[arg(long, default_value = "http://localhost:20000", env = "STATE_COMPARE_NODE1")]
+    node1:  endpoints::Endpoint,
+
+    /// Optionally, a GRPC V2 interface of a second node to compare state with.
+    ///
+    /// If not provided the first node is used.
+    #[arg(long, env = "STATE_COMPARE_NODE2")]
+    node2: Option<endpoints::Endpoint>,
+
+    /// The first block to compare state against.
+    ///
+    /// If not given the default is the last finalized block `before` the last protocol update.
+    #[arg(
         long = "block1",
-        help = "The first block where to compare state. If not given the default is the last \
-                finalized block `before` the last protocol update.",
         env = "STATE_COMPARE_BLOCK1"
     )]
     block1:    Option<BlockHash>,
-    #[clap(
+
+    /// The second block where to compare state.
+    ///
+    /// If not given the default is the genesis block of the current protocol.
+    #[arg(
         long = "block2",
-        help = "The second block where to compare state. If not given the default is the genesis \
-                block of the current protocol.",
         env = "STATE_COMPARE_BLOCK2"
     )]
     block2:    Option<BlockHash>,
@@ -98,10 +99,10 @@ async fn get_protocol_versions(
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let app = App::parse();
+    let args = Args::parse();
 
-    let mut client = v2::Client::new(app.endpoint).await?;
-    let mut client2 = match app.endpoint2 {
+    let mut client = v2::Client::new(args.node1).await?;
+    let mut client2 = match args.node2 {
         Some(ep) => v2::Client::new(ep).await?,
         None => client.clone(),
     };
@@ -112,7 +113,7 @@ async fn main() -> anyhow::Result<()> {
         ci1.genesis_block == ci2.genesis_block,
         "Genesis blocks for the two nodes differ."
     );
-    let block1 = match app.block1 {
+    let block1 = match args.block1 {
         Some(bh) => bh,
         None => {
             client
@@ -122,7 +123,7 @@ async fn main() -> anyhow::Result<()> {
                 .block_parent
         }
     };
-    let block2 = match app.block2 {
+    let block2 = match args.block2 {
         Some(bh) => bh,
         None => ci1.current_era_genesis_block,
     };
