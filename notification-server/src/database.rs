@@ -1,9 +1,9 @@
 use crate::models::Preference;
 use anyhow::{anyhow, Context};
+use concordium_rust_sdk::common::types::AccountAddress;
 use deadpool_postgres::{Manager, ManagerConfig, Pool, RecyclingMethod};
 use lazy_static::lazy_static;
 use std::collections::{HashMap, HashSet};
-use concordium_rust_sdk::common::types::AccountAddress;
 use tokio_postgres::NoTls;
 
 #[derive(Clone, Debug)]
@@ -64,11 +64,7 @@ impl PreparedStatements {
         preferences: Vec<Preference>,
         device_id: &str,
     ) -> anyhow::Result<()> {
-        let mut client = self
-            .pool
-            .get()
-            .await
-            .context("Failed to get client")?;
+        let mut client = self.pool.get().await.context("Failed to get client")?;
         let preferences_mask = preferences_to_bitmask(&preferences);
         let transaction = client.transaction().await?;
         for account in address {
