@@ -1993,7 +1993,6 @@ dependencies = [
  "anyhow",
  "axum 0.7.5",
  "backoff",
- "bs58",
  "bytes",
  "clap",
  "concordium-rust-sdk",
