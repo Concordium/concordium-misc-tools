@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use axum::{
     extract::{Json, Path, State},
     http::StatusCode,
@@ -7,19 +8,18 @@ use axum::{
 };
 use backoff::ExponentialBackoff;
 use clap::Parser;
-use concordium_rust_sdk::base::contracts_common::{AccountAddress, AccountAddressParseError};
+use concordium_rust_sdk::base::contracts_common::AccountAddress;
 use dotenv::dotenv;
+use enum_iterator::all;
+use gcp_auth::CustomServiceAccount;
+use lazy_static::lazy_static;
 use notification_server::{
-    database::DatabaseConnection, google_cloud::GoogleCloud,
+    database::DatabaseConnection,
+    google_cloud::GoogleCloud,
     models::{DeviceSubscription, Preference},
 };
-use std::{path::PathBuf, time::Duration};
-use anyhow::anyhow;
-use gcp_auth::CustomServiceAccount;
-use enum_iterator::all;
-use lazy_static::lazy_static;
 use serde_json::json;
-use std::{collections::HashSet, str::FromStr, sync::Arc};
+use std::{collections::HashSet, path::PathBuf, str::FromStr, sync::Arc, time::Duration};
 use tokio_postgres::Config;
 use tracing::{error, info};
 
@@ -121,21 +121,17 @@ async fn upsert_account_device(
             .into_response())?;
     }
 
-    let decoded_accounts: Result<Vec<Vec<u8>>, Response> = subscription
+    let decoded_accounts: Result<Vec<AccountAddress>, Response> = subscription
         .accounts
         .iter()
         .map(|account| {
-            let account_address: Result<AccountAddress, AccountAddressParseError> =
-                AccountAddress::from_str(account);
-            account_address
-                .map_err(|e| {
-                    error!("Failed to parse account address: {}", e);
-                    (StatusCode::BAD_REQUEST, "Failed to parse account address").into_response()
-                })
-                .map(|value| value.0.to_vec())
+            AccountAddress::from_str(account).map_err(|e| {
+                error!("Failed to parse account address: {}", e);
+                (StatusCode::BAD_REQUEST, "Failed to parse account address").into_response()
+            })
         })
         .collect();
-    
+
     if let Err(err) = state.google_cloud.validate_device_token(&device).await {
         error!(
             "Unexpected response provided by gcm service while validating device_token: {}",
@@ -185,15 +181,13 @@ async fn main() -> anyhow::Result<()> {
 
     let path = PathBuf::from(args.google_application_credentials_path);
     let service_account = CustomServiceAccount::from_file(path)?;
-    let project_id = service_account.project_id().ok_or(anyhow!("Project ID not found in service account"))?.to_string();
+    let project_id = service_account
+        .project_id()
+        .ok_or(anyhow!("Project ID not found in service account"))?
+        .to_string();
     let app_state = Arc::new(AppState {
         db_connection: DatabaseConnection::create(args.db_connection).await?,
-        google_cloud:  GoogleCloud::new(
-            http_client,
-            retry_policy,
-            service_account,
-            &project_id
-        )?,
+        google_cloud:  GoogleCloud::new(http_client, retry_policy, service_account, &project_id)?,
     });
 
     let app = Router::new()

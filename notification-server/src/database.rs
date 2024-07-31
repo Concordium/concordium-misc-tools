@@ -1,5 +1,6 @@
 use crate::models::Preference;
-use anyhow::{anyhow, Context};
+use anyhow::Context;
+use concordium_rust_sdk::common::types::AccountAddress;
 use deadpool_postgres::{Manager, ManagerConfig, Pool, RecyclingMethod};
 use lazy_static::lazy_static;
 use std::collections::{HashMap, HashSet};
@@ -42,13 +43,12 @@ impl PreparedStatements {
         })
     }
 
-    pub async fn get_devices_from_account(&self, address: &[u8]) -> anyhow::Result<Vec<String>> {
-        let client = self
-            .pool
-            .get()
-            .await
-            .map_err(|e| anyhow!("Failed to get client: {}", e))?;
-        let params: &[&(dyn tokio_postgres::types::ToSql + Sync)] = &[&address];
+    pub async fn get_devices_from_account(
+        &self,
+        account_address: AccountAddress,
+    ) -> anyhow::Result<Vec<String>> {
+        let client = self.pool.get().await.context("Failed to get client")?;
+        let params: &[&(dyn tokio_postgres::types::ToSql + Sync)] = &[&account_address.0.as_ref()];
         let rows = client.query(&self.get_devices_from_account, params).await?;
         let devices: Vec<String> = rows
             .iter()
@@ -59,20 +59,16 @@ impl PreparedStatements {
 
     pub async fn upsert_subscription(
         &self,
-        address: Vec<Vec<u8>>,
+        account_address: Vec<AccountAddress>,
         preferences: Vec<Preference>,
         device_id: &str,
     ) -> anyhow::Result<()> {
-        let mut client = self
-            .pool
-            .get()
-            .await
-            .map_err(|e| anyhow!("Failed to get client: {}", e))?;
+        let mut client = self.pool.get().await.context("Failed to get client")?;
         let preferences_mask = preferences_to_bitmask(&preferences);
         let transaction = client.transaction().await?;
-        for account in address {
+        for account in account_address {
             let params: &[&(dyn tokio_postgres::types::ToSql + Sync)] =
-                &[&account, &device_id, &preferences_mask];
+                &[&account.0.as_ref(), &device_id, &preferences_mask];
             if let Err(e) = transaction.execute(&self.upsert_device, params).await {
                 let _ = transaction.rollback().await;
                 return Err(e.into());
@@ -130,9 +126,11 @@ pub fn bitmask_to_preferences(bitmask: i32) -> Vec<Preference> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use enum_iterator::all;
     use std::collections::HashSet;
+
+    use enum_iterator::all;
+
+    use super::*;
 
     #[test]
     fn test_preference_map_coverage_and_uniqueness() {

@@ -8,11 +8,10 @@ use std::collections::HashMap;
 
 const SCOPES: &[&str; 1] = &["https://www.googleapis.com/auth/firebase.messaging"];
 
-
 #[derive(Debug)]
-pub struct GoogleCloud<T> where
-    T: TokenProvider,
-{
+pub struct GoogleCloud<T>
+where
+    T: TokenProvider, {
     client:          Client,
     service_account: T,
     url:             String,
@@ -21,12 +20,13 @@ pub struct GoogleCloud<T> where
 
 impl<T> GoogleCloud<T>
 where
-    T: TokenProvider, {
+    T: TokenProvider,
+{
     pub fn new(
         client: Client,
         backoff_policy: ExponentialBackoff,
         service_account: T,
-        project_id: &str
+        project_id: &str,
     ) -> anyhow::Result<Self> {
         let url = format!(
             "https://fcm.googleapis.com/v1/projects/{}/messages:send",
@@ -131,12 +131,12 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use reqwest::Client;
+    use anyhow::Result;
     use async_trait::async_trait;
     use backoff::ExponentialBackoff;
-    use std::sync::Arc;
-    use anyhow::{Result};
     use gcp_auth::Token;
+    use reqwest::Client;
+    use std::sync::Arc;
 
     pub struct MockTokenProvider {
         pub token_response: Arc<String>,
@@ -159,10 +159,11 @@ mod tests {
         }
 
         async fn project_id(&self) -> Result<Arc<str>, gcp_auth::Error> {
-            Err(gcp_auth::Error::Str("Project id cannot be called in this test"))
+            Err(gcp_auth::Error::Str(
+                "Project id cannot be called in this test",
+            ))
         }
     }
-
 
     #[tokio::test]
     async fn test_validate_device_token_success() {
@@ -170,25 +171,25 @@ mod tests {
         let mock_provider = MockTokenProvider {
             token_response: Arc::new("mock_token".to_string()),
         };
-        let _mock = server.mock("POST", "/v1/projects/fake_project_id/messages:send")
+        let _mock = server
+            .mock("POST", "/v1/projects/fake_project_id/messages:send")
             .with_status(200)
             .with_body(json!({"success": true}).to_string())
-            .create_async().await;
+            .create_async()
+            .await;
 
         let client = Client::new();
         let backoff_policy = ExponentialBackoff::default();
-        let mut gc = GoogleCloud::new(
-            client,
-            backoff_policy,
-            mock_provider,
-            "mock_project_id",
-        ).unwrap();
-        gc.url = format!("{}{}", server.url(), "/v1/projects/fake_project_id/messages:send".to_string());
+        let mut gc =
+            GoogleCloud::new(client, backoff_policy, mock_provider, "mock_project_id").unwrap();
+        gc.url = format!(
+            "{}{}",
+            server.url(),
+            "/v1/projects/fake_project_id/messages:send".to_string()
+        );
         match gc.validate_device_token("valid_device_token").await {
             Ok(value) => assert!(value),
             Err(_) => assert!(false),
         }
     }
-
 }
-
