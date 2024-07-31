@@ -77,7 +77,7 @@ async fn upsert_account_device(
         return Err((
             StatusCode::BAD_REQUEST,
             format!(
-                "Preferences exceed maximum length of {}",
+                "Accounts exceed maximum length of {}",
                 MAX_RESOURCES_LENGTH
             ),
         )
