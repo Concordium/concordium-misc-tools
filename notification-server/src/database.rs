@@ -1,5 +1,5 @@
 use crate::models::Preference;
-use anyhow::{anyhow, Context};
+use anyhow::Context;
 use concordium_rust_sdk::common::types::AccountAddress;
 use deadpool_postgres::{Manager, ManagerConfig, Pool, RecyclingMethod};
 use lazy_static::lazy_static;
@@ -43,13 +43,12 @@ impl PreparedStatements {
         })
     }
 
-    pub async fn get_devices_from_account(&self, address: &[u8]) -> anyhow::Result<Vec<String>> {
-        let client = self
-            .pool
-            .get()
-            .await
-            .map_err(|e| anyhow!("Failed to get client: {}", e))?;
-        let params: &[&(dyn tokio_postgres::types::ToSql + Sync)] = &[&address];
+    pub async fn get_devices_from_account(
+        &self,
+        account_address: AccountAddress,
+    ) -> anyhow::Result<Vec<String>> {
+        let client = self.pool.get().await.context("Failed to get client")?;
+        let params: &[&(dyn tokio_postgres::types::ToSql + Sync)] = &[&account_address.0.as_ref()];
         let rows = client.query(&self.get_devices_from_account, params).await?;
         let devices: Vec<String> = rows
             .iter()
@@ -127,9 +126,11 @@ pub fn bitmask_to_preferences(bitmask: i32) -> Vec<Preference> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use enum_iterator::all;
     use std::collections::HashSet;
+
+    use enum_iterator::all;
+
+    use super::*;
 
     #[test]
     fn test_preference_map_coverage_and_uniqueness() {
