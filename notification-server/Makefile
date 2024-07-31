@@ -14,7 +14,7 @@ setup:
 
 docker-up:
 	@echo "Starting Docker containers..."
-	docker-compose up -d
+	docker compose up -d
 
 # Target to wait for the PostgreSQL database to be ready.
 wait-for-db:
