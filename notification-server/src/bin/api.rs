@@ -9,23 +9,17 @@ use backoff::ExponentialBackoff;
 use clap::Parser;
 use concordium_rust_sdk::base::contracts_common::{AccountAddress, AccountAddressParseError};
 use dotenv::dotenv;
-<<<<<<< HEAD
 use notification_server::{
-    database::DatabaseConnection, google_cloud::GoogleCloud, models::DeviceSubscription,
-};
-use std::{path, path::PathBuf, sync::Arc, time::Duration};
-use anyhow::anyhow;
-use gcp_auth::CustomServiceAccount;
-=======
-use enum_iterator::all;
-use lazy_static::lazy_static;
-use notification_server::{
-    database::DatabaseConnection,
+    database::DatabaseConnection, google_cloud::GoogleCloud,
     models::{DeviceSubscription, Preference},
 };
+use std::{path, path::PathBuf, time::Duration};
+use anyhow::anyhow;
+use gcp_auth::CustomServiceAccount;
+use enum_iterator::all;
+use lazy_static::lazy_static;
 use serde_json::json;
 use std::{collections::HashSet, str::FromStr, sync::Arc};
->>>>>>> lma/gcm_integration
 use tokio_postgres::Config;
 use tracing::{error, info};
 

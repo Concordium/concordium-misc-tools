@@ -8,6 +8,8 @@ use std::collections::HashMap;
 
 const SCOPES: &[&str; 1] = &["https://www.googleapis.com/auth/firebase.messaging"];
 
+
+#[derive(Debug)]
 pub struct GoogleCloud<T> where
     T: TokenProvider,
 {
