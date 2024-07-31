@@ -50,7 +50,6 @@ struct Args {
         default_value_t = 5
     )]
     google_client_connection_timeout_secs: u64,
-
     #[arg(
         long = "google-client-max-elapsed-time-secs",
         help = "Max elapsed time for connecting to the Google API in seconds.",
@@ -58,7 +57,6 @@ struct Args {
         default_value_t = 900  // 15 minutes
     )]
     google_client_max_elapsed_time_secs: u64,
-
     #[arg(
         long = "google-client-max-interval-time-secs",
         help = "Max interval time for retries when connecting to the Google API in seconds.",

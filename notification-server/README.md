@@ -27,20 +27,20 @@ where `<BINARY_NAME>` is the name of the binary you want to run.
 
 The subscription endpoint is idempotent.
 
-All account to device mapping being registered under a single endpoint call will have the same preferences
+All account to device mapping being registered under a single endpoint call will have the same preferences set.
 Accounts is a list of base58 encoded account ids.
 
-At most 1000 preferences and accounts can be registered in one call and only a 1000 accounts be queried at once.
+At most 1000 accounts can be registered in one call and only 1000 accounts be queried at once.
 
-Should conflicts occur upon subscription updates, then only the preferences becomes updates.
+Should conflicts occur upon subscription updates, then only the preferences are updated.
 
 ### Example:
 
 ```shell
-❯ curl -X PUT "http://localhost:3030/api/v1/device/example-device/subscription" \
+curl -X PUT "http://localhost:3030/api/v1/device/<device_token>/subscription" \
     -H "Content-Type: application/json" \
     -d '{
-        "preferences": ["CIS2", "CCDTransaction"],
-        "accounts": ["6zLVntGxRRgFnwQf4HBZTwK2qWrg3"]
+        "preferences": ["cis2-tx", "ccd-tx"],
+        "accounts": ["4FmiTW2L2AccyR9VjzsnpWFSAcohXWf7Vf797i36y526mqiEcp"]
     }'
 ```

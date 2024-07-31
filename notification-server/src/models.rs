@@ -1,4 +1,5 @@
 use concordium_rust_sdk::base::contracts_common::AccountAddress;
+use enum_iterator::Sequence;
 use num_bigint::BigInt;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -37,9 +38,11 @@ impl DeviceSubscription {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize, Sequence)]
 #[serde(rename_all = "PascalCase")]
 pub enum Preference {
-    CIS2,
+    #[serde(rename = "cis2-tx")]
+    CIS2Transaction,
+    #[serde(rename = "ccd-tx")]
     CCDTransaction,
 }
