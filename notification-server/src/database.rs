@@ -68,12 +68,12 @@ impl PreparedStatements {
             .pool
             .get()
             .await
-            .map_err(|e| anyhow!("Failed to get client: {}", e))?;
+            .context("Failed to get client")?;
         let preferences_mask = preferences_to_bitmask(&preferences);
         let transaction = client.transaction().await?;
         for account in address {
             let params: &[&(dyn tokio_postgres::types::ToSql + Sync)] =
-                &[&account.0.to_vec(), &device_id, &preferences_mask];
+                &[&account.0.as_ref(), &device_id, &preferences_mask];
             if let Err(e) = transaction.execute(&self.upsert_device, params).await {
                 let _ = transaction.rollback().await;
                 return Err(e.into());
