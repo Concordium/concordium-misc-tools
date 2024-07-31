@@ -7,7 +7,8 @@ use std::collections::HashMap;
 /// Represents details for a notification.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NotificationInformation {
-     /// The blockchain account address unawarely involved in the notification emitting event.
+    /// The blockchain account address unawarely involved in the notification
+    /// emitting event.
     pub address: AccountAddress,
     /// The amount being involved in the notification emitting event.
     pub amount:  BigInt,
