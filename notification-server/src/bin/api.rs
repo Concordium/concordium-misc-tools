@@ -6,7 +6,7 @@ use axum::{
     Router,
 };
 use clap::Parser;
-use concordium_rust_sdk::base::contracts_common::{AccountAddress, AccountAddressParseError};
+use concordium_rust_sdk::base::contracts_common::AccountAddress;
 use dotenv::dotenv;
 use enum_iterator::all;
 use lazy_static::lazy_static;
@@ -80,18 +80,14 @@ async fn upsert_account_device(
         )
             .into_response())?;
     }
-    let decoded_accounts: Result<Vec<Vec<u8>>, Response> = subscription
+    let decoded_accounts: Result<Vec<AccountAddress>, Response> = subscription
         .accounts
         .iter()
         .map(|account| {
-            let account_address: Result<AccountAddress, AccountAddressParseError> =
-                AccountAddress::from_str(account);
-            account_address
-                .map_err(|e| {
-                    error!("Failed to parse account address: {}", e);
-                    (StatusCode::BAD_REQUEST, "Failed to parse account address").into_response()
-                })
-                .map(|value| value.0.to_vec())
+            AccountAddress::from_str(account).map_err(|e| {
+                error!("Failed to parse account address: {}", e);
+                (StatusCode::BAD_REQUEST, "Failed to parse account address").into_response()
+            })
         })
         .collect();
     let decoded_accounts = decoded_accounts?;

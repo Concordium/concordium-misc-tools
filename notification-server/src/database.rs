@@ -3,6 +3,7 @@ use anyhow::{anyhow, Context};
 use deadpool_postgres::{Manager, ManagerConfig, Pool, RecyclingMethod};
 use lazy_static::lazy_static;
 use std::collections::{HashMap, HashSet};
+use concordium_rust_sdk::common::types::AccountAddress;
 use tokio_postgres::NoTls;
 
 #[derive(Clone, Debug)]
@@ -59,7 +60,7 @@ impl PreparedStatements {
 
     pub async fn upsert_subscription(
         &self,
-        address: Vec<Vec<u8>>,
+        address: Vec<AccountAddress>,
         preferences: Vec<Preference>,
         device_id: &str,
     ) -> anyhow::Result<()> {
@@ -72,7 +73,7 @@ impl PreparedStatements {
         let transaction = client.transaction().await?;
         for account in address {
             let params: &[&(dyn tokio_postgres::types::ToSql + Sync)] =
-                &[&account, &device_id, &preferences_mask];
+                &[&account.0.to_vec(), &device_id, &preferences_mask];
             if let Err(e) = transaction.execute(&self.upsert_device, params).await {
                 let _ = transaction.rollback().await;
                 return Err(e.into());
