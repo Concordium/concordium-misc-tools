@@ -119,7 +119,7 @@ async fn main() -> anyhow::Result<()> {
             println!("address: {}, amount: {}", result.address, result.amount);
             for device in database_connection
                 .prepared
-                .get_devices_from_account(&result.address.0)
+                .get_devices_from_account(result.address)
                 .await?
                 .iter()
             {
