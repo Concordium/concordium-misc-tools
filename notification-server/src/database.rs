@@ -60,14 +60,14 @@ impl PreparedStatements {
 
     pub async fn upsert_subscription(
         &self,
-        address: Vec<AccountAddress>,
+        account_address: Vec<AccountAddress>,
         preferences: Vec<Preference>,
         device_id: &str,
     ) -> anyhow::Result<()> {
         let mut client = self.pool.get().await.context("Failed to get client")?;
         let preferences_mask = preferences_to_bitmask(&preferences);
         let transaction = client.transaction().await?;
-        for account in address {
+        for account in account_address {
             let params: &[&(dyn tokio_postgres::types::ToSql + Sync)] =
                 &[&account.0.as_ref(), &device_id, &preferences_mask];
             if let Err(e) = transaction.execute(&self.upsert_device, params).await {
