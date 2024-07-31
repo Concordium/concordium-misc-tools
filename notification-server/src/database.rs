@@ -14,10 +14,7 @@ pub struct PreparedStatements {
 
 impl PreparedStatements {
     async fn new(pool: Pool) -> anyhow::Result<Self> {
-        let mut client = pool
-            .get()
-            .await
-            .context("Failed to get client")?;
+        let mut client = pool.get().await.context("Failed to get client")?;
         let transaction = client
             .transaction()
             .await

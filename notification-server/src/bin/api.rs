@@ -76,10 +76,7 @@ async fn upsert_account_device(
     if subscription.accounts.len() > MAX_RESOURCES_LENGTH {
         return Err((
             StatusCode::BAD_REQUEST,
-            format!(
-                "Accounts exceed maximum length of {}",
-                MAX_RESOURCES_LENGTH
-            ),
+            format!("Accounts exceed maximum length of {}", MAX_RESOURCES_LENGTH),
         )
             .into_response())?;
     }
