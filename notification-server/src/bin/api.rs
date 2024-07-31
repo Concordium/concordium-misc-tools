@@ -13,7 +13,7 @@ use notification_server::{
     database::DatabaseConnection, google_cloud::GoogleCloud,
     models::{DeviceSubscription, Preference},
 };
-use std::{path, path::PathBuf, time::Duration};
+use std::{path::PathBuf, time::Duration};
 use anyhow::anyhow;
 use gcp_auth::CustomServiceAccount;
 use enum_iterator::all;
@@ -188,18 +188,17 @@ async fn main() -> anyhow::Result<()> {
 
     let path = PathBuf::from(args.google_application_credentials_path);
     let service_account = CustomServiceAccount::from_file(path)?;
-    let project_id = service_account.project_id().ok_or(anyhow!("Project ID not found in service account"))?;
+    let project_id = service_account.project_id().ok_or(anyhow!("Project ID not found in service account"))?.to_string();
     let app_state = Arc::new(AppState {
         db_connection: DatabaseConnection::create(args.db_connection).await?,
         google_cloud:  GoogleCloud::new(
             http_client,
             retry_policy,
             service_account,
-            project_id
+            &project_id
         )?,
     });
 
-    // TODO add authentication middleware
     let app = Router::new()
         .route(
             "/api/v1/device/:device/subscription",
