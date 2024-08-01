@@ -133,7 +133,7 @@ mod tests {
     use super::*;
     use anyhow::Result;
     use async_trait::async_trait;
-    use backoff::ExponentialBackoff;
+    use backoff::{Clock, ExponentialBackoff};
     use gcp_auth::Token;
     use reqwest::Client;
     use std::sync::Arc;
@@ -141,6 +141,8 @@ mod tests {
     pub struct MockTokenProvider {
         pub token_response: Arc<String>,
     }
+
+    use std::time::{Duration, Instant};
 
     fn generate_mock_token() -> Token {
         let json_data = json!({
@@ -171,10 +173,11 @@ mod tests {
         let mock_provider = MockTokenProvider {
             token_response: Arc::new("mock_token".to_string()),
         };
-        let _mock = server
+        let mock = server
             .mock("POST", "/v1/projects/fake_project_id/messages:send")
             .with_status(200)
             .with_body(json!({"success": true}).to_string())
+            .expect(1)
             .create_async()
             .await;
 
@@ -191,5 +194,35 @@ mod tests {
             Ok(value) => assert!(value),
             Err(_) => assert!(false),
         }
+        mock.assert();
+    }
+
+    #[tokio::test]
+    async fn test_server_error_during_token_validation() {
+        let mut server = mockito::Server::new_async().await;
+        let mock_provider = MockTokenProvider {
+            token_response: Arc::new("mock_token".to_string()),
+        };
+        let mock = server
+            .mock("POST", "/v1/projects/fake_project_id/messages:send")
+            .with_status(500)
+            .with_body("Internal server error")
+            .expect(1)
+            .create_async()
+            .await;
+
+        let client = Client::new();
+        let backoff_policy = ExponentialBackoff::default();
+
+        let mut gc =
+            GoogleCloud::new(client, backoff_policy, mock_provider, "mock_project_id").unwrap();
+        gc.url = format!(
+            "{}{}",
+            server.url(),
+            "/v1/projects/fake_project_id/messages:send".to_string()
+        );
+        let result = gc.validate_device_token("valid_device_token").await;
+        assert!(result.is_err());
+        mock.assert();
     }
 }
