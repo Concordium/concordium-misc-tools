@@ -3,7 +3,7 @@ use clap::{Parser, Subcommand};
 use concordium_rust_sdk::{endpoints::Endpoint, types::WalletAccount, v2};
 use generator::{
     generate_transactions, CcdGenerator, CommonArgs, MintCis2Generator,
-    RegisterCredentialsGenerator, TransferCis2Generator, WccdGenerator,
+    RegisterCredentialsGenerator, RegisterDataGenerator, TransferCis2Generator, WccdGenerator,
 };
 use std::path::PathBuf;
 
@@ -52,6 +52,8 @@ enum Command {
     Wccd,
     /// Register Web3 ID credentials.
     RegisterCredentials,
+    /// Register data
+    RegisterData(generator::RegisterDataArgs),
 }
 
 #[tokio::main(flavor = "multi_thread")]
@@ -107,6 +109,12 @@ async fn main() -> anyhow::Result<()> {
         }
         Command::RegisterCredentials => {
             let generator = RegisterCredentialsGenerator::instantiate(client.clone(), args).await?;
+            generate_transactions(client, generator, app.tps).await
+        }
+        Command::RegisterData(register_data_args) => {
+            let generator =
+                RegisterDataGenerator::instantiate(client.clone(), args, register_data_args)
+                    .await?;
             generate_transactions(client, generator, app.tps).await
         }
     }
