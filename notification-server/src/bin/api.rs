@@ -1,14 +1,23 @@
 use axum::{
     extract::{Json, Path, State},
     http::StatusCode,
+    response::{IntoResponse, Response},
     routing::put,
     Router,
 };
 use clap::Parser;
+use concordium_rust_sdk::base::contracts_common::AccountAddress;
 use dotenv::dotenv;
-use std::sync::Arc;
+use enum_iterator::all;
+use lazy_static::lazy_static;
+use notification_server::{
+    database::DatabaseConnection,
+    models::{DeviceSubscription, Preference},
+};
+use serde_json::json;
+use std::{collections::HashSet, str::FromStr, sync::Arc};
 use tokio_postgres::Config;
-use tracing::info;
+use tracing::{error, info};
 
 #[derive(Debug, Parser)]
 struct Args {
@@ -18,7 +27,7 @@ struct Args {
                 application.",
         env = "NOTIFICATION_SERVER_DB_CONNECTION"
     )]
-    db_connection:  String,
+    db_connection:  Config,
     #[arg(
         long = "listen-address",
         help = "Listen address for the server.",
@@ -31,20 +40,71 @@ struct Args {
     log_level:      log::LevelFilter,
 }
 
-#[derive(Clone)]
+#[derive(Debug)]
 struct AppState {
-    db_connection: Config,
+    db_connection: DatabaseConnection,
 }
 
+const MAX_RESOURCES_LENGTH: usize = 1000;
+
+lazy_static! {
+    static ref MAX_PREFERENCES_LENGTH: usize = all::<Preference>().collect::<Vec<_>>().len();
+}
+
+#[tracing::instrument(skip(state))]
 async fn upsert_account_device(
     Path(device): Path<String>,
     State(state): State<Arc<AppState>>,
-    Json(account): Json<Vec<String>>,
-) -> Result<impl axum::response::IntoResponse, axum::response::Response> {
-    info!("Subscribing accounts {:?} to device {}", account, device);
-    let _ = &state.db_connection;
-    // TODO write to the database
-    Ok(StatusCode::OK)
+    Json(subscription): Json<DeviceSubscription>,
+) -> Result<impl IntoResponse, Response> {
+    info!(
+        "Subscribing accounts {:?} to device {}",
+        subscription, device
+    );
+    if subscription.preferences.len() > *MAX_PREFERENCES_LENGTH {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("Preferences exceeded length of {}", *MAX_PREFERENCES_LENGTH),
+        )
+            .into_response())?;
+    }
+    let unique_preferences: HashSet<_> = subscription.preferences.iter().collect();
+    if unique_preferences.len() != subscription.preferences.len() {
+        return Err((StatusCode::BAD_REQUEST, "Duplicate preferences found").into_response());
+    }
+
+    if subscription.accounts.len() > MAX_RESOURCES_LENGTH {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("Accounts exceed maximum length of {}", MAX_RESOURCES_LENGTH),
+        )
+            .into_response())?;
+    }
+    let decoded_accounts: Result<Vec<AccountAddress>, Response> = subscription
+        .accounts
+        .iter()
+        .map(|account| {
+            AccountAddress::from_str(account).map_err(|e| {
+                error!("Failed to parse account address: {}", e);
+                (StatusCode::BAD_REQUEST, "Failed to parse account address").into_response()
+            })
+        })
+        .collect();
+    let decoded_accounts = decoded_accounts?;
+    state
+        .db_connection
+        .prepared
+        .upsert_subscription(decoded_accounts, subscription.preferences, &device)
+        .await
+        .map_err(|e| {
+            error!("Database error: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to write subscriptions to database",
+            )
+                .into_response()
+        })?;
+    Ok(Json(json!({"message": "Subscribed accounts to device"})))
 }
 
 #[tokio::main]
@@ -54,8 +114,10 @@ async fn main() -> anyhow::Result<()> {
 
     tracing_subscriber::fmt::init();
 
-    let db_connection: Config = args.db_connection.parse()?;
-    let app_state = Arc::new(AppState { db_connection });
+    let app_state = Arc::new(AppState {
+        db_connection: DatabaseConnection::create(args.db_connection).await?,
+    });
+
     // TODO add authentication middleware
     let app = Router::new()
         .route(

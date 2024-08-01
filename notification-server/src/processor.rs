@@ -1,5 +1,5 @@
+use crate::models::NotificationInformation;
 use concordium_rust_sdk::{
-    base::contracts_common::AccountAddress,
     cis2,
     cis2::Event,
     types,
@@ -10,17 +10,6 @@ use concordium_rust_sdk::{
 };
 use futures::{Stream, StreamExt};
 use num_bigint::BigInt;
-use std::fmt::Debug;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NotificationInformation {
-    pub address: AccountAddress,
-    pub amount:  BigInt,
-}
-
-impl NotificationInformation {
-    pub fn new(address: AccountAddress, amount: BigInt) -> Self { Self { address, amount } }
-}
 
 fn convert<T: Into<BigInt>>(
     address: Address,

@@ -6,6 +6,10 @@ setup:
 	@echo "Setting default password"
 	@DB_PASSWORD=$$(openssl rand -base64 12) && \
 	export DB_PASSWORD=$$DB_PASSWORD && \
+	echo "Please enter the path to your Google application credentials file:" && \
+	read GOOGLE_APPLICATION_CREDENTIALS_PATH && \
+	mkdir -p secrets && \
+	cp $$GOOGLE_APPLICATION_CREDENTIALS_PATH secrets/google-credentials.json && \
 	cat .env.template | envsubst > .env
 
 docker-up:
@@ -31,7 +35,7 @@ create-tables:
 	@echo "Creating tables from SQL files..."
 	@for sql_file in resources/*.sql; do \
 		echo "Processing $$sql_file..."; \
-		docker-compose exec -T db psql --username=postgres < $$sql_file; \
+		docker compose exec -T db psql --username=postgres < $$sql_file; \
 	done
 
 .PHONY: setup all docker-up wait-for-db create-tables
