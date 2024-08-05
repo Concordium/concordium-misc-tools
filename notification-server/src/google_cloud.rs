@@ -128,14 +128,15 @@ where
                     )))
                 }
                 Ok(res) if res.status().is_client_error() => {
+                    let status = res.status();
                     match res.json::<Value>().await {
                         Ok(content) => {
-                            if content["error"]["status"] == "INVALID_ARGUMENT" {
+                            if content["error"]["status"] == "INVALID_ARGUMENT" && status == StatusCode::BAD_REQUEST {
                                 Ok(false)
                             } else {
                                 Err(backoff::Error::permanent(anyhow!(
                                     "Bad request sent to Google API: {}",
-                                    &payload
+                                    content,
                                 )))
                             }
                         }
@@ -171,11 +172,12 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
     use super::*;
     use anyhow::Result;
     use async_trait::async_trait;
     use backoff::ExponentialBackoff;
-    use gcp_auth::Token;
+    use gcp_auth::{CustomServiceAccount, Token};
     use reqwest::Client;
     use std::sync::Arc;
 
@@ -184,9 +186,12 @@ mod tests {
     }
 
     use std::time::Duration;
+    use concordium_rust_sdk::base::contracts_common::AccountAddress;
     use enum_iterator::{all, Sequence};
+    use num_bigint::BigInt;
     use quickcheck::{Arbitrary, Gen};
     use quickcheck_macros::quickcheck;
+    use rand::random;
 
     fn generate_mock_token() -> Token {
         let json_data = json!({
@@ -409,5 +414,4 @@ mod tests {
         succeeding_call.assert();
         result.unwrap_or_else(|_| false)
     }
-
 }
