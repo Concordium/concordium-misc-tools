@@ -148,8 +148,14 @@ async fn handle(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Authentication towards the external messaging service failed".to_string(),
             ),
-            NotificationError::ClientError(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Client error received from external message service service".to_string()),
-            NotificationError::ServerError(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Server error received from external message service service".to_string()),
+            NotificationError::ClientError(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Client error received from external message service service".to_string(),
+            ),
+            NotificationError::ServerError(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Server error received from external message service service".to_string(),
+            ),
         };
         return Err((status, message));
     }

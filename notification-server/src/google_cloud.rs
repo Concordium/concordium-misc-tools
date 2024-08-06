@@ -52,13 +52,17 @@ impl<T> GoogleCloud<T>
 where
     T: TokenProvider,
 {
-    /// Creates a new instance of `GoogleCloud` configured for interacting with the Google Cloud Messaging API.
+    /// Creates a new instance of `GoogleCloud` configured for interacting with
+    /// the Google Cloud Messaging API.
     ///
     /// # Arguments
     /// * `client` - A `reqwest::Client` used for making HTTP requests.
-    /// * `backoff_policy` - An `ExponentialBackoff` policy to handle retries for transient errors.
-    /// * `service_account` - An implementation of the `TokenProvider` trait to fetch access tokens.
-    /// * `project_id` - The project ID associated with your Google Cloud project.
+    /// * `backoff_policy` - An `ExponentialBackoff` policy to handle retries
+    ///   for transient errors.
+    /// * `service_account` - An implementation of the `TokenProvider` trait to
+    ///   fetch access tokens.
+    /// * `project_id` - The project ID associated with your Google Cloud
+    ///   project.
     ///
     /// # Returns
     /// Returns an instance of `GoogleCloud`.
@@ -80,36 +84,47 @@ where
         }
     }
 
-    /// Validates a device token by making a minimal push notification request to Google's FCM API with `validate_only` set to true.
-    /// This method checks if a provided device token is correctly formatted and recognized by Google without sending a real notification.
+    /// Validates a device token by making a minimal push notification request
+    /// to Google's FCM API with `validate_only` set to true. This method
+    /// checks if a provided device token is correctly formatted and recognized
+    /// by Google without sending a real notification.
     ///
     /// # Arguments
     /// * `device_token` - The device token that needs validation.
     ///
     /// # Returns
-    /// Returns `Ok(())` if the token is valid, indicating successful validation.
-    /// Returns `Err(NotificationError)` if the token is invalid or if there is an error in sending the request or processing the API response.
+    /// Returns `Ok(())` if the token is valid, indicating successful
+    /// validation. Returns `Err(NotificationError)` if the token is invalid
+    /// or if there is an error in sending the request or processing the API
+    /// response.
     ///
     /// # Errors
-    /// Errors include network issues, token validation errors, or other server/client errors as defined by `NotificationError`.
+    /// Errors include network issues, token validation errors, or other
+    /// server/client errors as defined by `NotificationError`.
     pub async fn validate_device_token(&self, device_token: &str) -> Result<(), NotificationError> {
         self.send_push_notification_with_validate(device_token, None)
             .await
     }
 
     /// Sends a push notification to a device using Google's FCM API.
-    /// This method is intended for when an actual notification needs to be dispatched to an end-user device.
+    /// This method is intended for when an actual notification needs to be
+    /// dispatched to an end-user device.
     ///
     /// # Arguments
-    /// * `device_token` - The device token to which the notification will be sent.
-    /// * `information` - A `NotificationInformation` struct containing the data to be sent in the notification.
+    /// * `device_token` - The device token to which the notification will be
+    ///   sent.
+    /// * `information` - A `NotificationInformation` struct containing the data
+    ///   to be sent in the notification.
     ///
     /// # Returns
     /// Returns `Ok(())` on successful dispatch of the notification.
-    /// Returns `Err(NotificationError)` on failure, which includes any issue related to network connectivity, token validation, or errors from the Google API.
+    /// Returns `Err(NotificationError)` on failure, which includes any issue
+    /// related to network connectivity, token validation, or errors from the
+    /// Google API.
     ///
     /// # Errors
-    /// Specific errors are returned as `NotificationError` which includes various client and server-side issues.
+    /// Specific errors are returned as `NotificationError` which includes
+    /// various client and server-side issues.
     pub async fn send_push_notification(
         &self,
         device_token: &str,
@@ -124,11 +139,9 @@ where
         device_token: &str,
         information: Option<NotificationInformation>,
     ) -> Result<(), NotificationError> {
-        let access_token = self
-            .service_account
-            .token(SCOPES)
-            .await
-            .map_err(|err| AuthenticationError(format!("Authentication error received: {}", err)))?;
+        let access_token = self.service_account.token(SCOPES).await.map_err(|err| {
+            AuthenticationError(format!("Authentication error received: {}", err))
+        })?;
         let mut payload = json!({});
         if Option::is_none(&information) {
             payload["validate_only"] = json!(true);
@@ -166,12 +179,16 @@ where
                         )))
                     }
                     _ if res.status().is_success() => Ok(()),
-                    _ if res.status().is_server_error() => Err(backoff::Error::transient(ServerError(
-                        format!("Google API responded with a server error status code: {}", res.status().as_u16()) ,
-                    ))),
-                    _ => Err(backoff::Error::transient(ServerError(
-                        format!("Google API responded with status code: {}", res.status().as_u16()),
-                    ))),
+                    _ if res.status().is_server_error() => {
+                        Err(backoff::Error::transient(ServerError(format!(
+                            "Google API responded with a server error status code: {}",
+                            res.status().as_u16()
+                        ))))
+                    }
+                    _ => Err(backoff::Error::transient(ServerError(format!(
+                        "Google API responded with status code: {}",
+                        res.status().as_u16()
+                    )))),
                 },
                 Err(e) => Err(backoff::Error::transient(ServerError(e.to_string()))),
             }
