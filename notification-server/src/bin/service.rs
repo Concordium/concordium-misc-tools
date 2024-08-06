@@ -107,7 +107,7 @@ async fn main() -> anyhow::Result<()> {
         .project_id()
         .context("Project ID not found in service account")?
         .to_string();
-    let gcloud = GoogleCloud::new(http_client, retry_policy, service_account, &project_id)?;
+    let gcloud = GoogleCloud::new(http_client, retry_policy, service_account, &project_id);
     let database_connection = DatabaseConnection::create(args.db_connection).await?;
 
     let mut concordium_client = Client::new(endpoint).await?;
