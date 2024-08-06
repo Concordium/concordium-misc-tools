@@ -15,7 +15,7 @@ use std::{
 
 const SCOPES: &[&str; 1] = &["https://www.googleapis.com/auth/firebase.messaging"];
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum NotificationError {
     ServerError(String),
     ClientError(String),
@@ -128,7 +128,7 @@ where
             .service_account
             .token(SCOPES)
             .await
-            .map_err(|err| AuthenticationError(format!("Authentication error received: {}", err.to_string())))?;
+            .map_err(|err| AuthenticationError(format!("Authentication error received: {}", err)))?;
         let mut payload = json!({});
         if Option::is_none(&information) {
             payload["validate_only"] = json!(true);
@@ -455,9 +455,7 @@ mod tests {
         );
 
         mock.assert();
-        assert!(match gc.validate_device_token("valid_device_token").await {
-            Err(AuthenticationError) => true,
-            _ => false,
-        });
+        let result = gc.validate_device_token("valid_device_token").await;
+        assert!(matches!(result, Err(AuthenticationError(_))));
     }
 }
