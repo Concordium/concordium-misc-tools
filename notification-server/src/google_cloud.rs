@@ -354,7 +354,7 @@ mod tests {
     }
 
     #[quickcheck]
-    fn test_retry_on_retry_status_codes(server_side_status_code: RetryStatusCode) -> bool {
+    fn test_retry_on_retry_status_codes(status_code: RetryStatusCode) -> bool {
         let mut server = mockito::Server::new();
         let mock_provider = MockTokenProvider {
             token_response: Arc::new("mock_token".to_string()),
@@ -363,7 +363,7 @@ mod tests {
 
         let mock = server
             .mock("POST", "/v1/projects/fake_project_id/messages:send")
-            .with_status(server_side_status_code as usize)
+            .with_status(status_code as usize)
             .with_body("Service temporarily unavailable")
             .expect_at_least(2)
             .create();
