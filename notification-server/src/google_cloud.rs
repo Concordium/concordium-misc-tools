@@ -199,20 +199,17 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::cmp::PartialEq;
-    use std::error::Error;
-    use std::ops::Not;
     use super::*;
     use anyhow::Result;
     use async_trait::async_trait;
     use backoff::ExponentialBackoff;
     use gcp_auth::Token;
     use reqwest::Client;
-    use std::sync::Arc;
+    use std::{cmp::PartialEq, sync::Arc};
 
     pub struct MockTokenProvider {
         pub token_response: Arc<String>,
-        pub should_fail: bool,
+        pub should_fail:    bool,
     }
 
     use enum_iterator::{all, Sequence};
@@ -248,64 +245,68 @@ mod tests {
 
     #[derive(Debug, Clone, Copy, PartialEq, Sequence)]
     enum RetryStatusCode {
-        TooManyRequests = 429,
+        TooManyRequests     = 429,
         InternalServerError = 500,
-        NotImplemented = 501,
-        BadGateway = 502,
-        ServiceUnavailable = 503,
-        GatewayTimeout = 504,
+        NotImplemented      = 501,
+        BadGateway          = 502,
+        ServiceUnavailable  = 503,
+        GatewayTimeout      = 504,
         HTTPVersionNotSupported = 505,
         VariantAlsoNegotiates = 506,
         InsufficientStorage = 507,
-        LoopDetected = 508,
-        NotExtended = 510,
+        LoopDetected        = 508,
+        NotExtended         = 510,
         NetworkAuthenticationRequired = 511,
     }
 
-    fn is_status_code_causing_correct_notification_error(status_code: usize, actual_notification_error: NotificationError) -> bool {
+    fn is_status_code_causing_correct_notification_error(
+        status_code: usize,
+        actual_notification_error: NotificationError,
+    ) -> bool {
         match all::<RetryStatusCode>().find(|&x| x as usize == status_code) {
-            Some(retry_status_code) => matches!(actual_notification_error, ServerError(_)),
+            Some(_) => matches!(actual_notification_error, ServerError(_)),
             None => match all::<ZeroRetryStatusCode>().find(|&x| x as usize == status_code) {
-                Some(zero_retry_status_code) => if zero_retry_status_code == ZeroRetryStatusCode::BadRequest {
-                    matches!(actual_notification_error, InvalidArgumentError)
-                } else if zero_retry_status_code == ZeroRetryStatusCode::NotFound {
-                    matches!(actual_notification_error, UnregisteredError)
-                } else {
-                    matches!(actual_notification_error, ClientError(_))
-                },
+                Some(zero_retry_status_code) => {
+                    if zero_retry_status_code == ZeroRetryStatusCode::BadRequest {
+                        matches!(actual_notification_error, InvalidArgumentError)
+                    } else if zero_retry_status_code == ZeroRetryStatusCode::NotFound {
+                        matches!(actual_notification_error, UnregisteredError)
+                    } else {
+                        matches!(actual_notification_error, ClientError(_))
+                    }
+                }
                 None => false,
-            }
+            },
         }
     }
 
-
     #[derive(Debug, Clone, Copy, PartialEq, Sequence)]
     enum ZeroRetryStatusCode {
-        BadRequest = 400,
-        Unauthorized = 401,
-        PaymentRequired = 402,
-        Forbidden = 403,
-        NotFound = 404,
-        MethodNotAllowed = 405,
-        NotAcceptable = 406,
+        BadRequest           = 400,
+        Unauthorized         = 401,
+        PaymentRequired      = 402,
+        Forbidden            = 403,
+        NotFound             = 404,
+        MethodNotAllowed     = 405,
+        NotAcceptable        = 406,
         ProxyAuthenticationRequired = 407,
-        RequestTimeout = 408,
-        Conflict = 409,
-        Gone = 410,
-        LengthRequired = 411,
-        PreconditionFailed = 412,
-        PayloadTooLarge = 413,
-        UriTooLong = 414,
+        RequestTimeout       = 408,
+        Conflict             = 409,
+        Gone                 = 410,
+        LengthRequired       = 411,
+        PreconditionFailed   = 412,
+        PayloadTooLarge      = 413,
+        UriTooLong           = 414,
         UnsupportedMediaType = 415,
-        RangeNotSatisfiable = 416,
-        ExpectationFailed = 417,
-        ImATeapot = 418,
-        MisdirectedRequest = 421,
-        UnprocessableEntity = 422,
-        Locked = 423,
-        FailedDependency = 424,
-        TooEarly = 425,
-        UpgradeRequired = 426,
+        RangeNotSatisfiable  = 416,
+        ExpectationFailed    = 417,
+        ImATeapot            = 418,
+        MisdirectedRequest   = 421,
+        UnprocessableEntity  = 422,
+        Locked               = 423,
+        FailedDependency     = 424,
+        TooEarly             = 425,
+        UpgradeRequired      = 426,
         PreconditionRequired = 428,
         RequestHeaderFieldsTooLarge = 431,
         UnavailableForLegalReasons = 451,
@@ -330,7 +331,7 @@ mod tests {
         let mut server = mockito::Server::new_async().await;
         let mock_provider = MockTokenProvider {
             token_response: Arc::new("mock_token".to_string()),
-            should_fail: false,
+            should_fail:    false,
         };
         let mock = server
             .mock("POST", "/v1/projects/fake_project_id/messages:send")
@@ -357,7 +358,7 @@ mod tests {
         let mut server = mockito::Server::new();
         let mock_provider = MockTokenProvider {
             token_response: Arc::new("mock_token".to_string()),
-            should_fail: false,
+            should_fail:    false,
         };
 
         let mock = server
@@ -386,7 +387,7 @@ mod tests {
         mock.assert();
         result.map_or_else(
             |err| is_status_code_causing_correct_notification_error(status_code as usize, err),
-            |_| false
+            |_| false,
         )
     }
 
@@ -395,7 +396,7 @@ mod tests {
         let mut server = mockito::Server::new();
         let mock_provider = MockTokenProvider {
             token_response: Arc::new("mock_token".to_string()),
-            should_fail: false,
+            should_fail:    false,
         };
 
         let mock = server
@@ -424,7 +425,7 @@ mod tests {
         mock.assert();
         result.map_or_else(
             |err| is_status_code_causing_correct_notification_error(status_code as usize, err),
-            |_| false
+            |_| false,
         )
     }
 
@@ -435,7 +436,7 @@ mod tests {
         let mut server = mockito::Server::new();
         let mock_provider = MockTokenProvider {
             token_response: Arc::new("mock_token".to_string()),
-            should_fail: false,
+            should_fail:    false,
         };
 
         let failing_calls = server
@@ -478,7 +479,7 @@ mod tests {
         let mut server = mockito::Server::new_async().await;
         let mock_provider = MockTokenProvider {
             token_response: Arc::new("mock_token".to_string()),
-            should_fail: true,
+            should_fail:    true,
         };
         let mock = server
             .mock("POST", "/v1/projects/fake_project_id/messages:send")
