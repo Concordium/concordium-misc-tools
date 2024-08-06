@@ -1,9 +1,8 @@
 use anyhow::anyhow;
 use axum::{
-    body::Body,
     extract::{Json, Path, State},
     http::StatusCode,
-    response::{IntoResponse, Response},
+    response::IntoResponse,
     routing::put,
     Router,
 };
@@ -19,8 +18,7 @@ use notification_server::{
     google_cloud::{GoogleCloud, NotificationError},
     models::{DeviceSubscription, Preference},
 };
-use serde::Serialize;
-use serde_json::{json, Value};
+use serde_json::json;
 use std::{collections::HashSet, path::PathBuf, str::FromStr, sync::Arc, time::Duration};
 use tokio_postgres::Config;
 use tracing::{error, info};
@@ -93,6 +91,86 @@ lazy_static! {
     static ref MAX_PREFERENCES_LENGTH: usize = all::<Preference>().collect::<Vec<_>>().len();
 }
 
+async fn handle(
+    device: String,
+    subscription: DeviceSubscription,
+    state: Arc<AppState>,
+) -> Result<String, (StatusCode, String)> {
+    if subscription.preferences.len() > *MAX_PREFERENCES_LENGTH {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("Preferences exceeded length of {}", *MAX_PREFERENCES_LENGTH),
+        ));
+    }
+    let unique_preferences: HashSet<_> = subscription.preferences.iter().collect();
+    if unique_preferences.len() != subscription.preferences.len() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "Duplicate preferences found".to_string(),
+        ));
+    }
+
+    if subscription.accounts.len() > MAX_RESOURCES_LENGTH {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("Accounts exceed maximum length of {}", MAX_RESOURCES_LENGTH),
+        ));
+    }
+
+    let decoded_accounts: Result<Vec<AccountAddress>, (StatusCode, String)> = subscription
+        .accounts
+        .iter()
+        .map(|account| {
+            AccountAddress::from_str(account).map_err(|e| {
+                error!("Failed to parse account address: {}", e);
+                (
+                    StatusCode::BAD_REQUEST,
+                    "Failed to parse account address".to_string(),
+                )
+            })
+        })
+        .collect();
+
+    if let Err(err) = state.google_cloud.validate_device_token(&device).await {
+        error!(
+            "Unexpected response provided by gcm service while validating device_token: {}",
+            err
+        );
+        let (status, message) = match err {
+            NotificationError::InvalidArgumentError => {
+                (StatusCode::BAD_REQUEST, "Invalid device token".to_string())
+            }
+            NotificationError::UnregisteredError => (
+                StatusCode::NOT_FOUND,
+                "The device token has not been registered".to_string(),
+            ),
+            NotificationError::AuthenticationError => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Authentication towards the GCM service failed".to_string(),
+            ),
+            NotificationError::ClientError(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg),
+            NotificationError::ServerError(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg),
+        };
+        return Err((status, message));
+    }
+
+    let decoded_accounts = decoded_accounts?;
+    state
+        .db_connection
+        .prepared
+        .upsert_subscription(decoded_accounts, subscription.preferences, &device)
+        .await
+        .map_err(|e| {
+            error!("Database error: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Internal server error occurred while writing subscriptions to database"
+                    .to_string(),
+            )
+        })?;
+    Ok("Subscribed accounts to device".to_string())
+}
+
 #[tracing::instrument(skip(state))]
 async fn upsert_account_device(
     Path(device): Path<String>,
@@ -103,80 +181,9 @@ async fn upsert_account_device(
         "Subscribing accounts {:?} to device {}",
         subscription, device
     );
-    let response: Result<String, (StatusCode, String)> = {
-        if subscription.preferences.len() > *MAX_PREFERENCES_LENGTH {
-            return Err((
-                StatusCode::BAD_REQUEST,
-                format!("Preferences exceeded length of {}", *MAX_PREFERENCES_LENGTH),
-            ))?;
-        }
-        let unique_preferences: HashSet<_> = subscription.preferences.iter().collect();
-        if unique_preferences.len() != subscription.preferences.len() {
-            return Err((
-                StatusCode::BAD_REQUEST,
-                "Duplicate preferences found".to_string(),
-            ));
-        }
-
-        if subscription.accounts.len() > MAX_RESOURCES_LENGTH {
-            return Err((
-                StatusCode::BAD_REQUEST,
-                format!("Accounts exceed maximum length of {}", MAX_RESOURCES_LENGTH),
-            ))?;
-        }
-
-        let decoded_accounts: Result<Vec<AccountAddress>, Response> = subscription
-            .accounts
-            .iter()
-            .map(|account| {
-                AccountAddress::from_str(account).map_err(|e| {
-                    error!("Failed to parse account address: {}", e);
-                    (StatusCode::BAD_REQUEST, "Failed to parse account address")
-                })
-            })
-            .collect();
-
-        if let Err(err) = state.google_cloud.validate_device_token(&device).await {
-            error!(
-                "Unexpected response provided by gcm service while validating device_token: {}",
-                err
-            );
-            let (status, message) = match err {
-                NotificationError::InvalidArgumentError => {
-                    (StatusCode::BAD_REQUEST, "Invalid device token".to_string())
-                }
-                NotificationError::UnregisteredError => (
-                    StatusCode::NOT_FOUND,
-                    "The device token has not been registered".to_string(),
-                ),
-                NotificationError::AuthenticationError => (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "Authentication towards the GCM service failed".to_string(),
-                ),
-                NotificationError::ClientError(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg),
-                NotificationError::ServerError(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg),
-            };
-            return Err((status, message));
-        }
-
-        let decoded_accounts = decoded_accounts?;
-        state
-            .db_connection
-            .prepared
-            .upsert_subscription(decoded_accounts, subscription.preferences, &device)
-            .await
-            .map_err(|e| {
-                error!("Database error: {}", e);
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "Failed to write subscriptions to database",
-                )
-                    .into_response()
-            })?;
-        Ok("Subscribed accounts to device".to_string())
-    };
+    let response: Result<String, (StatusCode, String)> = handle(device, subscription, state).await;
     match response {
-        Ok(message) => (200, Json(json!({ "message": message }))),
+        Ok(message) => (StatusCode::OK, Json(json!({ "message": message }))),
         Err((status_code, message)) => (status_code, Json(json!({ "errorMessage": message }))),
     }
 }
@@ -211,7 +218,7 @@ async fn main() -> anyhow::Result<()> {
         .to_string();
     let app_state = Arc::new(AppState {
         db_connection: DatabaseConnection::create(args.db_connection).await?,
-        google_cloud:  GoogleCloud::new(http_client, retry_policy, service_account, &project_id)?,
+        google_cloud:  GoogleCloud::new(http_client, retry_policy, service_account, &project_id),
     });
 
     let app = Router::new()
