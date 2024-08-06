@@ -349,7 +349,7 @@ mod tests {
 
         let client = Client::new();
         let backoff_policy = ExponentialBackoff {
-            max_elapsed_time: Some(Duration::from_millis(10)),
+            max_elapsed_time: Some(Duration::from_millis(50)),
             max_interval: Duration::from_millis(1),
             initial_interval: Duration::from_millis(1),
             ..ExponentialBackoff::default()
