@@ -20,7 +20,7 @@ pub enum NotificationError {
     ServerError(String),
     ClientError(String),
     InvalidArgumentError,
-    AuthenticationError,
+    AuthenticationError(String),
     UnregisteredError,
 }
 
@@ -31,7 +31,7 @@ impl Display for NotificationError {
             ServerError(msg) => write!(f, "Server Error: {}", msg),
             InvalidArgumentError => write!(f, "Device token had an invalid format"),
             UnregisteredError => write!(f, "Device token has been unregistered"),
-            AuthenticationError => write!(f, "Error occurred while authenticating with Google"),
+            AuthenticationError(msg) => write!(f, "Authentication error: {}", msg),
         }
     }
 }
@@ -128,7 +128,7 @@ where
             .service_account
             .token(SCOPES)
             .await
-            .map_err(|_| AuthenticationError)?;
+            .map_err(|err| AuthenticationError(format!("Authentication error received: {}", err.to_string())))?;
         let mut payload = json!({});
         if Option::is_none(&information) {
             payload["validate_only"] = json!(true);
@@ -154,21 +154,23 @@ where
 
             match response {
                 Ok(res) => match res.status() {
-                    StatusCode::OK => Ok(()),
                     StatusCode::TOO_MANY_REQUESTS => Err(backoff::Error::transient(ServerError(
-                        "Too many requests".to_string(),
+                        "Too many requests to the Google API".to_string(),
                     ))),
                     StatusCode::BAD_REQUEST => Err(backoff::Error::permanent(InvalidArgumentError)),
                     StatusCode::NOT_FOUND => Err(backoff::Error::permanent(UnregisteredError)),
                     _ if res.status().is_client_error() => {
                         Err(backoff::Error::permanent(ClientError(
-                            "Client calling Google API, while not seem to be related to the input \
-                             of the user"
+                            "Error calling Google API, not related to the input of the user"
                                 .to_string(),
                         )))
                     }
+                    _ if res.status().is_success() => Ok(()),
+                    _ if res.status().is_server_error() => Err(backoff::Error::transient(ServerError(
+                        format!("Google API responded with a server error status code: {}", res.status().as_u16()) ,
+                    ))),
                     _ => Err(backoff::Error::transient(ServerError(
-                        "Other server error".to_string(),
+                        format!("Google API responded with status code: {}", res.status().as_u16()),
                     ))),
                 },
                 Err(e) => Err(backoff::Error::transient(ServerError(e.to_string()))),
