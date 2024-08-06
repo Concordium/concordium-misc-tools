@@ -1,12 +1,42 @@
-use crate::models::NotificationInformation;
-use anyhow::anyhow;
+use crate::{
+    google_cloud::NotificationError::{
+        AuthenticationError, ClientError, InvalidArgumentError, ServerError, UnregisteredError,
+    },
+    models::NotificationInformation,
+};
 use backoff::{future::retry, ExponentialBackoff};
 use gcp_auth::TokenProvider;
 use reqwest::{Client, StatusCode};
-use serde_json::{json, Value};
-use std::collections::HashMap;
+use serde_json::json;
+use std::{
+    collections::HashMap,
+    fmt::{Display, Formatter},
+};
 
 const SCOPES: &[&str; 1] = &["https://www.googleapis.com/auth/firebase.messaging"];
+
+#[derive(Debug)]
+pub enum NotificationError {
+    ServerError(String),
+    ClientError(String),
+    InvalidArgumentError,
+    AuthenticationError,
+    UnregisteredError,
+}
+
+impl Display for NotificationError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ClientError(msg) => write!(f, "Client Error: {}", msg),
+            ServerError(msg) => write!(f, "Server Error: {}", msg),
+            InvalidArgumentError => write!(f, "Device token had an invalid format"),
+            UnregisteredError => write!(f, "Device token has been unregistered"),
+            AuthenticationError => write!(f, "Error occurred while authenticating with Google"),
+        }
+    }
+}
+
+impl std::error::Error for NotificationError {}
 
 #[derive(Debug)]
 pub struct GoogleCloud<T>
@@ -22,81 +52,100 @@ impl<T> GoogleCloud<T>
 where
     T: TokenProvider,
 {
-    /// Creates a new instance of `GoogleCloud` configured for interacting with the Google Cloud Messaging API.
+    /// Creates a new instance of `GoogleCloud` configured for interacting with
+    /// the Google Cloud Messaging API.
     ///
     /// # Arguments
     /// * `client` - A `reqwest::Client` for making HTTP requests.
-    /// * `backoff_policy` - An `ExponentialBackoff` policy to handle retries for transient errors.
-    /// * `service_account` - An implementation of the `TokenProvider` trait to fetch access tokens.
-    /// * `project_id` - The project ID associated with your Google Cloud project.
+    /// * `backoff_policy` - An `ExponentialBackoff` policy to handle retries
+    ///   for transient errors.
+    /// * `service_account` - An implementation of the `TokenProvider` trait to
+    ///   fetch access tokens.
+    /// * `project_id` - The project ID associated with your Google Cloud
+    ///   project.
     ///
     /// # Returns
     /// Returns an instance of `GoogleCloud`.
     ///
     /// # Errors
-    /// Returns an `Err` if there is a problem constructing the URL or any other initial setup issue.
+    /// Returns an `Err` if there is a problem constructing the URL or any other
+    /// initial setup issue.
     pub fn new(
         client: Client,
         backoff_policy: ExponentialBackoff,
         service_account: T,
         project_id: &str,
-    ) -> anyhow::Result<Self> {
+    ) -> Self {
         let url = format!(
             "https://fcm.googleapis.com/v1/projects/{}/messages:send",
             project_id
         );
-        Ok(Self {
+        Self {
             client,
             service_account,
             url,
             backoff_policy,
-        })
+        }
     }
 
-    /// Validates a device token by attempting a minimal push notification request to Google's FCM API with `validate_only` set to true.
-    /// This method is designed to verify if a provided device token is correctly formatted and recognized by Google without actually sending a notification.
+    /// Validates a device token by attempting a minimal push notification
+    /// request to Google's FCM API with `validate_only` set to true.
+    /// This method is designed to verify if a provided device token is
+    /// correctly formatted and recognized by Google without actually sending a
+    /// notification.
     ///
     /// # Arguments
     /// * `device_token` - The device token that needs validation.
     ///
     /// # Returns
-    /// Returns `Ok(true)` if the token is valid, `Ok(false)` if the token is invalid, and `Err` if there is an error in sending the request or processing the API response.
+    /// Returns `Ok()` if the token is valid, `Ok(false)` if the token is
+    /// invalid, and `Err` if there is an error in sending the request or
+    /// processing the API response.
     ///
     /// # Errors
-    /// Errors are generally related to network issues or server errors that prevent the API from processing the request.
-    pub async fn validate_device_token(&self, device_token: &str) -> anyhow::Result<bool> {
+    /// Errors are generally related to network issues or server errors that
+    /// prevent the API from processing the request.
+    pub async fn validate_device_token(&self, device_token: &str) -> Result<(), NotificationError> {
         self.send_push_notification_with_validate(device_token, None)
             .await
     }
 
     /// Sends a push notification to a device using Google's FCM API.
-    /// This method should be used when a real notification needs to be dispatched to an end-user device.
+    /// This method should be used when a real notification needs to be
+    /// dispatched to an end-user device.
     ///
     /// # Arguments
-    /// * `device_token` - The device token to which the notification will be sent.
-    /// * `information` - A `NotificationInformation` struct containing data to be sent in the notification.
+    /// * `device_token` - The device token to which the notification will be
+    ///   sent.
+    /// * `information` - A `NotificationInformation` struct containing data to
+    ///   be sent in the notification.
     ///
     /// # Returns
-    /// Returns `Ok(())` on successful dispatch of the notification, and `Err` on failure.
+    /// Returns `Ok(())` on successful dispatch of the notification, and `Err`
+    /// on failure.
     ///
     /// # Errors
-    /// Errors may include issues with network connectivity, token validation, or errors from the Google API response.
+    /// Errors may include issues with network connectivity, token validation,
+    /// or errors from the Google API response.
     pub async fn send_push_notification(
         &self,
         device_token: &str,
         information: NotificationInformation,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), NotificationError> {
         self.send_push_notification_with_validate(device_token, Some(information))
             .await
-            .map(|_| ())
     }
 
     async fn send_push_notification_with_validate(
         &self,
         device_token: &str,
         information: Option<NotificationInformation>,
-    ) -> anyhow::Result<bool> {
-        let access_token = self.service_account.token(SCOPES).await?;
+    ) -> Result<(), NotificationError> {
+        let access_token = self
+            .service_account
+            .token(SCOPES)
+            .await
+            .map_err(|_| AuthenticationError)?;
         let mut payload = json!({});
         if Option::is_none(&information) {
             payload["validate_only"] = json!(true);
@@ -119,51 +168,27 @@ where
                 .json(&payload)
                 .send()
                 .await;
+
             match response {
-                Ok(res) if res.status().is_success() => Ok(true),
-                Ok(res) if res.status() == StatusCode::TOO_MANY_REQUESTS => {
-                    Err(backoff::Error::transient(anyhow!(
-                        "Too many requests sent to Google API: {}",
-                        &payload
-                    )))
-                }
-                Ok(res) if res.status().is_client_error() => {
-                    let status = res.status();
-                    match res.json::<Value>().await {
-                        Ok(content) => {
-                            if content["error"]["status"] == "INVALID_ARGUMENT" && status == StatusCode::BAD_REQUEST {
-                                Ok(false)
-                            } else {
-                                Err(backoff::Error::permanent(anyhow!(
-                                    "Bad request sent to Google API: {}",
-                                    content,
-                                )))
-                            }
-                        }
-                        Err(err) => Err(backoff::Error::permanent(anyhow!(
-                            "Content returned from Google API is not valid json: {}",
-                            err
-                        ))),
-                    }
-                }
-                Ok(res) => {
-                    let status = res.status();
-                    let error_text = res.text().await.unwrap_or_default();
-                    if status.is_server_error() {
-                        Err(backoff::Error::transient(anyhow!(
-                            "Google API responded with server error: {} with text {}",
-                            status,
-                            error_text
-                        )))
-                    } else {
-                        Err(backoff::Error::permanent(anyhow!(
-                            "Google API responded with client error: {} with text {}",
-                            status,
-                            error_text
+                Ok(res) => match res.status() {
+                    StatusCode::OK => Ok(()),
+                    StatusCode::TOO_MANY_REQUESTS => Err(backoff::Error::transient(ServerError(
+                        "Too many requests".to_string(),
+                    ))),
+                    StatusCode::BAD_REQUEST => Err(backoff::Error::permanent(InvalidArgumentError)),
+                    StatusCode::NOT_FOUND => Err(backoff::Error::permanent(UnregisteredError)),
+                    _ if res.status().is_client_error() => {
+                        Err(backoff::Error::permanent(ClientError(
+                            "Client calling Google API, while not seem to be related to the input \
+                             of the user"
+                                .to_string(),
                         )))
                     }
-                }
-                Err(e) => Err(backoff::Error::transient(anyhow!("Network error: {}", e))),
+                    _ => Err(backoff::Error::transient(ServerError(
+                        "Other server error".to_string(),
+                    ))),
+                },
+                Err(e) => Err(backoff::Error::transient(ServerError(e.to_string()))),
             }
         };
         retry(self.backoff_policy.clone(), operation).await
@@ -172,26 +197,23 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
     use super::*;
     use anyhow::Result;
     use async_trait::async_trait;
     use backoff::ExponentialBackoff;
-    use gcp_auth::{CustomServiceAccount, Token};
+    use gcp_auth::Token;
     use reqwest::Client;
     use std::sync::Arc;
 
     pub struct MockTokenProvider {
         pub token_response: Arc<String>,
+        pub should_fail:    bool,
     }
 
-    use std::time::Duration;
-    use concordium_rust_sdk::base::contracts_common::AccountAddress;
     use enum_iterator::{all, Sequence};
-    use num_bigint::BigInt;
     use quickcheck::{Arbitrary, Gen};
     use quickcheck_macros::quickcheck;
-    use rand::random;
+    use std::time::Duration;
 
     fn generate_mock_token() -> Token {
         let json_data = json!({
@@ -206,7 +228,10 @@ mod tests {
     #[async_trait]
     impl TokenProvider for MockTokenProvider {
         async fn token(&self, _scopes: &[&str]) -> Result<Arc<Token>, gcp_auth::Error> {
-            Ok(Arc::new(generate_mock_token()))
+            match &self.should_fail {
+                true => Err(gcp_auth::Error::Str("Mock token provider failed")),
+                false => Ok(Arc::new(generate_mock_token())),
+            }
         }
 
         async fn project_id(&self) -> Result<Arc<str>, gcp_auth::Error> {
@@ -218,47 +243,47 @@ mod tests {
 
     #[derive(Debug, Clone, Copy, Sequence)]
     enum RetryStatusCode {
-        TooManyRequests = 429,
+        TooManyRequests     = 429,
         InternalServerError = 500,
-        NotImplemented = 501,
-        BadGateway = 502,
-        ServiceUnavailable = 503,
-        GatewayTimeout = 504,
+        NotImplemented      = 501,
+        BadGateway          = 502,
+        ServiceUnavailable  = 503,
+        GatewayTimeout      = 504,
         HTTPVersionNotSupported = 505,
         VariantAlsoNegotiates = 506,
         InsufficientStorage = 507,
-        LoopDetected = 508,
-        NotExtended = 510,
+        LoopDetected        = 508,
+        NotExtended         = 510,
         NetworkAuthenticationRequired = 511,
     }
 
     #[derive(Debug, Clone, Copy, Sequence)]
     pub enum ZeroRetryStatusCode {
-        BadRequest = 400,
-        Unauthorized = 401,
-        PaymentRequired = 402,
-        Forbidden = 403,
-        NotFound = 404,
-        MethodNotAllowed = 405,
-        NotAcceptable = 406,
+        BadRequest           = 400,
+        Unauthorized         = 401,
+        PaymentRequired      = 402,
+        Forbidden            = 403,
+        NotFound             = 404,
+        MethodNotAllowed     = 405,
+        NotAcceptable        = 406,
         ProxyAuthenticationRequired = 407,
-        RequestTimeout = 408,
-        Conflict = 409,
-        Gone = 410,
-        LengthRequired = 411,
-        PreconditionFailed = 412,
-        PayloadTooLarge = 413,
-        UriTooLong = 414,
+        RequestTimeout       = 408,
+        Conflict             = 409,
+        Gone                 = 410,
+        LengthRequired       = 411,
+        PreconditionFailed   = 412,
+        PayloadTooLarge      = 413,
+        UriTooLong           = 414,
         UnsupportedMediaType = 415,
-        RangeNotSatisfiable = 416,
-        ExpectationFailed = 417,
-        ImATeapot = 418,
-        MisdirectedRequest = 421,
-        UnprocessableEntity = 422,
-        Locked = 423,
-        FailedDependency = 424,
-        TooEarly = 425,
-        UpgradeRequired = 426,
+        RangeNotSatisfiable  = 416,
+        ExpectationFailed    = 417,
+        ImATeapot            = 418,
+        MisdirectedRequest   = 421,
+        UnprocessableEntity  = 422,
+        Locked               = 423,
+        FailedDependency     = 424,
+        TooEarly             = 425,
+        UpgradeRequired      = 426,
         PreconditionRequired = 428,
         RequestHeaderFieldsTooLarge = 431,
         UnavailableForLegalReasons = 451,
@@ -283,6 +308,7 @@ mod tests {
         let mut server = mockito::Server::new_async().await;
         let mock_provider = MockTokenProvider {
             token_response: Arc::new("mock_token".to_string()),
+            should_fail:    false,
         };
         let mock = server
             .mock("POST", "/v1/projects/fake_project_id/messages:send")
@@ -294,17 +320,13 @@ mod tests {
 
         let client = Client::new();
         let backoff_policy = ExponentialBackoff::default();
-        let mut gc =
-            GoogleCloud::new(client, backoff_policy, mock_provider, "mock_project_id").unwrap();
+        let mut gc = GoogleCloud::new(client, backoff_policy, mock_provider, "mock_project_id");
         gc.url = format!(
             "{}{}",
             server.url(),
             "/v1/projects/fake_project_id/messages:send".to_string()
         );
-        match gc.validate_device_token("valid_device_token").await {
-            Ok(value) => assert!(value),
-            Err(_) => assert!(false),
-        }
+        assert!(gc.validate_device_token("valid_device_token").await.is_ok());
         mock.assert();
     }
 
@@ -313,13 +335,15 @@ mod tests {
         let mut server = mockito::Server::new();
         let mock_provider = MockTokenProvider {
             token_response: Arc::new("mock_token".to_string()),
+            should_fail:    false,
         };
 
-        let mock = server.mock("POST", "/v1/projects/fake_project_id/messages:send")
-              .with_status(server_side_status_code as usize)
-              .with_body("Service temporarily unavailable")
-              .expect_at_least(2)
-              .create();
+        let mock = server
+            .mock("POST", "/v1/projects/fake_project_id/messages:send")
+            .with_status(server_side_status_code as usize)
+            .with_body("Service temporarily unavailable")
+            .expect_at_least(2)
+            .create();
 
         let client = Client::new();
         let backoff_policy = ExponentialBackoff {
@@ -329,7 +353,7 @@ mod tests {
             ..ExponentialBackoff::default()
         };
 
-        let mut gc = GoogleCloud::new(client, backoff_policy, mock_provider, "mock_project_id").unwrap();
+        let mut gc = GoogleCloud::new(client, backoff_policy, mock_provider, "mock_project_id");
         gc.url = format!(
             "{}{}",
             server.url(),
@@ -346,9 +370,11 @@ mod tests {
         let mut server = mockito::Server::new();
         let mock_provider = MockTokenProvider {
             token_response: Arc::new("mock_token".to_string()),
+            should_fail:    false,
         };
 
-        let mock = server.mock("POST", "/v1/projects/fake_project_id/messages:send")
+        let mock = server
+            .mock("POST", "/v1/projects/fake_project_id/messages:send")
             .with_status(status_code as usize)
             .with_body("Client side error")
             .expect(1)
@@ -362,7 +388,7 @@ mod tests {
             ..ExponentialBackoff::default()
         };
 
-        let mut gc = GoogleCloud::new(client, backoff_policy, mock_provider, "mock_project_id").unwrap();
+        let mut gc = GoogleCloud::new(client, backoff_policy, mock_provider, "mock_project_id");
         gc.url = format!(
             "{}{}",
             server.url(),
@@ -375,24 +401,28 @@ mod tests {
     }
 
     #[quickcheck]
-    fn test_retry_on_zero_retry_status_codes_eventually_succeeds(server_side_status_code: RetryStatusCode) -> bool {
+    fn test_retry_on_zero_retry_status_codes_eventually_succeeds(
+        server_side_status_code: RetryStatusCode,
+    ) -> bool {
         let mut server = mockito::Server::new();
         let mock_provider = MockTokenProvider {
             token_response: Arc::new("mock_token".to_string()),
+            should_fail:    false,
         };
 
-        let failing_calls = server.mock("POST", "/v1/projects/fake_project_id/messages:send")
-              .with_status(server_side_status_code as usize)
-              .with_body("Service temporarily unavailable")
-              .expect(2)
-              .create();
+        let failing_calls = server
+            .mock("POST", "/v1/projects/fake_project_id/messages:send")
+            .with_status(server_side_status_code as usize)
+            .with_body("Service temporarily unavailable")
+            .expect(2)
+            .create();
 
-        let succeeding_call = server.mock("POST", "/v1/projects/fake_project_id/messages:send")
+        let succeeding_call = server
+            .mock("POST", "/v1/projects/fake_project_id/messages:send")
             .with_status(200)
             .with_body("Service temporarily unavailable")
             .expect(1)
             .create();
-
 
         let client = Client::new();
         let backoff_policy = ExponentialBackoff {
@@ -402,7 +432,7 @@ mod tests {
             ..ExponentialBackoff::default()
         };
 
-        let mut gc = GoogleCloud::new(client, backoff_policy, mock_provider, "mock_project_id").unwrap();
+        let mut gc = GoogleCloud::new(client, backoff_policy, mock_provider, "mock_project_id");
         gc.url = format!(
             "{}{}",
             server.url(),
@@ -412,6 +442,37 @@ mod tests {
         let result = runtime.block_on(gc.validate_device_token("valid_device_token"));
         failing_calls.assert();
         succeeding_call.assert();
-        result.unwrap_or_else(|_| false)
+        result.is_ok()
+    }
+
+    #[tokio::test]
+    async fn should_not_continue_on_auth_failed() {
+        let mut server = mockito::Server::new_async().await;
+        let mock_provider = MockTokenProvider {
+            token_response: Arc::new("mock_token".to_string()),
+            should_fail:    true,
+        };
+        let mock = server
+            .mock("POST", "/v1/projects/fake_project_id/messages:send")
+            .with_status(200)
+            .with_body(json!({"success": true}).to_string())
+            .expect(0)
+            .create_async()
+            .await;
+
+        let client = Client::new();
+        let backoff_policy = ExponentialBackoff::default();
+        let mut gc = GoogleCloud::new(client, backoff_policy, mock_provider, "mock_project_id");
+        gc.url = format!(
+            "{}{}",
+            server.url(),
+            "/v1/projects/fake_project_id/messages:send".to_string()
+        );
+
+        mock.assert();
+        assert!(match gc.validate_device_token("valid_device_token").await {
+            Err(AuthenticationError) => true,
+            _ => false,
+        });
     }
 }

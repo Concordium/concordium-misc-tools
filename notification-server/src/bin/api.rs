@@ -1,5 +1,6 @@
 use anyhow::anyhow;
 use axum::{
+    body::Body,
     extract::{Json, Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
@@ -15,10 +16,11 @@ use gcp_auth::CustomServiceAccount;
 use lazy_static::lazy_static;
 use notification_server::{
     database::DatabaseConnection,
-    google_cloud::GoogleCloud,
+    google_cloud::{GoogleCloud, NotificationError},
     models::{DeviceSubscription, Preference},
 };
-use serde_json::json;
+use serde::Serialize;
+use serde_json::{json, Value};
 use std::{collections::HashSet, path::PathBuf, str::FromStr, sync::Arc, time::Duration};
 use tokio_postgres::Config;
 use tracing::{error, info};
@@ -96,65 +98,87 @@ async fn upsert_account_device(
     Path(device): Path<String>,
     State(state): State<Arc<AppState>>,
     Json(subscription): Json<DeviceSubscription>,
-) -> Result<impl IntoResponse, Response> {
+) -> impl IntoResponse {
     info!(
         "Subscribing accounts {:?} to device {}",
         subscription, device
     );
-    if subscription.preferences.len() > *MAX_PREFERENCES_LENGTH {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            format!("Preferences exceeded length of {}", *MAX_PREFERENCES_LENGTH),
-        )
-            .into_response())?;
-    }
-    let unique_preferences: HashSet<_> = subscription.preferences.iter().collect();
-    if unique_preferences.len() != subscription.preferences.len() {
-        return Err((StatusCode::BAD_REQUEST, "Duplicate preferences found").into_response());
-    }
+    let response: Result<String, (StatusCode, String)> = {
+        if subscription.preferences.len() > *MAX_PREFERENCES_LENGTH {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                format!("Preferences exceeded length of {}", *MAX_PREFERENCES_LENGTH),
+            ))?;
+        }
+        let unique_preferences: HashSet<_> = subscription.preferences.iter().collect();
+        if unique_preferences.len() != subscription.preferences.len() {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                "Duplicate preferences found".to_string(),
+            ));
+        }
 
-    if subscription.accounts.len() > MAX_RESOURCES_LENGTH {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            format!("Accounts exceed maximum length of {}", MAX_RESOURCES_LENGTH),
-        )
-            .into_response())?;
-    }
+        if subscription.accounts.len() > MAX_RESOURCES_LENGTH {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                format!("Accounts exceed maximum length of {}", MAX_RESOURCES_LENGTH),
+            ))?;
+        }
 
-    let decoded_accounts: Result<Vec<AccountAddress>, Response> = subscription
-        .accounts
-        .iter()
-        .map(|account| {
-            AccountAddress::from_str(account).map_err(|e| {
-                error!("Failed to parse account address: {}", e);
-                (StatusCode::BAD_REQUEST, "Failed to parse account address").into_response()
+        let decoded_accounts: Result<Vec<AccountAddress>, Response> = subscription
+            .accounts
+            .iter()
+            .map(|account| {
+                AccountAddress::from_str(account).map_err(|e| {
+                    error!("Failed to parse account address: {}", e);
+                    (StatusCode::BAD_REQUEST, "Failed to parse account address")
+                })
             })
-        })
-        .collect();
+            .collect();
 
-    if let Err(err) = state.google_cloud.validate_device_token(&device).await {
-        error!(
-            "Unexpected response provided by gcm service while validating device_token: {}",
-            err
-        );
-        return Err((StatusCode::BAD_REQUEST, "Invalid device token").into_response());
+        if let Err(err) = state.google_cloud.validate_device_token(&device).await {
+            error!(
+                "Unexpected response provided by gcm service while validating device_token: {}",
+                err
+            );
+            let (status, message) = match err {
+                NotificationError::InvalidArgumentError => {
+                    (StatusCode::BAD_REQUEST, "Invalid device token".to_string())
+                }
+                NotificationError::UnregisteredError => (
+                    StatusCode::NOT_FOUND,
+                    "The device token has not been registered".to_string(),
+                ),
+                NotificationError::AuthenticationError => (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Authentication towards the GCM service failed".to_string(),
+                ),
+                NotificationError::ClientError(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg),
+                NotificationError::ServerError(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg),
+            };
+            return Err((status, message));
+        }
+
+        let decoded_accounts = decoded_accounts?;
+        state
+            .db_connection
+            .prepared
+            .upsert_subscription(decoded_accounts, subscription.preferences, &device)
+            .await
+            .map_err(|e| {
+                error!("Database error: {}", e);
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Failed to write subscriptions to database",
+                )
+                    .into_response()
+            })?;
+        Ok("Subscribed accounts to device".to_string())
+    };
+    match response {
+        Ok(message) => (200, Json(json!({ "message": message }))),
+        Err((status_code, message)) => (status_code, Json(json!({ "errorMessage": message }))),
     }
-
-    let decoded_accounts = decoded_accounts?;
-    state
-        .db_connection
-        .prepared
-        .upsert_subscription(decoded_accounts, subscription.preferences, &device)
-        .await
-        .map_err(|e| {
-            error!("Database error: {}", e);
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Failed to write subscriptions to database",
-            )
-                .into_response()
-        })?;
-    Ok(Json(json!({"message": "Subscribed accounts to device"})))
 }
 
 #[tokio::main]
