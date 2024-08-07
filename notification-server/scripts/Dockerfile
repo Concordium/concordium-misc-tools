@@ -15,9 +15,11 @@ WORKDIR /usr/app
 
 RUN apt-get update && \
     apt-get -y install \
+      postgresql-client \
       ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
+COPY notification-server/resources /usr/app/resources
 COPY --from=build /usr/app/notification-server/target/release/notification-api /usr/app/notification-server/target/release/notification-service ./
 
 RUN chmod +x notification-api notification-service
