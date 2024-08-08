@@ -21,9 +21,9 @@ pub enum NotificationError {
     ClientError(String),
     #[error("Device token had an invalid format")]
     InvalidArgumentError,
-    #[error("Device token has been unregistered")]
-    AuthenticationError(String),
     #[error("Authentication error: {0}")]
+    AuthenticationError(String),
+    #[error("Device token has been unregistered")]
     UnregisteredError,
 }
 
