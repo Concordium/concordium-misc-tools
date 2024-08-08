@@ -92,7 +92,7 @@ lazy_static! {
 }
 
 /// Processes a device subscription by validating and updating the device's
-/// preferences and accounts.
+/// accounts.
 ///
 /// # Arguments
 /// * `device` - A string identifier for the device.
