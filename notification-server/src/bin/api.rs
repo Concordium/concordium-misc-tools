@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context};
+use anyhow::Context;
 use axum::{
     extract::{Json, Path, State},
     http::StatusCode,
