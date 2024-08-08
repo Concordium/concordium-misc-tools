@@ -8,35 +8,24 @@ use backoff::{future::retry, ExponentialBackoff};
 use gcp_auth::TokenProvider;
 use reqwest::{Client, StatusCode};
 use serde_json::json;
-use std::{
-    collections::HashMap,
-    fmt::{Display, Formatter},
-};
+use std::{collections::HashMap, fmt::Display};
+use thiserror::Error;
 
 const SCOPES: &[&str; 1] = &["https://www.googleapis.com/auth/firebase.messaging"];
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Error)]
 pub enum NotificationError {
+    #[error("Server Error: {0}")]
     ServerError(String),
+    #[error("Client Error: {0}")]
     ClientError(String),
+    #[error("Device token had an invalid format")]
     InvalidArgumentError,
+    #[error("Device token has been unregistered")]
     AuthenticationError(String),
+    #[error("Authentication error: {0}")]
     UnregisteredError,
 }
-
-impl Display for NotificationError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ClientError(msg) => write!(f, "Client Error: {}", msg),
-            ServerError(msg) => write!(f, "Server Error: {}", msg),
-            InvalidArgumentError => write!(f, "Device token had an invalid format"),
-            UnregisteredError => write!(f, "Device token has been unregistered"),
-            AuthenticationError(msg) => write!(f, "Authentication error: {}", msg),
-        }
-    }
-}
-
-impl std::error::Error for NotificationError {}
 
 #[derive(Debug)]
 pub struct GoogleCloud<T>
