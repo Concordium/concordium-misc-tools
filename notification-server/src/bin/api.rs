@@ -91,7 +91,25 @@ lazy_static! {
     static ref MAX_PREFERENCES_LENGTH: usize = all::<Preference>().collect::<Vec<_>>().len();
 }
 
-async fn handle(
+/// Processes a device subscription by validating and updating the device's preferences and accounts.
+///
+/// # Arguments
+/// * `device` - A string identifier for the device.
+/// * `subscription` - The subscription details including preferences and accounts.
+/// * `state` - Shared application state including database and external service connections.
+///
+/// # Returns
+/// Returns a `Result` indicating success with a confirmation message or an error with status code and description.
+///
+/// # Errors
+/// Returns `Err` with appropriate status code and error message for any of the following conditions:
+/// - Exceeding the maximum preferences length.
+/// - Duplicate preferences found.
+/// - Exceeding the maximum number of accounts.
+/// - Parsing failure of account addresses.
+/// - Device token validation failure.
+/// - Database errors during subscription update.
+async fn process_device_subscription(
     device: String,
     subscription: DeviceSubscription,
     state: Arc<AppState>,
@@ -187,7 +205,7 @@ async fn upsert_account_device(
         "Subscribing accounts {:?} to device {}",
         subscription, device
     );
-    let response: Result<String, (StatusCode, String)> = handle(device, subscription, state).await;
+    let response: Result<String, (StatusCode, String)> = process_device_subscription(device, subscription, state).await;
     match response {
         Ok(message) => (StatusCode::OK, Json(json!({ "message": message }))),
         Err((status_code, message)) => (status_code, Json(json!({ "errorMessage": message }))),
