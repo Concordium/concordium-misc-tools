@@ -1,4 +1,4 @@
-use anyhow::anyhow;
+use anyhow::{anyhow, Context};
 use axum::{
     extract::{Json, Path, State},
     http::StatusCode,
@@ -220,7 +220,7 @@ async fn main() -> anyhow::Result<()> {
     let service_account = CustomServiceAccount::from_file(path)?;
     let project_id = service_account
         .project_id()
-        .ok_or(anyhow!("Project ID not found in service account"))?
+        .context("Project ID not found in service account")?
         .to_string();
     let app_state = Arc::new(AppState {
         db_connection: DatabaseConnection::create(args.db_connection).await?,
