@@ -20,6 +20,6 @@ RUN apt-get update && \
     && rm -rf /var/lib/apt/lists/*
 
 COPY notification-server/resources /usr/app/resources
-COPY --from=build /usr/app/notification-server/target/release/notification-api /usr/app/notification-server/target/release/notification-service ./
+COPY --from=build /usr/app/notification-server/target/release/notification-api /usr/app/notification-server/target/release/notification-service /usr/bin/
 
-RUN chmod +x notification-api notification-service
+RUN chmod +x /usr/bin/notification-api /usr/bin/notification-service
