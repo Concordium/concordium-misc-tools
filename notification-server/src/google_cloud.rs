@@ -8,7 +8,7 @@ use backoff::{future::retry, ExponentialBackoff};
 use gcp_auth::TokenProvider;
 use reqwest::{Client, StatusCode};
 use serde_json::json;
-use std::{collections::HashMap, fmt::Display};
+use std::collections::HashMap;
 use thiserror::Error;
 
 const SCOPES: &[&str; 1] = &["https://www.googleapis.com/auth/firebase.messaging"];
