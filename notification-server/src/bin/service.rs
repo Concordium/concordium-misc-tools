@@ -1,7 +1,9 @@
+use anyhow::Context;
 use backoff::ExponentialBackoff;
 use clap::Parser;
 use concordium_rust_sdk::v2::{Client, Endpoint};
 use dotenv::dotenv;
+use gcp_auth::CustomServiceAccount;
 use notification_server::{
     database::DatabaseConnection, google_cloud::GoogleCloud, processor::process,
 };
@@ -99,11 +101,13 @@ async fn main() -> anyhow::Result<()> {
         .timeout(Duration::from_secs(args.google_client_timeout_secs))
         .build()?;
 
-    let gcloud = GoogleCloud::new(
-        PathBuf::from(args.google_application_credentials_path),
-        http_client,
-        retry_policy,
-    )?;
+    let path = PathBuf::from(args.google_application_credentials_path);
+    let service_account = CustomServiceAccount::from_file(path)?;
+    let project_id = service_account
+        .project_id()
+        .context("Project ID not found in service account")?
+        .to_string();
+    let gcloud = GoogleCloud::new(http_client, retry_policy, service_account, &project_id);
     let database_connection = DatabaseConnection::create(args.db_connection).await?;
 
     let mut concordium_client = Client::new(endpoint).await?;
