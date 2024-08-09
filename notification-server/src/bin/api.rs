@@ -96,10 +96,8 @@ lazy_static! {
 ///
 /// # Arguments
 /// * `device` - A string identifier for the device.
-/// * `subscription` - The subscription details including preferences and
-///   accounts.
-/// * `state` - Shared application state including database and external service
-///   connections.
+/// * `subscription` - The subscription details including accounts.
+/// * `state` - Shared application state
 ///
 /// # Returns
 /// Returns a `Result` indicating success with a confirmation message or an
@@ -173,11 +171,11 @@ async fn process_device_subscription(
             ),
             NotificationError::ClientError(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "Client error received from external message service service".to_string(),
+                "Client error received from external message service".to_string(),
             ),
             NotificationError::ServerError(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "Server error received from external message service service".to_string(),
+                "Server error received from external message service".to_string(),
             ),
         };
         return Err((status, message));
