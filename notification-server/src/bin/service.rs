@@ -19,7 +19,8 @@ struct Args {
     #[arg(
         long = "node",
         help = "The endpoint is expected to point to a concordium node grpc v2 API's.",
-        default_value = "https://grpc.testnet.concordium.com:20000"
+        default_value = "https://grpc.testnet.concordium.com:20000",
+        env = "NOTIFICATION_SERVER_BACKEND_NODE"
     )]
     endpoint: Endpoint,
     /// Database connection string.
