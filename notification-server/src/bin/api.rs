@@ -216,7 +216,7 @@ async fn upsert_account_device(
                 info!("Invalid request: {}", message);
             }
             (status_code, Json(json!({ "errorMessage": message })))
-        },
+        }
     }
 }
 
