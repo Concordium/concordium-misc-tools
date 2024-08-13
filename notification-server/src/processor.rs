@@ -31,7 +31,7 @@ fn convert<T: Into<BigInt>>(
     }
 }
 
-fn get_cis2_events_addresses(effects: &AccountTransactionEffects) -> Vec<NotificationInformation> {
+fn map_transaction_to_notification_information(effects: &AccountTransactionEffects) -> Vec<NotificationInformation> {
     match &effects {
         AccountTransactionEffects::AccountTransfer { to, amount } => {
             vec![NotificationInformation::new(
@@ -106,7 +106,7 @@ pub async fn process(
         .flat_map(|t| {
             futures::stream::iter(match t.details {
                 AccountTransaction(ref account_transaction) => {
-                    get_cis2_events_addresses(&account_transaction.effects)
+                    map_transaction_to_notification_information(&account_transaction.effects)
                 }
                 _ => vec![],
             })

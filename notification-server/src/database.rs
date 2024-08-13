@@ -4,6 +4,7 @@ use concordium_rust_sdk::common::types::AccountAddress;
 use deadpool_postgres::{Manager, ManagerConfig, Pool, RecyclingMethod};
 use lazy_static::lazy_static;
 use std::collections::{HashMap, HashSet};
+use std::vec::IntoIter;
 use tokio_postgres::NoTls;
 
 #[derive(Clone, Debug)]
@@ -21,7 +22,7 @@ impl PreparedStatements {
             .await
             .context("Failed to start a transaction")?;
         let get_devices_from_account = transaction
-            .prepare("SELECT device_id FROM account_device_mapping WHERE address = $1 LIMIT 1000")
+            .prepare("SELECT device_id, preferences FROM account_device_mapping WHERE address = $1 LIMIT 1000")
             .await
             .context("Failed to create account device mapping")?;
         let upsert_device = transaction
@@ -46,15 +47,18 @@ impl PreparedStatements {
     pub async fn get_devices_from_account(
         &self,
         account_address: AccountAddress,
-    ) -> anyhow::Result<Vec<String>> {
+    ) -> anyhow::Result<Vec<(String, HashSet<Preference>)>> {
         let client = self.pool.get().await.context("Failed to get client")?;
         let params: &[&(dyn tokio_postgres::types::ToSql + Sync)] = &[&account_address.0.as_ref()];
         let rows = client.query(&self.get_devices_from_account, params).await?;
-        let devices: Vec<String> = rows
+        rows
             .iter()
-            .map(|row| row.try_get::<_, String>(0))
-            .collect::<Result<Vec<String>, _>>()?;
-        Ok(devices)
+            .map(|row| {
+                let device_id = row.try_get::<_, String>(0)?;
+                let preferences = bitmask_to_preferences(row.try_get::<_, i32>(1)?);
+                Ok((device_id, preferences))
+            })
+            .collect::<Result<Vec<(String, HashSet<Preference>)>, _>>()
     }
 
     pub async fn upsert_subscription(
@@ -64,7 +68,7 @@ impl PreparedStatements {
         device_id: &str,
     ) -> anyhow::Result<()> {
         let mut client = self.pool.get().await.context("Failed to get client")?;
-        let preferences_mask = preferences_to_bitmask(&preferences);
+        let preferences_mask = preferences_to_bitmask(preferences.into_iter());
         let transaction = client.transaction().await?;
         for account in account_address {
             let params: &[&(dyn tokio_postgres::types::ToSql + Sync)] =
@@ -104,14 +108,14 @@ lazy_static! {
     .collect();
 }
 
-pub fn preferences_to_bitmask(preferences: &[Preference]) -> i32 {
-    let unique_preferences: HashSet<Preference> = preferences.iter().copied().collect();
+pub fn preferences_to_bitmask(preferences: IntoIter<Preference>) -> i32 {
+    let unique_preferences: HashSet<Preference> = preferences.into_iter().collect();
     unique_preferences
         .iter()
         .fold(0, |acc, &pref| acc | PREFERENCE_MAP[&pref])
 }
 
-pub fn bitmask_to_preferences(bitmask: i32) -> Vec<Preference> {
+pub fn bitmask_to_preferences(bitmask: i32) -> HashSet<Preference> {
     PREFERENCE_MAP
         .iter()
         .filter_map(|(&key, &value)| {
@@ -134,7 +138,7 @@ mod tests {
 
     #[test]
     fn test_preference_map_coverage_and_uniqueness() {
-        let expected_variants = all::<Preference>().collect::<Vec<_>>();
+        let expected_variants = all::<Preference>().collect::<HashSet<_>>();
 
         // Check for coverage
         for variant in &expected_variants {
@@ -146,15 +150,12 @@ mod tests {
         }
 
         // Check for uniqueness of indices
-        let mut indices = vec![];
-        for &index in PREFERENCE_MAP.values() {
-            assert!(
-                !indices.contains(&index),
-                "Duplicate index found: {}",
-                index
-            );
-            indices.push(index);
-        }
+        let indices = PREFERENCE_MAP.values().cloned().collect::<HashSet<_>>();
+        assert_eq!(
+            indices.len(),
+            PREFERENCE_MAP.len(),
+            "Indices in PREFERENCE_MAP are not unique."
+        );
 
         // Ensure all variants are accounted for
         assert_eq!(
@@ -167,11 +168,11 @@ mod tests {
     #[test]
     fn test_preferences_to_bitmask_and_back() {
         let preferences = vec![Preference::CIS2Transaction, Preference::CCDTransaction];
-        let bitmask = preferences_to_bitmask(&preferences);
+        let bitmask = preferences_to_bitmask(preferences.clone().into_iter());
 
         let decoded_preferences = bitmask_to_preferences(bitmask);
-        let expected_preferences_set: HashSet<_> = preferences.into_iter().collect();
-        let decoded_preferences_set: HashSet<_> = decoded_preferences.into_iter().collect();
+        let expected_preferences_set = HashSet::from_iter(preferences.into_iter());
+        let decoded_preferences_set = decoded_preferences;
 
         assert_eq!(decoded_preferences_set, expected_preferences_set);
     }
@@ -179,27 +180,27 @@ mod tests {
     #[test]
     fn test_single_preference_to_bitmask_and_back() {
         let preferences = vec![Preference::CIS2Transaction];
-        let bitmask = preferences_to_bitmask(&preferences);
-        assert_eq!(bitmask, 1);
+        let bitmask = preferences_to_bitmask(preferences.clone().into_iter());
+        assert_eq!(bitmask, PREFERENCE_MAP[&Preference::CIS2Transaction]);
 
         let decoded_preferences = bitmask_to_preferences(bitmask);
-        assert_eq!(decoded_preferences, preferences);
+        assert_eq!(decoded_preferences, HashSet::from_iter(preferences.into_iter()));
 
         let preferences2 = vec![Preference::CCDTransaction];
-        let bitmask2 = preferences_to_bitmask(&preferences2);
-        assert_eq!(bitmask2, 2);
+        let bitmask2 = preferences_to_bitmask(preferences2.clone().into_iter());
+        assert_eq!(bitmask2, PREFERENCE_MAP[&Preference::CCDTransaction]);
 
         let decoded_preferences2 = bitmask_to_preferences(bitmask2);
-        assert_eq!(decoded_preferences2, preferences2);
+        assert_eq!(decoded_preferences2, HashSet::from_iter(preferences2.into_iter()));
     }
 
     #[test]
     fn test_no_preference() {
         let preferences = vec![];
-        let bitmask = preferences_to_bitmask(&preferences);
-        assert_eq!(bitmask, 0); // No preferences
+        let bitmask = preferences_to_bitmask(preferences.into_iter());
+        assert_eq!(bitmask, 0); // No preferences set
 
         let decoded_preferences = bitmask_to_preferences(bitmask);
-        assert_eq!(decoded_preferences, preferences);
+        assert!(decoded_preferences.is_empty(), "No preferences should be decoded from a bitmask of 0.");
     }
 }

@@ -122,11 +122,12 @@ async fn main() -> anyhow::Result<()> {
             .response;
         for result in process(transactions).await.iter() {
             println!("address: {}, amount: {}", result.address, result.amount);
-            for device in database_connection
+            for (device, preferences) in database_connection
                 .prepared
                 .get_devices_from_account(result.address)
                 .await?
                 .iter()
+                .filter(|(_, preferences)| preferences.contains(&result.transaction_type))
             {
                 gcloud
                     .send_push_notification(device, result.to_owned())
