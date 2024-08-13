@@ -143,7 +143,6 @@ where
             "token": device_token,
             "data": entity_data
         });
-        println!("Payload: {}", payload.clone().to_string());
 
         let operation = || async {
             let response = self
