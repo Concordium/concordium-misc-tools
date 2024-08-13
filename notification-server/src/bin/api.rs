@@ -153,10 +153,6 @@ async fn process_device_subscription(
         .collect();
 
     if let Err(err) = state.google_cloud.validate_device_token(&device).await {
-        error!(
-            "Unexpected response provided by gcm service while validating device_token: {}",
-            err
-        );
         let (status, message) = match err {
             NotificationError::InvalidArgumentError => {
                 (StatusCode::BAD_REQUEST, "Invalid device token".to_string())
@@ -212,7 +208,15 @@ async fn upsert_account_device(
         process_device_subscription(device, subscription, state).await;
     match response {
         Ok(message) => (StatusCode::OK, Json(json!({ "message": message }))),
-        Err((status_code, message)) => (status_code, Json(json!({ "errorMessage": message }))),
+        Err((status_code, message)) => {
+            if status_code.is_server_error() {
+                error!("Server error: {}", message);
+            }
+            if status_code.is_client_error() {
+                info!("Invalid request: {}", message);
+            }
+            (status_code, Json(json!({ "errorMessage": message })))
+        }
     }
 }
 
