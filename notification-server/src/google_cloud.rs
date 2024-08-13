@@ -8,7 +8,6 @@ use backoff::{future::retry, ExponentialBackoff};
 use gcp_auth::TokenProvider;
 use reqwest::{Client, StatusCode};
 use serde_json::json;
-use std::collections::HashMap;
 use thiserror::Error;
 
 const SCOPES: &[&str; 1] = &["https://www.googleapis.com/auth/firebase.messaging"];
@@ -205,6 +204,7 @@ mod tests {
     use quickcheck::{Arbitrary, Gen};
     use quickcheck_macros::quickcheck;
     use std::time::Duration;
+    use concordium_rust_sdk::id::types::AccountAddress;
 
     fn generate_mock_token() -> Token {
         let json_data = json!({

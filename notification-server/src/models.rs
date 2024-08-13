@@ -2,7 +2,6 @@ use concordium_rust_sdk::base::contracts_common::AccountAddress;
 use enum_iterator::Sequence;
 use num_bigint::BigInt;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 /// Represents details for a notification.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
