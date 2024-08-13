@@ -135,10 +135,10 @@ where
         if Option::is_none(&information) {
             payload["validate_only"] = json!(true);
         }
-        let entity_data: HashMap<String, String> = if let Some(information) = information {
-            information.into_hashmap()
+        let entity_data = if let Some(information) = information {
+            json!(information)
         } else {
-            HashMap::new()
+            json!({})
         };
         payload["message"] = json!({
             "token": device_token,

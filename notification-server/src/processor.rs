@@ -1,4 +1,4 @@
-use crate::models::NotificationInformation;
+use crate::models::{NotificationInformation, Preference};
 use concordium_rust_sdk::{
     cis2,
     cis2::Event,
@@ -22,7 +22,11 @@ fn convert<T: Into<BigInt>>(
     }
 
     match address {
-        Account(address) => Some(NotificationInformation::new(address, amount)),
+        Account(address) => Some(NotificationInformation::new(
+            address,
+            amount,
+            Preference::CIS2Transaction,
+        )),
         _ => None,
     }
 }
@@ -30,16 +34,28 @@ fn convert<T: Into<BigInt>>(
 fn get_cis2_events_addresses(effects: &AccountTransactionEffects) -> Vec<NotificationInformation> {
     match &effects {
         AccountTransactionEffects::AccountTransfer { to, amount } => {
-            vec![NotificationInformation::new(*to, amount.micro_ccd.into())]
+            vec![NotificationInformation::new(
+                *to,
+                amount.micro_ccd.into(),
+                Preference::CCDTransaction,
+            )]
         }
         AccountTransactionEffects::AccountTransferWithMemo { to, amount, .. } => {
-            vec![NotificationInformation::new(*to, amount.micro_ccd.into())]
+            vec![NotificationInformation::new(
+                *to,
+                amount.micro_ccd.into(),
+                Preference::CCDTransaction,
+            )]
         }
         AccountTransactionEffects::ContractUpdateIssued { effects } => effects
             .iter()
             .flat_map(|effect| match effect {
                 ContractTraceElement::Transferred { to, amount, .. } => {
-                    vec![NotificationInformation::new(*to, amount.micro_ccd.into())]
+                    vec![NotificationInformation::new(
+                        *to,
+                        amount.micro_ccd.into(),
+                        Preference::CIS2Transaction,
+                    )]
                 }
                 ContractTraceElement::Updated { data } => data
                     .events
@@ -60,6 +76,7 @@ fn get_cis2_events_addresses(effects: &AccountTransactionEffects) -> Vec<Notific
                 amount.iter().fold(BigInt::from(0), |acc, &(_, item)| {
                     acc + BigInt::from(item.micro_ccd)
                 }),
+                Preference::CCDTransaction,
             )]
         }
         AccountTransactionEffects::TransferredWithScheduleAndMemo { to, amount, .. } => {
@@ -68,6 +85,7 @@ fn get_cis2_events_addresses(effects: &AccountTransactionEffects) -> Vec<Notific
                 amount.iter().fold(BigInt::from(0), |acc, &(_, item)| {
                     acc + BigInt::from(item.micro_ccd)
                 }),
+                Preference::CCDTransaction,
             )]
         }
         _ => vec![],
@@ -95,6 +113,7 @@ pub async fn process(
 mod tests {
     use std::{fmt::Debug, str::FromStr};
 
+    use crate::models::Preference;
     use concordium_rust_sdk::{
         base::{
             contracts_common::AccountAddress,
@@ -255,8 +274,9 @@ mod tests {
             };
 
             let notification = NotificationInformation {
-                address: receiver_address,
-                amount:  BigInt::from(amount.micro_ccd),
+                address:          receiver_address,
+                amount:           BigInt::from(amount.micro_ccd),
+                transaction_type: Preference::CCDTransaction,
             };
 
             EmittingBlockItemSummaryPair(summary, notification)
