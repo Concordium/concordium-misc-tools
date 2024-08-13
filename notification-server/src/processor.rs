@@ -24,7 +24,7 @@ fn convert<T: Into<BigInt>>(
     match address {
         Account(address) => Some(NotificationInformation::new(
             address,
-            amount,
+            amount.to_string(),
             Preference::CIS2Transaction,
         )),
         _ => None,
@@ -36,14 +36,14 @@ fn get_cis2_events_addresses(effects: &AccountTransactionEffects) -> Vec<Notific
         AccountTransactionEffects::AccountTransfer { to, amount } => {
             vec![NotificationInformation::new(
                 *to,
-                amount.micro_ccd.into(),
+                amount.micro_ccd.to_string(),
                 Preference::CCDTransaction,
             )]
         }
         AccountTransactionEffects::AccountTransferWithMemo { to, amount, .. } => {
             vec![NotificationInformation::new(
                 *to,
-                amount.micro_ccd.into(),
+                amount.micro_ccd.to_string(),
                 Preference::CCDTransaction,
             )]
         }
@@ -53,7 +53,7 @@ fn get_cis2_events_addresses(effects: &AccountTransactionEffects) -> Vec<Notific
                 ContractTraceElement::Transferred { to, amount, .. } => {
                     vec![NotificationInformation::new(
                         *to,
-                        amount.micro_ccd.into(),
+                        amount.micro_ccd.to_string(),
                         Preference::CIS2Transaction,
                     )]
                 }
@@ -73,18 +73,24 @@ fn get_cis2_events_addresses(effects: &AccountTransactionEffects) -> Vec<Notific
         AccountTransactionEffects::TransferredWithSchedule { to, amount } => {
             vec![NotificationInformation::new(
                 *to,
-                amount.iter().fold(BigInt::from(0), |acc, &(_, item)| {
-                    acc + BigInt::from(item.micro_ccd)
-                }),
+                amount
+                    .iter()
+                    .fold(BigInt::from(0), |acc, &(_, item)| {
+                        acc + BigInt::from(item.micro_ccd)
+                    })
+                    .to_string(),
                 Preference::CCDTransaction,
             )]
         }
         AccountTransactionEffects::TransferredWithScheduleAndMemo { to, amount, .. } => {
             vec![NotificationInformation::new(
                 *to,
-                amount.iter().fold(BigInt::from(0), |acc, &(_, item)| {
-                    acc + BigInt::from(item.micro_ccd)
-                }),
+                amount
+                    .iter()
+                    .fold(BigInt::from(0), |acc, &(_, item)| {
+                        acc + BigInt::from(item.micro_ccd)
+                    })
+                    .to_string(),
                 Preference::CCDTransaction,
             )]
         }
@@ -275,7 +281,7 @@ mod tests {
 
             let notification = NotificationInformation {
                 address:          receiver_address,
-                amount:           BigInt::from(amount.micro_ccd),
+                amount:           BigInt::from(amount.micro_ccd).to_string(),
                 transaction_type: Preference::CCDTransaction,
             };
 

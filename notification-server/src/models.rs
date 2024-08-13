@@ -1,6 +1,5 @@
 use concordium_rust_sdk::base::contracts_common::AccountAddress;
 use enum_iterator::Sequence;
-use num_bigint::BigInt;
 use serde::{Deserialize, Serialize};
 
 /// Represents details for a notification.
@@ -11,15 +10,14 @@ pub struct NotificationInformation {
     #[serde(rename = "recipient")]
     pub address:          AccountAddress,
     /// The amount being involved in the notification emitting event.
-    #[serde(rename = "amount")]
-    pub amount:           BigInt,
+    pub amount:           String,
     /// The type of event that the notification is about.
     #[serde(rename = "type")]
     pub transaction_type: Preference,
 }
 
 impl NotificationInformation {
-    pub fn new(address: AccountAddress, amount: BigInt, transaction_type: Preference) -> Self {
+    pub fn new(address: AccountAddress, amount: String, transaction_type: Preference) -> Self {
         Self {
             address,
             amount,
