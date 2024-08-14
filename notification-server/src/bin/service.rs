@@ -110,7 +110,6 @@ async fn main() -> anyhow::Result<()> {
     let gcloud = GoogleCloud::new(http_client, retry_policy, service_account, &project_id);
     let database_connection = DatabaseConnection::create(args.db_connection).await?;
 
-
     let mut concordium_client = Client::new(endpoint).await?;
     loop {
         let mut receiver = concordium_client.get_finalized_blocks().await?;
