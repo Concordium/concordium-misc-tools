@@ -871,7 +871,7 @@ impl RegisterDataGenerator {
 impl Generate for RegisterDataGenerator {
     fn generate(&mut self) -> anyhow::Result<AccountTransaction<EncodedPayload>> {
         let data_bytes: Vec<u8> = (0..self.size).map(|_| self.rng.gen()).collect();
-        let data: RegisteredData = data_bytes.try_into().unwrap();
+        let data: RegisteredData = data_bytes.try_into()?;
         let expiry = TransactionTime::seconds_after(self.args.expiry);
 
         let tx = send::register_data(
