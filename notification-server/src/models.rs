@@ -1,29 +1,28 @@
 use concordium_rust_sdk::base::contracts_common::AccountAddress;
 use enum_iterator::Sequence;
-use num_bigint::BigInt;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 /// Represents details for a notification.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct NotificationInformation {
     /// The blockchain account address unawarely involved in the notification
     /// emitting event.
-    pub address: AccountAddress,
+    #[serde(rename = "recipient")]
+    pub address:          AccountAddress,
     /// The amount being involved in the notification emitting event.
-    pub amount:  BigInt,
+    pub amount:           String,
+    /// The type of event that the notification is about.
+    #[serde(rename = "type")]
+    pub transaction_type: Preference,
 }
 
 impl NotificationInformation {
-    pub fn new(address: AccountAddress, amount: BigInt) -> Self { Self { address, amount } }
-}
-
-impl NotificationInformation {
-    pub fn into_hashmap(self) -> HashMap<String, String> {
-        let mut map = HashMap::new();
-        map.insert("amount".to_string(), self.amount.to_string());
-        map.insert("recipient".to_string(), self.address.to_string());
-        map
+    pub fn new(address: AccountAddress, amount: String, transaction_type: Preference) -> Self {
+        Self {
+            address,
+            amount,
+            transaction_type,
+        }
     }
 }
 
