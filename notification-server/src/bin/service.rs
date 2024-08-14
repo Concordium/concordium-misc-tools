@@ -8,10 +8,8 @@ use notification_server::{
     database::DatabaseConnection, google_cloud::GoogleCloud, processor::process,
 };
 use std::{path::PathBuf, time::Duration};
-use tonic::{
-    codegen::{http, tokio_stream::StreamExt},
-    transport::ClientTlsConfig,
-};
+use log::info;
+use tonic::{codegen::{http, tokio_stream::StreamExt}, transport::ClientTlsConfig};
 
 #[derive(Debug, Parser)]
 struct Args {
@@ -70,6 +68,7 @@ struct Args {
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> anyhow::Result<()> {
     dotenv().ok();
+    tracing_subscriber::fmt::init();
     let args = Args::parse();
     let endpoint = if args
         .endpoint
@@ -111,35 +110,45 @@ async fn main() -> anyhow::Result<()> {
     let gcloud = GoogleCloud::new(http_client, retry_policy, service_account, &project_id);
     let database_connection = DatabaseConnection::create(args.db_connection).await?;
 
+
     let mut concordium_client = Client::new(endpoint).await?;
-    let mut receiver = concordium_client.get_finalized_blocks().await?;
-    while let Some(v) = receiver.next().await {
-        let block_hash = v?.block_hash;
-        println!("Blockhash: {:?}", block_hash);
-        let transactions = concordium_client
-            .get_block_transaction_events(block_hash)
-            .await?
-            .response;
-        for result in process(transactions).await.iter() {
-            println!("address: {}, amount: {}", result.address, result.amount);
-            for device in database_connection
-                .prepared
-                .get_devices_from_account(result.address)
+    loop {
+        let mut receiver = concordium_client.get_finalized_blocks().await?;
+        while let Some(v) = receiver.next().await {
+            let finalized_block = match v {
+                Ok(v) => v,
+                Err(e) => {
+                    info!("Error while reading block: {:?}", e);
+                    continue;
+                }
+            };
+            let block_hash = finalized_block.block_hash;
+            println!("Blockhash: {:?}", block_hash);
+            let transactions = concordium_client
+                .get_block_transaction_events(block_hash)
                 .await?
-                .iter()
-                .filter_map(|(device, preferences)| {
-                    if preferences.contains(&result.transaction_type) {
-                        Some(device)
-                    } else {
-                        None
-                    }
-                })
-            {
-                gcloud
-                    .send_push_notification(device, result.to_owned())
-                    .await?;
+                .response;
+            for result in process(transactions).await.iter() {
+                println!("address: {}, amount: {}", result.address, result.amount);
+                for device in database_connection
+                    .prepared
+                    .get_devices_from_account(result.address)
+                    .await?
+                    .iter()
+                    .filter_map(|(device, preferences)| {
+                        if preferences.contains(&result.transaction_type) {
+                            Some(device)
+                        } else {
+                            None
+                        }
+                    })
+                {
+                    gcloud
+                        .send_push_notification(device, result.to_owned())
+                        .await?;
+                }
             }
         }
+        info!("Restarting block stream")
     }
-    Ok(())
 }
