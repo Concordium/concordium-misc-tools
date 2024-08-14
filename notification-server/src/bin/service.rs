@@ -112,6 +112,7 @@ async fn main() -> anyhow::Result<()> {
 
     let mut concordium_client = Client::new(endpoint).await?;
     loop {
+        info!("Reading finalized blocks");
         let mut receiver = concordium_client.get_finalized_blocks().await?;
         while let Some(v) = receiver.next().await {
             let finalized_block = match v {
@@ -122,13 +123,12 @@ async fn main() -> anyhow::Result<()> {
                 }
             };
             let block_hash = finalized_block.block_hash;
-            println!("Blockhash: {:?}", block_hash);
             let transactions = concordium_client
                 .get_block_transaction_events(block_hash)
                 .await?
                 .response;
             for result in process(transactions).await.iter() {
-                println!("address: {}, amount: {}", result.address, result.amount);
+                info!("Sending notification to account {} with type {:?}", result.address, result.transaction_type);
                 for device in database_connection
                     .prepared
                     .get_devices_from_account(result.address)
@@ -148,6 +148,5 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
         }
-        info!("Restarting block stream")
     }
 }
