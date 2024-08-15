@@ -3,7 +3,6 @@ use backoff::ExponentialBackoff;
 use clap::Parser;
 use concordium_rust_sdk::v2::{Client, Endpoint};
 use dotenv::dotenv;
-use futures::SinkExt;
 use gcp_auth::CustomServiceAccount;
 use log::info;
 use notification_server::{
@@ -14,7 +13,7 @@ use tonic::{
     codegen::{http, tokio_stream::StreamExt},
     transport::ClientTlsConfig,
 };
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, FmtSubscriber};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[derive(Debug, Parser)]
 struct Args {
