@@ -127,16 +127,12 @@ async fn main() -> anyhow::Result<()> {
                 .get_devices_from_account(result.address)
                 .await?
                 .iter()
-                .filter_map(|(device, preferences)| {
-                    if preferences.contains(&result.transaction_type) {
-                        Some(device)
-                    } else {
-                        None
-                    }
+                .filter(|device| {
+                    device.preferences.contains(&result.transaction_type)
                 })
             {
                 gcloud
-                    .send_push_notification(device, result.to_owned())
+                    .send_push_notification(&device.device_token, result.to_owned())
                     .await?;
             }
         }

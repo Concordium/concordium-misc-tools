@@ -1,4 +1,4 @@
-use crate::models::Preference;
+use crate::models::{Device, Preference};
 use anyhow::Context;
 use concordium_rust_sdk::common::types::AccountAddress;
 use deadpool_postgres::{Manager, ManagerConfig, Pool, RecyclingMethod};
@@ -47,7 +47,7 @@ impl PreparedStatements {
     pub async fn get_devices_from_account(
         &self,
         account_address: AccountAddress,
-    ) -> anyhow::Result<Vec<(String, HashSet<Preference>)>> {
+    ) -> anyhow::Result<Vec<Device>> {
         let client = self.pool.get().await.context("Failed to get client")?;
         let params: &[&(dyn tokio_postgres::types::ToSql + Sync)] = &[&account_address.0.as_ref()];
         let rows = client.query(&self.get_devices_from_account, params).await?;
@@ -56,9 +56,9 @@ impl PreparedStatements {
             .map(|row| {
                 let device_id = row.try_get::<_, String>(0)?;
                 let preferences = bitmask_to_preferences(row.try_get::<_, i32>(1)?);
-                Ok((device_id, preferences))
+                Ok(Device::new(preferences, device_id))
             })
-            .collect::<Result<Vec<(String, HashSet<Preference>)>, _>>()
+            .collect::<Result<Vec<Device>, _>>()
     }
 
     pub async fn upsert_subscription(

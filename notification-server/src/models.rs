@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use concordium_rust_sdk::base::contracts_common::AccountAddress;
 use enum_iterator::Sequence;
 use serde::{Deserialize, Serialize};
@@ -48,4 +49,16 @@ pub enum Preference {
     CIS2Transaction,
     #[serde(rename = "ccd-tx")]
     CCDTransaction,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Device {
+    pub preferences: HashSet<Preference>,
+    pub device_token: String,
+}
+
+impl Device {
+    pub fn new(preferences: HashSet<Preference>, device_token: String) -> Self {
+        Self { preferences, device_token }
+    }
 }
