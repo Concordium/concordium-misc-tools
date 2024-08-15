@@ -4,12 +4,15 @@ use clap::Parser;
 use concordium_rust_sdk::v2::{Client, Endpoint};
 use dotenv::dotenv;
 use gcp_auth::CustomServiceAccount;
+use log::info;
 use notification_server::{
     database::DatabaseConnection, google_cloud::GoogleCloud, processor::process,
 };
 use std::{path::PathBuf, time::Duration};
-use log::info;
-use tonic::{codegen::{http, tokio_stream::StreamExt}, transport::ClientTlsConfig};
+use tonic::{
+    codegen::{http, tokio_stream::StreamExt},
+    transport::ClientTlsConfig,
+};
 
 #[derive(Debug, Parser)]
 struct Args {
@@ -128,17 +131,20 @@ async fn main() -> anyhow::Result<()> {
                 .await?
                 .response;
             for result in process(transactions).await.iter() {
-                info!("Sending notification to account {} with type {:?}", result.address, result.transaction_type);
+                info!(
+                    "Sending notification to account {} with type {:?}",
+                    result.address, result.transaction_type
+                );
                 for device in database_connection
                     .prepared
                     .get_devices_from_account(result.address)
                     .await?
-                .iter()
-                .filter(|device| device.preferences.contains(&result.transaction_type))
+                    .iter()
+                    .filter(|device| device.preferences.contains(&result.transaction_type))
                 {
-                  gcloud
-                      .send_push_notification(&device.device_token, result.to_owned())
-                      .await?;
+                    gcloud
+                        .send_push_notification(&device.device_token, result.to_owned())
+                        .await?;
                 }
             }
         }
