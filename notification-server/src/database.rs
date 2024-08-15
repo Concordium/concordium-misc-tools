@@ -1,10 +1,12 @@
-use crate::models::Preference;
+use crate::models::{Device, Preference};
 use anyhow::Context;
 use concordium_rust_sdk::common::types::AccountAddress;
 use deadpool_postgres::{Manager, ManagerConfig, Pool, RecyclingMethod};
 use lazy_static::lazy_static;
-use std::collections::{HashMap, HashSet};
-use std::vec::IntoIter;
+use std::{
+    collections::{HashMap, HashSet},
+    vec::IntoIter,
+};
 use tokio_postgres::NoTls;
 
 #[derive(Clone, Debug)]
@@ -22,7 +24,10 @@ impl PreparedStatements {
             .await
             .context("Failed to start a transaction")?;
         let get_devices_from_account = transaction
-            .prepare("SELECT device_id, preferences FROM account_device_mapping WHERE address = $1 LIMIT 1000")
+            .prepare(
+                "SELECT device_id, preferences FROM account_device_mapping WHERE address = $1 \
+                 LIMIT 1000",
+            )
             .await
             .context("Failed to create account device mapping")?;
         let upsert_device = transaction
@@ -47,18 +52,17 @@ impl PreparedStatements {
     pub async fn get_devices_from_account(
         &self,
         account_address: AccountAddress,
-    ) -> anyhow::Result<Vec<(String, HashSet<Preference>)>> {
+    ) -> anyhow::Result<Vec<Device>> {
         let client = self.pool.get().await.context("Failed to get client")?;
         let params: &[&(dyn tokio_postgres::types::ToSql + Sync)] = &[&account_address.0.as_ref()];
         let rows = client.query(&self.get_devices_from_account, params).await?;
-        rows
-            .iter()
+        rows.iter()
             .map(|row| {
                 let device_id = row.try_get::<_, String>(0)?;
                 let preferences = bitmask_to_preferences(row.try_get::<_, i32>(1)?);
-                Ok((device_id, preferences))
+                Ok(Device::new(preferences, device_id))
             })
-            .collect::<Result<Vec<(String, HashSet<Preference>)>, _>>()
+            .collect::<Result<Vec<Device>, _>>()
     }
 
     pub async fn upsert_subscription(
@@ -184,14 +188,20 @@ mod tests {
         assert_eq!(bitmask, PREFERENCE_MAP[&Preference::CIS2Transaction]);
 
         let decoded_preferences = bitmask_to_preferences(bitmask);
-        assert_eq!(decoded_preferences, HashSet::from_iter(preferences.into_iter()));
+        assert_eq!(
+            decoded_preferences,
+            HashSet::from_iter(preferences.into_iter())
+        );
 
         let preferences2 = vec![Preference::CCDTransaction];
         let bitmask2 = preferences_to_bitmask(preferences2.clone().into_iter());
         assert_eq!(bitmask2, PREFERENCE_MAP[&Preference::CCDTransaction]);
 
         let decoded_preferences2 = bitmask_to_preferences(bitmask2);
-        assert_eq!(decoded_preferences2, HashSet::from_iter(preferences2.into_iter()));
+        assert_eq!(
+            decoded_preferences2,
+            HashSet::from_iter(preferences2.into_iter())
+        );
     }
 
     #[test]
@@ -201,6 +211,9 @@ mod tests {
         assert_eq!(bitmask, 0); // No preferences set
 
         let decoded_preferences = bitmask_to_preferences(bitmask);
-        assert!(decoded_preferences.is_empty(), "No preferences should be decoded from a bitmask of 0.");
+        assert!(
+            decoded_preferences.is_empty(),
+            "No preferences should be decoded from a bitmask of 0."
+        );
     }
 }

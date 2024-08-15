@@ -31,7 +31,9 @@ fn convert<T: Into<BigInt>>(
     }
 }
 
-fn map_transaction_to_notification_information(effects: &AccountTransactionEffects) -> Vec<NotificationInformation> {
+fn map_transaction_to_notification_information(
+    effects: &AccountTransactionEffects,
+) -> Vec<NotificationInformation> {
     match &effects {
         AccountTransactionEffects::AccountTransfer { to, amount } => {
             vec![NotificationInformation::new(
