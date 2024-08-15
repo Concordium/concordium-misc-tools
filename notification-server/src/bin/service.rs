@@ -3,6 +3,7 @@ use backoff::ExponentialBackoff;
 use clap::Parser;
 use concordium_rust_sdk::v2::{Client, Endpoint};
 use dotenv::dotenv;
+use futures::SinkExt;
 use gcp_auth::CustomServiceAccount;
 use log::info;
 use notification_server::{
@@ -13,6 +14,7 @@ use tonic::{
     codegen::{http, tokio_stream::StreamExt},
     transport::ClientTlsConfig,
 };
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, FmtSubscriber};
 
 #[derive(Debug, Parser)]
 struct Args {
@@ -66,13 +68,21 @@ struct Args {
         default_value_t = 180  // 3 minutes
     )]
     google_client_max_interval_time_secs: u64,
+    #[clap(
+        long = "log-level",
+        default_value = "info",
+        help = "The maximum log level. Possible values are: `trace`, `debug`, `info`, `warn`, and \
+                `error`.",
+        env = "LOG_LEVEL"
+    )]
+    log_level: tracing_subscriber::filter::LevelFilter,
 }
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> anyhow::Result<()> {
     dotenv().ok();
-    tracing_subscriber::fmt::init();
     let args = Args::parse();
+    tracing_subscriber::registry().with(args.log_level).init();
     let endpoint = if args
         .endpoint
         .uri()
@@ -125,6 +135,10 @@ async fn main() -> anyhow::Result<()> {
                     continue;
                 }
             };
+            info!(
+                "Processed block {} at height {}",
+                finalized_block.block_hash, finalized_block.height
+            );
             let block_hash = finalized_block.block_hash;
             let transactions = concordium_client
                 .get_block_transaction_events(block_hash)
