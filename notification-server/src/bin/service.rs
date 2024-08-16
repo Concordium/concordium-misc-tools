@@ -81,7 +81,7 @@ struct Args {
     log_level: tracing_subscriber::filter::LevelFilter,
 }
 
-const DATABASE_RETRY_DELAY: Duration = Duration::from_secs(2);
+const DATABASE_RETRY_DELAY: Duration = Duration::from_secs(1);
 
 async fn traverse_chain(
     database_connection: &DatabaseConnection,
