@@ -1,20 +1,23 @@
 use anyhow::Context;
 use backoff::ExponentialBackoff;
 use clap::Parser;
-use concordium_rust_sdk::v2::{Client, Endpoint};
+use concordium_rust_sdk::v2::{Client, Endpoint, FinalizedBlockInfo};
 use dotenv::dotenv;
+use futures::Stream;
 use gcp_auth::CustomServiceAccount;
-use log::info;
+use log::{error, info};
 use notification_server::{
-    database::DatabaseConnection, google_cloud::GoogleCloud, processor::process,
+    database::DatabaseConnection,
+    google_cloud::{GoogleCloud, NotificationError},
+    processor::process,
 };
 use std::{path::PathBuf, time::Duration};
+use tokio::time::sleep;
 use tonic::{
     codegen::{http, tokio_stream::StreamExt},
     transport::ClientTlsConfig,
 };
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[derive(Debug, Parser)]
 struct Args {
@@ -78,6 +81,79 @@ struct Args {
     log_level: tracing_subscriber::filter::LevelFilter,
 }
 
+const DATABASE_RETRY_DELAY: Duration = Duration::from_secs(2);
+
+async fn traverse_chain(
+    database_connection: &DatabaseConnection,
+    concordium_client: &mut Client,
+    gcloud: &GoogleCloud<CustomServiceAccount>,
+    mut receiver: impl Stream<Item = Result<FinalizedBlockInfo, tonic::Status>> + Unpin,
+) {
+    while let Some(v) = receiver.next().await {
+        let finalized_block = match v {
+            Ok(v) => v,
+            Err(e) => {
+                error!("Error while reading block: {:?}", e);
+                continue;
+            }
+        };
+        info!(
+            "Processed block {} at height {}",
+            finalized_block.block_hash, finalized_block.height
+        );
+        let block_hash = finalized_block.block_hash;
+        let transactions = match concordium_client
+            .get_block_transaction_events(block_hash)
+            .await
+        {
+            Ok(transactions) => transactions.response,
+            Err(err) => {
+                error!("Error occurred while reading transactions: {:?}", err);
+                continue;
+            }
+        };
+        for result in process(transactions).await.iter() {
+            info!(
+                "Sending notification to account {} with type {:?}",
+                result.address, result.transaction_type
+            );
+
+            let devices = loop {
+                match database_connection
+                    .prepared
+                    .get_devices_from_account(result.address)
+                    .await
+                {
+                    Ok(devices) => break devices,
+                    Err(err) => {
+                        error!(
+                            "Error retrieving devices for account {}: {:?}. Retrying...",
+                            result.address, err
+                        );
+                        sleep(DATABASE_RETRY_DELAY).await;
+                    }
+                }
+            };
+
+            for device in devices
+                .iter()
+                .filter(|device| device.preferences.contains(&result.transaction_type))
+            {
+                if let Err(err) = gcloud
+                    .send_push_notification(&device.device_token, result.to_owned())
+                    .await
+                {
+                    if err == NotificationError::UnregisteredError {
+                        info!("Device {} is unregistered", device.device_token);
+                    } else {
+                        error!("Error occurred while sending notification: {:?}", err);
+                    }
+                }
+            }
+        }
+    }
+}
+
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> anyhow::Result<()> {
     dotenv().ok();
@@ -134,43 +210,23 @@ async fn main() -> anyhow::Result<()> {
     let database_connection = DatabaseConnection::create(args.db_connection).await?;
 
     let mut concordium_client = Client::new(endpoint).await?;
+
     loop {
-        info!("Reading finalized blocks");
-        let mut receiver = concordium_client.get_finalized_blocks().await?;
-        while let Some(v) = receiver.next().await {
-            let finalized_block = match v {
-                Ok(v) => v,
-                Err(e) => {
-                    info!("Error while reading block: {:?}", e);
-                    continue;
-                }
-            };
-            info!(
-                "Processed block {} at height {}",
-                finalized_block.block_hash, finalized_block.height
-            );
-            let block_hash = finalized_block.block_hash;
-            let transactions = concordium_client
-                .get_block_transaction_events(block_hash)
-                .await?
-                .response;
-            for result in process(transactions).await.iter() {
-                info!(
-                    "Sending notification to account {} with type {:?}",
-                    result.address, result.transaction_type
-                );
-                for device in database_connection
-                    .prepared
-                    .get_devices_from_account(result.address)
-                    .await?
-                    .iter()
-                    .filter(|device| device.preferences.contains(&result.transaction_type))
-                {
-                    gcloud
-                        .send_push_notification(&device.device_token, result.to_owned())
-                        .await?;
-                }
+        info!("Establishing stream of finalized blocks");
+        let receiver = match concordium_client.clone().get_finalized_blocks().await {
+            Ok(receiver) => receiver,
+            Err(err) => {
+                info!("Error occurred while reading finalized blocks: {:?}", err);
+                tokio::time::sleep(Duration::from_secs(10)).await;
+                continue;
             }
-        }
+        };
+        traverse_chain(
+            &database_connection,
+            &mut concordium_client,
+            &gcloud,
+            receiver,
+        )
+        .await;
     }
 }
