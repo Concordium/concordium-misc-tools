@@ -213,7 +213,7 @@ async fn main() -> anyhow::Result<()> {
 
     loop {
         info!("Establishing stream of finalized blocks");
-        let receiver = match concordium_client.clone().get_finalized_blocks().await {
+        let receiver = match concordium_client.get_finalized_blocks().await {
             Ok(receiver) => receiver,
             Err(err) => {
                 info!("Error occurred while reading finalized blocks: {:?}", err);
