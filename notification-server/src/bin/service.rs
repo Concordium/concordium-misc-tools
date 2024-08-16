@@ -13,7 +13,8 @@ use tonic::{
     codegen::{http, tokio_stream::StreamExt},
     transport::ClientTlsConfig,
 };
-use tracing_subscriber::EnvFilter;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 
 #[derive(Debug, Parser)]
 struct Args {
@@ -82,8 +83,14 @@ async fn main() -> anyhow::Result<()> {
     dotenv().ok();
     let args = Args::parse();
 
-    tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::new(args.log_level.to_string()))
+    let log_filter = tracing_subscriber::filter::Targets::new()
+        .with_target(module_path!(), args.log_level)
+        .with_target("tower_http", args.log_level)
+        .with_target("tokio_postgres", args.log_level);
+
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer())
+        .with(log_filter)
         .init();
 
     let endpoint = if args
