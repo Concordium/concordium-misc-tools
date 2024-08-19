@@ -2,14 +2,13 @@ use crate::{
     google_cloud::NotificationError::{
         AuthenticationError, ClientError, InvalidArgumentError, ServerError, UnregisteredError,
     },
-    models::NotificationInformation,
+    models::{CCDTransactionNotificationInformation, NotificationInformation},
 };
 use backoff::{future::retry, ExponentialBackoff};
 use gcp_auth::TokenProvider;
 use reqwest::{Client, StatusCode};
 use serde_json::json;
 use thiserror::Error;
-use crate::models::CCDTransactionNotificationInformation;
 
 const SCOPES: &[&str; 1] = &["https://www.googleapis.com/auth/firebase.messaging"];
 
@@ -91,8 +90,11 @@ where
     /// Errors include network issues, token validation errors, or other
     /// server/client errors as defined by `NotificationError`.
     pub async fn validate_device_token(&self, device_token: &str) -> Result<(), NotificationError> {
-        self.send_push_notification_with_validate::<CCDTransactionNotificationInformation>(device_token, None)
-            .await
+        self.send_push_notification_with_validate::<CCDTransactionNotificationInformation>(
+            device_token,
+            None,
+        )
+        .await
     }
 
     /// Sends a push notification to a device using Google's FCM API.
@@ -203,12 +205,11 @@ mod tests {
     }
 
     use crate::models::{CCDTransactionNotificationInformation, CIS2EventNotificationInformation};
-    use concordium_rust_sdk::id::types::AccountAddress;
+    use concordium_rust_sdk::{cis2::TokenId, id::types::AccountAddress};
     use enum_iterator::{all, Sequence};
     use quickcheck::{Arbitrary, Gen};
     use quickcheck_macros::quickcheck;
     use std::time::Duration;
-    use concordium_rust_sdk::cis2::TokenId;
 
     fn generate_mock_token() -> Token {
         let json_data = json!({
@@ -370,7 +371,7 @@ mod tests {
             .is_ok());
         mock.assert();
     }
-    
+
     #[tokio::test]
     async fn test_send_push_notification_cis2() {
         let mut server = mockito::Server::new_async().await;

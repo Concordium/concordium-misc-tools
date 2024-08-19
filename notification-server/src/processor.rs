@@ -1,4 +1,7 @@
-use crate::models::{CCDTransactionNotificationInformation, CIS2EventNotificationInformation, NotificationInformationType};
+use crate::models::{
+    CCDTransactionNotificationInformation, CIS2EventNotificationInformation,
+    NotificationInformationType,
+};
 use concordium_rust_sdk::{
     cis2,
     cis2::Event,
@@ -23,11 +26,9 @@ fn convert<T: Into<BigInt>>(
     }
 
     match address {
-        Account(address) => Some(NotificationInformationType::CIS2(CIS2EventNotificationInformation::new(
-            address,
-            amount.to_string(),
-            token_id
-        ))),
+        Account(address) => Some(NotificationInformationType::CIS2(
+            CIS2EventNotificationInformation::new(address, amount.to_string(), token_id),
+        )),
         _ => None,
     }
 }
@@ -37,33 +38,46 @@ fn map_transaction_to_notification_information(
 ) -> Vec<NotificationInformationType> {
     match &effects {
         AccountTransactionEffects::AccountTransfer { to, amount } => {
-            vec![NotificationInformationType::CCD(CCDTransactionNotificationInformation::new(
-                *to,
-                amount.micro_ccd.to_string(),
-            ))]
+            vec![NotificationInformationType::CCD(
+                CCDTransactionNotificationInformation::new(*to, amount.micro_ccd.to_string()),
+            )]
         }
         AccountTransactionEffects::AccountTransferWithMemo { to, amount, .. } => {
-            vec![NotificationInformationType::CCD(CCDTransactionNotificationInformation::new(
-                *to,
-                amount.micro_ccd.to_string(),
-            ))]
+            vec![NotificationInformationType::CCD(
+                CCDTransactionNotificationInformation::new(*to, amount.micro_ccd.to_string()),
+            )]
         }
         AccountTransactionEffects::ContractUpdateIssued { effects } => effects
             .iter()
             .flat_map(|effect| match effect {
                 ContractTraceElement::Transferred { to, amount, .. } => {
-                    vec![NotificationInformationType::CCD(CCDTransactionNotificationInformation::new(
-                        *to,
-                        amount.micro_ccd.to_string(),
-                    ))]
+                    vec![NotificationInformationType::CCD(
+                        CCDTransactionNotificationInformation::new(
+                            *to,
+                            amount.micro_ccd.to_string(),
+                        ),
+                    )]
                 }
                 ContractTraceElement::Updated { data } => data
                     .events
                     .iter()
                     .filter_map(|event| match cis2::Event::try_from(event) {
-                        Ok(Event::Transfer { token_id, to, amount, .. }) => convert(to, amount.0, true, token_id),
-                        Ok(Event::Mint { token_id, owner, amount }) => convert(owner, amount.0, true, token_id),
-                        Ok(Event::Burn { token_id, owner, amount }) => convert(owner, amount.0, false, token_id),
+                        Ok(Event::Transfer {
+                            token_id,
+                            to,
+                            amount,
+                            ..
+                        }) => convert(to, amount.0, true, token_id),
+                        Ok(Event::Mint {
+                            token_id,
+                            owner,
+                            amount,
+                        }) => convert(owner, amount.0, true, token_id),
+                        Ok(Event::Burn {
+                            token_id,
+                            owner,
+                            amount,
+                        }) => convert(owner, amount.0, false, token_id),
                         _ => None,
                     })
                     .collect(),
@@ -71,26 +85,30 @@ fn map_transaction_to_notification_information(
             })
             .collect(),
         AccountTransactionEffects::TransferredWithSchedule { to, amount } => {
-            vec![NotificationInformationType::CCD(CCDTransactionNotificationInformation::new(
-                *to,
-                amount
-                    .iter()
-                    .fold(BigInt::from(0), |acc, &(_, item)| {
-                        acc + BigInt::from(item.micro_ccd)
-                    })
-                    .to_string(),
-            ))]
+            vec![NotificationInformationType::CCD(
+                CCDTransactionNotificationInformation::new(
+                    *to,
+                    amount
+                        .iter()
+                        .fold(BigInt::from(0), |acc, &(_, item)| {
+                            acc + BigInt::from(item.micro_ccd)
+                        })
+                        .to_string(),
+                ),
+            )]
         }
         AccountTransactionEffects::TransferredWithScheduleAndMemo { to, amount, .. } => {
-            vec![NotificationInformationType::CCD(CCDTransactionNotificationInformation::new(
-                *to,
-                amount
-                    .iter()
-                    .fold(BigInt::from(0), |acc, &(_, item)| {
-                        acc + BigInt::from(item.micro_ccd)
-                    })
-                    .to_string(),
-            ))]
+            vec![NotificationInformationType::CCD(
+                CCDTransactionNotificationInformation::new(
+                    *to,
+                    amount
+                        .iter()
+                        .fold(BigInt::from(0), |acc, &(_, item)| {
+                            acc + BigInt::from(item.micro_ccd)
+                        })
+                        .to_string(),
+                ),
+            )]
         }
         _ => vec![],
     }
@@ -117,7 +135,10 @@ pub async fn process(
 mod tests {
     use std::{fmt::Debug, str::FromStr};
 
-    use crate::models::{CCDTransactionNotificationInformation, NotificationInformationType};
+    use crate::{
+        models::{CCDTransactionNotificationInformation, NotificationInformationType},
+        processor::process,
+    };
     use concordium_rust_sdk::{
         base::{
             contracts_common::AccountAddress,
@@ -140,7 +161,6 @@ mod tests {
     use quickcheck_macros::quickcheck;
     use rand::{random, thread_rng, Rng};
     use sha2::Digest;
-    use crate::processor::process;
 
     #[derive(Clone, Debug)]
     struct ArbitraryTransactionIndex(pub TransactionIndex);
@@ -276,7 +296,11 @@ mod tests {
                 details:     BlockItemSummaryDetails::AccountTransaction(details(effect.clone())),
             };
 
-            let notification = NotificationInformationType::CCD(CCDTransactionNotificationInformation::new(receiver_address, BigInt::from(amount.micro_ccd).to_string()));
+            let notification =
+                NotificationInformationType::CCD(CCDTransactionNotificationInformation::new(
+                    receiver_address,
+                    BigInt::from(amount.micro_ccd).to_string(),
+                ));
             EmittingBlockItemSummaryPair(summary, notification)
         }
     }

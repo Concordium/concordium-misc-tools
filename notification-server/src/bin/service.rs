@@ -9,6 +9,7 @@ use log::{error, info};
 use notification_server::{
     database::DatabaseConnection,
     google_cloud::{GoogleCloud, NotificationError},
+    models::NotificationInformation,
     processor::process,
 };
 use std::{path::PathBuf, time::Duration};
@@ -18,7 +19,6 @@ use tonic::{
     transport::ClientTlsConfig,
 };
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use notification_server::models::NotificationInformation;
 
 #[derive(Debug, Parser)]
 struct Args {
@@ -116,7 +116,8 @@ async fn traverse_chain(
         for result in process(transactions).await.iter() {
             info!(
                 "Sending notification to account {} with type {:?}",
-                result.address(), result.transaction_type()
+                result.address(),
+                result.transaction_type()
             );
 
             let devices = loop {
@@ -129,7 +130,8 @@ async fn traverse_chain(
                     Err(err) => {
                         error!(
                             "Error retrieving devices for account {}: {:?}. Retrying...",
-                            result.address(), err
+                            result.address(),
+                            err
                         );
                         sleep(DATABASE_RETRY_DELAY).await;
                     }

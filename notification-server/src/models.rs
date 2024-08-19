@@ -1,11 +1,9 @@
-use concordium_rust_sdk::base::contracts_common::AccountAddress;
+use concordium_rust_sdk::{base::contracts_common::AccountAddress, cis2::TokenId};
 use enum_iterator::Sequence;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
-use concordium_rust_sdk::cis2::TokenId;
 
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, )]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum NotificationInformationType {
     CCD(CCDTransactionNotificationInformation),
     CIS2(CIS2EventNotificationInformation),
@@ -24,32 +22,40 @@ pub trait NotificationInformation: Serialize {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CCDTransactionNotificationInformation {
     #[serde(rename = "recipient")]
-    pub address: AccountAddress,
-    pub amount: String,
+    pub address:          AccountAddress,
+    pub amount:           String,
     #[serde(rename = "type")]
-    pub transaction_type: Preference
+    pub transaction_type: Preference,
 }
 
 impl CCDTransactionNotificationInformation {
     pub fn new(address: AccountAddress, amount: String) -> Self {
-        Self { address, amount, transaction_type: Preference::CCDTransaction }
+        Self {
+            address,
+            amount,
+            transaction_type: Preference::CCDTransaction,
+        }
     }
 }
-
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CIS2EventNotificationInformation {
     #[serde(rename = "recipient")]
-    pub address: AccountAddress,
-    pub amount: String,
+    pub address:          AccountAddress,
+    pub amount:           String,
     #[serde(rename = "type")]
     pub transaction_type: Preference,
-    pub token_id: TokenId,
+    pub token_id:         TokenId,
 }
 
 impl CIS2EventNotificationInformation {
     pub fn new(address: AccountAddress, amount: String, token_id: TokenId) -> Self {
-        Self { address, amount, transaction_type: Preference::CIS2Transaction, token_id }
+        Self {
+            address,
+            amount,
+            transaction_type: Preference::CIS2Transaction,
+            token_id,
+        }
     }
 }
 
@@ -77,33 +83,20 @@ impl NotificationInformation for NotificationInformationType {
 }
 
 impl NotificationInformation for CCDTransactionNotificationInformation {
-    fn address(&self) -> &AccountAddress {
-        &self.address
-    }
+    fn address(&self) -> &AccountAddress { &self.address }
 
-    fn amount(&self) -> &String {
-        &self.amount
-    }
+    fn amount(&self) -> &String { &self.amount }
 
-    fn transaction_type(&self) -> &Preference {
-        &self.transaction_type
-    }
+    fn transaction_type(&self) -> &Preference { &self.transaction_type }
 }
 
 impl NotificationInformation for CIS2EventNotificationInformation {
-    fn address(&self) -> &AccountAddress {
-        &self.address
-    }
+    fn address(&self) -> &AccountAddress { &self.address }
 
-    fn amount(&self) -> &String {
-        &self.amount
-    }
+    fn amount(&self) -> &String { &self.amount }
 
-    fn transaction_type(&self) -> &Preference {
-        &self.transaction_type
-    }
+    fn transaction_type(&self) -> &Preference { &self.transaction_type }
 }
-
 
 #[derive(Debug, Deserialize)]
 pub struct DeviceSubscription {
