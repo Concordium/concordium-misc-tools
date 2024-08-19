@@ -3,29 +3,105 @@ use enum_iterator::Sequence;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
-/// Represents details for a notification.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct NotificationInformation {
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, )]
+pub enum NotificationInformationType {
+    CCD(CCDTransactionNotificationInformation),
+    CIS2(CIS2EventNotificationInformation),
+}
+
+pub trait NotificationInformation: Serialize {
     /// The blockchain account address unawarely involved in the notification
     /// emitting event.
-    #[serde(rename = "recipient")]
-    pub address:          AccountAddress,
+    fn address(&self) -> &AccountAddress;
     /// The amount being involved in the notification emitting event.
-    pub amount:           String,
+    fn amount(&self) -> &String;
     /// The type of event that the notification is about.
+    fn transaction_type(&self) -> &Preference;
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CCDTransactionNotificationInformation {
+    #[serde(rename = "recipient")]
+    pub address: AccountAddress,
+    pub amount: String,
+    #[serde(rename = "type")]
+    pub transaction_type: Preference
+}
+
+impl CCDTransactionNotificationInformation {
+    pub fn new(address: AccountAddress, amount: String) -> Self {
+        Self { address, amount, transaction_type: Preference::CCDTransaction }
+    }
+}
+
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CIS2EventNotificationInformation {
+    #[serde(rename = "recipient")]
+    pub address: AccountAddress,
+    pub amount: String,
     #[serde(rename = "type")]
     pub transaction_type: Preference,
 }
 
-impl NotificationInformation {
-    pub fn new(address: AccountAddress, amount: String, transaction_type: Preference) -> Self {
-        Self {
-            address,
-            amount,
-            transaction_type,
+impl CIS2EventNotificationInformation {
+    pub fn new(address: AccountAddress, amount: String) -> Self {
+        Self { address, amount, transaction_type: Preference::CIS2Transaction }
+    }
+}
+
+impl NotificationInformation for NotificationInformationType {
+    fn address(&self) -> &AccountAddress {
+        match self {
+            NotificationInformationType::CCD(info) => info.address(),
+            NotificationInformationType::CIS2(info) => info.address(),
+        }
+    }
+
+    fn amount(&self) -> &String {
+        match self {
+            NotificationInformationType::CCD(info) => info.amount(),
+            NotificationInformationType::CIS2(info) => info.amount(),
+        }
+    }
+
+    fn transaction_type(&self) -> &Preference {
+        match self {
+            NotificationInformationType::CCD(info) => info.transaction_type(),
+            NotificationInformationType::CIS2(info) => info.transaction_type(),
         }
     }
 }
+
+impl NotificationInformation for CCDTransactionNotificationInformation {
+    fn address(&self) -> &AccountAddress {
+        &self.address
+    }
+
+    fn amount(&self) -> &String {
+        &self.amount
+    }
+
+    fn transaction_type(&self) -> &Preference {
+        &self.transaction_type
+    }
+}
+
+impl NotificationInformation for CIS2EventNotificationInformation {
+    fn address(&self) -> &AccountAddress {
+        &self.address
+    }
+
+    fn amount(&self) -> &String {
+        &self.amount
+    }
+
+    fn transaction_type(&self) -> &Preference {
+        &self.transaction_type
+    }
+}
+
 
 #[derive(Debug, Deserialize)]
 pub struct DeviceSubscription {

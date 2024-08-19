@@ -9,6 +9,7 @@ use gcp_auth::TokenProvider;
 use reqwest::{Client, StatusCode};
 use serde_json::json;
 use thiserror::Error;
+use crate::models::CCDTransactionNotificationInformation;
 
 const SCOPES: &[&str; 1] = &["https://www.googleapis.com/auth/firebase.messaging"];
 
@@ -90,7 +91,7 @@ where
     /// Errors include network issues, token validation errors, or other
     /// server/client errors as defined by `NotificationError`.
     pub async fn validate_device_token(&self, device_token: &str) -> Result<(), NotificationError> {
-        self.send_push_notification_with_validate(device_token, None)
+        self.send_push_notification_with_validate::<CCDTransactionNotificationInformation>(device_token, None)
             .await
     }
 
@@ -113,19 +114,19 @@ where
     /// # Errors
     /// Specific errors are returned as `NotificationError` which includes
     /// various client and server-side issues.
-    pub async fn send_push_notification(
+    pub async fn send_push_notification<Y: NotificationInformation>(
         &self,
         device_token: &str,
-        information: NotificationInformation,
+        information: Y,
     ) -> Result<(), NotificationError> {
         self.send_push_notification_with_validate(device_token, Some(information))
             .await
     }
 
-    async fn send_push_notification_with_validate(
+    async fn send_push_notification_with_validate<Y: NotificationInformation>(
         &self,
         device_token: &str,
-        information: Option<NotificationInformation>,
+        information: Option<Y>,
     ) -> Result<(), NotificationError> {
         let access_token = self.service_account.token(SCOPES).await.map_err(|err| {
             AuthenticationError(format!("Authentication error received: {}", err))
@@ -134,6 +135,7 @@ where
         if Option::is_none(&information) {
             payload["validate_only"] = json!(true);
         }
+
         let entity_data = if let Some(information) = information {
             json!(information)
         } else {
@@ -200,7 +202,7 @@ mod tests {
         pub should_fail:    bool,
     }
 
-    use crate::models::Preference;
+    use crate::models::CCDTransactionNotificationInformation;
     use concordium_rust_sdk::id::types::AccountAddress;
     use enum_iterator::{all, Sequence};
     use quickcheck::{Arbitrary, Gen};
@@ -357,10 +359,9 @@ mod tests {
             server.url(),
             "/v1/projects/fake_project_id/messages:send".to_string()
         );
-        let notification_information = NotificationInformation::new(
+        let notification_information = CCDTransactionNotificationInformation::new(
             AccountAddress::from_str("4FmiTW2L2AccyR9VjzsnpWFSAcohXWf7Vf797i36y526mqiEcp").unwrap(),
             "100".to_string(),
-            Preference::CCDTransaction,
         );
         assert!(gc
             .send_push_notification("valid_device_token", notification_information)

@@ -18,6 +18,7 @@ use tonic::{
     transport::ClientTlsConfig,
 };
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use notification_server::models::NotificationInformation;
 
 #[derive(Debug, Parser)]
 struct Args {
@@ -115,20 +116,20 @@ async fn traverse_chain(
         for result in process(transactions).await.iter() {
             info!(
                 "Sending notification to account {} with type {:?}",
-                result.address, result.transaction_type
+                result.address(), result.transaction_type()
             );
 
             let devices = loop {
                 match database_connection
                     .prepared
-                    .get_devices_from_account(result.address)
+                    .get_devices_from_account(result.address().clone())
                     .await
                 {
                     Ok(devices) => break devices,
                     Err(err) => {
                         error!(
                             "Error retrieving devices for account {}: {:?}. Retrying...",
-                            result.address, err
+                            result.address(), err
                         );
                         sleep(DATABASE_RETRY_DELAY).await;
                     }
@@ -137,7 +138,7 @@ async fn traverse_chain(
 
             for device in devices
                 .iter()
-                .filter(|device| device.preferences.contains(&result.transaction_type))
+                .filter(|device| device.preferences.contains(&result.transaction_type()))
             {
                 if let Err(err) = gcloud
                     .send_push_notification(&device.device_token, result.to_owned())
