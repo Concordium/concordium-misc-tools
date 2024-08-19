@@ -15,6 +15,7 @@ fn convert<T: Into<BigInt>>(
     address: Address,
     amount: T,
     is_positive: bool,
+    token_id: cis2::TokenId,
 ) -> Option<NotificationInformationType> {
     let mut amount: BigInt = amount.into();
     if !is_positive {
@@ -25,6 +26,7 @@ fn convert<T: Into<BigInt>>(
         Account(address) => Some(NotificationInformationType::CIS2(CIS2EventNotificationInformation::new(
             address,
             amount.to_string(),
+            token_id
         ))),
         _ => None,
     }
@@ -50,7 +52,7 @@ fn map_transaction_to_notification_information(
             .iter()
             .flat_map(|effect| match effect {
                 ContractTraceElement::Transferred { to, amount, .. } => {
-                    vec![NotificationInformationType::CIS2(CIS2EventNotificationInformation::new(
+                    vec![NotificationInformationType::CCD(CCDTransactionNotificationInformation::new(
                         *to,
                         amount.micro_ccd.to_string(),
                     ))]
@@ -59,9 +61,9 @@ fn map_transaction_to_notification_information(
                     .events
                     .iter()
                     .filter_map(|event| match cis2::Event::try_from(event) {
-                        Ok(Event::Transfer { to, amount, .. }) => convert(to, amount.0, true),
-                        Ok(Event::Mint { owner, amount, .. }) => convert(owner, amount.0, true),
-                        Ok(Event::Burn { owner, amount, .. }) => convert(owner, amount.0, false),
+                        Ok(Event::Transfer { token_id, to, amount, .. }) => convert(to, amount.0, true, token_id),
+                        Ok(Event::Mint { token_id, owner, amount }) => convert(owner, amount.0, true, token_id),
+                        Ok(Event::Burn { token_id, owner, amount }) => convert(owner, amount.0, false, token_id),
                         _ => None,
                     })
                     .collect(),

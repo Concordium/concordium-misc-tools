@@ -135,7 +135,7 @@ where
         if Option::is_none(&information) {
             payload["validate_only"] = json!(true);
         }
-
+        println!("Payload: {:?}", payload);
         let entity_data = if let Some(information) = information {
             json!(information)
         } else {
@@ -202,12 +202,13 @@ mod tests {
         pub should_fail:    bool,
     }
 
-    use crate::models::CCDTransactionNotificationInformation;
+    use crate::models::{CCDTransactionNotificationInformation, CIS2EventNotificationInformation};
     use concordium_rust_sdk::id::types::AccountAddress;
     use enum_iterator::{all, Sequence};
     use quickcheck::{Arbitrary, Gen};
     use quickcheck_macros::quickcheck;
     use std::time::Duration;
+    use concordium_rust_sdk::cis2::TokenId;
 
     fn generate_mock_token() -> Token {
         let json_data = json!({
@@ -319,7 +320,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_send_push_notification() {
+    async fn test_send_push_notification_ccd() {
         let mut server = mockito::Server::new_async().await;
         let mock_provider = MockTokenProvider {
             token_response: Arc::new("mock_token".to_string()),
@@ -369,6 +370,61 @@ mod tests {
             .is_ok());
         mock.assert();
     }
+    
+    #[tokio::test]
+    async fn test_send_push_notification_cis2() {
+        let mut server = mockito::Server::new_async().await;
+        let mock_provider = MockTokenProvider {
+            token_response: Arc::new("mock_token".to_string()),
+            should_fail:    false,
+        };
+
+        let expected_body = json!({
+            "message": {
+                "token": "test_device_token",
+                "data": {
+                    "recipient": "4FmiTW2L2AccyR9VjzsnpWFSAcohXWf7Vf797i36y526mqiEcp",
+                    "amount": "200",
+                    "type": "cis2-tx",
+                    "token_id": "2e"
+                }
+            }
+        });
+
+        let mock = server
+            .mock("POST", "/v1/projects/fake_project_id/messages:send")
+            .match_body(mockito::Matcher::Json(expected_body))
+            .with_status(200)
+            .with_body(json!({"success": true}).to_string())
+            .expect(1)
+            .create_async()
+            .await;
+
+        let client = Client::new();
+        let backoff_policy = ExponentialBackoff {
+            max_elapsed_time: Some(Duration::from_millis(50)),
+            max_interval: Duration::from_millis(1),
+            initial_interval: Duration::from_millis(1),
+            ..ExponentialBackoff::default()
+        };
+        let mut gc = GoogleCloud::new(client, backoff_policy, mock_provider, "mock_project_id");
+        gc.url = format!(
+            "{}{}",
+            server.url(),
+            "/v1/projects/fake_project_id/messages:send".to_string()
+        );
+        let notification_information = CIS2EventNotificationInformation::new(
+            AccountAddress::from_str("4FmiTW2L2AccyR9VjzsnpWFSAcohXWf7Vf797i36y526mqiEcp").unwrap(),
+            "200".to_string(),
+            TokenId::from_str("2e").unwrap(),
+        );
+        assert!(gc
+            .send_push_notification("test_device_token", notification_information)
+            .await
+            .is_ok());
+        mock.assert();
+    }
+
     #[tokio::test]
     async fn test_validate_device_token_success() {
         let mut server = mockito::Server::new_async().await;

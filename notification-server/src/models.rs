@@ -2,6 +2,7 @@ use concordium_rust_sdk::base::contracts_common::AccountAddress;
 use enum_iterator::Sequence;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+use concordium_rust_sdk::cis2::TokenId;
 
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, )]
@@ -43,11 +44,12 @@ pub struct CIS2EventNotificationInformation {
     pub amount: String,
     #[serde(rename = "type")]
     pub transaction_type: Preference,
+    pub token_id: TokenId,
 }
 
 impl CIS2EventNotificationInformation {
-    pub fn new(address: AccountAddress, amount: String) -> Self {
-        Self { address, amount, transaction_type: Preference::CIS2Transaction }
+    pub fn new(address: AccountAddress, amount: String, token_id: TokenId) -> Self {
+        Self { address, amount, transaction_type: Preference::CIS2Transaction, token_id }
     }
 }
 
