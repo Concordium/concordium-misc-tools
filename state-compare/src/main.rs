@@ -6,6 +6,7 @@
 
 use std::fmt::Display;
 
+use anyhow::Context;
 use clap::Parser;
 use concordium_rust_sdk::{
     endpoints,
@@ -113,7 +114,7 @@ async fn main() -> anyhow::Result<()> {
 
     compare_active_bakers(&mut client1, &mut client2, block1, block2).await?;
 
-    compare_baker_pools(&mut client1, &mut client2, block1, block2, pv1, pv2).await?;
+    compare_baker_pools(&mut client1, &mut client2, block1, block2).await?;
 
     compare_update_queues(&mut client1, &mut client2, block1, block2).await?;
 
@@ -451,50 +452,78 @@ async fn compare_baker_pools(
     client2: &mut v2::Client,
     block1: BlockHash,
     block2: BlockHash,
-    pv1: ProtocolVersion,
-    pv2: ProtocolVersion,
 ) -> anyhow::Result<()> {
     info!("Checking baker pools.");
+
     let mut pools1 = client1
         .get_baker_list(block1)
         .await?
         .response
         .try_collect::<Vec<_>>()
         .await?;
+
     let mut pools2 = client2
         .get_baker_list(block2)
         .await?
         .response
         .try_collect::<Vec<_>>()
         .await?;
+
     pools1.sort_unstable();
     pools2.sort_unstable();
+
     compare_iters("Pool", block1, block2, pools1.iter(), pools2.iter());
 
-    if pv1 >= ProtocolVersion::P4 && pv2 >= ProtocolVersion::P4 {
-        for pool in pools1 {
-            let (d1, d2) = futures::try_join!(
-                client1.get_pool_delegators(block1, pool),
-                client2.get_pool_delegators(block2, pool)
-            )?;
-            let mut ds1 = d1.response.try_collect::<Vec<_>>().await?;
-            let mut ds2 = d2.response.try_collect::<Vec<_>>().await?;
-            ds1.sort_unstable_by_key(|x| x.account);
-            ds2.sort_unstable_by_key(|x| x.account);
-            if ds1 != ds2 {
-                warn!("Delegators for pool {pool} differ.");
-            }
+    for pool in pools1 {
+        let (d1, d2) = futures::join!(
+            client1.get_pool_delegators(block1, pool),
+            client2.get_pool_delegators(block2, pool)
+        );
 
-            let (p1, p2) = futures::try_join!(
-                client1.get_pool_info(block1, pool),
-                client2.get_pool_info(block2, pool)
-            )?;
-            if p1.response != p2.response {
-                warn!("Pool {pool} differs.");
+        let (d1, d2) = match (d1, d2) {
+            (Ok(d1), Ok(d2)) => (d1.response, d2.response),
+            (Ok(_), Err(e)) => {
+                warn!("Failed to get delegators for pool {pool} in block 2: {e}");
+                continue;
             }
-        }
-    } else {
-        warn!("Not comparing baker pools since one of the protocol versions is before P4.")
+            // The pool should definitely appear in the first block, we got the list of pools from that block.
+            (Err(e), Ok(_)) => return Err(e).with_context(|| format!("Failed to get delegators for pool {pool}")),
+            (Err(e1), Err(e2)) => {
+                return Err(e2)
+                    .context(e1)
+                    .with_context(|| format!("Failed to get delegators for pool {pool}"))
+            }
+        };
+
+        let mut ds1 = d1.try_collect::<Vec<_>>().await?;
+        let mut ds2 = d2.try_collect::<Vec<_>>().await?;
+
+        ds1.sort_unstable_by_key(|x| x.account);
+        ds2.sort_unstable_by_key(|x| x.account);
+
+        compare!(ds1, ds2, "Delegators for pool {pool}");
+
+        let (p1, p2) = futures::join!(
+            client1.get_pool_info(block1, pool),
+            client2.get_pool_info(block2, pool)
+        );
+
+        let (p1, p2) = match (p1, p2) {
+            (Ok(p1), Ok(p2)) => (p1.response, p2.response),
+            (Ok(_), Err(e)) => {
+                warn!("Failed to get pool {pool} in block 2: {e}");
+                continue;
+            }
+            // The pool should definitely appear in the first block, we got the list of pools from that block.
+            (Err(e), Ok(_)) => return Err(e).with_context(|| format!("Failed to get pool {pool}")),
+            (Err(e1), Err(e2)) => {
+                return Err(e2)
+                    .context(e1)
+                    .with_context(|| format!("Failed to get pool {pool}"))
+            }
+        };
+
+        compare!(p1, p2, "Pool {pool}");
     }
 
     Ok(())
