@@ -300,12 +300,10 @@ async fn compare_accounts(
 
     info!("Querying and comparing all accounts.");
     for acc in accounts1 {
-        let mut a_client = client1.clone();
-        let mut a_client2 = client2.clone();
         let accid = acc.into();
         let (a1, a2) = futures::try_join!(
-            a_client.get_account_info(&accid, block1),
-            a_client2.get_account_info(&accid, block2)
+            client1.get_account_info(&accid, block1),
+            client2.get_account_info(&accid, block2)
         )?;
 
         let mut a1 = a1.response;
@@ -345,9 +343,8 @@ async fn compare_modules(
             client1.get_module_source(&m, block1),
             client2.get_module_source(&m, block2)
         )?;
-        if m1.response != m2.response {
-            warn!("Module {m} differs.");
-        }
+
+        compare!(m1.response, m2.response, "Module {m}");
     }
 
     bar.finish_and_clear();
@@ -372,26 +369,27 @@ async fn compare_instances(
             client1.get_instance_info(c, block1),
             client2.get_instance_info(c, block2)
         )?;
-        if ci1.response != ci2.response {
-            warn!("Instance {c} differs.");
-        }
-        let (mut state1, mut state2) = futures::try_join!(
+
+        compare!(ci1.response, ci2.response, "Contract instance {c}");
+
+        let (state1, state2) = futures::try_join!(
             client1.get_instance_state(c, block1),
             client2.get_instance_state(c, block2)
         )?;
-        while let Some(s1) = state1.response.next().await.transpose()? {
-            if let Some(s2) = state2.response.next().await.transpose()? {
-                if s1 != s2 {
-                    warn!("State differs for {c}.");
-                    break;
-                }
+
+        let mut state1 = state1.response;
+        let mut state2 = state2.response;
+
+        while let Some(s1) = state1.next().await.transpose()? {
+            if let Some(s2) = state2.next().await.transpose()? {
+                compare!(s1, s2, "State for {c}");
             } else {
-                warn!("State differs for {c}.");
-                break;
+                warn!("State for {c} not present in block 2.");
             }
         }
-        if state2.response.next().await.is_some() {
-            warn!("State differs for {c}.");
+
+        if state2.next().await.is_some() {
+            warn!("State for {c} not present in block 1.");
         }
     }
 
