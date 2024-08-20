@@ -109,9 +109,9 @@ async fn main() -> anyhow::Result<()> {
 
     compare_instances(&mut client1, &mut client2, block1, block2).await?;
 
-    compare_passive_delegators(&mut client1, &mut client2, block1, block2, pv1, pv2).await?;
+    compare_passive_delegators(&mut client1, &mut client2, block1, block2).await?;
 
-    compare_active_bakers(&mut client1, &mut client2, block1, block2, pv1, pv2).await?;
+    compare_active_bakers(&mut client1, &mut client2, block1, block2).await?;
 
     compare_baker_pools(&mut client1, &mut client2, block1, block2, pv1, pv2).await?;
 
@@ -403,32 +403,22 @@ async fn compare_passive_delegators(
     client2: &mut v2::Client,
     block1: BlockHash,
     block2: BlockHash,
-    pv1: ProtocolVersion,
-    pv2: ProtocolVersion,
 ) -> anyhow::Result<()> {
     info!("Checking passive delegators.");
 
-    let mut passive1 = if pv1 >= ProtocolVersion::P4 {
-        client1
-            .get_passive_delegators(block1)
-            .await?
-            .response
-            .try_collect::<Vec<_>>()
-            .await?
-    } else {
-        Vec::new()
-    };
+    let mut passive1 = client1
+        .get_passive_delegators(block1)
+        .await?
+        .response
+        .try_collect::<Vec<_>>()
+        .await?;
 
-    let mut passive2 = if pv2 >= ProtocolVersion::P4 {
-        client2
-            .get_passive_delegators(block2)
-            .await?
-            .response
-            .try_collect::<Vec<_>>()
-            .await?
-    } else {
-        Vec::new()
-    };
+    let mut passive2 = client2
+        .get_passive_delegators(block2)
+        .await?
+        .response
+        .try_collect::<Vec<_>>()
+        .await?;
 
     passive1.sort_unstable_by_key(|x| x.account);
     passive2.sort_unstable_by_key(|x| x.account);
@@ -443,27 +433,17 @@ async fn compare_active_bakers(
     client2: &mut v2::Client,
     block1: BlockHash,
     block2: BlockHash,
-    pv1: ProtocolVersion,
-    pv2: ProtocolVersion,
-) -> anyhow::Result<bool> {
+) -> anyhow::Result<()> {
     info!("Checking active bakers.");
-    let mut found_diff = false;
+
     let (ei1, ei2) = futures::try_join!(
         client1.get_election_info(block1),
         client2.get_election_info(block2)
     )?;
-    if pv1 < ProtocolVersion::P6
-        && pv2 < ProtocolVersion::P6
-        && ei1.response.election_difficulty != ei2.response.election_difficulty
-    {
-        warn!("Election difficulty differs.");
-        found_diff = true;
-    }
-    if ei1.response.bakers != ei2.response.bakers {
-        warn!("Bakers differ.");
-        found_diff = true;
-    }
-    Ok(found_diff)
+
+    compare!(ei1.response, ei2.response, "Election info");
+
+    Ok(())
 }
 
 async fn compare_baker_pools(
