@@ -4,16 +4,9 @@
 //! The program will print a collection of diffs between the various parts of
 //! the states between the two blocks.
 
-use std::{
-    fmt::Display,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-};
+use std::fmt::Display;
 
 use clap::Parser;
-use colored::Colorize;
 use concordium_rust_sdk::{
     endpoints,
     id::types::AccountAddress,
@@ -38,15 +31,8 @@ macro_rules! compare {
     };
 }
 
-/// Like eprintln!, but print the provided message in red.
-macro_rules! diff {
-    ($($arg:tt)*) => {{
-        eprintln!("{}", format!($($arg)*).red());
-    }};
-}
-
 #[derive(Parser, Debug)]
-#[clap(version, author)]
+#[clap(version)]
 struct Args {
     /// GRPC V2 interface of the node.
     #[arg(
@@ -73,28 +59,6 @@ struct Args {
     /// If not given the default is the genesis block of the current protocol.
     #[arg(long, env = "STATE_COMPARE_BLOCK2")]
     block2: Option<BlockHash>,
-}
-
-/// Get the protocol version for the two blocks.
-/// This currently uses the rewards overview call since this is the cheapest
-/// call that returns it.
-async fn get_protocol_versions(
-    client1: &mut v2::Client,
-    client2: &mut v2::Client,
-    block1: BlockHash,
-    block2: BlockHash,
-) -> anyhow::Result<(ProtocolVersion, ProtocolVersion)> {
-    let t1 = client1.get_tokenomics_info(&block1).await?;
-    let t2 = client2.get_tokenomics_info(&block2).await?;
-    let p1 = match t1.response {
-        concordium_rust_sdk::types::RewardsOverview::V0 { data } => data.protocol_version,
-        concordium_rust_sdk::types::RewardsOverview::V1 { common, .. } => common.protocol_version,
-    };
-    let p2 = match t2.response {
-        concordium_rust_sdk::types::RewardsOverview::V0 { data } => data.protocol_version,
-        concordium_rust_sdk::types::RewardsOverview::V1 { common, .. } => common.protocol_version,
-    };
-    Ok((p1, p2))
 }
 
 #[tokio::main]
@@ -157,6 +121,28 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Get the protocol version for the two blocks.
+/// This currently uses the rewards overview call since this is the cheapest
+/// call that returns it.
+async fn get_protocol_versions(
+    client1: &mut v2::Client,
+    client2: &mut v2::Client,
+    block1: BlockHash,
+    block2: BlockHash,
+) -> anyhow::Result<(ProtocolVersion, ProtocolVersion)> {
+    let t1 = client1.get_tokenomics_info(&block1).await?;
+    let t2 = client2.get_tokenomics_info(&block2).await?;
+    let p1 = match t1.response {
+        concordium_rust_sdk::types::RewardsOverview::V0 { data } => data.protocol_version,
+        concordium_rust_sdk::types::RewardsOverview::V1 { common, .. } => common.protocol_version,
+    };
+    let p2 = match t2.response {
+        concordium_rust_sdk::types::RewardsOverview::V0 { data } => data.protocol_version,
+        concordium_rust_sdk::types::RewardsOverview::V1 { common, .. } => common.protocol_version,
+    };
+    Ok((p1, p2))
+}
+
 async fn compare_update_queues(
     client1: &mut v2::Client,
     client2: &mut v2::Client,
@@ -172,7 +158,7 @@ async fn compare_update_queues(
         .await?
         .response;
     if s1 != s2 {
-        diff!("    Sequence numbers differ: {s1:#?} {s2:#?}")
+        warn!("    Sequence numbers differ: {s1:#?} {s2:#?}")
     }
     let q1 = client1
         .get_block_pending_updates(block1)
@@ -197,7 +183,7 @@ async fn compare_account_lists(
     client2: &mut v2::Client,
     block1: BlockHash,
     block2: BlockHash,
-) -> anyhow::Result<(bool, Vec<AccountAddress>)> {
+) -> anyhow::Result<Vec<AccountAddress>> {
     let mut accounts1 = client1
         .get_account_list(block1)
         .await?
@@ -212,14 +198,14 @@ async fn compare_account_lists(
         .try_collect::<Vec<_>>()
         .await?;
     accounts2.sort_unstable();
-    let found_diff = compare_iters(
+    compare_iters(
         "Account",
         block1,
         block2,
         accounts1.iter(),
         accounts2.iter(),
     );
-    Ok((found_diff, accounts1))
+    Ok(accounts1)
 }
 
 async fn compare_instance_lists(
@@ -227,7 +213,7 @@ async fn compare_instance_lists(
     client2: &mut v2::Client,
     block1: BlockHash,
     block2: BlockHash,
-) -> anyhow::Result<(bool, Vec<ContractAddress>)> {
+) -> anyhow::Result<Vec<ContractAddress>> {
     let mut cs1 = client1
         .get_instance_list(block1)
         .await?
@@ -242,8 +228,8 @@ async fn compare_instance_lists(
         .try_collect::<Vec<_>>()
         .await?;
     cs2.sort_unstable();
-    let found_diff = compare_iters("Instance", block1, block2, cs1.iter(), cs2.iter());
-    Ok((found_diff, cs1))
+    compare_iters("Instance", block1, block2, cs1.iter(), cs2.iter());
+    Ok(cs1)
 }
 
 async fn compare_module_lists(
@@ -251,7 +237,7 @@ async fn compare_module_lists(
     client2: &mut v2::Client,
     block1: BlockHash,
     block2: BlockHash,
-) -> anyhow::Result<(bool, Vec<ModuleReference>)> {
+) -> anyhow::Result<Vec<ModuleReference>> {
     let mut ms1 = client1
         .get_module_list(block1)
         .await?
@@ -266,60 +252,56 @@ async fn compare_module_lists(
         .try_collect::<Vec<_>>()
         .await?;
     ms2.sort_unstable();
-    let found_diff = compare_iters("Module", block1, block2, ms1.iter(), ms2.iter());
-    Ok((found_diff, ms1))
+    compare_iters("Module", block1, block2, ms1.iter(), ms2.iter());
+    Ok(ms1)
 }
 
 /// Compare two iterators that are assumed to yield elements in increasing
-/// order. Print any discrepancies. Return
+/// order. Print any discrepancies.
 fn compare_iters<A: Display + PartialOrd>(
     msg: &str,
     block1: BlockHash,
     block2: BlockHash,
     i1: impl Iterator<Item = A>,
     i2: impl Iterator<Item = A>,
-) -> bool {
-    let mut found_diff = false;
+) {
     let mut i1 = i1.peekable();
     let mut i2 = i2.peekable();
     while let Some(a1) = i1.peek() {
         if let Some(a2) = i2.peek() {
             if a1 < a2 {
-                diff!(
+                warn!(
                     "    {} {} appears in {} but not in {}.",
                     msg,
                     a1,
                     block1,
                     block2
                 );
-                found_diff = true;
-                let _ = i1.next();
+                i1.next();
             } else if a2 < a1 {
-                diff!(
+                warn!(
                     "    {} {} appears in {} but not in {}.",
                     msg,
                     a2,
                     block2,
                     block1
                 );
-                found_diff = true;
-                let _ = i2.next();
+                i2.next();
             } else {
-                let _ = i1.next();
-                let _ = i2.next();
+                i1.next();
+                i2.next();
             }
         } else {
-            found_diff = true;
-            diff!(
+            warn!(
                 "    {} {} appears in {} but not in {}.",
                 msg,
                 a1,
                 block1,
                 block2
-            )
+            );
+            i1.next();
         }
     }
-    found_diff
 }
 
 async fn compare_accounts(
@@ -329,16 +311,15 @@ async fn compare_accounts(
     block2: BlockHash,
     pv1: ProtocolVersion,
     pv2: ProtocolVersion,
-) -> anyhow::Result<bool> {
-    eprintln!("Comparing account lists.");
-    let (found_diff, accounts1) = compare_account_lists(client1, client2, block1, block2).await?;
+) -> anyhow::Result<()> {
+    info!("Comparing account lists.");
+    let accounts1 = compare_account_lists(client1, client2, block1, block2).await?;
 
-    eprintln!("Got {} accounts.", accounts1.len());
+    info!("Got {} accounts.", accounts1.len());
 
     let bar = ProgressBar::new(accounts1.len() as u64);
 
-    eprintln!("Querying and comparing all accounts.");
-    let flag = Arc::new(AtomicBool::new(found_diff));
+    info!("Querying and comparing all accounts.");
     for acc in accounts1 {
         let mut a_client = client1.clone();
         let mut a_client2 = client2.clone();
@@ -360,31 +341,28 @@ async fn compare_accounts(
         if a1.response != a2.response {
             match (&a1.response.account_stake, a2.response.account_stake) {
                 (None, None) => {
-                    diff!(
+                    warn!(
                         "Account {} differs. It does not have stake either in {} or {}.",
                         a1.response.account_address,
                         block1,
                         block2
                     );
-                    flag.store(true, Ordering::Release);
                 }
                 (None, Some(_)) => {
-                    diff!(
+                    warn!(
                         "Account {} differs. It does not have stake in {} but does in {}.",
                         a1.response.account_address,
                         block1,
                         block2
                     );
-                    flag.store(true, Ordering::Release);
                 }
                 (Some(_), None) => {
-                    diff!(
+                    warn!(
                         "Account {} differs. It does have stake in {} but does not in {}.",
                         a1.response.account_address,
                         block1,
                         block2
                     );
-                    flag.store(true, Ordering::Release);
                 }
                 (Some(s1), Some(s2)) => {
                     // This is special case handling of P3->P4 upgrade.
@@ -414,51 +392,49 @@ async fn compare_accounts(
                                         ..a2.response
                                     };
                                     if a1.response != a2_no_pool {
-                                        diff!(
+                                        warn!(
                                             "Account {} differs. It does have stake in both {} \
                                              and {}.",
                                             a1.response.account_address,
                                             block1,
                                             block2
                                         );
-                                        flag.store(true, Ordering::Release);
                                     }
                                 }
                                 _ => {
-                                    diff!(
+                                    warn!(
                                         "Account {} differs. It does have stake in both {} and {}.",
                                         a1.response.account_address,
                                         block1,
                                         block2
                                     );
-                                    flag.store(true, Ordering::Release);
                                 }
                             },
                             _ => {
-                                diff!(
+                                warn!(
                                     "Account {} differs. It does have stake in both {} and {}.",
                                     a1.response.account_address,
                                     block1,
                                     block2
                                 );
-                                flag.store(true, Ordering::Release);
                             }
                         }
                     } else {
-                        diff!(
+                        warn!(
                             "Account {} differs. It does have stake in both {} and {}.",
                             a1.response.account_address,
                             block1,
                             block2
                         );
-                        flag.store(true, Ordering::Release);
                     }
                 }
             }
         }
     }
+
     bar.finish_and_clear();
-    Ok(found_diff | flag.load(Ordering::Acquire))
+
+    Ok(())
 }
 
 async fn compare_modules(
@@ -466,9 +442,9 @@ async fn compare_modules(
     client2: &mut v2::Client,
     block1: BlockHash,
     block2: BlockHash,
-) -> anyhow::Result<bool> {
+) -> anyhow::Result<()> {
     eprintln!("Comparing all modules.");
-    let (mut found_diff, ms1) = compare_module_lists(client1, client2, block1, block2).await?;
+    let ms1 = compare_module_lists(client1, client2, block1, block2).await?;
     let bar = ProgressBar::new(ms1.len() as u64);
 
     for m in ms1 {
@@ -478,12 +454,13 @@ async fn compare_modules(
             client2.get_module_source(&m, block2)
         )?;
         if m1.response != m2.response {
-            found_diff = true;
-            diff!("Module {} differs.", m);
+            warn!("Module {} differs.", m);
         }
     }
+
     bar.finish_and_clear();
-    Ok(found_diff)
+
+    Ok(())
 }
 
 async fn compare_instances(
@@ -491,9 +468,9 @@ async fn compare_instances(
     client2: &mut v2::Client,
     block1: BlockHash,
     block2: BlockHash,
-) -> anyhow::Result<bool> {
+) -> anyhow::Result<()> {
     eprintln!("Querying all contracts.");
-    let (mut found_diff, cs1) = compare_instance_lists(client1, client2, block1, block2).await?;
+    let cs1 = compare_instance_lists(client1, client2, block1, block2).await?;
 
     let bar = ProgressBar::new(cs1.len() as u64);
 
@@ -504,8 +481,7 @@ async fn compare_instances(
             client2.get_instance_info(c, block2)
         )?;
         if ci1.response != ci2.response {
-            diff!("Instance {} differs.", c);
-            found_diff = true;
+            warn!("Instance {} differs.", c);
         }
         let (mut state1, mut state2) = futures::try_join!(
             client1.get_instance_state(c, block1),
@@ -514,23 +490,22 @@ async fn compare_instances(
         while let Some(s1) = state1.response.next().await.transpose()? {
             if let Some(s2) = state2.response.next().await.transpose()? {
                 if s1 != s2 {
-                    diff!("State differs for {}.", c);
-                    found_diff = true;
+                    warn!("State differs for {}.", c);
                     break;
                 }
             } else {
-                diff!("State differs for {}.", c);
-                found_diff = true;
+                warn!("State differs for {}.", c);
                 break;
             }
         }
         if state2.response.next().await.is_some() {
-            diff!("State differs for {}.", c);
-            found_diff = true;
+            warn!("State differs for {}.", c);
         }
     }
+
     bar.finish_and_clear();
-    Ok(found_diff)
+
+    Ok(())
 }
 
 async fn compare_passive_delegators(
@@ -565,7 +540,7 @@ async fn compare_passive_delegators(
     passive1.sort_unstable_by_key(|x| x.account);
     passive2.sort_unstable_by_key(|x| x.account);
     if passive1 != passive2 {
-        diff!("Passive delegators differ.");
+        warn!("Passive delegators differ.");
         Ok(true)
     } else {
         Ok(false)
@@ -590,11 +565,11 @@ async fn compare_active_bakers(
         && pv2 < ProtocolVersion::P6
         && ei1.response.election_difficulty != ei2.response.election_difficulty
     {
-        diff!("Election difficulty differs.");
+        warn!("Election difficulty differs.");
         found_diff = true;
     }
     if ei1.response.bakers != ei2.response.bakers {
-        diff!("Bakers differ.");
+        warn!("Bakers differ.");
         found_diff = true;
     }
     Ok(found_diff)
@@ -607,7 +582,7 @@ async fn compare_baker_pools(
     block2: BlockHash,
     pv1: ProtocolVersion,
     pv2: ProtocolVersion,
-) -> anyhow::Result<bool> {
+) -> anyhow::Result<()> {
     eprintln!("Checking baker pools.");
     let mut pools1 = client1
         .get_baker_list(block1)
@@ -623,7 +598,7 @@ async fn compare_baker_pools(
         .await?;
     pools1.sort_unstable();
     pools2.sort_unstable();
-    let mut found_diff = compare_iters("Pool", block1, block2, pools1.iter(), pools2.iter());
+    compare_iters("Pool", block1, block2, pools1.iter(), pools2.iter());
 
     if pv1 >= ProtocolVersion::P4 && pv2 >= ProtocolVersion::P4 {
         for pool in pools1 {
@@ -636,8 +611,7 @@ async fn compare_baker_pools(
             ds1.sort_unstable_by_key(|x| x.account);
             ds2.sort_unstable_by_key(|x| x.account);
             if ds1 != ds2 {
-                diff!("Delegators for pool {} differ.", pool);
-                found_diff = true;
+                warn!("Delegators for pool {} differ.", pool);
             }
 
             let (p1, p2) = futures::try_join!(
@@ -645,13 +619,12 @@ async fn compare_baker_pools(
                 client2.get_pool_info(block2, pool)
             )?;
             if p1.response != p2.response {
-                diff!("Pool {} differs.", pool);
-                found_diff = true;
+                warn!("Pool {} differs.", pool);
             }
         }
     } else {
         warn!("Not comparing baker pools since one of the protocol versions is before P4.")
     }
 
-    Ok(found_diff)
+    Ok(())
 }
