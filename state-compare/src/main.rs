@@ -405,8 +405,9 @@ async fn compare_passive_delegators(
     block2: BlockHash,
     pv1: ProtocolVersion,
     pv2: ProtocolVersion,
-) -> anyhow::Result<bool> {
+) -> anyhow::Result<()> {
     info!("Checking passive delegators.");
+
     let mut passive1 = if pv1 >= ProtocolVersion::P4 {
         client1
             .get_passive_delegators(block1)
@@ -417,6 +418,7 @@ async fn compare_passive_delegators(
     } else {
         Vec::new()
     };
+
     let mut passive2 = if pv2 >= ProtocolVersion::P4 {
         client2
             .get_passive_delegators(block2)
@@ -427,14 +429,13 @@ async fn compare_passive_delegators(
     } else {
         Vec::new()
     };
+
     passive1.sort_unstable_by_key(|x| x.account);
     passive2.sort_unstable_by_key(|x| x.account);
-    if passive1 != passive2 {
-        warn!("Passive delegators differ.");
-        Ok(true)
-    } else {
-        Ok(false)
-    }
+
+    compare!(passive1, passive2, "Passive delegators");
+
+    Ok(())
 }
 
 async fn compare_active_bakers(
