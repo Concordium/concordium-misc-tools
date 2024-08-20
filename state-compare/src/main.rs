@@ -270,35 +270,17 @@ fn compare_iters<A: Display + PartialOrd>(
     while let Some(a1) = i1.peek() {
         if let Some(a2) = i2.peek() {
             if a1 < a2 {
-                warn!(
-                    "    {} {} appears in {} but not in {}.",
-                    msg,
-                    a1,
-                    block1,
-                    block2
-                );
+                warn!("    {msg} {a1} appears in {block1} but not in {block2}.",);
                 i1.next();
             } else if a2 < a1 {
-                warn!(
-                    "    {} {} appears in {} but not in {}.",
-                    msg,
-                    a2,
-                    block2,
-                    block1
-                );
+                warn!("    {msg} {a2} appears in {block2} but not in {block1}.",);
                 i2.next();
             } else {
                 i1.next();
                 i2.next();
             }
         } else {
-            warn!(
-                "    {} {} appears in {} but not in {}.",
-                msg,
-                a1,
-                block1,
-                block2
-            );
+            warn!("    {msg} {a1} appears in {block1} but not in {block2}.",);
             i1.next();
         }
     }
@@ -341,28 +323,13 @@ async fn compare_accounts(
         if a1.response != a2.response {
             match (&a1.response.account_stake, a2.response.account_stake) {
                 (None, None) => {
-                    warn!(
-                        "Account {} differs. It does not have stake either in {} or {}.",
-                        a1.response.account_address,
-                        block1,
-                        block2
-                    );
+                    warn!("Account {} differs. It does not have stake either in {block1} or {block2}.", a1.response.account_address);
                 }
                 (None, Some(_)) => {
-                    warn!(
-                        "Account {} differs. It does not have stake in {} but does in {}.",
-                        a1.response.account_address,
-                        block1,
-                        block2
-                    );
+                    warn!("Account {} differs. It does not have stake in {block1} but does in {block2}.", a1.response.account_address);
                 }
                 (Some(_), None) => {
-                    warn!(
-                        "Account {} differs. It does have stake in {} but does not in {}.",
-                        a1.response.account_address,
-                        block1,
-                        block2
-                    );
+                    warn!("Account {} differs. It does have stake in {block1} but does not in {block2}.", a1.response.account_address);
                 }
                 (Some(s1), Some(s2)) => {
                     // This is special case handling of P3->P4 upgrade.
@@ -392,39 +359,21 @@ async fn compare_accounts(
                                         ..a2.response
                                     };
                                     if a1.response != a2_no_pool {
-                                        warn!(
-                                            "Account {} differs. It does have stake in both {} \
-                                             and {}.",
-                                            a1.response.account_address,
-                                            block1,
-                                            block2
-                                        );
+                                        warn!("Account {} differs. It does have stake in both {block1} and {block2}.", a1.response.account_address);
                                     }
                                 }
                                 _ => {
-                                    warn!(
-                                        "Account {} differs. It does have stake in both {} and {}.",
-                                        a1.response.account_address,
-                                        block1,
-                                        block2
-                                    );
+                                    warn!("Account {} differs. It does have stake in both {block1} and {block2}.", a1.response.account_address);
                                 }
                             },
                             _ => {
-                                warn!(
-                                    "Account {} differs. It does have stake in both {} and {}.",
-                                    a1.response.account_address,
-                                    block1,
-                                    block2
-                                );
+                                warn!("Account {} differs. It does have stake in both {block1} and {block2}.", a1.response.account_address);
                             }
                         }
                     } else {
                         warn!(
-                            "Account {} differs. It does have stake in both {} and {}.",
-                            a1.response.account_address,
-                            block1,
-                            block2
+                            "Account {} differs. It does have stake in both {block1} and {block2}.",
+                            a1.response.account_address
                         );
                     }
                 }
@@ -454,7 +403,7 @@ async fn compare_modules(
             client2.get_module_source(&m, block2)
         )?;
         if m1.response != m2.response {
-            warn!("Module {} differs.", m);
+            warn!("Module {m} differs.");
         }
     }
 
@@ -481,7 +430,7 @@ async fn compare_instances(
             client2.get_instance_info(c, block2)
         )?;
         if ci1.response != ci2.response {
-            warn!("Instance {} differs.", c);
+            warn!("Instance {c} differs.");
         }
         let (mut state1, mut state2) = futures::try_join!(
             client1.get_instance_state(c, block1),
@@ -490,16 +439,16 @@ async fn compare_instances(
         while let Some(s1) = state1.response.next().await.transpose()? {
             if let Some(s2) = state2.response.next().await.transpose()? {
                 if s1 != s2 {
-                    warn!("State differs for {}.", c);
+                    warn!("State differs for {c}.");
                     break;
                 }
             } else {
-                warn!("State differs for {}.", c);
+                warn!("State differs for {c}.");
                 break;
             }
         }
         if state2.response.next().await.is_some() {
-            warn!("State differs for {}.", c);
+            warn!("State differs for {c}.");
         }
     }
 
@@ -611,7 +560,7 @@ async fn compare_baker_pools(
             ds1.sort_unstable_by_key(|x| x.account);
             ds2.sort_unstable_by_key(|x| x.account);
             if ds1 != ds2 {
-                warn!("Delegators for pool {} differ.", pool);
+                warn!("Delegators for pool {pool} differ.");
             }
 
             let (p1, p2) = futures::try_join!(
@@ -619,7 +568,7 @@ async fn compare_baker_pools(
                 client2.get_pool_info(block2, pool)
             )?;
             if p1.response != p2.response {
-                warn!("Pool {} differs.", pool);
+                warn!("Pool {pool} differs.");
             }
         }
     } else {
