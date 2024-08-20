@@ -1,10 +1,8 @@
 //! A tool to compare the state at two given blocks, potentially in two
 //! different nodes.
 //!
-//! The program is structured as a set of functions for checking various parts
-//! of the state. Each of these functions returns a boolean that indicates
-//! whether the particular aspect of the state is changed between the two blocks
-//! and/or nodes.
+//! The program will print a collection of diffs between the various parts of
+//! the states between the two blocks.
 
 use std::{
     fmt::Display,
@@ -14,7 +12,6 @@ use std::{
     },
 };
 
-use anyhow::ensure;
 use clap::Parser;
 use colored::Colorize;
 use concordium_rust_sdk::{
@@ -28,12 +25,17 @@ use concordium_rust_sdk::{
 };
 use futures::{StreamExt, TryStreamExt};
 use indicatif::ProgressBar;
+use pretty_assertions::Comparison;
+use tracing::{info, level_filters::LevelFilter, warn};
+use tracing_subscriber::EnvFilter;
 
-/// Like eprintln!, but print the provided message in yellow.
-macro_rules! warn {
-    ($($arg:tt)*) => {{
-        eprintln!("{}", format!($($arg)*).yellow());
-    }};
+/// Compares the given values and prints a pretty diff with the given message if they are not equal.
+macro_rules! compare {
+    ($v1:expr, $v2:expr, $($arg:tt)*) => {
+        if $v1 != $v2 {
+            warn!("{} differs:\n{}", format!($($arg)*), Comparison::new(&$v1, &$v2))
+        }
+    };
 }
 
 /// Like eprintln!, but print the provided message in red.
@@ -47,8 +49,12 @@ macro_rules! diff {
 #[clap(version, author)]
 struct Args {
     /// GRPC V2 interface of the node.
-    #[arg(long, default_value = "http://localhost:20000", env = "STATE_COMPARE_NODE1")]
-    node1:  endpoints::Endpoint,
+    #[arg(
+        long,
+        default_value = "http://localhost:20000",
+        env = "STATE_COMPARE_NODE1"
+    )]
+    node1: endpoints::Endpoint,
 
     /// Optionally, a GRPC V2 interface of a second node to compare state with.
     ///
@@ -59,20 +65,14 @@ struct Args {
     /// The first block to compare state against.
     ///
     /// If not given the default is the last finalized block `before` the last protocol update.
-    #[arg(
-        long = "block1",
-        env = "STATE_COMPARE_BLOCK1"
-    )]
-    block1:    Option<BlockHash>,
+    #[arg(long, env = "STATE_COMPARE_BLOCK1")]
+    block1: Option<BlockHash>,
 
     /// The second block where to compare state.
     ///
     /// If not given the default is the genesis block of the current protocol.
-    #[arg(
-        long = "block2",
-        env = "STATE_COMPARE_BLOCK2"
-    )]
-    block2:    Option<BlockHash>,
+    #[arg(long, env = "STATE_COMPARE_BLOCK2")]
+    block2: Option<BlockHash>,
 }
 
 /// Get the protocol version for the two blocks.
@@ -101,61 +101,59 @@ async fn get_protocol_versions(
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
-    let mut client = v2::Client::new(args.node1).await?;
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            EnvFilter::builder()
+                .with_default_directive(LevelFilter::INFO.into())
+                .from_env()?,
+        )
+        .init();
+
+    let mut client1 = v2::Client::new(args.node1).await?;
     let mut client2 = match args.node2 {
         Some(ep) => v2::Client::new(ep).await?,
-        None => client.clone(),
+        None => client1.clone(),
     };
 
-    let ci1 = client.get_consensus_info().await?;
+    let ci1 = client1.get_consensus_info().await?;
     let ci2 = client2.get_consensus_info().await?;
-    ensure!(
-        ci1.genesis_block == ci2.genesis_block,
-        "Genesis blocks for the two nodes differ."
-    );
+
     let block1 = match args.block1 {
         Some(bh) => bh,
         None => {
-            client
+            client1
                 .get_block_info(ci1.current_era_genesis_block)
                 .await?
                 .response
                 .block_parent
         }
     };
+
     let block2 = match args.block2 {
         Some(bh) => bh,
         None => ci1.current_era_genesis_block,
     };
-    let (pv1, pv2) = get_protocol_versions(&mut client, &mut client2, block1, block2).await?;
-    eprintln!(
-        "Comparings state in blocks {} (protocol version {}) and {} (protocol version {}).",
-        block1, pv1, block2, pv2
-    );
 
-    let mut found_diff = false;
+    let (pv1, pv2) = get_protocol_versions(&mut client1, &mut client2, block1, block2).await?;
 
-    found_diff |= compare_accounts(&mut client, &mut client2, block1, block2, pv1, pv2).await?;
+    info!("Comparing state in blocks {block1} (protocol version {pv1}) and {block2} (protocol version {pv2}).");
 
-    found_diff |= compare_modules(&mut client, &mut client2, block1, block2).await?;
+    compare!(ci1.genesis_block, ci2.genesis_block, "Genesis blocks");
 
-    found_diff |= compare_instances(&mut client, &mut client2, block1, block2).await?;
+    compare_accounts(&mut client1, &mut client2, block1, block2, pv1, pv2).await?;
 
-    found_diff |=
-        compare_passive_delegators(&mut client, &mut client2, block1, block2, pv1, pv2).await?;
+    compare_modules(&mut client1, &mut client2, block1, block2).await?;
 
-    found_diff |=
-        compare_active_bakers(&mut client, &mut client2, block1, block2, pv1, pv2).await?;
+    compare_instances(&mut client1, &mut client2, block1, block2).await?;
 
-    found_diff |= compare_baker_pools(&mut client, &mut client2, block1, block2, pv1, pv2).await?;
+    compare_passive_delegators(&mut client1, &mut client2, block1, block2, pv1, pv2).await?;
 
-    found_diff |= compare_update_queues(&mut client, &mut client2, block1, block2).await?;
+    compare_active_bakers(&mut client1, &mut client2, block1, block2, pv1, pv2).await?;
 
-    if found_diff {
-        anyhow::bail!(format!("States in the two blocks {} and {} differ.", block1, block2).red());
-    } else {
-        eprintln!("{}", "No changes in the state detected.".green());
-    }
+    compare_baker_pools(&mut client1, &mut client2, block1, block2, pv1, pv2).await?;
+
+    compare_update_queues(&mut client1, &mut client2, block1, block2).await?;
+
     Ok(())
 }
 
@@ -626,6 +624,7 @@ async fn compare_baker_pools(
     pools1.sort_unstable();
     pools2.sort_unstable();
     let mut found_diff = compare_iters("Pool", block1, block2, pools1.iter(), pools2.iter());
+
     if pv1 >= ProtocolVersion::P4 && pv2 >= ProtocolVersion::P4 {
         for pool in pools1 {
             let (d1, d2) = futures::try_join!(
@@ -653,5 +652,6 @@ async fn compare_baker_pools(
     } else {
         warn!("Not comparing baker pools since one of the protocol versions is before P4.")
     }
+
     Ok(found_diff)
 }
