@@ -11,8 +11,7 @@ use concordium_rust_sdk::{
     endpoints,
     id::types::AccountAddress,
     types::{
-        hashes::BlockHash, smart_contracts::ModuleReference, AccountInfo, ContractAddress,
-        ProtocolVersion,
+        hashes::BlockHash, smart_contracts::ModuleReference, ContractAddress, ProtocolVersion,
     },
     v2,
 };
@@ -104,7 +103,7 @@ async fn main() -> anyhow::Result<()> {
 
     compare!(ci1.genesis_block, ci2.genesis_block, "Genesis blocks");
 
-    compare_accounts(&mut client1, &mut client2, block1, block2, pv1, pv2).await?;
+    compare_accounts(&mut client1, &mut client2, block1, block2).await?;
 
     compare_modules(&mut client1, &mut client2, block1, block2).await?;
 
@@ -158,7 +157,7 @@ async fn compare_update_queues(
         .await?
         .response;
     if s1 != s2 {
-        warn!("    Sequence numbers differ: {s1:#?} {s2:#?}")
+        warn!("Sequence numbers differ: {s1:#?} {s2:#?}")
     }
     let q1 = client1
         .get_block_pending_updates(block1)
@@ -270,17 +269,17 @@ fn compare_iters<A: Display + PartialOrd>(
     while let Some(a1) = i1.peek() {
         if let Some(a2) = i2.peek() {
             if a1 < a2 {
-                warn!("    {msg} {a1} appears in {block1} but not in {block2}.",);
+                warn!("{msg} {a1} appears in {block1} but not in {block2}.",);
                 i1.next();
             } else if a2 < a1 {
-                warn!("    {msg} {a2} appears in {block2} but not in {block1}.",);
+                warn!("{msg} {a2} appears in {block2} but not in {block1}.",);
                 i2.next();
             } else {
                 i1.next();
                 i2.next();
             }
         } else {
-            warn!("    {msg} {a1} appears in {block1} but not in {block2}.",);
+            warn!("{msg} {a1} appears in {block1} but not in {block2}.",);
             i1.next();
         }
     }
@@ -291,8 +290,6 @@ async fn compare_accounts(
     client2: &mut v2::Client,
     block1: BlockHash,
     block2: BlockHash,
-    pv1: ProtocolVersion,
-    pv2: ProtocolVersion,
 ) -> anyhow::Result<()> {
     info!("Comparing account lists.");
     let accounts1 = compare_account_lists(client1, client2, block1, block2).await?;
@@ -306,79 +303,25 @@ async fn compare_accounts(
         let mut a_client = client1.clone();
         let mut a_client2 = client2.clone();
         let accid = acc.into();
-        let (mut a1, mut a2) = futures::try_join!(
+        let (a1, a2) = futures::try_join!(
             a_client.get_account_info(&accid, block1),
             a_client2.get_account_info(&accid, block2)
         )?;
 
+        let mut a1 = a1.response;
+        let mut a2 = a2.response;
+
         bar.inc(1);
         // We ignore the order of transactions in the release schedules since they are
         // not guaranteed to be in any specific order.
-        for s in a1.response.account_release_schedule.schedule.iter_mut() {
+        for s in a1.account_release_schedule.schedule.iter_mut() {
             s.transactions.sort_unstable();
         }
-        for s in a2.response.account_release_schedule.schedule.iter_mut() {
+        for s in a2.account_release_schedule.schedule.iter_mut() {
             s.transactions.sort_unstable();
         }
-        if a1.response != a2.response {
-            match (&a1.response.account_stake, a2.response.account_stake) {
-                (None, None) => {
-                    warn!("Account {} differs. It does not have stake either in {block1} or {block2}.", a1.response.account_address);
-                }
-                (None, Some(_)) => {
-                    warn!("Account {} differs. It does not have stake in {block1} but does in {block2}.", a1.response.account_address);
-                }
-                (Some(_), None) => {
-                    warn!("Account {} differs. It does have stake in {block1} but does not in {block2}.", a1.response.account_address);
-                }
-                (Some(s1), Some(s2)) => {
-                    // This is special case handling of P3->P4 upgrade.
-                    if pv1 == ProtocolVersion::P3 && pv2 == ProtocolVersion::P4 {
-                        match s1 {
-                            concordium_rust_sdk::types::AccountStakingInfo::Baker {
-                                pool_info: None,
-                                ..
-                            } => match s2 {
-                                concordium_rust_sdk::types::AccountStakingInfo::Baker {
-                                    staked_amount,
-                                    restake_earnings,
-                                    baker_info,
-                                    pending_change,
-                                    pool_info: Some(_),
-                                } => {
-                                    let s2_no_pool =
-                                        concordium_rust_sdk::types::AccountStakingInfo::Baker {
-                                            staked_amount,
-                                            restake_earnings,
-                                            baker_info,
-                                            pending_change,
-                                            pool_info: None,
-                                        };
-                                    let a2_no_pool = AccountInfo {
-                                        account_stake: Some(s2_no_pool),
-                                        ..a2.response
-                                    };
-                                    if a1.response != a2_no_pool {
-                                        warn!("Account {} differs. It does have stake in both {block1} and {block2}.", a1.response.account_address);
-                                    }
-                                }
-                                _ => {
-                                    warn!("Account {} differs. It does have stake in both {block1} and {block2}.", a1.response.account_address);
-                                }
-                            },
-                            _ => {
-                                warn!("Account {} differs. It does have stake in both {block1} and {block2}.", a1.response.account_address);
-                            }
-                        }
-                    } else {
-                        warn!(
-                            "Account {} differs. It does have stake in both {block1} and {block2}.",
-                            a1.response.account_address
-                        );
-                    }
-                }
-            }
-        }
+
+        compare!(a1, a2, "Account {accid}");
     }
 
     bar.finish_and_clear();
@@ -392,7 +335,7 @@ async fn compare_modules(
     block1: BlockHash,
     block2: BlockHash,
 ) -> anyhow::Result<()> {
-    eprintln!("Comparing all modules.");
+    info!("Comparing all modules.");
     let ms1 = compare_module_lists(client1, client2, block1, block2).await?;
     let bar = ProgressBar::new(ms1.len() as u64);
 
@@ -418,7 +361,7 @@ async fn compare_instances(
     block1: BlockHash,
     block2: BlockHash,
 ) -> anyhow::Result<()> {
-    eprintln!("Querying all contracts.");
+    info!("Querying all contracts.");
     let cs1 = compare_instance_lists(client1, client2, block1, block2).await?;
 
     let bar = ProgressBar::new(cs1.len() as u64);
@@ -465,7 +408,7 @@ async fn compare_passive_delegators(
     pv1: ProtocolVersion,
     pv2: ProtocolVersion,
 ) -> anyhow::Result<bool> {
-    eprintln!("Checking passive delegators.");
+    info!("Checking passive delegators.");
     let mut passive1 = if pv1 >= ProtocolVersion::P4 {
         client1
             .get_passive_delegators(block1)
@@ -504,7 +447,7 @@ async fn compare_active_bakers(
     pv1: ProtocolVersion,
     pv2: ProtocolVersion,
 ) -> anyhow::Result<bool> {
-    eprintln!("Checking active bakers.");
+    info!("Checking active bakers.");
     let mut found_diff = false;
     let (ei1, ei2) = futures::try_join!(
         client1.get_election_info(block1),
@@ -532,7 +475,7 @@ async fn compare_baker_pools(
     pv1: ProtocolVersion,
     pv2: ProtocolVersion,
 ) -> anyhow::Result<()> {
-    eprintln!("Checking baker pools.");
+    info!("Checking baker pools.");
     let mut pools1 = client1
         .get_baker_list(block1)
         .await?
