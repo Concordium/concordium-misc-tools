@@ -100,7 +100,7 @@ async fn main() -> anyhow::Result<()> {
 
     let (pv1, pv2) = get_protocol_versions(&mut client1, &mut client2, block1, block2).await?;
 
-    info!("Comparing state in blocks {block1} (protocol version {pv1}) and {block2} (protocol version {pv2}).");
+    info!("Comparing states in blocks {block1} (protocol version {pv1}) and {block2} (protocol version {pv2}).");
 
     compare!(ci1.genesis_block, ci2.genesis_block, "Genesis blocks");
 
@@ -148,34 +148,38 @@ async fn compare_update_queues(
     client2: &mut v2::Client,
     block1: BlockHash,
     block2: BlockHash,
-) -> anyhow::Result<bool> {
+) -> anyhow::Result<()> {
     let s1 = client1
         .get_next_update_sequence_numbers(block1)
         .await?
         .response;
+
     let s2 = client2
         .get_next_update_sequence_numbers(block2)
         .await?
         .response;
-    if s1 != s2 {
-        warn!("Sequence numbers differ: {s1:#?} {s2:#?}")
-    }
+
+    compare!(s1, s2, "Sequence numbers");
+
     let q1 = client1
         .get_block_pending_updates(block1)
         .await?
         .response
         .try_collect::<Vec<_>>()
         .await?;
+
     let q2 = client2
         .get_block_pending_updates(block2)
         .await?
         .response
         .try_collect::<Vec<_>>()
         .await?;
-    if q1.len() != q2.len() {
-        return Ok(false);
-    }
-    Ok(s1 != s2)
+
+    // PendingUpdate unfortunately does not impl Eq so we'll settle for a comparison of their debug representations
+    // Should be good enough to produce a nice diff.
+    compare!(format!("{q1:#?}"), format!("{q2:#?}"), "Pending updates");
+
+    Ok(())
 }
 
 async fn compare_account_lists(
