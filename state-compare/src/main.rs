@@ -118,6 +118,8 @@ async fn main() -> anyhow::Result<()> {
 
     compare_update_queues(&mut client1, &mut client2, block1, block2).await?;
 
+    info!("Done!");
+
     Ok(())
 }
 
@@ -149,6 +151,8 @@ async fn compare_update_queues(
     block1: BlockHash,
     block2: BlockHash,
 ) -> anyhow::Result<()> {
+    info!("Checking update queues.");
+
     let s1 = client1
         .get_next_update_sequence_numbers(block1)
         .await?
