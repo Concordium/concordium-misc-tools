@@ -1,4 +1,4 @@
-use crate::models::{Device, Preference};
+use crate::models::device::{Device, Preference};
 use anyhow::Context;
 use concordium_rust_sdk::common::types::AccountAddress;
 use deadpool_postgres::{Manager, ManagerConfig, Pool, RecyclingMethod};

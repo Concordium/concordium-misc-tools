@@ -9,7 +9,6 @@ use log::{error, info};
 use notification_server::{
     database::DatabaseConnection,
     google_cloud::{GoogleCloud, NotificationError},
-    models::NotificationInformation,
     processor::process,
 };
 use std::{path::PathBuf, time::Duration};
@@ -119,8 +118,7 @@ async fn traverse_chain(
                 result.address(),
                 result.transaction_type()
             );
-
-            let devices = loop {
+            let devices: Vec<_> = loop {
                 match database_connection
                     .prepared
                     .get_devices_from_account(result.address().clone())
@@ -137,13 +135,39 @@ async fn traverse_chain(
                     }
                 }
             };
-
-            for device in devices
+            let devices: Vec<_> = devices
                 .iter()
-                .filter(|device| device.preferences.contains(&result.transaction_type()))
+                .filter(|device| device.preferences.contains(result.transaction_type()))
+                .collect();
+            if devices.is_empty() {
+                info!(
+                    "No devices subscribed to account {} having preference {:?}",
+                    result.address(),
+                    result.transaction_type()
+                );
+                continue;
+            }
+            let enriched_notification_information = match result
+                .clone()
+                .enrich(concordium_client.clone(), block_hash)
+                .await
             {
+                Ok(information) => information,
+                Err(err) => {
+                    error!(
+                        "Error occurred while enriching notification information: {:?}",
+                        err
+                    );
+                    continue;
+                }
+            };
+
+            for device in devices {
                 if let Err(err) = gcloud
-                    .send_push_notification(&device.device_token, result.to_owned())
+                    .send_push_notification(
+                        &device.device_token,
+                        enriched_notification_information.clone(),
+                    )
                     .await
                 {
                     if err == NotificationError::UnregisteredError {

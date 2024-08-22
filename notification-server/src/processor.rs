@@ -1,6 +1,6 @@
-use crate::models::{
-    CCDTransactionNotificationInformation, CIS2EventNotificationInformation,
-    NotificationInformationType,
+use crate::models::notification::{
+    CCDTransactionNotificationInformation, CIS2EventNotificationInformationBasic,
+    NotificationInformationBasic,
 };
 use concordium_rust_sdk::{
     cis2,
@@ -8,7 +8,7 @@ use concordium_rust_sdk::{
     types,
     types::{
         AccountTransactionEffects, Address, Address::Account,
-        BlockItemSummaryDetails::AccountTransaction, ContractTraceElement,
+        BlockItemSummaryDetails::AccountTransaction, ContractAddress, ContractTraceElement,
     },
 };
 use futures::{Stream, StreamExt};
@@ -19,15 +19,21 @@ fn convert<T: Into<BigInt>>(
     amount: T,
     is_positive: bool,
     token_id: cis2::TokenId,
-) -> Option<NotificationInformationType> {
+    contract_address: ContractAddress,
+) -> Option<NotificationInformationBasic> {
     let mut amount: BigInt = amount.into();
     if !is_positive {
         amount = -amount;
     }
 
     match address {
-        Account(address) => Some(NotificationInformationType::CIS2(
-            CIS2EventNotificationInformation::new(address, amount.to_string(), token_id),
+        Account(address) => Some(NotificationInformationBasic::CIS2(
+            CIS2EventNotificationInformationBasic::new(
+                address,
+                amount.to_string(),
+                token_id,
+                contract_address,
+            ),
         )),
         _ => None,
     }
@@ -35,15 +41,15 @@ fn convert<T: Into<BigInt>>(
 
 fn map_transaction_to_notification_information(
     effects: &AccountTransactionEffects,
-) -> Vec<NotificationInformationType> {
+) -> Vec<NotificationInformationBasic> {
     match &effects {
         AccountTransactionEffects::AccountTransfer { to, amount } => {
-            vec![NotificationInformationType::CCD(
+            vec![NotificationInformationBasic::CCD(
                 CCDTransactionNotificationInformation::new(*to, amount.micro_ccd.to_string()),
             )]
         }
         AccountTransactionEffects::AccountTransferWithMemo { to, amount, .. } => {
-            vec![NotificationInformationType::CCD(
+            vec![NotificationInformationBasic::CCD(
                 CCDTransactionNotificationInformation::new(*to, amount.micro_ccd.to_string()),
             )]
         }
@@ -51,41 +57,43 @@ fn map_transaction_to_notification_information(
             .iter()
             .flat_map(|effect| match effect {
                 ContractTraceElement::Transferred { to, amount, .. } => {
-                    vec![NotificationInformationType::CCD(
+                    vec![NotificationInformationBasic::CCD(
                         CCDTransactionNotificationInformation::new(
                             *to,
                             amount.micro_ccd.to_string(),
                         ),
                     )]
                 }
-                ContractTraceElement::Updated { data } => data
-                    .events
-                    .iter()
-                    .filter_map(|event| match cis2::Event::try_from(event) {
-                        Ok(Event::Transfer {
-                            token_id,
-                            to,
-                            amount,
-                            ..
-                        }) => convert(to, amount.0, true, token_id),
-                        Ok(Event::Mint {
-                            token_id,
-                            owner,
-                            amount,
-                        }) => convert(owner, amount.0, true, token_id),
-                        Ok(Event::Burn {
-                            token_id,
-                            owner,
-                            amount,
-                        }) => convert(owner, amount.0, false, token_id),
-                        _ => None,
-                    })
-                    .collect(),
+                ContractTraceElement::Updated { data } => {
+                    let address = data.address;
+                    data.events
+                        .iter()
+                        .filter_map(|event| match cis2::Event::try_from(event) {
+                            Ok(Event::Transfer {
+                                token_id,
+                                to,
+                                amount,
+                                ..
+                            }) => convert(to, amount.0, true, token_id, address),
+                            Ok(Event::Mint {
+                                token_id,
+                                owner,
+                                amount,
+                            }) => convert(owner, amount.0, true, token_id, address),
+                            Ok(Event::Burn {
+                                token_id,
+                                owner,
+                                amount,
+                            }) => convert(owner, amount.0, false, token_id, address),
+                            _ => None,
+                        })
+                        .collect()
+                }
                 _ => vec![],
             })
             .collect(),
         AccountTransactionEffects::TransferredWithSchedule { to, amount } => {
-            vec![NotificationInformationType::CCD(
+            vec![NotificationInformationBasic::CCD(
                 CCDTransactionNotificationInformation::new(
                     *to,
                     amount
@@ -98,7 +106,7 @@ fn map_transaction_to_notification_information(
             )]
         }
         AccountTransactionEffects::TransferredWithScheduleAndMemo { to, amount, .. } => {
-            vec![NotificationInformationType::CCD(
+            vec![NotificationInformationBasic::CCD(
                 CCDTransactionNotificationInformation::new(
                     *to,
                     amount
@@ -116,7 +124,7 @@ fn map_transaction_to_notification_information(
 
 pub async fn process(
     transactions: impl Stream<Item = Result<types::BlockItemSummary, tonic::Status>>,
-) -> Vec<NotificationInformationType> {
+) -> Vec<NotificationInformationBasic> {
     transactions
         .filter_map(|result| async move { result.ok() })
         .flat_map(|t| {
@@ -127,7 +135,7 @@ pub async fn process(
                 _ => vec![],
             })
         })
-        .collect::<Vec<NotificationInformationType>>()
+        .collect::<Vec<NotificationInformationBasic>>()
         .await
 }
 
@@ -136,7 +144,9 @@ mod tests {
     use std::{fmt::Debug, str::FromStr};
 
     use crate::{
-        models::{CCDTransactionNotificationInformation, NotificationInformationType},
+        models::notification::{
+            CCDTransactionNotificationInformation, NotificationInformationBasic,
+        },
         processor::process,
     };
     use concordium_rust_sdk::{
@@ -244,7 +254,7 @@ mod tests {
     }
 
     #[derive(Clone, Debug)]
-    struct EmittingBlockItemSummaryPair(pub BlockItemSummary, pub NotificationInformationType);
+    struct EmittingBlockItemSummaryPair(pub BlockItemSummary, pub NotificationInformationBasic);
 
     impl Arbitrary for EmittingBlockItemSummaryPair {
         fn arbitrary(g: &mut Gen) -> Self {
@@ -297,7 +307,7 @@ mod tests {
             };
 
             let notification =
-                NotificationInformationType::CCD(CCDTransactionNotificationInformation::new(
+                NotificationInformationBasic::CCD(CCDTransactionNotificationInformation::new(
                     receiver_address,
                     BigInt::from(amount.micro_ccd).to_string(),
                 ));
@@ -397,7 +407,7 @@ mod tests {
 
     trait TestableBlockItemSummary {
         fn get_block_item_summary(&self) -> &BlockItemSummary;
-        fn get_expected_notification(&self) -> Option<NotificationInformationType>;
+        fn get_expected_notification(&self) -> Option<NotificationInformationBasic>;
     }
 
     impl TestableBlockItemSummary for BlockItemSummaryWrapper {
@@ -408,7 +418,7 @@ mod tests {
             }
         }
 
-        fn get_expected_notification(&self) -> Option<NotificationInformationType> {
+        fn get_expected_notification(&self) -> Option<NotificationInformationBasic> {
             match self {
                 BlockItemSummaryWrapper::Emitting(pair) => Some(pair.1.clone()),
                 BlockItemSummaryWrapper::Silent(_) => None,
@@ -427,7 +437,7 @@ mod tests {
         );
         let runtime = tokio::runtime::Runtime::new().unwrap();
         let result = runtime.block_on(process(summary_stream));
-        let expected: Vec<NotificationInformationType> = summaries
+        let expected: Vec<NotificationInformationBasic> = summaries
             .into_iter()
             .filter_map(|summary| summary.get_expected_notification())
             .collect();
