@@ -112,7 +112,7 @@ async fn traverse_chain(
                 continue;
             }
         };
-        for result in process(transactions).await.iter() {
+        for result in process(transactions).await.into_iter() {
             info!(
                 "Sending notification to account {} with type {:?}",
                 result.address(),
@@ -128,8 +128,7 @@ async fn traverse_chain(
                     Err(err) => {
                         error!(
                             "Error retrieving devices for account {}: {:?}. Retrying...",
-                            result.address(),
-                            err
+                            result.address(), err
                         );
                         sleep(DATABASE_RETRY_DELAY).await;
                     }
@@ -148,7 +147,6 @@ async fn traverse_chain(
                 continue;
             }
             let enriched_notification_information = match result
-                .clone()
                 .enrich(concordium_client.clone(), block_hash)
                 .await
             {
