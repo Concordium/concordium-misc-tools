@@ -141,8 +141,6 @@ pub async fn process(
 
 #[cfg(test)]
 mod tests {
-    use std::{fmt::Debug, str::FromStr};
-
     use crate::{
         models::notification::{
             CCDTransactionNotificationInformation, NotificationInformationBasic,
@@ -171,6 +169,7 @@ mod tests {
     use quickcheck_macros::quickcheck;
     use rand::{random, thread_rng, Rng};
     use sha2::Digest;
+    use std::{fmt::Debug, str::FromStr};
 
     #[derive(Clone, Debug)]
     struct ArbitraryTransactionIndex(pub TransactionIndex);
