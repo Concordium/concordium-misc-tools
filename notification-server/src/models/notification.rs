@@ -2,10 +2,10 @@ use concordium_rust_sdk::{
     base::{contracts_common::AccountAddress, smart_contracts::OwnedContractName},
     cis2::{Cis2QueryError, Cis2Type, MetadataUrl, TokenId},
     contract_client::ContractClient,
-    types::ContractAddress,
+    types::{ContractAddress, ContractIndex},
     v2::{Client, IntoBlockIdentifier},
 };
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 use std::ops::Deref;
 
 use crate::models::device::Preference;
@@ -16,10 +16,21 @@ pub enum NotificationInformationBasic {
     CIS2(CIS2EventNotificationInformationBasic),
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum NotificationInformation {
     CCD(CCDTransactionNotificationInformation),
     CIS2(CIS2EventNotificationInformation),
+}
+
+impl Serialize for NotificationInformation {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer, {
+        match self {
+            NotificationInformation::CCD(inner) => inner.serialize(serializer),
+            NotificationInformation::CIS2(inner) => inner.serialize(serializer),
+        }
+    }
 }
 
 impl NotificationInformationBasic {
@@ -38,7 +49,7 @@ impl NotificationInformationBasic {
                         info.address,
                         info.amount,
                         info.token_id.clone(),
-                        info.contract_address,
+                        info.contract_address.index,
                         contract_client.contract_name.deref().clone(),
                         contract_client
                             .token_metadata_single(block_identifier, info.token_id)
@@ -73,14 +84,15 @@ impl CCDTransactionNotificationInformation {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CIS2EventNotificationInformation {
     #[serde(rename = "recipient")]
-    pub address:          AccountAddress,
-    pub amount:           String,
+    pub address:            AccountAddress,
+    pub amount:             String,
     #[serde(rename = "type")]
-    pub transaction_type: Preference,
-    pub token_id:         TokenId,
-    pub contract_address: ContractAddress,
-    pub contract_name:    OwnedContractName,
-    pub metadata_url:     Option<MetadataUrl>,
+    pub transaction_type:   Preference,
+    pub token_id:           TokenId,
+    pub contract_index:     String,
+    pub contract_name:      OwnedContractName,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub token_metadata_url: Option<MetadataUrl>,
 }
 
 impl CIS2EventNotificationInformation {
@@ -88,18 +100,18 @@ impl CIS2EventNotificationInformation {
         address: AccountAddress,
         amount: String,
         token_id: TokenId,
-        contract_address: ContractAddress,
+        contract_index: ContractIndex,
         contract_name: OwnedContractName,
-        metadata_url: Option<MetadataUrl>,
+        token_metadata_url: Option<MetadataUrl>,
     ) -> Self {
         Self {
             address,
             amount,
             transaction_type: Preference::CIS2Transaction,
             token_id,
-            contract_address,
+            contract_index: contract_index.to_string(),
             contract_name,
-            metadata_url,
+            token_metadata_url,
         }
     }
 }
