@@ -116,10 +116,10 @@ impl CIS2EventNotificationInformation {
 }
 
 impl NotificationInformationBasic {
-    pub fn address(&self) -> AccountAddress {
+    pub fn address(&self) -> &AccountAddress {
         match self {
-            NotificationInformationBasic::CCD(info) => info.address,
-            NotificationInformationBasic::CIS2(info) => info.address,
+            NotificationInformationBasic::CCD(info) => &info.address,
+            NotificationInformationBasic::CIS2(info) => &info.address,
         }
     }
 

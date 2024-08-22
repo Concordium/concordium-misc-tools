@@ -51,7 +51,7 @@ impl PreparedStatements {
 
     pub async fn get_devices_from_account(
         &self,
-        account_address: AccountAddress,
+        account_address: &AccountAddress,
     ) -> anyhow::Result<Vec<Device>> {
         let client = self.pool.get().await.context("Failed to get client")?;
         let params: &[&(dyn tokio_postgres::types::ToSql + Sync)] = &[&account_address.0.as_ref()];
