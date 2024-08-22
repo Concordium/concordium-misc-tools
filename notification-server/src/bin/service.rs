@@ -128,7 +128,8 @@ async fn traverse_chain(
                     Err(err) => {
                         error!(
                             "Error retrieving devices for account {}: {:?}. Retrying...",
-                            result.address(), err
+                            result.address(),
+                            err
                         );
                         sleep(DATABASE_RETRY_DELAY).await;
                     }
@@ -146,19 +147,17 @@ async fn traverse_chain(
                 );
                 continue;
             }
-            let enriched_notification_information = match result
-                .enrich(concordium_client.clone(), block_hash)
-                .await
-            {
-                Ok(information) => information,
-                Err(err) => {
-                    error!(
-                        "Error occurred while enriching notification information: {:?}",
-                        err
-                    );
-                    continue;
-                }
-            };
+            let enriched_notification_information =
+                match result.enrich(concordium_client.clone(), block_hash).await {
+                    Ok(information) => information,
+                    Err(err) => {
+                        error!(
+                            "Error occurred while enriching notification information: {:?}",
+                            err
+                        );
+                        continue;
+                    }
+                };
 
             for device in devices {
                 if let Err(err) = gcloud
