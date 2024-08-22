@@ -188,8 +188,10 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::{cmp::PartialEq, str::FromStr, sync::Arc, time::Duration};
-
+    use super::*;
+    use crate::models::notification::{
+        CCDTransactionNotificationInformation, CIS2EventNotificationInformation,
+    };
     use anyhow::Result;
     use async_trait::async_trait;
     use backoff::ExponentialBackoff;
@@ -204,12 +206,7 @@ mod tests {
     use quickcheck::{Arbitrary, Gen};
     use quickcheck_macros::quickcheck;
     use reqwest::Client;
-
-    use crate::models::notification::{
-        CCDTransactionNotificationInformation, CIS2EventNotificationInformation,
-    };
-
-    use super::*;
+    use std::{cmp::PartialEq, str::FromStr, sync::Arc, time::Duration};
 
     pub struct MockTokenProvider {
         pub token_response: Arc<String>,
