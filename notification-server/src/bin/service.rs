@@ -163,7 +163,7 @@ async fn traverse_chain(
                 if let Err(err) = gcloud
                     .send_push_notification(
                         &device.device_token,
-                        enriched_notification_information.clone(),
+                        &enriched_notification_information,
                     )
                     .await
                 {

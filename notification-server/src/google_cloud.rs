@@ -117,7 +117,7 @@ where
     pub async fn send_push_notification(
         &self,
         device_token: &str,
-        information: NotificationInformation,
+        information: &NotificationInformation,
     ) -> Result<(), NotificationError> {
         self.send_push_notification_with_validate(device_token, Some(information))
             .await
@@ -126,7 +126,7 @@ where
     async fn send_push_notification_with_validate(
         &self,
         device_token: &str,
-        information: Option<NotificationInformation>,
+        information: Option<&NotificationInformation>,
     ) -> Result<(), NotificationError> {
         let access_token = self.service_account.token(SCOPES).await.map_err(|err| {
             AuthenticationError(format!("Authentication error received: {}", err))
@@ -370,7 +370,7 @@ mod tests {
                 "100".to_string(),
             ));
         assert!(gc
-            .send_push_notification("valid_device_token", notification_information)
+            .send_push_notification("valid_device_token", &notification_information)
             .await
             .is_ok());
         mock.assert();
@@ -431,7 +431,7 @@ mod tests {
                 None,
             ));
         assert!(gc
-            .send_push_notification("test_token", notification_information)
+            .send_push_notification("test_token", &notification_information)
             .await
             .is_ok());
         mock.assert();
@@ -492,7 +492,7 @@ mod tests {
                 Some(MetadataUrl::new("https://example.com".to_string(), None).unwrap()),
             ));
         assert!(gc
-            .send_push_notification("test_token", notification_information)
+            .send_push_notification("test_token", &notification_information)
             .await
             .is_ok());
         mock.assert();
@@ -564,7 +564,7 @@ mod tests {
                 ),
             ));
         assert!(gc
-            .send_push_notification("test_token", notification_information)
+            .send_push_notification("test_token", &notification_information)
             .await
             .is_ok());
         mock.assert();
