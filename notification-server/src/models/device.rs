@@ -1,7 +1,6 @@
-use std::collections::HashSet;
-
 use enum_iterator::Sequence;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 
 #[derive(Debug, Deserialize)]
 pub struct DeviceSubscription {

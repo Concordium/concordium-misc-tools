@@ -1,3 +1,4 @@
+use crate::models::device::Preference;
 use concordium_rust_sdk::{
     base::{contracts_common::AccountAddress, smart_contracts::OwnedContractName},
     cis2::{Cis2QueryError, Cis2Type, MetadataUrl, TokenId},
@@ -7,8 +8,6 @@ use concordium_rust_sdk::{
 };
 use serde::{Deserialize, Serialize, Serializer};
 use std::ops::Deref;
-
-use crate::models::device::Preference;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum NotificationInformationBasic {
