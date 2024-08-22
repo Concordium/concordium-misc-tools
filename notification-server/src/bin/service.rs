@@ -118,10 +118,10 @@ async fn traverse_chain(
                 result.address(),
                 result.transaction_type()
             );
-            let devices: Vec<_> = loop {
+            let devices = loop {
                 match database_connection
                     .prepared
-                    .get_devices_from_account(result.address().clone())
+                    .get_devices_from_account(result.address())
                     .await
                 {
                     Ok(devices) => break devices,
