@@ -5,7 +5,7 @@ use concordium_rust_sdk::v2::{Client, Endpoint, FinalizedBlockInfo};
 use dotenv::dotenv;
 use futures::Stream;
 use gcp_auth::CustomServiceAccount;
-use log::{error, info};
+use log::{error, info, debug};
 use notification_server::{
     database::DatabaseConnection,
     google_cloud::{GoogleCloud, NotificationError},
@@ -140,7 +140,7 @@ async fn traverse_chain(
                 .filter(|device| device.preferences.contains(result.transaction_type()))
                 .collect();
             if devices.is_empty() {
-                info!(
+                debug!(
                     "No devices subscribed to account {} having preference {:?}",
                     result.address(),
                     result.transaction_type()
