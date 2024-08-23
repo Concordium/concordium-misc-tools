@@ -3,7 +3,7 @@ use concordium_rust_sdk::{
     base::{contracts_common::AccountAddress, smart_contracts::OwnedContractName},
     cis2::{Cis2QueryError, Cis2Type, MetadataUrl, TokenId},
     contract_client::ContractClient,
-    types::{ContractAddress, ContractIndex},
+    types::ContractAddress,
     v2::{Client, IntoBlockIdentifier},
 };
 use serde::{Deserialize, Serialize, Serializer};
@@ -48,7 +48,7 @@ impl NotificationInformationBasic {
                         info.address,
                         info.amount,
                         info.token_id.clone(),
-                        info.contract_address.index,
+                        info.contract_address,
                         contract_client.contract_name.deref().clone(),
                         contract_client
                             .token_metadata_single(block_identifier, info.token_id)
@@ -88,7 +88,7 @@ pub struct CIS2EventNotificationInformation {
     #[serde(rename = "type")]
     pub transaction_type:   Preference,
     pub token_id:           TokenId,
-    pub contract_index:     String,
+    pub contract_address:   ContractAddress,
     pub contract_name:      OwnedContractName,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub token_metadata_url: Option<MetadataUrl>,
@@ -99,7 +99,7 @@ impl CIS2EventNotificationInformation {
         address: AccountAddress,
         amount: String,
         token_id: TokenId,
-        contract_index: ContractIndex,
+        contract_address: ContractAddress,
         contract_name: OwnedContractName,
         token_metadata_url: Option<MetadataUrl>,
     ) -> Self {
@@ -108,7 +108,7 @@ impl CIS2EventNotificationInformation {
             amount,
             transaction_type: Preference::CIS2Transaction,
             token_id,
-            contract_index: contract_index.to_string(),
+            contract_address,
             contract_name,
             token_metadata_url,
         }

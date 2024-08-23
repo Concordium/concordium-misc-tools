@@ -199,7 +199,7 @@ mod tests {
         base::smart_contracts::OwnedContractName,
         cis2::{MetadataUrl, TokenId},
         id::types::AccountAddress,
-        types::hashes::Hash,
+        types::{hashes::Hash, ContractAddress},
     };
     use enum_iterator::{all, Sequence};
     use gcp_auth::Token;
@@ -392,7 +392,7 @@ mod tests {
                     "amount": "200",
                     "type": "cis2-tx",
                     "token_id": "ffffff",
-                    "contract_index": "111",
+                    "contract_address": {"index": 3, "subindex": 0},
                     "contract_name": "init_contract"
                 }
             }
@@ -426,7 +426,7 @@ mod tests {
                     .unwrap(),
                 "200".to_string(),
                 TokenId::from_str("ffffff").unwrap(),
-                111,
+                ContractAddress::new(3, 0),
                 OwnedContractName::new("init_contract".to_string()).unwrap(),
                 None,
             ));
@@ -452,7 +452,7 @@ mod tests {
                     "recipient": "3kBx2h5Y2veb4hZgAJWPrr8RyQESKm5TjzF3ti1QQ4VSYLwK1G",
                     "amount": "200",
                     "type": "cis2-tx",
-                    "contract_index": "111",
+                    "contract_address": {"index": 112, "subindex": 2},
                     "contract_name": "init_contract",
                     "token_id": "ffffff",
                     "token_metadata_url": {"hash": None::<Hash>, "url": "https://example.com"}
@@ -487,7 +487,7 @@ mod tests {
                     .unwrap(),
                 "200".to_string(),
                 TokenId::from_str("ffffff").unwrap(),
-                111,
+                ContractAddress::new(112, 2),
                 OwnedContractName::new("init_contract".to_string()).unwrap(),
                 Some(MetadataUrl::new("https://example.com".to_string(), None).unwrap()),
             ));
@@ -513,7 +513,7 @@ mod tests {
                     "recipient": "3kBx2h5Y2veb4hZgAJWPrr8RyQESKm5TjzF3ti1QQ4VSYLwK1G",
                     "amount": "200",
                     "type": "cis2-tx",
-                    "contract_index": "111",
+                    "contract_address": {"index": 111, "subindex": 1},
                     "contract_name": "init_contract",
                     "token_id": "ffffff",
                     "token_metadata_url": {"hash": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08", "url": "https://example.com"}
@@ -548,7 +548,7 @@ mod tests {
                     .unwrap(),
                 "200".to_string(),
                 TokenId::from_str("ffffff").unwrap(),
-                111,
+                ContractAddress::new(111, 1),
                 OwnedContractName::new("init_contract".to_string()).unwrap(),
                 Some(
                     MetadataUrl::new(

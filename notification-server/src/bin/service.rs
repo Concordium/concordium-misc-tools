@@ -5,7 +5,7 @@ use concordium_rust_sdk::v2::{Client, Endpoint, FinalizedBlockInfo};
 use dotenv::dotenv;
 use futures::Stream;
 use gcp_auth::CustomServiceAccount;
-use log::{error, info, debug};
+use log::{debug, error, info};
 use notification_server::{
     database::DatabaseConnection,
     google_cloud::{GoogleCloud, NotificationError},
