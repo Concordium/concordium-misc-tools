@@ -16,7 +16,7 @@ use lazy_static::lazy_static;
 use notification_server::{
     database::DatabaseConnection,
     google_cloud::{GoogleCloud, NotificationError},
-    models::{DeviceSubscription, Preference},
+    models::device::{DeviceSubscription, Preference},
 };
 use serde_json::json;
 use std::{collections::HashSet, path::PathBuf, str::FromStr, sync::Arc, time::Duration};

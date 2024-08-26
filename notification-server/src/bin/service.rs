@@ -5,7 +5,7 @@ use concordium_rust_sdk::v2::{Client, Endpoint, FinalizedBlockInfo};
 use dotenv::dotenv;
 use futures::Stream;
 use gcp_auth::CustomServiceAccount;
-use log::{error, info};
+use log::{debug, error, info};
 use notification_server::{
     database::DatabaseConnection,
     google_cloud::{GoogleCloud, NotificationError},
@@ -112,35 +112,59 @@ async fn traverse_chain(
                 continue;
             }
         };
-        for result in process(transactions).await.iter() {
+        for result in process(transactions).await.into_iter() {
             info!(
                 "Sending notification to account {} with type {:?}",
-                result.address, result.transaction_type
+                result.address(),
+                result.transaction_type()
             );
-
             let devices = loop {
                 match database_connection
                     .prepared
-                    .get_devices_from_account(result.address)
+                    .get_devices_from_account(result.address())
                     .await
                 {
                     Ok(devices) => break devices,
                     Err(err) => {
                         error!(
                             "Error retrieving devices for account {}: {:?}. Retrying...",
-                            result.address, err
+                            result.address(),
+                            err
                         );
                         sleep(DATABASE_RETRY_DELAY).await;
                     }
                 }
             };
-
-            for device in devices
+            let devices: Vec<_> = devices
                 .iter()
-                .filter(|device| device.preferences.contains(&result.transaction_type))
-            {
+                .filter(|device| device.preferences.contains(result.transaction_type()))
+                .collect();
+            if devices.is_empty() {
+                debug!(
+                    "No devices subscribed to account {} having preference {:?}",
+                    result.address(),
+                    result.transaction_type()
+                );
+                continue;
+            }
+            let enriched_notification_information =
+                match result.enrich(concordium_client.clone(), block_hash).await {
+                    Ok(information) => information,
+                    Err(err) => {
+                        error!(
+                            "Error occurred while enriching notification information: {:?}",
+                            err
+                        );
+                        continue;
+                    }
+                };
+
+            for device in devices {
                 if let Err(err) = gcloud
-                    .send_push_notification(&device.device_token, result.to_owned())
+                    .send_push_notification(
+                        &device.device_token,
+                        &enriched_notification_information,
+                    )
                     .await
                 {
                     if err == NotificationError::UnregisteredError {
