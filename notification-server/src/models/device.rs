@@ -4,8 +4,8 @@ use std::collections::HashSet;
 
 #[derive(Debug, Deserialize)]
 pub struct DeviceSubscription {
-    pub preferences: Vec<Preference>,
-    pub accounts:    Vec<String>,
+    pub preferences:  Vec<Preference>,
+    pub accounts:     Vec<String>,
     pub device_token: String,
 }
 
@@ -14,7 +14,7 @@ impl DeviceSubscription {
         Self {
             preferences,
             accounts,
-            device_token
+            device_token,
         }
     }
 }

@@ -150,7 +150,11 @@ async fn process_device_subscription(
         })
         .collect();
 
-    if let Err(err) = state.google_cloud.validate_device_token(&subscription.device_token).await {
+    if let Err(err) = state
+        .google_cloud
+        .validate_device_token(&subscription.device_token)
+        .await
+    {
         let (status, message) = match err {
             NotificationError::InvalidArgumentError => {
                 (StatusCode::BAD_REQUEST, "Invalid device token".to_string())
@@ -179,7 +183,11 @@ async fn process_device_subscription(
     state
         .db_connection
         .prepared
-        .upsert_subscription(decoded_accounts, subscription.preferences, &subscription.device_token)
+        .upsert_subscription(
+            decoded_accounts,
+            subscription.preferences,
+            &subscription.device_token,
+        )
         .await
         .map_err(|e| {
             error!("Database error: {}", e);
@@ -247,10 +255,7 @@ async fn main() -> anyhow::Result<()> {
     });
 
     let app = Router::new()
-        .route(
-            "/api/v1/subscription",
-            put(upsert_account_device),
-        )
+        .route("/api/v1/subscription", put(upsert_account_device))
         .with_state(app_state);
     let listener = tokio::net::TcpListener::bind(args.listen_address).await?;
     axum::serve(listener, app).await?;
