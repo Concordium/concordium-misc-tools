@@ -138,20 +138,6 @@ async fn process_device_subscription(
         ));
     }
 
-    let decoded_accounts: Result<Vec<AccountAddress>, (StatusCode, String)> = subscription
-        .accounts
-        .iter()
-        .map(|account| {
-            AccountAddress::from_str(account).map_err(|e| {
-                error!("Failed to parse account address: {}", e);
-                (
-                    StatusCode::BAD_REQUEST,
-                    "Failed to parse account address".to_string(),
-                )
-            })
-        })
-        .collect();
-
     if let Err(err) = state.google_cloud.validate_device_token(&device).await {
         let (status, message) = match err {
             NotificationError::InvalidArgumentError => {
@@ -177,11 +163,10 @@ async fn process_device_subscription(
         return Err((status, message));
     }
 
-    let decoded_accounts = decoded_accounts?;
     state
         .db_connection
         .prepared
-        .upsert_subscription(decoded_accounts, subscription.preferences, &device)
+        .upsert_subscription(subscription.accounts, subscription.preferences, &device)
         .await
         .map_err(|e| {
             error!("Database error: {}", e);
@@ -194,15 +179,13 @@ async fn process_device_subscription(
     Ok("Subscribed accounts to device".to_string())
 }
 
-#[tracing::instrument(skip(state))]
 async fn upsert_account_device(
     Path(device): Path<String>,
     State(state): State<Arc<AppState>>,
     Json(subscription): Json<DeviceSubscription>,
 ) -> impl IntoResponse {
     info!(
-        "Subscribing accounts {:?} to device {}",
-        subscription, device
+        "Subscribing accounts {:?} to a device", subscription
     );
     let response: Result<String, (StatusCode, String)> =
         process_device_subscription(device, subscription, state).await;
