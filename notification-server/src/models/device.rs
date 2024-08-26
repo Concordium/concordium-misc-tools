@@ -1,7 +1,7 @@
+use concordium_rust_sdk::common::types::AccountAddress;
 use enum_iterator::Sequence;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
-use concordium_rust_sdk::common::types::AccountAddress;
 
 #[derive(Debug, Deserialize)]
 pub struct DeviceSubscription {
