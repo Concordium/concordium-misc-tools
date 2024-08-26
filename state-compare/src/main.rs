@@ -22,7 +22,8 @@ use pretty_assertions::Comparison;
 use tracing::{info, level_filters::LevelFilter, warn};
 use tracing_subscriber::EnvFilter;
 
-/// Compares the given values and prints a pretty diff with the given message if they are not equal.
+/// Compares the given values and prints a pretty diff with the given message if
+/// they are not equal.
 macro_rules! compare {
     ($v1:expr, $v2:expr, $($arg:tt)*) => {
         if $v1 != $v2 {
@@ -50,7 +51,8 @@ struct Args {
 
     /// The first block to compare state against.
     ///
-    /// If not given the default is the last finalized block `before` the last protocol update.
+    /// If not given the default is the last finalized block `before` the last
+    /// protocol update.
     #[arg(long, env = "STATE_COMPARE_BLOCK1")]
     block1: Option<BlockHash>,
 
@@ -100,7 +102,10 @@ async fn main() -> anyhow::Result<()> {
 
     let (pv1, pv2) = get_protocol_versions(&mut client1, &mut client2, block1, block2).await?;
 
-    info!("Comparing states in blocks {block1} (protocol version {pv1}) and {block2} (protocol version {pv2}).");
+    info!(
+        "Comparing states in blocks {block1} (protocol version {pv1}) and {block2} (protocol \
+         version {pv2})."
+    );
 
     compare!(ci1.genesis_block, ci2.genesis_block, "Genesis blocks");
 
@@ -179,8 +184,9 @@ async fn compare_update_queues(
         .try_collect::<Vec<_>>()
         .await?;
 
-    // PendingUpdate unfortunately does not impl Eq so we'll settle for a comparison of their debug representations
-    // Should be good enough to produce a nice diff.
+    // PendingUpdate unfortunately does not impl Eq so we'll settle for a comparison
+    // of their debug representations Should be good enough to produce a nice
+    // diff.
     compare!(format!("{q1:#?}"), format!("{q2:#?}"), "Pending updates");
 
     Ok(())
@@ -494,8 +500,11 @@ async fn compare_baker_pools(
                 warn!("Failed to get delegators for pool {pool} in block 2: {e}");
                 continue;
             }
-            // The pool should definitely appear in the first block, we got the list of pools from that block.
-            (Err(e), Ok(_)) => return Err(e).with_context(|| format!("Failed to get delegators for pool {pool}")),
+            // The pool should definitely appear in the first block, we got the list of pools from
+            // that block.
+            (Err(e), Ok(_)) => {
+                return Err(e).with_context(|| format!("Failed to get delegators for pool {pool}"))
+            }
             (Err(e1), Err(e2)) => {
                 return Err(e2)
                     .context(e1)
@@ -522,7 +531,8 @@ async fn compare_baker_pools(
                 warn!("Failed to get pool {pool} in block 2: {e}");
                 continue;
             }
-            // The pool should definitely appear in the first block, we got the list of pools from that block.
+            // The pool should definitely appear in the first block, we got the list of pools from
+            // that block.
             (Err(e), Ok(_)) => return Err(e).with_context(|| format!("Failed to get pool {pool}")),
             (Err(e1), Err(e2)) => {
                 return Err(e2)
