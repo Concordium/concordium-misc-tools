@@ -32,7 +32,6 @@ pub enum Preference {
 pub struct Device {
     pub preferences:  HashSet<Preference>,
     pub device_token: String,
-
 }
 
 impl Device {
