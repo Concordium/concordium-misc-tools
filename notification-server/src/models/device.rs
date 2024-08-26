@@ -1,4 +1,3 @@
-use concordium_rust_sdk::common::types::AccountAddress;
 use enum_iterator::Sequence;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -6,11 +5,11 @@ use std::collections::HashSet;
 #[derive(Debug, Deserialize)]
 pub struct DeviceSubscription {
     pub preferences: Vec<Preference>,
-    pub accounts:    Vec<AccountAddress>,
+    pub accounts:    Vec<String>,
 }
 
 impl DeviceSubscription {
-    pub fn new(preferences: Vec<Preference>, accounts: Vec<AccountAddress>) -> Self {
+    pub fn new(preferences: Vec<Preference>, accounts: Vec<String>) -> Self {
         Self {
             preferences,
             accounts,

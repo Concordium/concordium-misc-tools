@@ -8,6 +8,7 @@ use axum::{
 };
 use backoff::ExponentialBackoff;
 use clap::Parser;
+use concordium_rust_sdk::base::contracts_common::AccountAddress;
 use dotenv::dotenv;
 use enum_iterator::all;
 use gcp_auth::CustomServiceAccount;
@@ -18,7 +19,7 @@ use notification_server::{
     models::device::{DeviceSubscription, Preference},
 };
 use serde_json::json;
-use std::{collections::HashSet, path::PathBuf, sync::Arc, time::Duration};
+use std::{collections::HashSet, path::PathBuf, str::FromStr, sync::Arc, time::Duration};
 use tokio_postgres::Config;
 use tracing::{error, info};
 
@@ -137,6 +138,20 @@ async fn process_device_subscription(
         ));
     }
 
+    let decoded_accounts: Result<Vec<AccountAddress>, (StatusCode, String)> = subscription
+        .accounts
+        .iter()
+        .map(|account| {
+            AccountAddress::from_str(account).map_err(|e| {
+                error!("Failed to parse account address: {}", e);
+                (
+                    StatusCode::BAD_REQUEST,
+                    "Failed to parse account address".to_string(),
+                )
+            })
+        })
+        .collect();
+
     if let Err(err) = state.google_cloud.validate_device_token(&device).await {
         let (status, message) = match err {
             NotificationError::InvalidArgumentError => {
@@ -162,10 +177,11 @@ async fn process_device_subscription(
         return Err((status, message));
     }
 
+    let decoded_accounts = decoded_accounts?;
     state
         .db_connection
         .prepared
-        .upsert_subscription(subscription.accounts, subscription.preferences, &device)
+        .upsert_subscription(decoded_accounts, subscription.preferences, &device)
         .await
         .map_err(|e| {
             error!("Database error: {}", e);
@@ -183,7 +199,7 @@ async fn upsert_account_device(
     State(state): State<Arc<AppState>>,
     Json(subscription): Json<DeviceSubscription>,
 ) -> impl IntoResponse {
-    info!("Subscribing accounts {:?} to a device", subscription);
+    info!("Subscribing accounts {:?} to device a device", subscription);
     let response: Result<String, (StatusCode, String)> =
         process_device_subscription(device, subscription, state).await;
     match response {
