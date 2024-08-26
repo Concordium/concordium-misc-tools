@@ -196,7 +196,7 @@ mod tests {
     use async_trait::async_trait;
     use backoff::ExponentialBackoff;
     use concordium_rust_sdk::{
-        base::smart_contracts::OwnedContractName,
+        base::{hashes::TransactionHash, smart_contracts::OwnedContractName},
         cis2::{MetadataUrl, TokenId},
         id::types::AccountAddress,
         types::{hashes::Hash, ContractAddress},
@@ -336,7 +336,8 @@ mod tests {
                 "data": {
                     "recipient": "4FmiTW2L2AccyR9VjzsnpWFSAcohXWf7Vf797i36y526mqiEcp",
                     "amount": "100",
-                    "type": "ccd-tx"
+                    "type": "ccd-tx",
+                    "reference": "3d1c2f4fb9a0eb468bfe39e75c59897c1a375082a6440f4a5da77102182ba055",
                 }
             }
         });
@@ -368,6 +369,10 @@ mod tests {
                 AccountAddress::from_str("4FmiTW2L2AccyR9VjzsnpWFSAcohXWf7Vf797i36y526mqiEcp")
                     .unwrap(),
                 "100".to_string(),
+                TransactionHash::from_str(
+                    "3d1c2f4fb9a0eb468bfe39e75c59897c1a375082a6440f4a5da77102182ba055",
+                )
+                .unwrap(),
             ));
         assert!(gc
             .send_push_notification("valid_device_token", &notification_information)
@@ -393,7 +398,8 @@ mod tests {
                     "type": "cis2-tx",
                     "token_id": "ffffff",
                     "contract_address": {"index": 3, "subindex": 0},
-                    "contract_name": "init_contract"
+                    "contract_name": "init_contract",
+                    "reference": "6a6d250ecefb518253db4c0d7759b2f4ff2862217ed2c8343879a77e0c2c97a2",
                 }
             }
         });
@@ -429,6 +435,10 @@ mod tests {
                 ContractAddress::new(3, 0),
                 OwnedContractName::new("init_contract".to_string()).unwrap(),
                 None,
+                TransactionHash::from_str(
+                    "6a6d250ecefb518253db4c0d7759b2f4ff2862217ed2c8343879a77e0c2c97a2",
+                )
+                .unwrap(),
             ));
         assert!(gc
             .send_push_notification("test_token", &notification_information)
@@ -455,7 +465,8 @@ mod tests {
                     "contract_address": {"index": 112, "subindex": 2},
                     "contract_name": "init_contract",
                     "token_id": "ffffff",
-                    "token_metadata_url": {"hash": None::<Hash>, "url": "https://example.com"}
+                    "token_metadata": {"hash": None::<Hash>, "url": "https://example.com"},
+                    "reference": "494d7848e389d44a2c2fe81eeee6dc427ce33ab1d0c92cba23be321d495be110",
                 }
             }
         });
@@ -490,6 +501,10 @@ mod tests {
                 ContractAddress::new(112, 2),
                 OwnedContractName::new("init_contract".to_string()).unwrap(),
                 Some(MetadataUrl::new("https://example.com".to_string(), None).unwrap()),
+                TransactionHash::from_str(
+                    "494d7848e389d44a2c2fe81eeee6dc427ce33ab1d0c92cba23be321d495be110",
+                )
+                .unwrap(),
             ));
         assert!(gc
             .send_push_notification("test_token", &notification_information)
@@ -516,7 +531,8 @@ mod tests {
                     "contract_address": {"index": 111, "subindex": 1},
                     "contract_name": "init_contract",
                     "token_id": "ffffff",
-                    "token_metadata_url": {"hash": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08", "url": "https://example.com"}
+                    "token_metadata": {"hash": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08", "url": "https://example.com"},
+                    "reference": "8a3a09bffa6ead269f79be4192fcb7773cc4e10a2e90c0dec3eb9ca5200c06bc"
                 }
             }
         });
@@ -562,6 +578,10 @@ mod tests {
                     )
                     .unwrap(),
                 ),
+                TransactionHash::from_str(
+                    "8a3a09bffa6ead269f79be4192fcb7773cc4e10a2e90c0dec3eb9ca5200c06bc",
+                )
+                .unwrap(),
             ));
         assert!(gc
             .send_push_notification("test_token", &notification_information)
