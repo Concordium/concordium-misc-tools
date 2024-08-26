@@ -5,6 +5,7 @@ use std::collections::HashSet;
 #[derive(Debug, Deserialize)]
 pub struct DeviceSubscription {
     pub preferences: Vec<Preference>,
+    // TODO: Investigate if this should be a AccountAddress instead of a String
     pub accounts:    Vec<String>,
 }
 
