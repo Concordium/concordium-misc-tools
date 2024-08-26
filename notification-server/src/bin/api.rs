@@ -1,6 +1,6 @@
 use anyhow::Context;
 use axum::{
-    extract::{Json, Path, State},
+    extract::{Json, State},
     http::StatusCode,
     response::IntoResponse,
     routing::put,
@@ -113,7 +113,6 @@ lazy_static! {
 /// - Device token validation failure.
 /// - Database errors during subscription update.
 async fn process_device_subscription(
-    device: String,
     subscription: DeviceSubscription,
     state: Arc<AppState>,
 ) -> Result<String, (StatusCode, String)> {
@@ -130,7 +129,6 @@ async fn process_device_subscription(
             "Duplicate preferences found".to_string(),
         ));
     }
-
     if subscription.accounts.len() > MAX_RESOURCES_LENGTH {
         return Err((
             StatusCode::BAD_REQUEST,
@@ -152,7 +150,7 @@ async fn process_device_subscription(
         })
         .collect();
 
-    if let Err(err) = state.google_cloud.validate_device_token(&device).await {
+    if let Err(err) = state.google_cloud.validate_device_token(&subscription.device_token).await {
         let (status, message) = match err {
             NotificationError::InvalidArgumentError => {
                 (StatusCode::BAD_REQUEST, "Invalid device token".to_string())
@@ -181,7 +179,7 @@ async fn process_device_subscription(
     state
         .db_connection
         .prepared
-        .upsert_subscription(decoded_accounts, subscription.preferences, &device)
+        .upsert_subscription(decoded_accounts, subscription.preferences, &subscription.device_token)
         .await
         .map_err(|e| {
             error!("Database error: {}", e);
@@ -195,13 +193,12 @@ async fn process_device_subscription(
 }
 
 async fn upsert_account_device(
-    Path(device): Path<String>,
     State(state): State<Arc<AppState>>,
     Json(subscription): Json<DeviceSubscription>,
 ) -> impl IntoResponse {
     info!("Subscribing accounts {:?} to device a device", subscription);
     let response: Result<String, (StatusCode, String)> =
-        process_device_subscription(device, subscription, state).await;
+        process_device_subscription(subscription, state).await;
     match response {
         Ok(message) => (StatusCode::OK, Json(json!({ "message": message }))),
         Err((status_code, message)) => {
@@ -251,7 +248,7 @@ async fn main() -> anyhow::Result<()> {
 
     let app = Router::new()
         .route(
-            "/api/v1/device/:device/subscription",
+            "/api/v1/subscription",
             put(upsert_account_device),
         )
         .with_state(app_state);

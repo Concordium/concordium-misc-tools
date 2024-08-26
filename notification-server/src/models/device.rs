@@ -6,13 +6,15 @@ use std::collections::HashSet;
 pub struct DeviceSubscription {
     pub preferences: Vec<Preference>,
     pub accounts:    Vec<String>,
+    pub device_token: String,
 }
 
 impl DeviceSubscription {
-    pub fn new(preferences: Vec<Preference>, accounts: Vec<String>) -> Self {
+    pub fn new(preferences: Vec<Preference>, accounts: Vec<String>, device_token: String) -> Self {
         Self {
             preferences,
             accounts,
+            device_token
         }
     }
 }
@@ -30,6 +32,7 @@ pub enum Preference {
 pub struct Device {
     pub preferences:  HashSet<Preference>,
     pub device_token: String,
+
 }
 
 impl Device {
