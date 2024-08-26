@@ -140,8 +140,7 @@ async fn process_device_subscription(
         .accounts
         .iter()
         .map(|account| {
-            AccountAddress::from_str(account).map_err(|e| {
-                error!("Failed to parse account address: {}", e);
+            AccountAddress::from_str(account).map_err(|_| {
                 (
                     StatusCode::BAD_REQUEST,
                     "Failed to parse account address".to_string(),
