@@ -194,16 +194,12 @@ async fn process_device_subscription(
     Ok("Subscribed accounts to device".to_string())
 }
 
-#[tracing::instrument(skip(state))]
 async fn upsert_account_device(
     Path(device): Path<String>,
     State(state): State<Arc<AppState>>,
     Json(subscription): Json<DeviceSubscription>,
 ) -> impl IntoResponse {
-    info!(
-        "Subscribing accounts {:?} to device {}",
-        subscription, device
-    );
+    info!("Subscribing accounts {:?} to device a device", subscription);
     let response: Result<String, (StatusCode, String)> =
         process_device_subscription(device, subscription, state).await;
     match response {

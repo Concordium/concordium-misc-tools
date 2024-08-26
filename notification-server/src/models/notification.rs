@@ -3,7 +3,7 @@ use concordium_rust_sdk::{
     base::{contracts_common::AccountAddress, smart_contracts::OwnedContractName},
     cis2::{Cis2QueryError, Cis2Type, MetadataUrl, TokenId},
     contract_client::ContractClient,
-    types::ContractAddress,
+    types::{hashes::TransactionHash, ContractAddress},
     v2::{Client, IntoBlockIdentifier},
 };
 use serde::{Deserialize, Serialize, Serializer};
@@ -54,6 +54,7 @@ impl NotificationInformationBasic {
                             .token_metadata_single(block_identifier, info.token_id)
                             .await
                             .ok(),
+                        info.transaction_hash,
                     ),
                 ))
             }
@@ -68,14 +69,16 @@ pub struct CCDTransactionNotificationInformation {
     pub amount:           String,
     #[serde(rename = "type")]
     pub transaction_type: Preference,
+    pub reference:        TransactionHash,
 }
 
 impl CCDTransactionNotificationInformation {
-    pub fn new(address: AccountAddress, amount: String) -> Self {
+    pub fn new(address: AccountAddress, amount: String, reference: TransactionHash) -> Self {
         Self {
             address,
             amount,
             transaction_type: Preference::CCDTransaction,
+            reference,
         }
     }
 }
@@ -83,15 +86,16 @@ impl CCDTransactionNotificationInformation {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CIS2EventNotificationInformation {
     #[serde(rename = "recipient")]
-    pub address:            AccountAddress,
-    pub amount:             String,
+    pub address:          AccountAddress,
+    pub amount:           String,
     #[serde(rename = "type")]
-    pub transaction_type:   Preference,
-    pub token_id:           TokenId,
-    pub contract_address:   ContractAddress,
-    pub contract_name:      OwnedContractName,
+    pub transaction_type: Preference,
+    pub token_id:         TokenId,
+    pub contract_address: ContractAddress,
+    pub contract_name:    OwnedContractName,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub token_metadata_url: Option<MetadataUrl>,
+    pub token_metadata:   Option<MetadataUrl>,
+    pub reference:        TransactionHash,
 }
 
 impl CIS2EventNotificationInformation {
@@ -102,6 +106,7 @@ impl CIS2EventNotificationInformation {
         contract_address: ContractAddress,
         contract_name: OwnedContractName,
         token_metadata_url: Option<MetadataUrl>,
+        reference: TransactionHash,
     ) -> Self {
         Self {
             address,
@@ -110,7 +115,8 @@ impl CIS2EventNotificationInformation {
             token_id,
             contract_address,
             contract_name,
-            token_metadata_url,
+            token_metadata: token_metadata_url,
+            reference,
         }
     }
 }
@@ -145,6 +151,7 @@ pub struct CIS2EventNotificationInformationBasic {
     transaction_type: Preference,
     token_id:         TokenId,
     contract_address: ContractAddress,
+    transaction_hash: TransactionHash,
 }
 
 impl CIS2EventNotificationInformationBasic {
@@ -153,6 +160,7 @@ impl CIS2EventNotificationInformationBasic {
         amount: String,
         token_id: TokenId,
         contract_address: ContractAddress,
+        transaction_hash: TransactionHash,
     ) -> Self {
         Self {
             address,
@@ -160,6 +168,7 @@ impl CIS2EventNotificationInformationBasic {
             transaction_type: Preference::CIS2Transaction,
             token_id,
             contract_address,
+            transaction_hash,
         }
     }
 }

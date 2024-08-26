@@ -3,6 +3,7 @@ use crate::models::notification::{
     NotificationInformationBasic,
 };
 use concordium_rust_sdk::{
+    base::hashes::TransactionHash,
     cis2,
     cis2::Event,
     types,
@@ -20,6 +21,7 @@ fn convert<T: Into<BigInt>>(
     is_positive: bool,
     token_id: cis2::TokenId,
     contract_address: ContractAddress,
+    reference: TransactionHash,
 ) -> Option<NotificationInformationBasic> {
     let mut amount: BigInt = amount.into();
     if !is_positive {
@@ -33,6 +35,7 @@ fn convert<T: Into<BigInt>>(
                 amount.to_string(),
                 token_id,
                 contract_address,
+                reference,
             ),
         )),
         _ => None,
@@ -41,16 +44,25 @@ fn convert<T: Into<BigInt>>(
 
 fn map_transaction_to_notification_information(
     effects: &AccountTransactionEffects,
+    transaction_hash: TransactionHash,
 ) -> Vec<NotificationInformationBasic> {
     match &effects {
         AccountTransactionEffects::AccountTransfer { to, amount } => {
             vec![NotificationInformationBasic::CCD(
-                CCDTransactionNotificationInformation::new(*to, amount.micro_ccd.to_string()),
+                CCDTransactionNotificationInformation::new(
+                    *to,
+                    amount.micro_ccd.to_string(),
+                    transaction_hash,
+                ),
             )]
         }
         AccountTransactionEffects::AccountTransferWithMemo { to, amount, .. } => {
             vec![NotificationInformationBasic::CCD(
-                CCDTransactionNotificationInformation::new(*to, amount.micro_ccd.to_string()),
+                CCDTransactionNotificationInformation::new(
+                    *to,
+                    amount.micro_ccd.to_string(),
+                    transaction_hash,
+                ),
             )]
         }
         AccountTransactionEffects::ContractUpdateIssued { effects } => effects
@@ -61,6 +73,7 @@ fn map_transaction_to_notification_information(
                         CCDTransactionNotificationInformation::new(
                             *to,
                             amount.micro_ccd.to_string(),
+                            transaction_hash,
                         ),
                     )]
                 }
@@ -74,17 +87,21 @@ fn map_transaction_to_notification_information(
                                 to,
                                 amount,
                                 ..
-                            }) => convert(to, amount.0, true, token_id, address),
+                            }) => convert(to, amount.0, true, token_id, address, transaction_hash),
                             Ok(Event::Mint {
                                 token_id,
                                 owner,
                                 amount,
-                            }) => convert(owner, amount.0, true, token_id, address),
+                            }) => {
+                                convert(owner, amount.0, true, token_id, address, transaction_hash)
+                            }
                             Ok(Event::Burn {
                                 token_id,
                                 owner,
                                 amount,
-                            }) => convert(owner, amount.0, false, token_id, address),
+                            }) => {
+                                convert(owner, amount.0, false, token_id, address, transaction_hash)
+                            }
                             _ => None,
                         })
                         .collect()
@@ -102,6 +119,7 @@ fn map_transaction_to_notification_information(
                             acc + BigInt::from(item.micro_ccd)
                         })
                         .to_string(),
+                    transaction_hash,
                 ),
             )]
         }
@@ -115,6 +133,7 @@ fn map_transaction_to_notification_information(
                             acc + BigInt::from(item.micro_ccd)
                         })
                         .to_string(),
+                    transaction_hash,
                 ),
             )]
         }
@@ -130,7 +149,10 @@ pub async fn process(
         .flat_map(|t| {
             futures::stream::iter(match t.details {
                 AccountTransaction(ref account_transaction) => {
-                    map_transaction_to_notification_information(&account_transaction.effects)
+                    map_transaction_to_notification_information(
+                        &account_transaction.effects,
+                        t.hash,
+                    )
                 }
                 _ => vec![],
             })
@@ -157,10 +179,11 @@ mod tests {
         constants::EncryptedAmountsCurve,
         encrypted_transfers::types::EncryptedAmount,
         types::{
-            hashes, AccountCreationDetails, AccountTransactionDetails, AccountTransactionEffects,
-            BlockItemSummary, BlockItemSummaryDetails, CredentialRegistrationID, CredentialType,
-            EncryptedSelfAmountAddedEvent, Energy, ExchangeRate, Memo, RejectReason,
-            TransactionIndex, TransactionType, UpdateDetails, UpdatePayload,
+            hashes, hashes::TransactionHash, AccountCreationDetails, AccountTransactionDetails,
+            AccountTransactionEffects, BlockItemSummary, BlockItemSummaryDetails,
+            CredentialRegistrationID, CredentialType, EncryptedSelfAmountAddedEvent, Energy,
+            ExchangeRate, Memo, RejectReason, TransactionIndex, TransactionType, UpdateDetails,
+            UpdatePayload,
         },
     };
     use futures::stream;
@@ -297,11 +320,11 @@ mod tests {
             ];
 
             let effect = g.choose(&effects).unwrap().clone();
-
+            let hash = fixed_hash();
             let summary = BlockItemSummary {
                 index:       random_transaction_index(),
                 energy_cost: ArbitraryEnergy::arbitrary(g).0,
-                hash:        fixed_hash(),
+                hash:        hash.clone(),
                 details:     BlockItemSummaryDetails::AccountTransaction(details(effect.clone())),
             };
 
@@ -309,6 +332,7 @@ mod tests {
                 NotificationInformationBasic::CCD(CCDTransactionNotificationInformation::new(
                     receiver_address,
                     BigInt::from(amount.micro_ccd).to_string(),
+                    hash,
                 ));
             EmittingBlockItemSummaryPair(summary, notification)
         }
