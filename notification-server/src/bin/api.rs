@@ -8,7 +8,6 @@ use axum::{
 };
 use backoff::ExponentialBackoff;
 use clap::Parser;
-use concordium_rust_sdk::base::contracts_common::AccountAddress;
 use dotenv::dotenv;
 use enum_iterator::all;
 use gcp_auth::CustomServiceAccount;
@@ -19,7 +18,7 @@ use notification_server::{
     models::device::{DeviceSubscription, Preference},
 };
 use serde_json::json;
-use std::{collections::HashSet, path::PathBuf, str::FromStr, sync::Arc, time::Duration};
+use std::{collections::HashSet, path::PathBuf, sync::Arc, time::Duration};
 use tokio_postgres::Config;
 use tracing::{error, info};
 
