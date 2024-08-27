@@ -1,7 +1,7 @@
 use anyhow::Context;
 use backoff::ExponentialBackoff;
 use clap::Parser;
-use concordium_rust_sdk::v2::{Client, Endpoint, FinalizedBlockInfo};
+use concordium_rust_sdk::v2::{Client, Endpoint, FinalizedBlockInfo, FinalizedBlocksStream};
 use dotenv::dotenv;
 use futures::Stream;
 use gcp_auth::CustomServiceAccount;
@@ -12,6 +12,7 @@ use notification_server::{
     processor::process,
 };
 use std::{path::PathBuf, time::Duration};
+use concordium_rust_sdk::indexer;
 use tokio::time::sleep;
 use tonic::{
     codegen::{http, tokio_stream::StreamExt},
@@ -87,7 +88,7 @@ async fn traverse_chain(
     database_connection: &DatabaseConnection,
     concordium_client: &mut Client,
     gcloud: &GoogleCloud<CustomServiceAccount>,
-    mut receiver: impl Stream<Item = Result<FinalizedBlockInfo, tonic::Status>> + Unpin,
+    mut receiver: FinalizedBlocksStream,
 ) {
     while let Some(v) = receiver.next().await {
         let finalized_block = match v {
@@ -232,12 +233,12 @@ async fn main() -> anyhow::Result<()> {
         .to_string();
     let gcloud = GoogleCloud::new(http_client, retry_policy, service_account, &project_id);
     let database_connection = DatabaseConnection::create(args.db_connection).await?;
-
+    let height = database_connection.prepared.get_processed_block_height().await.context("Failed to get processed block height")?;
     let mut concordium_client = Client::new(endpoint).await?;
-
     loop {
         info!("Establishing stream of finalized blocks");
-        let receiver = match concordium_client.get_finalized_blocks().await {
+
+        let receiver = match concordium_client.get_finalized_blocks_from(height.unwrap_or(0.into())).await {
             Ok(receiver) => receiver,
             Err(err) => {
                 info!("Error occurred while reading finalized blocks: {:?}", err);

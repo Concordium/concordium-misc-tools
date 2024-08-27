@@ -7,13 +7,16 @@ use std::{
     collections::{HashMap, HashSet},
     vec::IntoIter,
 };
+use concordium_rust_sdk::types::AbsoluteBlockHeight;
 use tokio_postgres::NoTls;
 
 #[derive(Clone, Debug)]
 pub struct PreparedStatements {
-    get_devices_from_account: tokio_postgres::Statement,
-    upsert_device:            tokio_postgres::Statement,
-    pool:                     Pool,
+    get_devices_from_account:   tokio_postgres::Statement,
+    upsert_device:              tokio_postgres::Statement,
+    get_latest_block_height:    tokio_postgres::Statement,
+    insert_block:               tokio_postgres::Statement,
+    pool:                       Pool,
 }
 
 impl PreparedStatements {
@@ -38,6 +41,18 @@ impl PreparedStatements {
             )
             .await
             .context("Failed to create account device mapping")?;
+        let get_latest_block_height = transaction
+            .prepare(
+                "SELECT blocks.height FROM blocks WHERE blocks.id = (SELECT MAX(blocks.id) FROM blocks);",
+            )
+            .await
+            .context("Failed to create get latest block height")?;
+        let insert_block = transaction
+            .prepare(
+                "INSERT INTO blocks (hash, timestamp, height) VALUES ($1, $2, $3);",
+            )
+            .await
+            .context("Failed to create insert block")?;
         transaction
             .commit()
             .await
@@ -45,8 +60,19 @@ impl PreparedStatements {
         Ok(PreparedStatements {
             get_devices_from_account,
             upsert_device,
+            get_latest_block_height,
+            insert_block,
             pool,
         })
+    }
+
+    pub async fn get_processed_block_height(
+        &self,
+    ) -> anyhow::Result<Option<AbsoluteBlockHeight>> {
+        let client = self.pool.get().await.context("Failed to get client")?;
+        let row = client.query_opt(&self.get_latest_block_height, &[]).await?;
+        row.map(|row| row.try_get::<_, i64>(0).context("Row did not have any returning values").map(|raw| (raw as u64).into())).transpose()
+
     }
 
     pub async fn get_devices_from_account(
@@ -64,6 +90,7 @@ impl PreparedStatements {
             })
             .collect::<Result<Vec<Device>, _>>()
     }
+
 
     pub async fn upsert_subscription(
         &self,
