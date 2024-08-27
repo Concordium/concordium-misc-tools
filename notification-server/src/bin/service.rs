@@ -80,6 +80,14 @@ struct Args {
         env = "LOG_LEVEL"
     )]
     log_level: tracing_subscriber::filter::LevelFilter,
+    #[clap(
+        long = "process-timeout-secs",
+        default_value_t = 60,
+        help = "The maximum log level. Possible values are: `trace`, `debug`, `info`, `warn`, and \
+                `error`.",
+        env = "LOG_LEVEL"
+    )]
+    block_process_timeout_sec: u64,
 }
 
 const DATABASE_RETRY_DELAY: Duration = Duration::from_secs(1);
@@ -89,8 +97,9 @@ async fn traverse_chain(
     concordium_client: &mut Client,
     gcloud: &GoogleCloud<CustomServiceAccount>,
     mut receiver: FinalizedBlocksStream,
+    process_timeout: Duration
 ) {
-    while let Some(v) = receiver.next().await {
+    while let Some(v) = receiver.next_timeout(process_timeout).await {
         let finalized_block = match v {
             Ok(v) => v,
             Err(e) => {
@@ -233,12 +242,12 @@ async fn main() -> anyhow::Result<()> {
         .to_string();
     let gcloud = GoogleCloud::new(http_client, retry_policy, service_account, &project_id);
     let database_connection = DatabaseConnection::create(args.db_connection).await?;
-    let height = database_connection.prepared.get_processed_block_height().await.context("Failed to get processed block height")?;
     let mut concordium_client = Client::new(endpoint).await?;
+    let height = database_connection.prepared.get_processed_block_height().await.context("Failed to get processed block height")?.unwrap_or_else(|| concordium_client.get_consensus_info().await?.last_finalized_block_height);
     loop {
         info!("Establishing stream of finalized blocks");
 
-        let receiver = match concordium_client.get_finalized_blocks_from(height.unwrap_or(0.into())).await {
+        let receiver = match concordium_client.get_finalized_blocks_from(height).await {
             Ok(receiver) => receiver,
             Err(err) => {
                 info!("Error occurred while reading finalized blocks: {:?}", err);
