@@ -37,10 +37,11 @@ Should conflicts occur upon subscription updates, then only the preferences are 
 ### Example:
 
 ```shell
-curl -X PUT "http://localhost:3030/api/v1/device/<device_token>/subscription" \
+curl -X PUT "http://localhost:3030/api/v1/subscription" \
     -H "Content-Type: application/json" \
     -d '{
         "preferences": ["cis2-tx", "ccd-tx"],
-        "accounts": ["4FmiTW2L2AccyR9VjzsnpWFSAcohXWf7Vf797i36y526mqiEcp"]
+        "accounts": ["4FmiTW2L2AccyR9VjzsnpWFSAcohXWf7Vf797i36y526mqiEcp"],
+        "device_token": "<device_token>"
     }'
 ```
