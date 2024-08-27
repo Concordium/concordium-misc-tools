@@ -59,7 +59,6 @@ impl PreparedStatements {
             .commit()
             .await
             .context("Failed to commit transaction")?;
-
         Ok(PreparedStatements {
             get_devices_from_account,
             upsert_device,
@@ -75,7 +74,6 @@ impl PreparedStatements {
         let client = self.pool.get().await.context("Failed to get client")?;
         let row = client.query_opt(&self.get_latest_block_height, &[]).await?;
         row.map(|row| row.try_get::<_, i64>(0).context("Row did not have any returning values").map(|raw| (raw as u64).into())).transpose()
-
     }
 
     pub async fn get_devices_from_account(
@@ -93,7 +91,6 @@ impl PreparedStatements {
             })
             .collect::<Result<Vec<Device>, _>>()
     }
-
 
     pub async fn upsert_subscription(
         &self,
