@@ -1,24 +1,24 @@
 use anyhow::Context;
 use backoff::ExponentialBackoff;
 use clap::Parser;
-use concordium_rust_sdk::v2::{Client, Endpoint, FinalizedBlockInfo, FinalizedBlocksStream};
+use concordium_rust_sdk::v2::{Client, Endpoint, FinalizedBlocksStream};
 use dotenv::dotenv;
-use futures::Stream;
 use gcp_auth::CustomServiceAccount;
 use log::{debug, error, info};
 use notification_server::{
     database::DatabaseConnection,
-    google_cloud::{GoogleCloud, NotificationError},
+    google_cloud::GoogleCloud,
     processor::process,
 };
 use std::{path::PathBuf, time::Duration};
-use concordium_rust_sdk::indexer;
-use tokio::time::sleep;
+use backoff::future::retry;
+use concordium_rust_sdk::types::AbsoluteBlockHeight;
 use tonic::{
-    codegen::{http, tokio_stream::StreamExt},
+    codegen::http,
     transport::ClientTlsConfig,
 };
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use notification_server::google_cloud::NotificationError::UnregisteredError;
 
 #[derive(Debug, Parser)]
 struct Args {
@@ -83,9 +83,8 @@ struct Args {
     #[clap(
         long = "process-timeout-secs",
         default_value_t = 60,
-        help = "The maximum log level. Possible values are: `trace`, `debug`, `info`, `warn`, and \
-                `error`.",
-        env = "LOG_LEVEL"
+        help = "Specifies in seconds the maximum wait for the next block to be processed.",
+        env = "NOTIFICATION_SERVER_PROCESS_TIMEOUT_SEC"
     )]
     block_process_timeout_sec: u64,
 }
@@ -97,9 +96,10 @@ async fn traverse_chain(
     concordium_client: &mut Client,
     gcloud: &GoogleCloud<CustomServiceAccount>,
     mut receiver: FinalizedBlocksStream,
-    process_timeout: Duration
-) {
-    while let Some(v) = receiver.next_timeout(process_timeout).await {
+    process_timeout: Duration,
+    mut height: AbsoluteBlockHeight
+) -> AbsoluteBlockHeight {
+    while let Some(v) = receiver.next_timeout(process_timeout).await.transpose() {
         let finalized_block = match v {
             Ok(v) => v,
             Err(e) => {
@@ -128,23 +128,25 @@ async fn traverse_chain(
                 result.address(),
                 result.transaction_type()
             );
-            let devices = loop {
+            let operation = || async {
                 match database_connection
                     .prepared
                     .get_devices_from_account(result.address())
                     .await
                 {
-                    Ok(devices) => break devices,
+                    Ok(devices) => Ok(devices),
                     Err(err) => {
                         error!(
                             "Error retrieving devices for account {}: {:?}. Retrying...",
                             result.address(),
                             err
                         );
-                        sleep(DATABASE_RETRY_DELAY).await;
+                        Err(backoff::Error::transient(err))
                     }
                 }
             };
+            let devices = retry(backoff::backoff::Constant::new(DATABASE_RETRY_DELAY), operation).await.unwrap();
+
             let devices: Vec<_> = devices
                 .iter()
                 .filter(|device| device.preferences.contains(result.transaction_type()))
@@ -177,7 +179,7 @@ async fn traverse_chain(
                     )
                     .await
                 {
-                    if err == NotificationError::UnregisteredError {
+                    if err == UnregisteredError {
                         info!("Device {} is unregistered", device.device_token);
                     } else {
                         error!("Error occurred while sending notification: {:?}", err);
@@ -185,7 +187,28 @@ async fn traverse_chain(
                 }
             }
         }
+        let operation = || async {
+            match database_connection
+                .prepared
+                .insert_block(&block_hash, &finalized_block.height)
+                .await
+            {
+                Ok(_) => Ok(()),
+                Err(err) => {
+                    error!(
+                        "Error writing to database {:?}. Retrying...",
+                        err
+                    );
+                    Err(backoff::Error::transient(()))
+                }
+            }
+        };
+
+        retry(backoff::backoff::Constant::new(DATABASE_RETRY_DELAY), operation).await.unwrap();
+
+        height = finalized_block.height;
     }
+    height
 }
 
 #[tokio::main(flavor = "multi_thread")]
@@ -243,11 +266,14 @@ async fn main() -> anyhow::Result<()> {
     let gcloud = GoogleCloud::new(http_client, retry_policy, service_account, &project_id);
     let database_connection = DatabaseConnection::create(args.db_connection).await?;
     let mut concordium_client = Client::new(endpoint).await?;
-    let height = database_connection.prepared.get_processed_block_height().await.context("Failed to get processed block height")?.unwrap_or_else(|| concordium_client.get_consensus_info().await?.last_finalized_block_height);
+    let mut height = if let Some(height) = database_connection.prepared.get_processed_block_height().await.context("Failed to get processed block height")? {
+        height
+    } else {
+        concordium_client.get_consensus_info().await?.last_finalized_block_height
+    };
     loop {
         info!("Establishing stream of finalized blocks");
-
-        let receiver = match concordium_client.get_finalized_blocks_from(height).await {
+        let receiver = match concordium_client.get_finalized_blocks_from(height.next()).await {
             Ok(receiver) => receiver,
             Err(err) => {
                 info!("Error occurred while reading finalized blocks: {:?}", err);
@@ -255,11 +281,13 @@ async fn main() -> anyhow::Result<()> {
                 continue;
             }
         };
-        traverse_chain(
+        height = traverse_chain(
             &database_connection,
             &mut concordium_client,
             &gcloud,
             receiver,
+            Duration::from_secs(args.block_process_timeout_sec),
+            height
         )
         .await;
     }

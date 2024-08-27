@@ -7,8 +7,10 @@ use std::{
     collections::{HashMap, HashSet},
     vec::IntoIter,
 };
+use concordium_rust_sdk::base::hashes::BlockHash;
 use concordium_rust_sdk::types::AbsoluteBlockHeight;
 use tokio_postgres::NoTls;
+use tokio_postgres::types::ToSql;
 
 #[derive(Clone, Debug)]
 pub struct PreparedStatements {
@@ -49,7 +51,7 @@ impl PreparedStatements {
             .context("Failed to create get latest block height")?;
         let insert_block = transaction
             .prepare(
-                "INSERT INTO blocks (hash, timestamp, height) VALUES ($1, $2, $3);",
+                "INSERT INTO blocks (hash, height) VALUES ($1, $2);",
             )
             .await
             .context("Failed to create insert block")?;
@@ -57,6 +59,7 @@ impl PreparedStatements {
             .commit()
             .await
             .context("Failed to commit transaction")?;
+
         Ok(PreparedStatements {
             get_devices_from_account,
             upsert_device,
@@ -102,7 +105,7 @@ impl PreparedStatements {
         let preferences_mask = preferences_to_bitmask(preferences.into_iter());
         let transaction = client.transaction().await?;
         for account in account_address {
-            let params: &[&(dyn tokio_postgres::types::ToSql + Sync)] =
+            let params: &[&(dyn ToSql + Sync)] =
                 &[&account.0.as_ref(), &device_id, &preferences_mask];
             if let Err(e) = transaction.execute(&self.upsert_device, params).await {
                 let _ = transaction.rollback().await;
@@ -110,6 +113,17 @@ impl PreparedStatements {
             }
         }
         transaction.commit().await.map_err(Into::into)
+    }
+
+    pub async fn insert_block(
+        &self,
+        hash: &BlockHash,
+        height: &AbsoluteBlockHeight,
+    ) -> anyhow::Result<()> {
+        let client = self.pool.get().await.context("Failed to get client")?;
+        let params: &[&(dyn ToSql + Sync); 2] = &[&hash.as_ref(), &(height.height as i64)];
+        client.execute(&self.insert_block, params).await?;
+        Ok(())
     }
 }
 
