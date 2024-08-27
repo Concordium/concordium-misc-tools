@@ -4,15 +4,17 @@ use std::collections::HashSet;
 
 #[derive(Debug, Deserialize)]
 pub struct DeviceSubscription {
-    pub preferences: Vec<Preference>,
-    pub accounts:    Vec<String>,
+    pub preferences:  Vec<Preference>,
+    pub accounts:     Vec<String>,
+    pub device_token: String,
 }
 
 impl DeviceSubscription {
-    pub fn new(preferences: Vec<Preference>, accounts: Vec<String>) -> Self {
+    pub fn new(preferences: Vec<Preference>, accounts: Vec<String>, device_token: String) -> Self {
         Self {
             preferences,
             accounts,
+            device_token,
         }
     }
 }
