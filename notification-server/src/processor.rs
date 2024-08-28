@@ -1,3 +1,7 @@
+use crate::models::notification::{
+    CCDTransactionNotificationInformation, CIS2EventNotificationInformationBasic,
+    NotificationInformationBasic,
+};
 use concordium_rust_sdk::{
     base::hashes::TransactionHash,
     cis2,
@@ -10,11 +14,6 @@ use concordium_rust_sdk::{
 };
 use futures::{Stream, StreamExt};
 use num_bigint::BigInt;
-
-use crate::models::notification::{
-    CCDTransactionNotificationInformation, CIS2EventNotificationInformationBasic,
-    NotificationInformationBasic,
-};
 
 fn convert<T: Into<BigInt>>(
     address: Address,
