@@ -86,19 +86,19 @@ impl CCDTransactionNotificationInformation {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CIS2EventNotificationInformation {
     #[serde(rename = "recipient")]
-    pub address:          AccountAddress,
-    pub amount:           String,
+    pub address:                   AccountAddress,
+    pub amount:                    String,
     #[serde(rename = "type")]
-    pub transaction_type: Preference,
-    pub token_id:         TokenId,
-    pub contract_address_index: String,
+    pub transaction_type:          Preference,
+    pub token_id:                  TokenId,
+    pub contract_address_index:    String,
     pub contract_address_subindex: String,
-    pub contract_name:    OwnedContractName,
+    pub contract_name:             OwnedContractName,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub token_metadata_url: Option<String>,
+    pub token_metadata_url:        Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub token_metadata_hash: Option<String>,
-    pub reference:        TransactionHash,
+    pub token_metadata_hash:       Option<String>,
+    pub reference:                 TransactionHash,
 }
 
 impl CIS2EventNotificationInformation {
@@ -120,7 +120,9 @@ impl CIS2EventNotificationInformation {
             contract_address_subindex: contract_address.subindex.to_string(),
             contract_name,
             token_metadata_url: token_metadata_url.clone().map(|url| url.url().to_string()),
-            token_metadata_hash: token_metadata_url.map(|url| url.hash().map(|hash| hash.to_string())).flatten(),
+            token_metadata_hash: token_metadata_url
+                .map(|url| url.hash().map(|hash| hash.to_string()))
+                .flatten(),
             reference,
         }
     }
