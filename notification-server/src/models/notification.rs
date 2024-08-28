@@ -110,7 +110,6 @@ where
     serializer.serialize_str(&json_string)
 }
 
-// Function to serialize Option<T> using serde_json::to_string()
 fn serialize_option_as_json_string<S, T>(
     value: &Option<T>,
     serializer: S,
