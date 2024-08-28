@@ -1,7 +1,3 @@
-use crate::models::notification::{
-    CCDTransactionNotificationInformation, CIS2EventNotificationInformationBasic,
-    NotificationInformationBasic,
-};
 use concordium_rust_sdk::{
     base::hashes::TransactionHash,
     cis2,
@@ -14,6 +10,11 @@ use concordium_rust_sdk::{
 };
 use futures::{Stream, StreamExt};
 use num_bigint::BigInt;
+
+use crate::models::notification::{
+    CCDTransactionNotificationInformation, CIS2EventNotificationInformationBasic,
+    NotificationInformationBasic,
+};
 
 fn convert<T: Into<BigInt>>(
     address: Address,
@@ -163,12 +164,8 @@ pub async fn process(
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        models::notification::{
-            CCDTransactionNotificationInformation, NotificationInformationBasic,
-        },
-        processor::process,
-    };
+    use std::{fmt::Debug, str::FromStr};
+
     use concordium_rust_sdk::{
         base::{
             contracts_common::AccountAddress,
@@ -179,10 +176,10 @@ mod tests {
         constants::EncryptedAmountsCurve,
         encrypted_transfers::types::EncryptedAmount,
         types::{
-            hashes, hashes::TransactionHash, AccountCreationDetails, AccountTransactionDetails,
-            AccountTransactionEffects, BlockItemSummary, BlockItemSummaryDetails,
-            CredentialRegistrationID, CredentialType, EncryptedSelfAmountAddedEvent, Energy,
-            ExchangeRate, Memo, RejectReason, TransactionIndex, TransactionType, UpdateDetails,
+            AccountCreationDetails, AccountTransactionDetails, AccountTransactionEffects,
+            BlockItemSummary, BlockItemSummaryDetails, CredentialRegistrationID,
+            CredentialType, EncryptedSelfAmountAddedEvent, Energy, ExchangeRate,
+            hashes, Memo, RejectReason, TransactionIndex, TransactionType, UpdateDetails,
             UpdatePayload,
         },
     };
@@ -190,9 +187,15 @@ mod tests {
     use num_bigint::BigInt;
     use quickcheck::{Arbitrary, Gen};
     use quickcheck_macros::quickcheck;
-    use rand::{random, thread_rng, Rng};
+    use rand::{random, Rng, thread_rng};
     use sha2::Digest;
-    use std::{fmt::Debug, str::FromStr};
+
+    use crate::{
+        models::notification::{
+            CCDTransactionNotificationInformation, NotificationInformationBasic,
+        },
+        processor::process,
+    };
 
     #[derive(Clone, Debug)]
     struct ArbitraryTransactionIndex(pub TransactionIndex);

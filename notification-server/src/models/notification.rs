@@ -91,10 +91,13 @@ pub struct CIS2EventNotificationInformation {
     #[serde(rename = "type")]
     pub transaction_type: Preference,
     pub token_id:         TokenId,
-    pub contract_address: ContractAddress,
+    pub contract_address_index: String,
+    pub contract_address_subindex: String,
     pub contract_name:    OwnedContractName,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub token_metadata:   Option<MetadataUrl>,
+    pub token_metadata_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub token_metadata_hash: Option<String>,
     pub reference:        TransactionHash,
 }
 
@@ -113,9 +116,11 @@ impl CIS2EventNotificationInformation {
             amount,
             transaction_type: Preference::CIS2Transaction,
             token_id,
-            contract_address,
+            contract_address_index: contract_address.index.to_string(),
+            contract_address_subindex: contract_address.subindex.to_string(),
             contract_name,
-            token_metadata: token_metadata_url,
+            token_metadata_url: token_metadata_url.clone().map(|url| url.url().to_string()),
+            token_metadata_hash: token_metadata_url.map(|url| url.hash().map(|hash| hash.to_string())).flatten(),
             reference,
         }
     }

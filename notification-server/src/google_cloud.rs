@@ -397,7 +397,8 @@ mod tests {
                     "amount": "200",
                     "type": "cis2-tx",
                     "token_id": "ffffff",
-                    "contract_address": {"index": 3, "subindex": 0},
+                    "contract_address_index": "3",
+                    "contract_address_subindex": "0",
                     "contract_name": "init_contract",
                     "reference": "6a6d250ecefb518253db4c0d7759b2f4ff2862217ed2c8343879a77e0c2c97a2",
                 }
@@ -462,10 +463,11 @@ mod tests {
                     "recipient": "3kBx2h5Y2veb4hZgAJWPrr8RyQESKm5TjzF3ti1QQ4VSYLwK1G",
                     "amount": "200",
                     "type": "cis2-tx",
-                    "contract_address": {"index": 112, "subindex": 2},
+                    "contract_address_index": "112",
+                    "contract_address_subindex": "2",
                     "contract_name": "init_contract",
                     "token_id": "ffffff",
-                    "token_metadata": {"hash": None::<Hash>, "url": "https://example.com"},
+                    "token_metadata_url": "https://example.com",
                     "reference": "494d7848e389d44a2c2fe81eeee6dc427ce33ab1d0c92cba23be321d495be110",
                 }
             }
@@ -528,10 +530,12 @@ mod tests {
                     "recipient": "3kBx2h5Y2veb4hZgAJWPrr8RyQESKm5TjzF3ti1QQ4VSYLwK1G",
                     "amount": "200",
                     "type": "cis2-tx",
-                    "contract_address": {"index": 111, "subindex": 1},
+                    "contract_address_index": "111",
+                    "contract_address_subindex": "1",
                     "contract_name": "init_contract",
                     "token_id": "ffffff",
-                    "token_metadata": {"hash": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08", "url": "https://example.com"},
+                    "token_metadata_hash": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+                    "token_metadata_url": "https://example.com",
                     "reference": "8a3a09bffa6ead269f79be4192fcb7773cc4e10a2e90c0dec3eb9ca5200c06bc"
                 }
             }
