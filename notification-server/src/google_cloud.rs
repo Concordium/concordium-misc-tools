@@ -144,7 +144,6 @@ where
             "token": device_token,
             "data": entity_data
         });
-        println!("Payload: {}", payload);
 
         let operation = || async {
             let response = self
