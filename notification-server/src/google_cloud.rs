@@ -440,7 +440,6 @@ mod tests {
                 )
                 .unwrap(),
             ));
-        println!("Expected: {}", expected_body);
         assert!(gc
             .send_push_notification("test_token", &notification_information)
             .await
