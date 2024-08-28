@@ -13,6 +13,7 @@ use notification_server::{
 use std::{path::PathBuf, time::Duration};
 use backoff::future::retry;
 use concordium_rust_sdk::types::AbsoluteBlockHeight;
+use tokio_postgres::error::SqlState;
 use tonic::{
     codegen::http,
     transport::ClientTlsConfig,
@@ -195,6 +196,12 @@ async fn traverse_chain(
             {
                 Ok(_) => Ok(()),
                 Err(err) => {
+                    if let Some(db_err) = err.as_db_error() {
+                        if db_err.code() == &SqlState::UNIQUE_VIOLATION {
+                            eprintln!("Unique constraint violation: Block with this hash already exists.");
+                        }
+                    }
+                    Err(err.into())
                     error!(
                         "Error writing to database {:?}. Retrying...",
                         err
