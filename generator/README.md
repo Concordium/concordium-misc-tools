@@ -74,3 +74,7 @@ The tool first deploys and initializes the [`cis2-wccd`](https://github.com/Conc
 ### `register-credentials`
 
 The tool first deploys and initializes the [`credential-registry`](https://github.com/Concordium/concordium-rust-smart-contracts/tree/fcc668d87207aaf07b43f5a3b02b6d0a634368d0/examples/credential-registry) example contract. Each transaction is simply an issuance of a credential with dummy values.
+
+### `register-data`
+
+The transactions are register data transactions with randomly-generated data of a fixed size (specified with `--size`, defaulting to 32 bytes).
