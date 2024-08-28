@@ -86,19 +86,38 @@ impl CCDTransactionNotificationInformation {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CIS2EventNotificationInformation {
     #[serde(rename = "recipient")]
-    pub address:                   AccountAddress,
-    pub amount:                    String,
+    pub address:          AccountAddress,
+    pub amount:           String,
     #[serde(rename = "type")]
-    pub transaction_type:          Preference,
-    pub token_id:                  TokenId,
-    pub contract_address_index:    String,
-    pub contract_address_subindex: String,
-    pub contract_name:             OwnedContractName,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub token_metadata_url:        Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub token_metadata_hash:       Option<String>,
-    pub reference:                 TransactionHash,
+    pub transaction_type: Preference,
+    pub token_id:         TokenId,
+    #[serde(serialize_with = "serialize_as_json_string")]
+    pub contract_address: ContractAddress,
+    pub contract_name:    OwnedContractName,
+    #[serde(serialize_with = "serialize_option_as_json_string", skip_serializing_if = "Option::is_none")]
+    pub token_metadata:   Option<MetadataUrl>,
+    pub reference:        TransactionHash,
+}
+
+fn serialize_as_json_string<S, T>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+    T: Serialize,
+{
+    let json_string = serde_json::to_string(value).map_err(serde::ser::Error::custom)?;
+    serializer.serialize_str(&json_string)
+}
+
+// Function to serialize Option<T> using serde_json::to_string()
+fn serialize_option_as_json_string<S, T>(value: &Option<T>, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+    T: Serialize,
+{
+    match value {
+        Some(v) => serialize_as_json_string(v, serializer),
+        None => serializer.serialize_none(),
+    }
 }
 
 impl CIS2EventNotificationInformation {
@@ -116,13 +135,9 @@ impl CIS2EventNotificationInformation {
             amount,
             transaction_type: Preference::CIS2Transaction,
             token_id,
-            contract_address_index: contract_address.index.to_string(),
-            contract_address_subindex: contract_address.subindex.to_string(),
+            contract_address,
             contract_name,
-            token_metadata_url: token_metadata_url.clone().map(|url| url.url().to_string()),
-            token_metadata_hash: token_metadata_url
-                .map(|url| url.hash().map(|hash| hash.to_string()))
-                .flatten(),
+            token_metadata: token_metadata_url,
             reference,
         }
     }
