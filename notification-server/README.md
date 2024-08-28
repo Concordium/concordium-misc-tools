@@ -22,3 +22,26 @@ cargo run --bin <BINARY_NAME>
 ```
 
 where `<BINARY_NAME>` is the name of the binary you want to run.
+
+## API subscribe documentation
+
+The subscription endpoint is idempotent.
+
+All account-to-device mappings being registered under a single endpoint call will have the same preferences set.
+Accounts is a list of base58 encoded account addresses.
+
+At most 1000 accounts can be registered in one call and only 1000 accounts be queried at once.
+
+Should conflicts occur upon subscription updates, then only the preferences are updated.
+
+### Example:
+
+```shell
+curl -X PUT "http://localhost:3030/api/v1/subscription" \
+    -H "Content-Type: application/json" \
+    -d '{
+        "preferences": ["cis2-tx", "ccd-tx"],
+        "accounts": ["4FmiTW2L2AccyR9VjzsnpWFSAcohXWf7Vf797i36y526mqiEcp"],
+        "device_token": "<device_token>"
+    }'
+```

@@ -1,4 +1,5 @@
-# Unreleased
+## Unreleased changes
+- Updated the Concordium Rust SDK to support the changes introduced in protocol 7.
 
 ## 2.0.1
 

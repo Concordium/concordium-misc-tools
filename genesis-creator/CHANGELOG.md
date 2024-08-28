@@ -1,6 +1,7 @@
-# Unreleased
+## Unreleased changes
 
 - Support genesis data format of protocol version 7.
+- Updated the Concordium Rust SDK to support the changes introduced in protocol 7.
 
 ## 0.2.0
 

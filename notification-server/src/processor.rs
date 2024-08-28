@@ -1,84 +1,140 @@
+use crate::models::notification::{
+    CCDTransactionNotificationInformation, CIS2EventNotificationInformationBasic,
+    NotificationInformationBasic,
+};
 use concordium_rust_sdk::{
-    base::contracts_common::AccountAddress,
+    base::hashes::TransactionHash,
     cis2,
     cis2::Event,
     types,
     types::{
         AccountTransactionEffects, Address, Address::Account,
-        BlockItemSummaryDetails::AccountTransaction, ContractTraceElement,
+        BlockItemSummaryDetails::AccountTransaction, ContractAddress, ContractTraceElement,
     },
 };
 use futures::{Stream, StreamExt};
 use num_bigint::BigInt;
-use std::fmt::Debug;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NotificationInformation {
-    pub address: AccountAddress,
-    pub amount:  BigInt,
-}
-
-impl NotificationInformation {
-    pub fn new(address: AccountAddress, amount: BigInt) -> Self { Self { address, amount } }
-}
 
 fn convert<T: Into<BigInt>>(
     address: Address,
     amount: T,
     is_positive: bool,
-) -> Option<NotificationInformation> {
+    token_id: cis2::TokenId,
+    contract_address: ContractAddress,
+    reference: TransactionHash,
+) -> Option<NotificationInformationBasic> {
     let mut amount: BigInt = amount.into();
     if !is_positive {
         amount = -amount;
     }
 
     match address {
-        Account(address) => Some(NotificationInformation::new(address, amount)),
+        Account(address) => Some(NotificationInformationBasic::CIS2(
+            CIS2EventNotificationInformationBasic::new(
+                address,
+                amount.to_string(),
+                token_id,
+                contract_address,
+                reference,
+            ),
+        )),
         _ => None,
     }
 }
 
-fn get_cis2_events_addresses(effects: &AccountTransactionEffects) -> Vec<NotificationInformation> {
+fn map_transaction_to_notification_information(
+    effects: &AccountTransactionEffects,
+    transaction_hash: TransactionHash,
+) -> Vec<NotificationInformationBasic> {
     match &effects {
         AccountTransactionEffects::AccountTransfer { to, amount } => {
-            vec![NotificationInformation::new(*to, amount.micro_ccd.into())]
+            vec![NotificationInformationBasic::CCD(
+                CCDTransactionNotificationInformation::new(
+                    *to,
+                    amount.micro_ccd.to_string(),
+                    transaction_hash,
+                ),
+            )]
         }
         AccountTransactionEffects::AccountTransferWithMemo { to, amount, .. } => {
-            vec![NotificationInformation::new(*to, amount.micro_ccd.into())]
+            vec![NotificationInformationBasic::CCD(
+                CCDTransactionNotificationInformation::new(
+                    *to,
+                    amount.micro_ccd.to_string(),
+                    transaction_hash,
+                ),
+            )]
         }
         AccountTransactionEffects::ContractUpdateIssued { effects } => effects
             .iter()
             .flat_map(|effect| match effect {
                 ContractTraceElement::Transferred { to, amount, .. } => {
-                    vec![NotificationInformation::new(*to, amount.micro_ccd.into())]
+                    vec![NotificationInformationBasic::CCD(
+                        CCDTransactionNotificationInformation::new(
+                            *to,
+                            amount.micro_ccd.to_string(),
+                            transaction_hash,
+                        ),
+                    )]
                 }
-                ContractTraceElement::Updated { data } => data
-                    .events
-                    .iter()
-                    .filter_map(|event| match cis2::Event::try_from(event) {
-                        Ok(Event::Transfer { to, amount, .. }) => convert(to, amount.0, true),
-                        Ok(Event::Mint { owner, amount, .. }) => convert(owner, amount.0, true),
-                        Ok(Event::Burn { owner, amount, .. }) => convert(owner, amount.0, false),
-                        _ => None,
-                    })
-                    .collect(),
+                ContractTraceElement::Updated { data } => {
+                    let address = data.address;
+                    data.events
+                        .iter()
+                        .filter_map(|event| match cis2::Event::try_from(event) {
+                            Ok(Event::Transfer {
+                                token_id,
+                                to,
+                                amount,
+                                ..
+                            }) => convert(to, amount.0, true, token_id, address, transaction_hash),
+                            Ok(Event::Mint {
+                                token_id,
+                                owner,
+                                amount,
+                            }) => {
+                                convert(owner, amount.0, true, token_id, address, transaction_hash)
+                            }
+                            Ok(Event::Burn {
+                                token_id,
+                                owner,
+                                amount,
+                            }) => {
+                                convert(owner, amount.0, false, token_id, address, transaction_hash)
+                            }
+                            _ => None,
+                        })
+                        .collect()
+                }
                 _ => vec![],
             })
             .collect(),
         AccountTransactionEffects::TransferredWithSchedule { to, amount } => {
-            vec![NotificationInformation::new(
-                *to,
-                amount.iter().fold(BigInt::from(0), |acc, &(_, item)| {
-                    acc + BigInt::from(item.micro_ccd)
-                }),
+            vec![NotificationInformationBasic::CCD(
+                CCDTransactionNotificationInformation::new(
+                    *to,
+                    amount
+                        .iter()
+                        .fold(BigInt::from(0), |acc, &(_, item)| {
+                            acc + BigInt::from(item.micro_ccd)
+                        })
+                        .to_string(),
+                    transaction_hash,
+                ),
             )]
         }
         AccountTransactionEffects::TransferredWithScheduleAndMemo { to, amount, .. } => {
-            vec![NotificationInformation::new(
-                *to,
-                amount.iter().fold(BigInt::from(0), |acc, &(_, item)| {
-                    acc + BigInt::from(item.micro_ccd)
-                }),
+            vec![NotificationInformationBasic::CCD(
+                CCDTransactionNotificationInformation::new(
+                    *to,
+                    amount
+                        .iter()
+                        .fold(BigInt::from(0), |acc, &(_, item)| {
+                            acc + BigInt::from(item.micro_ccd)
+                        })
+                        .to_string(),
+                    transaction_hash,
+                ),
             )]
         }
         _ => vec![],
@@ -87,25 +143,32 @@ fn get_cis2_events_addresses(effects: &AccountTransactionEffects) -> Vec<Notific
 
 pub async fn process(
     transactions: impl Stream<Item = Result<types::BlockItemSummary, tonic::Status>>,
-) -> Vec<NotificationInformation> {
+) -> Vec<NotificationInformationBasic> {
     transactions
         .filter_map(|result| async move { result.ok() })
         .flat_map(|t| {
             futures::stream::iter(match t.details {
                 AccountTransaction(ref account_transaction) => {
-                    get_cis2_events_addresses(&account_transaction.effects)
+                    map_transaction_to_notification_information(
+                        &account_transaction.effects,
+                        t.hash,
+                    )
                 }
                 _ => vec![],
             })
         })
-        .collect::<Vec<NotificationInformation>>()
+        .collect::<Vec<NotificationInformationBasic>>()
         .await
 }
 
 #[cfg(test)]
 mod tests {
-    use std::{fmt::Debug, str::FromStr};
-
+    use crate::{
+        models::notification::{
+            CCDTransactionNotificationInformation, NotificationInformationBasic,
+        },
+        processor::process,
+    };
     use concordium_rust_sdk::{
         base::{
             contracts_common::AccountAddress,
@@ -116,10 +179,11 @@ mod tests {
         constants::EncryptedAmountsCurve,
         encrypted_transfers::types::EncryptedAmount,
         types::{
-            hashes, AccountCreationDetails, AccountTransactionDetails, AccountTransactionEffects,
-            BlockItemSummary, BlockItemSummaryDetails, CredentialRegistrationID, CredentialType,
-            EncryptedSelfAmountAddedEvent, Energy, ExchangeRate, Memo, RejectReason,
-            TransactionIndex, TransactionType, UpdateDetails, UpdatePayload,
+            hashes, hashes::TransactionHash, AccountCreationDetails, AccountTransactionDetails,
+            AccountTransactionEffects, BlockItemSummary, BlockItemSummaryDetails,
+            CredentialRegistrationID, CredentialType, EncryptedSelfAmountAddedEvent, Energy,
+            ExchangeRate, Memo, RejectReason, TransactionIndex, TransactionType, UpdateDetails,
+            UpdatePayload,
         },
     };
     use futures::stream;
@@ -128,8 +192,7 @@ mod tests {
     use quickcheck_macros::quickcheck;
     use rand::{random, thread_rng, Rng};
     use sha2::Digest;
-
-    use crate::processor::{process, NotificationInformation};
+    use std::{fmt::Debug, str::FromStr};
 
     #[derive(Clone, Debug)]
     struct ArbitraryTransactionIndex(pub TransactionIndex);
@@ -213,7 +276,7 @@ mod tests {
     }
 
     #[derive(Clone, Debug)]
-    struct EmittingBlockItemSummaryPair(pub BlockItemSummary, pub NotificationInformation);
+    struct EmittingBlockItemSummaryPair(pub BlockItemSummary, pub NotificationInformationBasic);
 
     impl Arbitrary for EmittingBlockItemSummaryPair {
         fn arbitrary(g: &mut Gen) -> Self {
@@ -257,19 +320,20 @@ mod tests {
             ];
 
             let effect = g.choose(&effects).unwrap().clone();
-
+            let hash = fixed_hash();
             let summary = BlockItemSummary {
                 index:       random_transaction_index(),
                 energy_cost: ArbitraryEnergy::arbitrary(g).0,
-                hash:        fixed_hash(),
+                hash:        hash.clone(),
                 details:     BlockItemSummaryDetails::AccountTransaction(details(effect.clone())),
             };
 
-            let notification = NotificationInformation {
-                address: receiver_address,
-                amount:  BigInt::from(amount.micro_ccd),
-            };
-
+            let notification =
+                NotificationInformationBasic::CCD(CCDTransactionNotificationInformation::new(
+                    receiver_address,
+                    BigInt::from(amount.micro_ccd).to_string(),
+                    hash,
+                ));
             EmittingBlockItemSummaryPair(summary, notification)
         }
     }
@@ -366,7 +430,7 @@ mod tests {
 
     trait TestableBlockItemSummary {
         fn get_block_item_summary(&self) -> &BlockItemSummary;
-        fn get_expected_notification(&self) -> Option<NotificationInformation>;
+        fn get_expected_notification(&self) -> Option<NotificationInformationBasic>;
     }
 
     impl TestableBlockItemSummary for BlockItemSummaryWrapper {
@@ -377,7 +441,7 @@ mod tests {
             }
         }
 
-        fn get_expected_notification(&self) -> Option<NotificationInformation> {
+        fn get_expected_notification(&self) -> Option<NotificationInformationBasic> {
             match self {
                 BlockItemSummaryWrapper::Emitting(pair) => Some(pair.1.clone()),
                 BlockItemSummaryWrapper::Silent(_) => None,
@@ -396,7 +460,7 @@ mod tests {
         );
         let runtime = tokio::runtime::Runtime::new().unwrap();
         let result = runtime.block_on(process(summary_stream));
-        let expected: Vec<NotificationInformation> = summaries
+        let expected: Vec<NotificationInformationBasic> = summaries
             .into_iter()
             .filter_map(|summary| summary.get_expected_notification())
             .collect();

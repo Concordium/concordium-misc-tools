@@ -1,4 +1,4 @@
-ARG build_image=rust:1.74-bookworm
+ARG build_image=rust:1.76-bookworm
 ARG base_image=debian:bookworm
 FROM ${build_image} AS build
 
