@@ -107,7 +107,7 @@ fn serialize_contract_name<S>(name: &OwnedContractName, serializer: S) -> Result
 where
     S: Serializer, {
     let contract_name_str = name.as_contract_name();
-    serializer.serialize_str(&contract_name_str.contract_name())
+    serializer.serialize_str(contract_name_str.contract_name())
 }
 
 fn serialize_as_json_string<S, T>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
