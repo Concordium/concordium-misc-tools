@@ -105,10 +105,10 @@ pub struct CIS2EventNotificationInformation {
 
 fn serialize_contract_name<S>(name: &OwnedContractName, serializer: S) -> Result<S::Ok, S::Error>
 where
-    S: Serializer,
-{
+    S: Serializer, {
     let contract_name_str = name.as_contract_name(); // Call the custom method
-    serializer.serialize_str(&contract_name_str.contract_name())     // Serialize as a string
+    serializer.serialize_str(&contract_name_str.contract_name()) // Serialize as
+                                                                 // a string
 }
 
 fn serialize_as_json_string<S, T>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
