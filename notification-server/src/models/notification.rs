@@ -93,6 +93,7 @@ pub struct CIS2EventNotificationInformation {
     pub token_id:         TokenId,
     #[serde(serialize_with = "serialize_as_json_string")]
     pub contract_address: ContractAddress,
+    #[serde(serialize_with = "serialize_contract_name")]
     pub contract_name:    OwnedContractName,
     #[serde(
         serialize_with = "serialize_option_as_json_string",
@@ -100,6 +101,14 @@ pub struct CIS2EventNotificationInformation {
     )]
     pub token_metadata:   Option<MetadataUrl>,
     pub reference:        TransactionHash,
+}
+
+fn serialize_contract_name<S>(name: &OwnedContractName, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let contract_name_str = name.as_contract_name(); // Call the custom method
+    serializer.serialize_str(&contract_name_str.contract_name())     // Serialize as a string
 }
 
 fn serialize_as_json_string<S, T>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
