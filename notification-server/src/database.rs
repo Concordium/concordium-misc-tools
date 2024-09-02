@@ -1,18 +1,26 @@
-use crate::models::device::{Device, Preference};
+use std::{collections::{HashMap, HashSet}, vec::IntoIter};
+
 use anyhow::Context;
+use concordium_rust_sdk::base::hashes::BlockHash;
 use concordium_rust_sdk::common::types::AccountAddress;
+use concordium_rust_sdk::types::AbsoluteBlockHeight;
 use deadpool_postgres::{Manager, ManagerConfig, Pool, RecyclingMethod};
 use lazy_static::lazy_static;
-use std::{
-    collections::{HashMap, HashSet},
-    vec::IntoIter,
-};
-use concordium_rust_sdk::base::hashes::BlockHash;
-use concordium_rust_sdk::types::AbsoluteBlockHeight;
 use log::error;
+use thiserror::Error;
 use tokio_postgres::error::SqlState;
-use tokio_postgres::{Error, NoTls};
+use tokio_postgres::NoTls;
 use tokio_postgres::types::ToSql;
+
+use crate::models::device::{Device, Preference};
+
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("Unrecoverable pool issue: {0}")]
+    GlobalIssue(#[from] tokio_postgres::Error),
+    #[error("Failed inserting block with hash {0} because one with height of {1} has already been inserted")]
+    ConstraintViolation(BlockHash, AbsoluteBlockHeight),
+}
 
 #[derive(Clone, Debug)]
 pub struct PreparedStatements {
@@ -73,18 +81,18 @@ impl PreparedStatements {
     pub async fn get_processed_block_height(
         &self,
     ) -> Result<Option<AbsoluteBlockHeight>, Error> {
-        let client = self.pool.get().await.context("Failed to get client")?;
+        let client = self.pool.get().await.unwrap();
         let row = client.query_opt(&self.get_latest_block_height, &[]).await?;
-        row.map(|row| row.try_get::<_, i64>(0).map(|raw| (raw as u64).into())).transpose()
+        row.map(|row| row.try_get::<_, i64>(0).map(|raw| (raw as u64).into())).transpose().map_err(Into::into)
     }
 
     pub async fn get_devices_from_account(
         &self,
         account_address: &AccountAddress,
     ) -> Result<Vec<Device>, Error> {
-        let client = self.pool.get().await.context("Failed to get client")?;
+        let client = self.pool.get().await.unwrap();
         let params: &[&(dyn tokio_postgres::types::ToSql + Sync)] = &[&account_address.0.as_ref()];
-        let rows = client.query(&self.get_devices_from_account, params).await?;
+        let rows = client.query(&self.get_devices_from_account, params).await.map_err(Into::<Error>::into)?;
         rows.iter()
             .map(|row| {
                 let device_token = row.try_get::<_, String>(0)?;
@@ -100,7 +108,7 @@ impl PreparedStatements {
         preferences: Vec<Preference>,
         device_token: &str,
     ) -> Result<(), Error> {
-        let mut client = self.pool.get().await.context("Failed to get client")?;
+        let mut client = self.pool.get().await.unwrap();
         let preferences_mask = preferences_to_bitmask(preferences.into_iter());
         let transaction = client.transaction().await?;
         for account in account_address {
@@ -119,10 +127,18 @@ impl PreparedStatements {
         hash: &BlockHash,
         height: &AbsoluteBlockHeight,
     ) -> Result<(), Error> {
-        let client = self.pool.get().await.context("Failed to get client")?;
+        let client = self.pool.get().await.unwrap();
         let params: &[&(dyn ToSql + Sync); 2] = &[&hash.as_ref(), &(height.height as i64)];
-        client.execute(&self.insert_block, params).await?;
-        Ok(())
+        client.execute(&self.insert_block, params).await.map_or_else(|err| {
+            if let Some(db_err) = err.as_db_error() {
+                if db_err.code() == &SqlState::UNIQUE_VIOLATION {
+                    return Err(Error::ConstraintViolation(*hash, *height))
+                }
+            };
+            Err(Error::GlobalIssue(err))
+        }, |_| {
+            Ok(())
+        })
     }
 }
 
@@ -175,11 +191,16 @@ pub fn bitmask_to_preferences(bitmask: i32) -> HashSet<Preference> {
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
+    use std::env;
     use std::str::FromStr;
+    use dotenv::dotenv;
+
     use enum_iterator::all;
-    use super::*;
     use serial_test::serial;
+
     use crate::models::device::Preference::{CCDTransaction, CIS2Transaction};
+
+    use super::*;
 
     #[test]
     fn test_preference_map_coverage_and_uniqueness() {
@@ -260,11 +281,11 @@ mod tests {
 
 
     async fn setup_database() -> anyhow::Result<DatabaseConnection> {
-        let config = "host=localhost dbname=postgres user=postgres password=GTn2VH/H2VB/S36m port=5432".parse().unwrap();
+        dotenv().ok();
+        let config = env::var("NOTIFICATION_SERVER_DB_CONNECTION").unwrap().parse().unwrap();
         let db_connection = DatabaseConnection::create(config).await?;
 
         let client = db_connection.prepared.pool.get().await?;
-
         client.batch_execute("
             DROP TABLE IF EXISTS blocks;
             DROP TABLE IF EXISTS account_device_mapping;

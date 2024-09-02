@@ -179,7 +179,7 @@ mod tests {
         constants::EncryptedAmountsCurve,
         encrypted_transfers::types::EncryptedAmount,
         types::{
-            hashes, hashes::TransactionHash, AccountCreationDetails, AccountTransactionDetails,
+            hashes, AccountCreationDetails, AccountTransactionDetails,
             AccountTransactionEffects, BlockItemSummary, BlockItemSummaryDetails,
             CredentialRegistrationID, CredentialType, EncryptedSelfAmountAddedEvent, Energy,
             ExchangeRate, Memo, RejectReason, TransactionIndex, TransactionType, UpdateDetails,

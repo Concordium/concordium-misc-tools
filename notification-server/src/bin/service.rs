@@ -5,15 +5,10 @@ use concordium_rust_sdk::v2::{Client, Endpoint, FinalizedBlocksStream};
 use dotenv::dotenv;
 use gcp_auth::CustomServiceAccount;
 use log::{debug, error, info};
-use notification_server::{
-    database::DatabaseConnection,
-    google_cloud::GoogleCloud,
-    processor::process,
-};
+use notification_server::{database, database::DatabaseConnection, google_cloud::GoogleCloud, processor::process};
 use std::{path::PathBuf, time::Duration};
 use backoff::future::retry;
 use concordium_rust_sdk::types::AbsoluteBlockHeight;
-use tokio_postgres::error::SqlState;
 use tonic::{
     codegen::http,
     transport::ClientTlsConfig,
@@ -196,17 +191,14 @@ async fn traverse_chain(
             {
                 Ok(_) => Ok(()),
                 Err(err) => {
-                    if let Some(db_err) = err.as_db_error() {
-                        if db_err.code() == &SqlState::UNIQUE_VIOLATION {
-                            eprintln!("Unique constraint violation: Block with this hash already exists.");
-                        }
-                    }
-                    Err(err.into())
                     error!(
-                        "Error writing to database {:?}. Retrying...",
+                        "Error writing to database {:?}.",
                         err
                     );
-                    Err(backoff::Error::transient(()))
+                    Err(match err {
+                        database::Error::GlobalIssue(_) => backoff::Error::transient(err),
+                        database::Error::ConstraintViolation(_, _) => backoff::Error::permanent(err),
+                    })
                 }
             }
         };

@@ -10,5 +10,6 @@ CREATE TABLE IF NOT EXISTS account_device_mapping (
 CREATE TABLE IF NOT EXISTS blocks (
   id SERIAL8 PRIMARY KEY,
   hash BYTEA NOT NULL UNIQUE,
-  height INT8 NOT NULL
+  height INT8 NOT NULL,
+  UNIQUE (height)
 );
