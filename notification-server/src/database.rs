@@ -1,16 +1,17 @@
-use std::{collections::{HashMap, HashSet}, vec::IntoIter};
+use std::{
+    collections::{HashMap, HashSet},
+    vec::IntoIter,
+};
 
 use anyhow::Context;
-use concordium_rust_sdk::base::hashes::BlockHash;
-use concordium_rust_sdk::common::types::AccountAddress;
-use concordium_rust_sdk::types::AbsoluteBlockHeight;
+use concordium_rust_sdk::{
+    base::hashes::BlockHash, common::types::AccountAddress, types::AbsoluteBlockHeight,
+};
 use deadpool_postgres::{Manager, ManagerConfig, Pool, RecyclingMethod};
 use lazy_static::lazy_static;
 use log::error;
 use thiserror::Error;
-use tokio_postgres::error::SqlState;
-use tokio_postgres::NoTls;
-use tokio_postgres::types::ToSql;
+use tokio_postgres::{error::SqlState, types::ToSql, NoTls};
 
 use crate::models::device::{Device, Preference};
 
@@ -18,17 +19,20 @@ use crate::models::device::{Device, Preference};
 pub enum Error {
     #[error("Unrecoverable pool issue: {0}")]
     GlobalIssue(#[from] tokio_postgres::Error),
-    #[error("Failed inserting block with hash {0} because one with height of {1} has already been inserted")]
+    #[error(
+        "Failed inserting block with hash {0} because one with height of {1} has already been \
+         inserted"
+    )]
     ConstraintViolation(BlockHash, AbsoluteBlockHeight),
 }
 
 #[derive(Clone, Debug)]
 pub struct PreparedStatements {
-    get_devices_from_account:   tokio_postgres::Statement,
-    upsert_device:              tokio_postgres::Statement,
-    get_latest_block_height:    tokio_postgres::Statement,
-    insert_block:               tokio_postgres::Statement,
-    pool:                       Pool,
+    get_devices_from_account: tokio_postgres::Statement,
+    upsert_device:            tokio_postgres::Statement,
+    get_latest_block_height:  tokio_postgres::Statement,
+    insert_block:             tokio_postgres::Statement,
+    pool:                     Pool,
 }
 
 impl PreparedStatements {
@@ -55,14 +59,13 @@ impl PreparedStatements {
             .context("Failed to create account device mapping")?;
         let get_latest_block_height = transaction
             .prepare(
-                "SELECT blocks.height FROM blocks WHERE blocks.id = (SELECT MAX(blocks.id) FROM blocks);",
+                "SELECT blocks.height FROM blocks WHERE blocks.id = (SELECT MAX(blocks.id) FROM \
+                 blocks);",
             )
             .await
             .context("Failed to create get latest block height")?;
         let insert_block = transaction
-            .prepare(
-                "INSERT INTO blocks (hash, height) VALUES ($1, $2);",
-            )
+            .prepare("INSERT INTO blocks (hash, height) VALUES ($1, $2);")
             .await
             .context("Failed to create insert block")?;
         transaction
@@ -78,12 +81,12 @@ impl PreparedStatements {
         })
     }
 
-    pub async fn get_processed_block_height(
-        &self,
-    ) -> Result<Option<AbsoluteBlockHeight>, Error> {
+    pub async fn get_processed_block_height(&self) -> Result<Option<AbsoluteBlockHeight>, Error> {
         let client = self.pool.get().await.unwrap();
         let row = client.query_opt(&self.get_latest_block_height, &[]).await?;
-        row.map(|row| row.try_get::<_, i64>(0).map(|raw| (raw as u64).into())).transpose().map_err(Into::into)
+        row.map(|row| row.try_get::<_, i64>(0).map(|raw| (raw as u64).into()))
+            .transpose()
+            .map_err(Into::into)
     }
 
     pub async fn get_devices_from_account(
@@ -92,7 +95,10 @@ impl PreparedStatements {
     ) -> Result<Vec<Device>, Error> {
         let client = self.pool.get().await.unwrap();
         let params: &[&(dyn tokio_postgres::types::ToSql + Sync)] = &[&account_address.0.as_ref()];
-        let rows = client.query(&self.get_devices_from_account, params).await.map_err(Into::<Error>::into)?;
+        let rows = client
+            .query(&self.get_devices_from_account, params)
+            .await
+            .map_err(Into::<Error>::into)?;
         rows.iter()
             .map(|row| {
                 let device_token = row.try_get::<_, String>(0)?;
@@ -129,16 +135,20 @@ impl PreparedStatements {
     ) -> Result<(), Error> {
         let client = self.pool.get().await.unwrap();
         let params: &[&(dyn ToSql + Sync); 2] = &[&hash.as_ref(), &(height.height as i64)];
-        client.execute(&self.insert_block, params).await.map_or_else(|err| {
-            if let Some(db_err) = err.as_db_error() {
-                if db_err.code() == &SqlState::UNIQUE_VIOLATION {
-                    return Err(Error::ConstraintViolation(*hash, *height))
-                }
-            };
-            Err(Error::GlobalIssue(err))
-        }, |_| {
-            Ok(())
-        })
+        client
+            .execute(&self.insert_block, params)
+            .await
+            .map_or_else(
+                |err| {
+                    if let Some(db_err) = err.as_db_error() {
+                        if db_err.code() == &SqlState::UNIQUE_VIOLATION {
+                            return Err(Error::ConstraintViolation(*hash, *height));
+                        }
+                    };
+                    Err(Error::GlobalIssue(err))
+                },
+                |_| Ok(()),
+            )
     }
 }
 
@@ -190,10 +200,8 @@ pub fn bitmask_to_preferences(bitmask: i32) -> HashSet<Preference> {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
-    use std::env;
-    use std::str::FromStr;
     use dotenv::dotenv;
+    use std::{collections::HashSet, env, str::FromStr};
 
     use enum_iterator::all;
     use serial_test::serial;
@@ -279,14 +287,18 @@ mod tests {
         );
     }
 
-
     async fn setup_database() -> anyhow::Result<DatabaseConnection> {
         dotenv().ok();
-        let config = env::var("NOTIFICATION_SERVER_DB_CONNECTION").unwrap().parse().unwrap();
+        let config = env::var("NOTIFICATION_SERVER_DB_CONNECTION")
+            .unwrap()
+            .parse()
+            .unwrap();
         let db_connection = DatabaseConnection::create(config).await?;
 
         let client = db_connection.prepared.pool.get().await?;
-        client.batch_execute("
+        client
+            .batch_execute(
+                "
             DROP TABLE IF EXISTS blocks;
             DROP TABLE IF EXISTS account_device_mapping;
 
@@ -304,7 +316,9 @@ mod tests {
               height INT8 NOT NULL,
               UNIQUE (height)
             );
-        ").await?;
+        ",
+            )
+            .await?;
 
         Ok(db_connection)
     }
@@ -317,9 +331,17 @@ mod tests {
         let hash = BlockHash::new([0; 32]); // Example block hash
         let height = AbsoluteBlockHeight::from(1);
 
-        db_connection.prepared.insert_block(&hash, &height).await.unwrap();
+        db_connection
+            .prepared
+            .insert_block(&hash, &height)
+            .await
+            .unwrap();
 
-        let latest_height = db_connection.prepared.get_processed_block_height().await.unwrap();
+        let latest_height = db_connection
+            .prepared
+            .get_processed_block_height()
+            .await
+            .unwrap();
         assert_eq!(latest_height, Some(height));
     }
 
@@ -327,12 +349,28 @@ mod tests {
     #[serial]
     async fn test_get_devices_from_account() {
         let db_connection = setup_database().await.unwrap();
-        let account_address = AccountAddress::from_str("4FmiTW2L2AccyR9VjzsnpWFSAcohXWf7Vf797i36y526mqiEcp").unwrap();
+        let account_address =
+            AccountAddress::from_str("4FmiTW2L2AccyR9VjzsnpWFSAcohXWf7Vf797i36y526mqiEcp").unwrap();
         let device = "device-1";
-        db_connection.prepared.upsert_subscription(vec![account_address], vec![Preference::CIS2Transaction], device).await.unwrap();
-        let devices = db_connection.prepared.get_devices_from_account(&account_address).await.unwrap();
+        db_connection
+            .prepared
+            .upsert_subscription(
+                vec![account_address],
+                vec![Preference::CIS2Transaction],
+                device,
+            )
+            .await
+            .unwrap();
+        let devices = db_connection
+            .prepared
+            .get_devices_from_account(&account_address)
+            .await
+            .unwrap();
 
-        let expected_devices = vec![Device::new(HashSet::from_iter(vec![Preference::CIS2Transaction].into_iter()), device.to_string())];
+        let expected_devices = vec![Device::new(
+            HashSet::from_iter(vec![Preference::CIS2Transaction].into_iter()),
+            device.to_string(),
+        )];
         assert_eq!(devices, expected_devices);
     }
 
@@ -340,17 +378,48 @@ mod tests {
     #[serial]
     async fn test_multiple_upsert_subscriptions() {
         let db_connection = setup_database().await.unwrap();
-        let account_address = AccountAddress::from_str("4FmiTW2L2AccyR9VjzsnpWFSAcohXWf7Vf797i36y526mqiEcp").unwrap();
+        let account_address =
+            AccountAddress::from_str("4FmiTW2L2AccyR9VjzsnpWFSAcohXWf7Vf797i36y526mqiEcp").unwrap();
         let device = "device-1";
-        db_connection.prepared.upsert_subscription(vec![account_address], vec![CIS2Transaction], device).await.unwrap();
-        db_connection.prepared.upsert_subscription(vec![account_address], vec![CIS2Transaction, CCDTransaction], device).await.unwrap();
-        let devices = db_connection.prepared.get_devices_from_account(&account_address).await.unwrap();
+        db_connection
+            .prepared
+            .upsert_subscription(vec![account_address], vec![CIS2Transaction], device)
+            .await
+            .unwrap();
+        db_connection
+            .prepared
+            .upsert_subscription(
+                vec![account_address],
+                vec![CIS2Transaction, CCDTransaction],
+                device,
+            )
+            .await
+            .unwrap();
+        let devices = db_connection
+            .prepared
+            .get_devices_from_account(&account_address)
+            .await
+            .unwrap();
 
-        assert_eq!(devices, vec![Device::new(HashSet::from_iter(vec![CIS2Transaction, CCDTransaction].into_iter()), device.to_string())]);
+        assert_eq!(devices, vec![Device::new(
+            HashSet::from_iter(vec![CIS2Transaction, CCDTransaction].into_iter()),
+            device.to_string()
+        )]);
 
-        db_connection.prepared.upsert_subscription(vec![account_address], vec![], device).await.unwrap();
-        let devices = db_connection.prepared.get_devices_from_account(&account_address).await.unwrap();
-        assert_eq!(devices, vec![Device::new(HashSet::from_iter(vec![].into_iter()), device.to_string())]);
+        db_connection
+            .prepared
+            .upsert_subscription(vec![account_address], vec![], device)
+            .await
+            .unwrap();
+        let devices = db_connection
+            .prepared
+            .get_devices_from_account(&account_address)
+            .await
+            .unwrap();
+        assert_eq!(devices, vec![Device::new(
+            HashSet::from_iter(vec![].into_iter()),
+            device.to_string()
+        )]);
     }
 
     #[tokio::test]
@@ -361,7 +430,11 @@ mod tests {
         let hash = BlockHash::new([0; 32]); // Example block hash
         let height = AbsoluteBlockHeight::from(1);
 
-        db_connection.prepared.insert_block(&hash, &height).await.unwrap();
+        db_connection
+            .prepared
+            .insert_block(&hash, &height)
+            .await
+            .unwrap();
 
         // Inserting the same block again should fail due to unique constraint
         let result = db_connection.prepared.insert_block(&hash, &height).await;

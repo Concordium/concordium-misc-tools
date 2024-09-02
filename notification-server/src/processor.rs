@@ -179,11 +179,10 @@ mod tests {
         constants::EncryptedAmountsCurve,
         encrypted_transfers::types::EncryptedAmount,
         types::{
-            hashes, AccountCreationDetails, AccountTransactionDetails,
-            AccountTransactionEffects, BlockItemSummary, BlockItemSummaryDetails,
-            CredentialRegistrationID, CredentialType, EncryptedSelfAmountAddedEvent, Energy,
-            ExchangeRate, Memo, RejectReason, TransactionIndex, TransactionType, UpdateDetails,
-            UpdatePayload,
+            hashes, AccountCreationDetails, AccountTransactionDetails, AccountTransactionEffects,
+            BlockItemSummary, BlockItemSummaryDetails, CredentialRegistrationID, CredentialType,
+            EncryptedSelfAmountAddedEvent, Energy, ExchangeRate, Memo, RejectReason,
+            TransactionIndex, TransactionType, UpdateDetails, UpdatePayload,
         },
     };
     use futures::stream;

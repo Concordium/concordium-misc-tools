@@ -1,20 +1,22 @@
 use anyhow::Context;
-use backoff::ExponentialBackoff;
+use backoff::{future::retry, ExponentialBackoff};
 use clap::Parser;
-use concordium_rust_sdk::v2::{Client, Endpoint, FinalizedBlocksStream};
+use concordium_rust_sdk::{
+    types::AbsoluteBlockHeight,
+    v2::{Client, Endpoint, FinalizedBlocksStream},
+};
 use dotenv::dotenv;
 use gcp_auth::CustomServiceAccount;
 use log::{debug, error, info};
-use notification_server::{database, database::DatabaseConnection, google_cloud::GoogleCloud, processor::process};
-use std::{path::PathBuf, time::Duration};
-use backoff::future::retry;
-use concordium_rust_sdk::types::AbsoluteBlockHeight;
-use tonic::{
-    codegen::http,
-    transport::ClientTlsConfig,
+use notification_server::{
+    database,
+    database::DatabaseConnection,
+    google_cloud::{GoogleCloud, NotificationError::UnregisteredError},
+    processor::process,
 };
+use std::{path::PathBuf, time::Duration};
+use tonic::{codegen::http, transport::ClientTlsConfig};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use notification_server::google_cloud::NotificationError::UnregisteredError;
 
 #[derive(Debug, Parser)]
 struct Args {
@@ -93,7 +95,7 @@ async fn traverse_chain(
     gcloud: &GoogleCloud<CustomServiceAccount>,
     mut receiver: FinalizedBlocksStream,
     process_timeout: Duration,
-    mut height: AbsoluteBlockHeight
+    mut height: AbsoluteBlockHeight,
 ) -> AbsoluteBlockHeight {
     while let Some(v) = receiver.next_timeout(process_timeout).await.transpose() {
         let finalized_block = match v {
@@ -141,7 +143,12 @@ async fn traverse_chain(
                     }
                 }
             };
-            let devices = retry(backoff::backoff::Constant::new(DATABASE_RETRY_DELAY), operation).await.unwrap();
+            let devices = retry(
+                backoff::backoff::Constant::new(DATABASE_RETRY_DELAY),
+                operation,
+            )
+            .await
+            .unwrap();
 
             let devices: Vec<_> = devices
                 .iter()
@@ -191,19 +198,23 @@ async fn traverse_chain(
             {
                 Ok(_) => Ok(()),
                 Err(err) => {
-                    error!(
-                        "Error writing to database {:?}.",
-                        err
-                    );
+                    error!("Error writing to database {:?}.", err);
                     Err(match err {
                         database::Error::GlobalIssue(_) => backoff::Error::transient(err),
-                        database::Error::ConstraintViolation(_, _) => backoff::Error::permanent(err),
+                        database::Error::ConstraintViolation(_, _) => {
+                            backoff::Error::permanent(err)
+                        }
                     })
                 }
             }
         };
 
-        retry(backoff::backoff::Constant::new(DATABASE_RETRY_DELAY), operation).await.unwrap();
+        retry(
+            backoff::backoff::Constant::new(DATABASE_RETRY_DELAY),
+            operation,
+        )
+        .await
+        .unwrap();
 
         height = finalized_block.height;
     }
@@ -265,14 +276,25 @@ async fn main() -> anyhow::Result<()> {
     let gcloud = GoogleCloud::new(http_client, retry_policy, service_account, &project_id);
     let database_connection = DatabaseConnection::create(args.db_connection).await?;
     let mut concordium_client = Client::new(endpoint).await?;
-    let mut height = if let Some(height) = database_connection.prepared.get_processed_block_height().await.context("Failed to get processed block height")? {
+    let mut height = if let Some(height) = database_connection
+        .prepared
+        .get_processed_block_height()
+        .await
+        .context("Failed to get processed block height")?
+    {
         height
     } else {
-        concordium_client.get_consensus_info().await?.last_finalized_block_height
+        concordium_client
+            .get_consensus_info()
+            .await?
+            .last_finalized_block_height
     };
     loop {
         info!("Establishing stream of finalized blocks");
-        let receiver = match concordium_client.get_finalized_blocks_from(height.next()).await {
+        let receiver = match concordium_client
+            .get_finalized_blocks_from(height.next())
+            .await
+        {
             Ok(receiver) => receiver,
             Err(err) => {
                 info!("Error occurred while reading finalized blocks: {:?}", err);
@@ -286,7 +308,7 @@ async fn main() -> anyhow::Result<()> {
             &gcloud,
             receiver,
             Duration::from_secs(args.block_process_timeout_sec),
-            height
+            height,
         )
         .await;
     }
