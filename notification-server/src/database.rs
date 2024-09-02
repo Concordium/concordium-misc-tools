@@ -323,27 +323,6 @@ mod tests {
         Ok(db_connection)
     }
 
-    #[tokio::test]
-    #[serial]
-    async fn test_insert_block() {
-        let db_connection = setup_database().await.unwrap();
-
-        let hash = BlockHash::new([0; 32]); // Example block hash
-        let height = AbsoluteBlockHeight::from(1);
-
-        db_connection
-            .prepared
-            .insert_block(&hash, &height)
-            .await
-            .unwrap();
-
-        let latest_height = db_connection
-            .prepared
-            .get_processed_block_height()
-            .await
-            .unwrap();
-        assert_eq!(latest_height, Some(height));
-    }
 
     #[tokio::test]
     #[serial]
@@ -424,7 +403,7 @@ mod tests {
 
     #[tokio::test]
     #[serial]
-    async fn test_insert_block_duplicate() {
+    async fn test_insert_block() {
         let db_connection = setup_database().await.unwrap();
 
         let hash = BlockHash::new([0; 32]); // Example block hash
@@ -436,9 +415,72 @@ mod tests {
             .await
             .unwrap();
 
-        // Inserting the same block again should fail due to unique constraint
-        let result = db_connection.prepared.insert_block(&hash, &height).await;
-        println!("{:?}", result);
-        assert!(result.is_err());
+        let latest_height = db_connection
+            .prepared
+            .get_processed_block_height()
+            .await
+            .unwrap();
+        assert_eq!(latest_height, Some(height));
+
+        let hash = BlockHash::new([1; 32]); // Example block hash
+        let height = AbsoluteBlockHeight::from(2);
+
+        db_connection
+            .prepared
+            .insert_block(&hash, &height)
+            .await
+            .unwrap();
+        let latest_height = db_connection
+            .prepared
+            .get_processed_block_height()
+            .await
+            .unwrap();
+        assert_eq!(latest_height.unwrap().height, 2);
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_insert_block_duplicate_hash() {
+        let db_connection = setup_database().await.unwrap();
+
+        let expected_hash = [2; 32];
+        let expected_height = AbsoluteBlockHeight::from(1);
+
+        db_connection
+            .prepared
+            .insert_block(&BlockHash::new(expected_hash), &AbsoluteBlockHeight::from(AbsoluteBlockHeight::from(2)))
+            .await
+            .unwrap();
+
+        match db_connection.prepared.insert_block(&BlockHash::new(expected_hash), &expected_height).await {
+            Err(Error::ConstraintViolation(ref hash, ref height)) => {
+                assert_eq!(expected_hash, hash.bytes);
+                assert_eq!(expected_height.height, height.height);
+            }
+            _ => panic!("Expected ConstraintViolation error"),
+        }
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_insert_block_duplicate_height() {
+        let db_connection = setup_database().await.unwrap();
+
+        let expected_hash = [1; 32];
+        let expected_height = AbsoluteBlockHeight::from(1);
+
+        db_connection
+            .prepared
+            .insert_block(&BlockHash::new([0; 32]), &AbsoluteBlockHeight::from(expected_height))
+            .await
+            .unwrap();
+
+        match db_connection.prepared.insert_block(&BlockHash::new(expected_hash), &expected_height).await {
+            Err(Error::ConstraintViolation(ref hash, ref height)) => {
+                assert_eq!(expected_hash, hash.bytes);
+                assert_eq!(expected_height.height, height.height);
+            }
+            _ => panic!("Expected ConstraintViolation error"),
+        }
     }
 }
