@@ -323,7 +323,6 @@ mod tests {
         Ok(db_connection)
     }
 
-
     #[tokio::test]
     #[serial]
     async fn test_get_devices_from_account() {
@@ -448,11 +447,18 @@ mod tests {
 
         db_connection
             .prepared
-            .insert_block(&BlockHash::new(expected_hash), &AbsoluteBlockHeight::from(AbsoluteBlockHeight::from(2)))
+            .insert_block(
+                &BlockHash::new(expected_hash),
+                &AbsoluteBlockHeight::from(AbsoluteBlockHeight::from(2)),
+            )
             .await
             .unwrap();
 
-        match db_connection.prepared.insert_block(&BlockHash::new(expected_hash), &expected_height).await {
+        match db_connection
+            .prepared
+            .insert_block(&BlockHash::new(expected_hash), &expected_height)
+            .await
+        {
             Err(Error::ConstraintViolation(ref hash, ref height)) => {
                 assert_eq!(expected_hash, hash.bytes);
                 assert_eq!(expected_height.height, height.height);
@@ -471,11 +477,18 @@ mod tests {
 
         db_connection
             .prepared
-            .insert_block(&BlockHash::new([0; 32]), &AbsoluteBlockHeight::from(expected_height))
+            .insert_block(
+                &BlockHash::new([0; 32]),
+                &AbsoluteBlockHeight::from(expected_height),
+            )
             .await
             .unwrap();
 
-        match db_connection.prepared.insert_block(&BlockHash::new(expected_hash), &expected_height).await {
+        match db_connection
+            .prepared
+            .insert_block(&BlockHash::new(expected_hash), &expected_height)
+            .await
+        {
             Err(Error::ConstraintViolation(ref hash, ref height)) => {
                 assert_eq!(expected_hash, hash.bytes);
                 assert_eq!(expected_height.height, height.height);
