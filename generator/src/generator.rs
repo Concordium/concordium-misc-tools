@@ -54,6 +54,16 @@ pub struct TransferCis2Args {
     receivers: Option<PathBuf>,
 }
 
+#[derive(Debug, Args)]
+pub struct RegisterDataArgs {
+    #[clap(
+        long = "size",
+        help = "Size of the data to register in bytes. Max 256.",
+        default_value = "32"
+    )]
+    size: u16,
+}
+
 #[derive(Debug, Clone, Copy)]
 enum Mode {
     Random,
