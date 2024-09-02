@@ -91,11 +91,44 @@ pub struct CIS2EventNotificationInformation {
     #[serde(rename = "type")]
     pub transaction_type: Preference,
     pub token_id:         TokenId,
+    #[serde(serialize_with = "serialize_as_json_string")]
     pub contract_address: ContractAddress,
+    #[serde(serialize_with = "serialize_contract_name")]
     pub contract_name:    OwnedContractName,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        serialize_with = "serialize_option_as_json_string",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub token_metadata:   Option<MetadataUrl>,
     pub reference:        TransactionHash,
+}
+
+fn serialize_contract_name<S>(name: &OwnedContractName, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer, {
+    let contract_name_str = name.as_contract_name();
+    serializer.serialize_str(contract_name_str.contract_name())
+}
+
+fn serialize_as_json_string<S, T>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+    T: Serialize, {
+    let json_string = serde_json::to_string(value).map_err(serde::ser::Error::custom)?;
+    serializer.serialize_str(&json_string)
+}
+
+fn serialize_option_as_json_string<S, T>(
+    value: &Option<T>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+    T: Serialize, {
+    match value {
+        Some(v) => serialize_as_json_string(v, serializer),
+        None => serializer.serialize_none(),
+    }
 }
 
 impl CIS2EventNotificationInformation {
