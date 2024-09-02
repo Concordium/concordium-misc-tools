@@ -17,10 +17,10 @@ use concordium_rust_sdk::{
     types::{
         smart_contracts::{OwnedContractName, OwnedParameter, WasmModule},
         transactions::{
-            send, send::GivenEnergy, AccountTransaction, BlockItem, EncodedPayload,
-            InitContractPayload,
+            send::{self, GivenEnergy},
+            AccountTransaction, BlockItem, EncodedPayload, InitContractPayload,
         },
-        Address, ContractAddress, Energy, NodeDetails, Nonce, WalletAccount,
+        Address, ContractAddress, Energy, NodeDetails, Nonce, RegisteredData, WalletAccount,
     },
     v2::{self, BlockIdentifier},
     web3id::CredentialHolderId,
@@ -56,11 +56,8 @@ pub struct TransferCis2Args {
 
 #[derive(Debug, Args)]
 pub struct RegisterDataArgs {
-    #[clap(
-        long = "size",
-        help = "Size of the data to register in bytes. Max 256.",
-        default_value = "32"
-    )]
+    /// Size of the data to register in bytes. Max 256.
+    #[arg(long, default_value = "32")]
     size: u16,
 }
 
@@ -827,6 +824,60 @@ impl Generate for RegisterCredentialsGenerator {
         let tx =
             self.client
                 .make_register_credential(&self.args.keys, &metadata, &cred_info, &[])?;
+        self.nonce.next_mut();
+
+        Ok(tx)
+    }
+}
+
+/// A generator that makes register data transactions with random data of a
+/// specified size.
+pub struct RegisterDataGenerator {
+    args:  CommonArgs,
+    nonce: Nonce,
+    rng:   StdRng,
+    size:  u16,
+}
+
+impl RegisterDataGenerator {
+    pub async fn instantiate(
+        mut client: v2::Client,
+        args: CommonArgs,
+        register_data_args: RegisterDataArgs,
+    ) -> anyhow::Result<Self> {
+        anyhow::ensure!(
+            register_data_args.size <= 256,
+            "Data size must be at most 256 bytes."
+        );
+
+        // Get the initial nonce.
+        let nonce = client
+            .get_next_account_sequence_number(&args.keys.address)
+            .await?;
+
+        let rng = StdRng::from_entropy();
+        Ok(Self {
+            args,
+            nonce: nonce.nonce,
+            rng,
+            size: register_data_args.size,
+        })
+    }
+}
+
+impl Generate for RegisterDataGenerator {
+    fn generate(&mut self) -> anyhow::Result<AccountTransaction<EncodedPayload>> {
+        let data_bytes: Vec<u8> = (0..self.size).map(|_| self.rng.gen()).collect();
+        let data: RegisteredData = data_bytes.try_into()?;
+        let expiry = TransactionTime::seconds_after(self.args.expiry);
+
+        let tx = send::register_data(
+            &self.args.keys,
+            self.args.keys.address,
+            self.nonce,
+            expiry,
+            data,
+        );
         self.nonce.next_mut();
 
         Ok(tx)
