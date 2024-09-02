@@ -30,7 +30,7 @@ wait-for-db:
 			echo "Database did not become ready in time."; \
 			exit 1; \
 		fi; \
-		echo "Retrying ($$current_attempt/$$max_attempts)..."; \
+		echo "Retrying ($$current_attempt/$$max_attempts)...";
 	done
 
 create-tables:
