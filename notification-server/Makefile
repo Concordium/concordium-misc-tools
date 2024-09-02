@@ -21,7 +21,7 @@ wait-for-db:
 	@echo "Waiting for the database to be ready..."
 	@max_attempts=10; \
 	current_attempt=1; \
-	until docker-compose exec -T db pg_isready -U postgres; do \
+	until docker compose exec -T db pg_isready -U postgres; do \
 		sleep 5; \
 		current_attempt=$$((current_attempt+1)); \
 		if [ $$current_attempt -gt $$max_attempts ]; then \

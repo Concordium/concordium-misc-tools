@@ -32,33 +32,6 @@ jobs:
         id: filter
         with:
           filters: |
-            wallet-proxy-load-simulator/Cargo.toml:
-              - 'wallet-proxy-load-simulator/**'
-              - '.github/**'
-            state-compare/Cargo.toml:
-              - 'state-compare/**'
-              - '.github/**'
-            genesis-creator/Cargo.toml:
-              - 'genesis-creator/**'
-              - '.github/**'
-            id-verifier/Cargo.toml:
-              - 'id-verifier/**'
-              - '.github/**'
-            kpi-tracker/Cargo.toml:
-              - 'kpi-tracker/**'
-              - '.github/**'
-            chain-prometheus-exporter/Cargo.toml:
-              - 'chain-prometheus-exporter/**'
-              - '.github/**'
-            recover-id-object/Cargo.toml:
-              - 'recover-id-object/**'
-              - '.github/**'
-            generator/Cargo.toml:
-              - 'generator/**'
-              - '.github/**'
-            wallet-connect-test-bench/smart-contract/Cargo.toml:
-              - 'wallet-connect-test-bench/**'
-              - '.github/**'
             notification-server/Cargo.toml:
               - 'notification-server/**'
               - '.github/**'
