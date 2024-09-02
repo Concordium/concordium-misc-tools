@@ -100,7 +100,7 @@ jobs:
         if: matrix.crates == 'notification-server/Cargo.toml'
         run: |
           cd notification-server
-          make setup && make
+          make setup-db && make
       - name: Cargo tests
         run: |
           cargo test --manifest-path ${{ matrix.crates }} --locked

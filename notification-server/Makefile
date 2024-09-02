@@ -2,15 +2,19 @@
 
 all: docker-up wait-for-db create-tables
 
-setup:
+setup-db:
 	@echo "Setting default password"
 	@DB_PASSWORD=$$(openssl rand -base64 12) && \
 	export DB_PASSWORD=$$DB_PASSWORD && \
+	cat .env.template | envsubst > .env
+
+setup-credentials:
 	echo "Please enter the path to your Google application credentials file:" && \
 	read GOOGLE_APPLICATION_CREDENTIALS_PATH && \
 	mkdir -p secrets && \
 	cp $$GOOGLE_APPLICATION_CREDENTIALS_PATH secrets/google-credentials.json && \
-	cat .env.template | envsubst > .env
+
+
 
 docker-up:
 	@echo "Starting Docker containers..."
