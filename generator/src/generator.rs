@@ -56,7 +56,7 @@ pub struct TransferCis2Args {
 
 #[derive(Debug, Args)]
 pub struct RegisterDataArgs {
-    /// Size of the data to register in bytes. Max 256. 
+    /// Size of the data to register in bytes. Max 256.  
     #[arg(long, default_value = "32")]
     size: u16,
 }
