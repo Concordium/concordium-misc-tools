@@ -14,8 +14,6 @@ setup-credentials:
 	mkdir -p secrets && \
 	cp $$GOOGLE_APPLICATION_CREDENTIALS_PATH secrets/google-credentials.json && \
 
-
-
 docker-up:
 	@echo "Starting Docker containers..."
 	docker compose up -d db
