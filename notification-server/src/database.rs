@@ -1,8 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    vec::IntoIter,
-};
-
+use crate::models::device::{Device, Preference};
 use anyhow::Context;
 use concordium_rust_sdk::{
     base::hashes::BlockHash, common::types::AccountAddress, types::AbsoluteBlockHeight,
@@ -10,10 +6,12 @@ use concordium_rust_sdk::{
 use deadpool_postgres::{Manager, ManagerConfig, Pool, RecyclingMethod};
 use lazy_static::lazy_static;
 use log::error;
+use std::{
+    collections::{HashMap, HashSet},
+    vec::IntoIter,
+};
 use thiserror::Error;
 use tokio_postgres::{error::SqlState, types::ToSql, NoTls};
-
-use crate::models::device::{Device, Preference};
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -200,21 +198,17 @@ pub fn bitmask_to_preferences(bitmask: i32) -> HashSet<Preference> {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::models::device::Preference::{CCDTransaction, CIS2Transaction};
     use dotenv::dotenv;
-    use std::{collections::HashSet, env, str::FromStr};
-
     use enum_iterator::all;
     use serial_test::serial;
-
-    use crate::models::device::Preference::{CCDTransaction, CIS2Transaction};
-
-    use super::*;
+    use std::{collections::HashSet, env, fs, path::Path, str::FromStr};
+    use tokio_postgres::Client;
 
     #[test]
     fn test_preference_map_coverage_and_uniqueness() {
         let expected_variants = all::<Preference>().collect::<HashSet<_>>();
-
-        // Check for coverage
         for variant in &expected_variants {
             assert!(
                 PREFERENCE_MAP.contains_key(variant),
@@ -223,7 +217,6 @@ mod tests {
             );
         }
 
-        // Check for uniqueness of indices
         let indices = PREFERENCE_MAP.values().cloned().collect::<HashSet<_>>();
         assert_eq!(
             indices.len(),
@@ -231,7 +224,6 @@ mod tests {
             "Indices in PREFERENCE_MAP are not unique."
         );
 
-        // Ensure all variants are accounted for
         assert_eq!(
             PREFERENCE_MAP.len(),
             expected_variants.len(),
@@ -241,7 +233,7 @@ mod tests {
 
     #[test]
     fn test_preferences_to_bitmask_and_back() {
-        let preferences = vec![Preference::CIS2Transaction, Preference::CCDTransaction];
+        let preferences = vec![CIS2Transaction, CCDTransaction];
         let bitmask = preferences_to_bitmask(preferences.clone().into_iter());
 
         let decoded_preferences = bitmask_to_preferences(bitmask);
@@ -253,9 +245,9 @@ mod tests {
 
     #[test]
     fn test_single_preference_to_bitmask_and_back() {
-        let preferences = vec![Preference::CIS2Transaction];
+        let preferences = vec![CIS2Transaction];
         let bitmask = preferences_to_bitmask(preferences.clone().into_iter());
-        assert_eq!(bitmask, PREFERENCE_MAP[&Preference::CIS2Transaction]);
+        assert_eq!(bitmask, PREFERENCE_MAP[&CIS2Transaction]);
 
         let decoded_preferences = bitmask_to_preferences(bitmask);
         assert_eq!(
@@ -263,9 +255,9 @@ mod tests {
             HashSet::from_iter(preferences.into_iter())
         );
 
-        let preferences2 = vec![Preference::CCDTransaction];
+        let preferences2 = vec![CCDTransaction];
         let bitmask2 = preferences_to_bitmask(preferences2.clone().into_iter());
-        assert_eq!(bitmask2, PREFERENCE_MAP[&Preference::CCDTransaction]);
+        assert_eq!(bitmask2, PREFERENCE_MAP[&CCDTransaction]);
 
         let decoded_preferences2 = bitmask_to_preferences(bitmask2);
         assert_eq!(
@@ -287,6 +279,36 @@ mod tests {
         );
     }
 
+    async fn drop_all_tables(client: &Client) -> Result<(), tokio_postgres::Error> {
+        let rows = client
+            .query(
+                "SELECT tablename FROM pg_tables WHERE schemaname = current_schema()",
+                &[],
+            )
+            .await?;
+
+        for row in rows {
+            let table_name: &str = row.get(0);
+            client
+                .batch_execute(&format!("DROP TABLE IF EXISTS {} CASCADE;", table_name))
+                .await?;
+        }
+        Ok(())
+    }
+
+    async fn create_sql(client: &Client) -> Result<(), tokio_postgres::Error> {
+        let sql_directory = Path::new("resources");
+        for entry in fs::read_dir(sql_directory).expect("Failed to read SQL directory") {
+            let entry = entry.expect("Failed to read directory entry");
+            let path = entry.path();
+            if path.extension().and_then(|ext| ext.to_str()) == Some("sql") {
+                let sql = fs::read_to_string(&path).expect("Unable to read SQL file");
+                client.batch_execute(&sql).await?;
+            }
+        }
+        Ok(())
+    }
+
     async fn setup_database() -> anyhow::Result<DatabaseConnection> {
         dotenv().ok();
         let config = env::var("NOTIFICATION_SERVER_DB_CONNECTION")
@@ -296,29 +318,8 @@ mod tests {
         let db_connection = DatabaseConnection::create(config).await?;
 
         let client = db_connection.prepared.pool.get().await?;
-        client
-            .batch_execute(
-                "
-            DROP TABLE IF EXISTS blocks;
-            DROP TABLE IF EXISTS account_device_mapping;
-
-            CREATE TABLE IF NOT EXISTS account_device_mapping (
-              id SERIAL8 PRIMARY KEY,
-              address BYTEA NOT NULL,
-              device_id VARCHAR NOT NULL,
-              preferences INTEGER NOT NULL,
-              UNIQUE (address, device_id)
-            );
-
-            CREATE TABLE IF NOT EXISTS blocks (
-              id SERIAL8 PRIMARY KEY,
-              hash BYTEA NOT NULL UNIQUE,
-              height INT8 NOT NULL,
-              UNIQUE (height)
-            );
-        ",
-            )
-            .await?;
+        drop_all_tables(&client).await?;
+        create_sql(&client).await?;
 
         Ok(db_connection)
     }
