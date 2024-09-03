@@ -148,7 +148,10 @@ async fn traverse_chain(
                 operation,
             )
             .await
-            .unwrap();
+            .unwrap_or_else(|_| {
+                error!("Error occurred while reading devices. We should never be here");
+                Vec::new()
+            });
 
             let devices: Vec<_> = devices
                 .iter()
@@ -191,31 +194,29 @@ async fn traverse_chain(
             }
         }
         let operation = || async {
-            match database_connection
+            database_connection
                 .prepared
                 .insert_block(&block_hash, &finalized_block.height)
                 .await
-            {
-                Ok(_) => Ok(()),
-                Err(err) => {
-                    error!("Error writing to database {:?}.", err);
-                    Err(match err {
-                        database::Error::GlobalIssue(_) => backoff::Error::transient(err),
+                .map_err(|err| {
+                    match err {
+                        database::Error::GlobalIssue(_) => {
+                            error!("Error writing to database {:?}. Retrying...", err);
+                            backoff::Error::transient(err)
+                        },
                         database::Error::ConstraintViolation(_, _) => {
                             backoff::Error::permanent(err)
                         }
-                    })
-                }
-            }
+                    }
+                })
         };
 
-        retry(
+        if let Err(err) = retry(
             backoff::backoff::Constant::new(DATABASE_RETRY_DELAY),
             operation,
-        )
-        .await
-        .unwrap();
-
+        ).await {
+            error!("Error occurred while writing to database: {:?}. Proceeding", err);
+        };
         height = finalized_block.height;
     }
     height
