@@ -198,24 +198,25 @@ async fn traverse_chain(
                 .prepared
                 .insert_block(&block_hash, &finalized_block.height)
                 .await
-                .map_err(|err| {
-                    match err {
-                        database::Error::GlobalIssue(_) => {
-                            error!("Error writing to database {:?}. Retrying...", err);
-                            backoff::Error::transient(err)
-                        },
-                        database::Error::ConstraintViolation(_, _) => {
-                            backoff::Error::permanent(err)
-                        }
+                .map_err(|err| match err {
+                    database::Error::GlobalIssue(_) => {
+                        error!("Error writing to database {:?}. Retrying...", err);
+                        backoff::Error::transient(err)
                     }
+                    database::Error::ConstraintViolation(_, _) => backoff::Error::permanent(err),
                 })
         };
 
         if let Err(err) = retry(
             backoff::backoff::Constant::new(DATABASE_RETRY_DELAY),
             operation,
-        ).await {
-            error!("Error occurred while writing to database: {:?}. Proceeding", err);
+        )
+        .await
+        {
+            error!(
+                "Error occurred while writing to database: {:?}. Proceeding",
+                err
+            );
         };
         height = finalized_block.height;
     }
