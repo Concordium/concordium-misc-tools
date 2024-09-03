@@ -20,7 +20,7 @@ pub enum Error {
     #[error("Unrecoverable pool issue: {0}")]
     PoolError(#[from] PoolError),
     #[error(
-    "Failed inserting block with hash {0} because one with height of {1} has already been \
+        "Failed inserting block with hash {0} because one with height of {1} has already been \
          inserted"
     )]
     ConstraintViolation(BlockHash, AbsoluteBlockHeight),
@@ -163,7 +163,10 @@ impl DatabaseConnection {
             recycling_method: RecyclingMethod::Fast,
         };
         let mgr = Manager::from_config(config, NoTls, mgr_config);
-        let pool = Pool::builder(mgr).max_size(16).build().expect("Failed to create pool");
+        let pool = Pool::builder(mgr)
+            .max_size(16)
+            .build()
+            .expect("Failed to create pool");
         let prepared = PreparedStatements::new(pool).await?;
         Ok(DatabaseConnection { prepared })
     }
