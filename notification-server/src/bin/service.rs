@@ -89,6 +89,40 @@ struct Args {
 
 const DATABASE_RETRY_DELAY: Duration = Duration::from_secs(1);
 
+/// This function continuously processes blocks received from a `FinalizedBlocksStream`, retrieves
+/// the associated transactions, and sends notifications based on those transactions. The process
+/// involves interacting with a database, a Concordium client, and Google Cloud services.
+///
+/// # Arguments
+///
+/// - `database_connection`: A reference to the `DatabaseConnection` used for database interactions.
+/// - `concordium_client`: A mutable reference to the Concordium client used to interact with the Concordium network.
+/// - `gcloud`: A reference to the `GoogleCloud` client used for sending push notifications.
+/// - `receiver`: A stream of finalized blocks that need to be processed.
+/// - `process_timeout`: A `Duration` that specifies the timeout for processing each block.
+/// - `height`: The starting block height from which processing begins.
+///
+/// # Returns
+///
+/// Returns the `AbsoluteBlockHeight` of the last processed block given error occurs such that we can proceed from the next block when we try and reestablish the stream.
+///
+/// # Error Handling
+///
+/// The function is designed to continue processing blocks even if errors occur while handling specific
+/// transactions. The error handling strategy is as follows:
+///
+/// - **Block Reading Errors**: If an error occurs while reading a block from the stream, it logs the error and continues to the next block. This ensures that the process does not halt due to issues in a specific block
+/// - **Transaction Retrieval Errors**: If an error occurs while retrieving transactions for a block, the error is logged, and the block is skipped. The function will continue processing subsequent blocks.
+/// - **Device Retrieval Errors**: When retrieving devices associated with a transaction, the function uses an exponential backoff strategy to retry the operation in case of transient errors. Permanent errors are logged, and the operation continues with the next transaction.
+/// - **Notification Sending Errors**: If sending a notification fails, the function logs the error. If the error indicates that the device is unregistered, it logs an informational message and continues. Other errors are logged as more severe, but the processing of other notifications is not interrupted.
+/// - **Database Write Errors**: Similar to device retrieval, database write errors are handled using a retry mechanism. Transient errors trigger a retry, while permanent errors are logged, and the process continues.
+///
+/// # Skipped Transactions
+///
+/// Transactions may be skipped if errors occur at various stages, such as:
+/// - If there is an error while retrieving the transactions for a block.
+/// - If an error occurs while enriching the notification information.
+/// - If an error occurs while sending a notification to a device.
 async fn traverse_chain(
     database_connection: &DatabaseConnection,
     concordium_client: &mut Client,
