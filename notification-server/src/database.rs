@@ -82,7 +82,7 @@ impl PreparedStatements {
     }
 
     pub async fn get_processed_block_height(&self) -> Result<Option<AbsoluteBlockHeight>, Error> {
-        let client = self.pool.get().await.unwrap();
+        let client = self.pool.get().await.map_err(Into::<Error>::into)?;
         let row = client.query_opt(&self.get_latest_block_height, &[]).await?;
         row.map(|row| row.try_get::<_, i64>(0).map(|raw| (raw as u64).into()))
             .transpose()
@@ -114,7 +114,7 @@ impl PreparedStatements {
         preferences: Vec<Preference>,
         device_token: &str,
     ) -> Result<(), Error> {
-        let mut client = self.pool.get().await.unwrap();
+        let mut client = self.pool.get().await.map_err(Into::<Error>::into)?;
         let preferences_mask = preferences_to_bitmask(preferences.into_iter());
         let transaction = client.transaction().await?;
         for account in account_address {
@@ -133,7 +133,7 @@ impl PreparedStatements {
         hash: &BlockHash,
         height: &AbsoluteBlockHeight,
     ) -> Result<(), Error> {
-        let client = self.pool.get().await.unwrap();
+        let client = self.pool.get().await.map_err(Into::<Error>::into)?;
         let params: &[&(dyn ToSql + Sync); 2] = &[&hash.as_ref(), &(height.height as i64)];
         client
             .execute(&self.insert_block, params)
@@ -163,7 +163,7 @@ impl DatabaseConnection {
             recycling_method: RecyclingMethod::Fast,
         };
         let mgr = Manager::from_config(config, NoTls, mgr_config);
-        let pool = Pool::builder(mgr).max_size(16).build().unwrap();
+        let pool = Pool::builder(mgr).max_size(16).build().expect("Failed to create pool");
         let prepared = PreparedStatements::new(pool).await?;
         Ok(DatabaseConnection { prepared })
     }
