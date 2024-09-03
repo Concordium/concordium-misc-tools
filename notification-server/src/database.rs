@@ -3,7 +3,7 @@ use anyhow::Context;
 use concordium_rust_sdk::{
     base::hashes::BlockHash, common::types::AccountAddress, types::AbsoluteBlockHeight,
 };
-use deadpool_postgres::{Manager, ManagerConfig, Pool, RecyclingMethod};
+use deadpool_postgres::{Manager, ManagerConfig, Pool, PoolError, RecyclingMethod};
 use lazy_static::lazy_static;
 use log::error;
 use std::{
@@ -15,10 +15,12 @@ use tokio_postgres::{error::SqlState, types::ToSql, NoTls};
 
 #[derive(Debug, Error)]
 pub enum Error {
+    #[error("Unrecoverable connection issue: {0}")]
+    DatabaseConnection(#[from] tokio_postgres::Error),
     #[error("Unrecoverable pool issue: {0}")]
-    GlobalIssue(#[from] tokio_postgres::Error),
+    PoolError(#[from] PoolError),
     #[error(
-        "Failed inserting block with hash {0} because one with height of {1} has already been \
+    "Failed inserting block with hash {0} because one with height of {1} has already been \
          inserted"
     )]
     ConstraintViolation(BlockHash, AbsoluteBlockHeight),
@@ -91,7 +93,7 @@ impl PreparedStatements {
         &self,
         account_address: &AccountAddress,
     ) -> Result<Vec<Device>, Error> {
-        let client = self.pool.get().await.unwrap();
+        let client = self.pool.get().await.map_err(Into::<Error>::into)?;
         let params: &[&(dyn tokio_postgres::types::ToSql + Sync)] = &[&account_address.0.as_ref()];
         let rows = client
             .query(&self.get_devices_from_account, params)
@@ -143,7 +145,7 @@ impl PreparedStatements {
                             return Err(Error::ConstraintViolation(*hash, *height));
                         }
                     };
-                    Err(Error::GlobalIssue(err))
+                    Err(Error::DatabaseConnection(err))
                 },
                 |_| Ok(()),
             )

@@ -199,7 +199,7 @@ async fn traverse_chain(
                 .insert_block(&block_hash, &finalized_block.height)
                 .await
                 .map_err(|err| match err {
-                    database::Error::GlobalIssue(_) => {
+                    database::Error::DatabaseConnection(_) | database::Error::PoolError(_) => {
                         error!("Error writing to database {:?}. Retrying...", err);
                         backoff::Error::transient(err)
                     }
