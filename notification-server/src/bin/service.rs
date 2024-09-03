@@ -158,9 +158,29 @@ async fn traverse_chain(
             finalized_block.block_hash, finalized_block.height
         );
         let block_hash = finalized_block.block_hash;
-        let transactions = match concordium_client
-            .get_block_transaction_events(block_hash)
-            .await
+
+        let operation = || async {
+            concordium_client
+                .clone()
+                .get_block_transaction_events(block_hash)
+                .await
+                .map_err(|err| {
+                    error!(
+                        "Error occurred while trying to read transactions: {:?}",
+                        err
+                    );
+                    backoff::Error::transient(err)
+                })
+        };
+
+        let transactions = match retry(
+            ExponentialBackoff {
+                max_elapsed_time: Some(Duration::from_secs(5)),
+                ..ExponentialBackoff::default()
+            },
+            operation,
+        )
+        .await
         {
             Ok(transactions) => transactions.response,
             Err(err) => {
@@ -168,6 +188,7 @@ async fn traverse_chain(
                 continue;
             }
         };
+
         for result in process(transactions).await.into_iter() {
             info!(
                 "Sending notification to account {} with type {:?}",
