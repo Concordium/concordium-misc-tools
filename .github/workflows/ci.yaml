@@ -123,6 +123,11 @@ jobs:
         run: |
           RUST_VERSION=$(echo '${{ env.CRATE_TO_RUST_VERSION_MAP }}' | jq -r '.["${{ matrix.crates }}"] // "${{ env.DEFAULT_RUST_VERSION }}"')
           rustup default $RUST_VERSION
+      - name: Setup dependencies
+        if: matrix.crates == 'notification-server/Cargo.toml'
+        run: |
+          cd notification-server
+          make setup-db && make
       - name: Cargo tests
         run: |
           cargo test --manifest-path ${{ matrix.crates }} --locked

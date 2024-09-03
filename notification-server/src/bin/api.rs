@@ -203,7 +203,7 @@ async fn upsert_account_device(
     State(state): State<Arc<AppState>>,
     Json(subscription): Json<DeviceSubscription>,
 ) -> impl IntoResponse {
-    info!("Subscribing accounts {:?} to device a device", subscription);
+    info!("Subscribing accounts {:?} to a device token", subscription);
     let response: Result<String, (StatusCode, String)> =
         process_device_subscription(subscription, state).await;
     match response {

@@ -1,22 +1,21 @@
 use anyhow::Context;
-use backoff::ExponentialBackoff;
+use backoff::{future::retry, ExponentialBackoff};
 use clap::Parser;
-use concordium_rust_sdk::v2::{Client, Endpoint, FinalizedBlockInfo};
+use concordium_rust_sdk::{
+    types::AbsoluteBlockHeight,
+    v2::{Client, Endpoint, FinalizedBlocksStream},
+};
 use dotenv::dotenv;
-use futures::Stream;
 use gcp_auth::CustomServiceAccount;
 use log::{debug, error, info};
 use notification_server::{
+    database,
     database::DatabaseConnection,
-    google_cloud::{GoogleCloud, NotificationError},
+    google_cloud::{GoogleCloud, NotificationError::UnregisteredError},
     processor::process,
 };
 use std::{path::PathBuf, time::Duration};
-use tokio::time::sleep;
-use tonic::{
-    codegen::{http, tokio_stream::StreamExt},
-    transport::ClientTlsConfig,
-};
+use tonic::{codegen::http, transport::ClientTlsConfig};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[derive(Debug, Parser)]
@@ -79,17 +78,74 @@ struct Args {
         env = "LOG_LEVEL"
     )]
     log_level: tracing_subscriber::filter::LevelFilter,
+    #[clap(
+        long = "process-timeout-secs",
+        default_value_t = 60,
+        help = "Specifies in seconds the maximum wait for the next block to be processed.",
+        env = "NOTIFICATION_SERVER_PROCESS_TIMEOUT_SEC"
+    )]
+    block_process_timeout_sec: u64,
 }
 
 const DATABASE_RETRY_DELAY: Duration = Duration::from_secs(1);
 
+/// This function continuously processes blocks received from a
+/// `FinalizedBlocksStream`, retrieves the associated transactions, and sends
+/// notifications based on those transactions. The process involves interacting
+/// with a database, a Concordium client, and Google Cloud services.
+///
+/// # Arguments
+///
+/// - `database_connection`: A reference to the `DatabaseConnection` used for
+///   database interactions.
+/// - `concordium_client`: A mutable reference to the Concordium client used to
+///   interact with the Concordium network.
+/// - `gcloud`: A reference to the `GoogleCloud` client used for sending push
+///   notifications.
+/// - `receiver`: A stream of finalized blocks that need to be processed.
+/// - `process_timeout`: A `Duration` that specifies the timeout for processing
+///   each block.
+/// - `height`: The starting block height from which processing begins.
+///
+/// # Returns
+///
+/// Returns the `AbsoluteBlockHeight` of the last processed block given error
+/// occurs such that we can proceed from the next block when we try and
+/// reestablish the stream.
+///
+/// # Error Handling
+///
+/// The function is designed to continue processing blocks even if errors occur
+/// while handling specific transactions. The error handling strategy is as
+/// follows:
+///
+/// - **Block Reading Errors**: If an error occurs while reading a block from
+///   the stream, it logs the error and continues to the next block. This
+///   ensures that the process does not halt due to issues in a specific block
+/// - **Transaction Retrieval Errors**: If an error occurs while retrieving
+///   transactions for a block, the error is logged, and the block is skipped.
+///   The function will continue processing subsequent blocks.
+/// - **Device Retrieval Errors**: When retrieving devices associated with a
+///   transaction, the function uses an exponential backoff strategy to retry
+///   the operation in case of transient errors. Permanent errors are logged,
+///   and the operation continues with the next transaction.
+/// - **Notification Sending Errors**: If sending a notification fails, the
+///   function logs the error. If the error indicates that the device is
+///   unregistered, it logs an informational message and continues. Other errors
+///   are logged as more severe, but the processing of other notifications is
+///   not interrupted.
+/// - **Database Write Errors**: Similar to device retrieval, database write
+///   errors are handled using a retry mechanism. Transient errors trigger a
+///   retry, while permanent errors are logged, and the process continues.
 async fn traverse_chain(
     database_connection: &DatabaseConnection,
     concordium_client: &mut Client,
     gcloud: &GoogleCloud<CustomServiceAccount>,
-    mut receiver: impl Stream<Item = Result<FinalizedBlockInfo, tonic::Status>> + Unpin,
-) {
-    while let Some(v) = receiver.next().await {
+    mut receiver: FinalizedBlocksStream,
+    process_timeout: Duration,
+    mut height: AbsoluteBlockHeight,
+) -> AbsoluteBlockHeight {
+    while let Some(v) = receiver.next_timeout(process_timeout).await.transpose() {
         let finalized_block = match v {
             Ok(v) => v,
             Err(e) => {
@@ -102,9 +158,29 @@ async fn traverse_chain(
             finalized_block.block_hash, finalized_block.height
         );
         let block_hash = finalized_block.block_hash;
-        let transactions = match concordium_client
-            .get_block_transaction_events(block_hash)
-            .await
+
+        let operation = || async {
+            concordium_client
+                .clone()
+                .get_block_transaction_events(block_hash)
+                .await
+                .map_err(|err| {
+                    error!(
+                        "Error occurred while trying to read transactions: {:?}",
+                        err
+                    );
+                    backoff::Error::transient(err)
+                })
+        };
+
+        let transactions = match retry(
+            ExponentialBackoff {
+                max_elapsed_time: Some(Duration::from_secs(5)),
+                ..ExponentialBackoff::default()
+            },
+            operation,
+        )
+        .await
         {
             Ok(transactions) => transactions.response,
             Err(err) => {
@@ -112,29 +188,40 @@ async fn traverse_chain(
                 continue;
             }
         };
+
         for result in process(transactions).await.into_iter() {
             info!(
                 "Sending notification to account {} with type {:?}",
                 result.address(),
                 result.transaction_type()
             );
-            let devices = loop {
+            let operation = || async {
                 match database_connection
                     .prepared
                     .get_devices_from_account(result.address())
                     .await
                 {
-                    Ok(devices) => break devices,
+                    Ok(devices) => Ok(devices),
                     Err(err) => {
                         error!(
                             "Error retrieving devices for account {}: {:?}. Retrying...",
                             result.address(),
                             err
                         );
-                        sleep(DATABASE_RETRY_DELAY).await;
+                        Err(backoff::Error::transient(err))
                     }
                 }
             };
+            let devices = retry(
+                backoff::backoff::Constant::new(DATABASE_RETRY_DELAY),
+                operation,
+            )
+            .await
+            .unwrap_or_else(|_| {
+                error!("Error occurred while reading devices. We should never be here");
+                Vec::new()
+            });
+
             let devices: Vec<_> = devices
                 .iter()
                 .filter(|device| device.preferences.contains(result.transaction_type()))
@@ -167,7 +254,7 @@ async fn traverse_chain(
                     )
                     .await
                 {
-                    if err == NotificationError::UnregisteredError {
+                    if err == UnregisteredError {
                         info!("Device {} is unregistered", device.device_token);
                     } else {
                         error!("Error occurred while sending notification: {:?}", err);
@@ -175,7 +262,34 @@ async fn traverse_chain(
                 }
             }
         }
+        let operation = || async {
+            database_connection
+                .prepared
+                .insert_block(&block_hash, &finalized_block.height)
+                .await
+                .map_err(|err| match err {
+                    database::Error::DatabaseConnection(_) | database::Error::PoolError(_) => {
+                        error!("Error writing to database {:?}. Retrying...", err);
+                        backoff::Error::transient(err)
+                    }
+                    database::Error::ConstraintViolation(_, _) => backoff::Error::permanent(err),
+                })
+        };
+
+        if let Err(err) = retry(
+            backoff::backoff::Constant::new(DATABASE_RETRY_DELAY),
+            operation,
+        )
+        .await
+        {
+            error!(
+                "Error occurred while writing to database: {:?}. Proceeding",
+                err
+            );
+        };
+        height = finalized_block.height;
     }
+    height
 }
 
 #[tokio::main(flavor = "multi_thread")]
@@ -232,12 +346,26 @@ async fn main() -> anyhow::Result<()> {
         .to_string();
     let gcloud = GoogleCloud::new(http_client, retry_policy, service_account, &project_id);
     let database_connection = DatabaseConnection::create(args.db_connection).await?;
-
     let mut concordium_client = Client::new(endpoint).await?;
-
+    let mut height = if let Some(height) = database_connection
+        .prepared
+        .get_processed_block_height()
+        .await
+        .context("Failed to get processed block height")?
+    {
+        height
+    } else {
+        concordium_client
+            .get_consensus_info()
+            .await?
+            .last_finalized_block_height
+    };
     loop {
         info!("Establishing stream of finalized blocks");
-        let receiver = match concordium_client.get_finalized_blocks().await {
+        let receiver = match concordium_client
+            .get_finalized_blocks_from(height.next())
+            .await
+        {
             Ok(receiver) => receiver,
             Err(err) => {
                 info!("Error occurred while reading finalized blocks: {:?}", err);
@@ -245,11 +373,13 @@ async fn main() -> anyhow::Result<()> {
                 continue;
             }
         };
-        traverse_chain(
+        height = traverse_chain(
             &database_connection,
             &mut concordium_client,
             &gcloud,
             receiver,
+            Duration::from_secs(args.block_process_timeout_sec),
+            height,
         )
         .await;
     }

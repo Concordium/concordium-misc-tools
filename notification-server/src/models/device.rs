@@ -28,7 +28,7 @@ pub enum Preference {
     CCDTransaction,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct Device {
     pub preferences:  HashSet<Preference>,
     pub device_token: String,

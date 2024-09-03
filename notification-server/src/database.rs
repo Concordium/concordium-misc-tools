@@ -1,18 +1,37 @@
 use crate::models::device::{Device, Preference};
 use anyhow::Context;
-use concordium_rust_sdk::common::types::AccountAddress;
-use deadpool_postgres::{Manager, ManagerConfig, Pool, RecyclingMethod};
+use concordium_rust_sdk::{
+    base::hashes::BlockHash, common::types::AccountAddress, types::AbsoluteBlockHeight,
+};
+use deadpool_postgres::{Manager, ManagerConfig, Pool, PoolError, RecyclingMethod};
 use lazy_static::lazy_static;
+use log::error;
 use std::{
     collections::{HashMap, HashSet},
     vec::IntoIter,
 };
-use tokio_postgres::NoTls;
+use thiserror::Error;
+use tokio_postgres::{error::SqlState, types::ToSql, NoTls};
+
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("Unrecoverable connection issue: {0}")]
+    DatabaseConnection(#[from] tokio_postgres::Error),
+    #[error("Unrecoverable pool issue: {0}")]
+    PoolError(#[from] PoolError),
+    #[error(
+        "Failed inserting block with hash {0} because one with height of {1} has already been \
+         inserted"
+    )]
+    ConstraintViolation(BlockHash, AbsoluteBlockHeight),
+}
 
 #[derive(Clone, Debug)]
 pub struct PreparedStatements {
     get_devices_from_account: tokio_postgres::Statement,
     upsert_device:            tokio_postgres::Statement,
+    get_latest_block_height:  tokio_postgres::Statement,
+    insert_block:             tokio_postgres::Statement,
     pool:                     Pool,
 }
 
@@ -38,6 +57,17 @@ impl PreparedStatements {
             )
             .await
             .context("Failed to create account device mapping")?;
+        let get_latest_block_height = transaction
+            .prepare(
+                "SELECT blocks.height FROM blocks WHERE blocks.id = (SELECT MAX(blocks.id) FROM \
+                 blocks);",
+            )
+            .await
+            .context("Failed to create get latest block height")?;
+        let insert_block = transaction
+            .prepare("INSERT INTO blocks (hash, height) VALUES ($1, $2);")
+            .await
+            .context("Failed to create insert block")?;
         transaction
             .commit()
             .await
@@ -45,22 +75,35 @@ impl PreparedStatements {
         Ok(PreparedStatements {
             get_devices_from_account,
             upsert_device,
+            get_latest_block_height,
+            insert_block,
             pool,
         })
+    }
+
+    pub async fn get_processed_block_height(&self) -> Result<Option<AbsoluteBlockHeight>, Error> {
+        let client = self.pool.get().await.map_err(Into::<Error>::into)?;
+        let row = client.query_opt(&self.get_latest_block_height, &[]).await?;
+        row.map(|row| row.try_get::<_, i64>(0).map(|raw| (raw as u64).into()))
+            .transpose()
+            .map_err(Into::into)
     }
 
     pub async fn get_devices_from_account(
         &self,
         account_address: &AccountAddress,
-    ) -> anyhow::Result<Vec<Device>> {
-        let client = self.pool.get().await.context("Failed to get client")?;
+    ) -> Result<Vec<Device>, Error> {
+        let client = self.pool.get().await.map_err(Into::<Error>::into)?;
         let params: &[&(dyn tokio_postgres::types::ToSql + Sync)] = &[&account_address.0.as_ref()];
-        let rows = client.query(&self.get_devices_from_account, params).await?;
+        let rows = client
+            .query(&self.get_devices_from_account, params)
+            .await
+            .map_err(Into::<Error>::into)?;
         rows.iter()
             .map(|row| {
-                let device_id = row.try_get::<_, String>(0)?;
+                let device_token = row.try_get::<_, String>(0)?;
                 let preferences = bitmask_to_preferences(row.try_get::<_, i32>(1)?);
-                Ok(Device::new(preferences, device_id))
+                Ok(Device::new(preferences, device_token))
             })
             .collect::<Result<Vec<Device>, _>>()
     }
@@ -69,20 +112,43 @@ impl PreparedStatements {
         &self,
         account_address: Vec<AccountAddress>,
         preferences: Vec<Preference>,
-        device_id: &str,
-    ) -> anyhow::Result<()> {
-        let mut client = self.pool.get().await.context("Failed to get client")?;
+        device_token: &str,
+    ) -> Result<(), Error> {
+        let mut client = self.pool.get().await.map_err(Into::<Error>::into)?;
         let preferences_mask = preferences_to_bitmask(preferences.into_iter());
         let transaction = client.transaction().await?;
         for account in account_address {
-            let params: &[&(dyn tokio_postgres::types::ToSql + Sync)] =
-                &[&account.0.as_ref(), &device_id, &preferences_mask];
+            let params: &[&(dyn ToSql + Sync)] =
+                &[&account.0.as_ref(), &device_token, &preferences_mask];
             if let Err(e) = transaction.execute(&self.upsert_device, params).await {
                 let _ = transaction.rollback().await;
                 return Err(e.into());
             }
         }
         transaction.commit().await.map_err(Into::into)
+    }
+
+    pub async fn insert_block(
+        &self,
+        hash: &BlockHash,
+        height: &AbsoluteBlockHeight,
+    ) -> Result<(), Error> {
+        let client = self.pool.get().await.map_err(Into::<Error>::into)?;
+        let params: &[&(dyn ToSql + Sync); 2] = &[&hash.as_ref(), &(height.height as i64)];
+        client
+            .execute(&self.insert_block, params)
+            .await
+            .map_or_else(
+                |err| {
+                    if let Some(db_err) = err.as_db_error() {
+                        if db_err.code() == &SqlState::UNIQUE_VIOLATION {
+                            return Err(Error::ConstraintViolation(*hash, *height));
+                        }
+                    };
+                    Err(Error::DatabaseConnection(err))
+                },
+                |_| Ok(()),
+            )
     }
 }
 
@@ -97,7 +163,10 @@ impl DatabaseConnection {
             recycling_method: RecyclingMethod::Fast,
         };
         let mgr = Manager::from_config(config, NoTls, mgr_config);
-        let pool = Pool::builder(mgr).max_size(16).build().unwrap();
+        let pool = Pool::builder(mgr)
+            .max_size(16)
+            .build()
+            .expect("Failed to create pool");
         let prepared = PreparedStatements::new(pool).await?;
         Ok(DatabaseConnection { prepared })
     }
@@ -134,17 +203,17 @@ pub fn bitmask_to_preferences(bitmask: i32) -> HashSet<Preference> {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
-
-    use enum_iterator::all;
-
     use super::*;
+    use crate::models::device::Preference::{CCDTransaction, CIS2Transaction};
+    use dotenv::dotenv;
+    use enum_iterator::all;
+    use serial_test::serial;
+    use std::{collections::HashSet, env, fs, path::Path, str::FromStr};
+    use tokio_postgres::Client;
 
     #[test]
     fn test_preference_map_coverage_and_uniqueness() {
         let expected_variants = all::<Preference>().collect::<HashSet<_>>();
-
-        // Check for coverage
         for variant in &expected_variants {
             assert!(
                 PREFERENCE_MAP.contains_key(variant),
@@ -153,7 +222,6 @@ mod tests {
             );
         }
 
-        // Check for uniqueness of indices
         let indices = PREFERENCE_MAP.values().cloned().collect::<HashSet<_>>();
         assert_eq!(
             indices.len(),
@@ -161,7 +229,6 @@ mod tests {
             "Indices in PREFERENCE_MAP are not unique."
         );
 
-        // Ensure all variants are accounted for
         assert_eq!(
             PREFERENCE_MAP.len(),
             expected_variants.len(),
@@ -171,7 +238,7 @@ mod tests {
 
     #[test]
     fn test_preferences_to_bitmask_and_back() {
-        let preferences = vec![Preference::CIS2Transaction, Preference::CCDTransaction];
+        let preferences = vec![CIS2Transaction, CCDTransaction];
         let bitmask = preferences_to_bitmask(preferences.clone().into_iter());
 
         let decoded_preferences = bitmask_to_preferences(bitmask);
@@ -183,9 +250,9 @@ mod tests {
 
     #[test]
     fn test_single_preference_to_bitmask_and_back() {
-        let preferences = vec![Preference::CIS2Transaction];
+        let preferences = vec![CIS2Transaction];
         let bitmask = preferences_to_bitmask(preferences.clone().into_iter());
-        assert_eq!(bitmask, PREFERENCE_MAP[&Preference::CIS2Transaction]);
+        assert_eq!(bitmask, PREFERENCE_MAP[&CIS2Transaction]);
 
         let decoded_preferences = bitmask_to_preferences(bitmask);
         assert_eq!(
@@ -193,9 +260,9 @@ mod tests {
             HashSet::from_iter(preferences.into_iter())
         );
 
-        let preferences2 = vec![Preference::CCDTransaction];
+        let preferences2 = vec![CCDTransaction];
         let bitmask2 = preferences_to_bitmask(preferences2.clone().into_iter());
-        assert_eq!(bitmask2, PREFERENCE_MAP[&Preference::CCDTransaction]);
+        assert_eq!(bitmask2, PREFERENCE_MAP[&CCDTransaction]);
 
         let decoded_preferences2 = bitmask_to_preferences(bitmask2);
         assert_eq!(
@@ -215,5 +282,224 @@ mod tests {
             decoded_preferences.is_empty(),
             "No preferences should be decoded from a bitmask of 0."
         );
+    }
+
+    async fn drop_all_tables(client: &Client) -> Result<(), tokio_postgres::Error> {
+        let rows = client
+            .query(
+                "SELECT tablename FROM pg_tables WHERE schemaname = current_schema()",
+                &[],
+            )
+            .await?;
+
+        for row in rows {
+            let table_name: &str = row.get(0);
+            client
+                .batch_execute(&format!("DROP TABLE IF EXISTS {} CASCADE;", table_name))
+                .await?;
+        }
+        Ok(())
+    }
+
+    async fn create_sql(client: &Client) -> Result<(), tokio_postgres::Error> {
+        let sql_directory = Path::new("resources");
+        for entry in fs::read_dir(sql_directory).expect("Failed to read SQL directory") {
+            let entry = entry.expect("Failed to read directory entry");
+            let path = entry.path();
+            if path.extension().and_then(|ext| ext.to_str()) == Some("sql") {
+                let sql = fs::read_to_string(&path).expect("Unable to read SQL file");
+                client.batch_execute(&sql).await?;
+            }
+        }
+        Ok(())
+    }
+
+    async fn setup_database() -> anyhow::Result<DatabaseConnection> {
+        dotenv().ok();
+        let config = env::var("NOTIFICATION_SERVER_DB_CONNECTION")
+            .unwrap()
+            .parse()
+            .unwrap();
+        let db_connection = DatabaseConnection::create(config).await?;
+
+        let client = db_connection.prepared.pool.get().await?;
+        drop_all_tables(&client).await?;
+        create_sql(&client).await?;
+
+        Ok(db_connection)
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_get_devices_from_account() {
+        let db_connection = setup_database().await.unwrap();
+        let account_address =
+            AccountAddress::from_str("4FmiTW2L2AccyR9VjzsnpWFSAcohXWf7Vf797i36y526mqiEcp").unwrap();
+        let device = "device-1";
+        db_connection
+            .prepared
+            .upsert_subscription(
+                vec![account_address],
+                vec![Preference::CIS2Transaction],
+                device,
+            )
+            .await
+            .unwrap();
+        let devices = db_connection
+            .prepared
+            .get_devices_from_account(&account_address)
+            .await
+            .unwrap();
+
+        let expected_devices = vec![Device::new(
+            HashSet::from_iter(vec![Preference::CIS2Transaction].into_iter()),
+            device.to_string(),
+        )];
+        assert_eq!(devices, expected_devices);
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_multiple_upsert_subscriptions() {
+        let db_connection = setup_database().await.unwrap();
+        let account_address =
+            AccountAddress::from_str("4FmiTW2L2AccyR9VjzsnpWFSAcohXWf7Vf797i36y526mqiEcp").unwrap();
+        let device = "device-1";
+        db_connection
+            .prepared
+            .upsert_subscription(vec![account_address], vec![CIS2Transaction], device)
+            .await
+            .unwrap();
+        db_connection
+            .prepared
+            .upsert_subscription(
+                vec![account_address],
+                vec![CIS2Transaction, CCDTransaction],
+                device,
+            )
+            .await
+            .unwrap();
+        let devices = db_connection
+            .prepared
+            .get_devices_from_account(&account_address)
+            .await
+            .unwrap();
+
+        assert_eq!(devices, vec![Device::new(
+            HashSet::from_iter(vec![CIS2Transaction, CCDTransaction].into_iter()),
+            device.to_string()
+        )]);
+
+        db_connection
+            .prepared
+            .upsert_subscription(vec![account_address], vec![], device)
+            .await
+            .unwrap();
+        let devices = db_connection
+            .prepared
+            .get_devices_from_account(&account_address)
+            .await
+            .unwrap();
+        assert_eq!(devices, vec![Device::new(
+            HashSet::from_iter(vec![].into_iter()),
+            device.to_string()
+        )]);
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_insert_block() {
+        let db_connection = setup_database().await.unwrap();
+
+        let hash = BlockHash::new([0; 32]); // Example block hash
+        let height = AbsoluteBlockHeight::from(1);
+
+        db_connection
+            .prepared
+            .insert_block(&hash, &height)
+            .await
+            .unwrap();
+
+        let latest_height = db_connection
+            .prepared
+            .get_processed_block_height()
+            .await
+            .unwrap();
+        assert_eq!(latest_height, Some(height));
+
+        let hash = BlockHash::new([1; 32]); // Example block hash
+        let height = AbsoluteBlockHeight::from(2);
+
+        db_connection
+            .prepared
+            .insert_block(&hash, &height)
+            .await
+            .unwrap();
+        let latest_height = db_connection
+            .prepared
+            .get_processed_block_height()
+            .await
+            .unwrap();
+        assert_eq!(latest_height.unwrap().height, 2);
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_insert_block_duplicate_hash() {
+        let db_connection = setup_database().await.unwrap();
+
+        let expected_hash = [2; 32];
+        let expected_height = AbsoluteBlockHeight::from(1);
+
+        db_connection
+            .prepared
+            .insert_block(
+                &BlockHash::new(expected_hash),
+                &AbsoluteBlockHeight::from(AbsoluteBlockHeight::from(2)),
+            )
+            .await
+            .unwrap();
+
+        match db_connection
+            .prepared
+            .insert_block(&BlockHash::new(expected_hash), &expected_height)
+            .await
+        {
+            Err(Error::ConstraintViolation(ref hash, ref height)) => {
+                assert_eq!(expected_hash, hash.bytes);
+                assert_eq!(expected_height.height, height.height);
+            }
+            _ => panic!("Expected ConstraintViolation error"),
+        }
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_insert_block_duplicate_height() {
+        let db_connection = setup_database().await.unwrap();
+
+        let expected_hash = [1; 32];
+        let expected_height = AbsoluteBlockHeight::from(1);
+
+        db_connection
+            .prepared
+            .insert_block(
+                &BlockHash::new([0; 32]),
+                &AbsoluteBlockHeight::from(expected_height),
+            )
+            .await
+            .unwrap();
+
+        match db_connection
+            .prepared
+            .insert_block(&BlockHash::new(expected_hash), &expected_height)
+            .await
+        {
+            Err(Error::ConstraintViolation(ref hash, ref height)) => {
+                assert_eq!(expected_hash, hash.bytes);
+                assert_eq!(expected_height.height, height.height);
+            }
+            _ => panic!("Expected ConstraintViolation error"),
+        }
     }
 }
