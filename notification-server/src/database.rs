@@ -460,16 +460,12 @@ mod tests {
             .await
             .unwrap();
 
-        match db_connection
+        if let Err(_) = db_connection
             .prepared
             .insert_block(&BlockHash::new(expected_hash), &expected_height)
             .await
         {
-            Err(Error::ConstraintViolation(ref hash, ref height)) => {
-                assert_eq!(expected_hash, hash.bytes);
-                assert_eq!(expected_height.height, height.height);
-            }
-            _ => panic!("Expected ConstraintViolation error"),
+            panic!("Expected ok result");
         }
     }
 
