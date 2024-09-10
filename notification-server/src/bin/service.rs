@@ -99,7 +99,6 @@ struct Args {
         default_value = "0.0.0.0:9090"
     )]
     listen_address: std::net::SocketAddr,
-
 }
 
 const DATABASE_RETRY_DELAY: Duration = Duration::from_secs(1);
@@ -153,24 +152,27 @@ async fn process_block(
             result.address(),
             result.transaction_type()
         );
-        let address = result.clone().address();
+
+        let address = result.address().clone();
+        let transaction_type = result.transaction_type();
+
         let operation = || async {
             match database_connection
                 .prepared
-                .get_devices_from_account(address)
+                .get_devices_from_account(&address)
                 .await
             {
                 Ok(devices) => Ok(devices),
                 Err(err) => {
                     error!(
                         "Error retrieving devices for account {}: {:?}. Retrying...",
-                        address,
-                        err
+                        address, err
                     );
                     Err(backoff::Error::transient(err))
                 }
             }
         };
+
         let devices = retry(
             backoff::backoff::Constant::new(DATABASE_RETRY_DELAY),
             operation,
@@ -180,46 +182,48 @@ async fn process_block(
             error!("Error occurred while reading devices. We should never be here");
             Vec::new()
         });
+
         let devices: Vec<_> = devices
             .iter()
-            .filter(|device| device.preferences.contains(result.transaction_type()))
+            .filter(|device| device.preferences.contains(&transaction_type))
             .collect();
+
         if devices.is_empty() {
             debug!(
                 "No devices subscribed to account {} having preference {:?}",
-                address,
-                result.transaction_type()
+                &address, transaction_type
             );
-            return Ok(finalized_block.height);
+            continue; // Continue instead of return, assuming you want to
+                      // process the next transaction.
         }
+
         let enriched_notification_information =
             match result.enrich(concordium_client.clone(), block_hash).await {
                 Ok(information) => information,
                 Err(err) => {
                     return Err(anyhow!(
-                        "Error occurred while writing to database: {}. Proceeding",
+                        "Error occurred while enriching notification information: {}. Proceeding",
                         err
                     ));
                 }
             };
 
         for device in devices {
-            info!(
-                "Sending a notification to account {}",
-                address,
-            );
-            if let Err(err) = gcloud
+            info!("Sending a notification to account {}", &address);
+            match gcloud
                 .send_push_notification(&device.device_token, &enriched_notification_information)
                 .await
             {
-                if err == UnregisteredError {
-                    info!("Device {} is unregistered", device.device_token);
-                } else {
-                    error!("Error occurred while sending notification: {:?}", err);
-                    counter!("notification.send_error").increment(1);
+                Ok(_) => counter!("notification.send_total").increment(1),
+                Err(err) => {
+                    if err == UnregisteredError {
+                        info!("Device {} is unregistered", device.device_token);
+                    } else {
+                        error!("Error occurred while sending notification: {:?}", err);
+                        counter!("notification.send_error").increment(1);
+                    }
                 }
             }
-            counter!("notification.send_total").increment(1);
         }
     }
     let operation = || async {
