@@ -149,7 +149,6 @@ where
                 }
             }
         });
-        println!("{}", payload);
         let operation = || async {
             let response = self
                 .client
