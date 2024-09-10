@@ -211,11 +211,11 @@ mod tests {
         types::{hashes::Hash, ContractAddress},
     };
     use enum_iterator::{all, Sequence};
-    use gcp_auth::{CustomServiceAccount, Token};
+    use gcp_auth::Token;
     use quickcheck::{Arbitrary, Gen};
     use quickcheck_macros::quickcheck;
     use reqwest::Client;
-    use std::{cmp::PartialEq, path::PathBuf, str::FromStr, sync::Arc, time::Duration};
+    use std::{cmp::PartialEq, str::FromStr, sync::Arc, time::Duration};
 
     pub struct MockTokenProvider {
         pub token_response: Arc<String>,
@@ -349,6 +349,9 @@ mod tests {
                     "reference": "3d1c2f4fb9a0eb468bfe39e75c59897c1a375082a6440f4a5da77102182ba055",
                 },
                 "apns": {
+                    "headers": {
+                        "apns-push-type": "background",
+                    },
                     "payload": {
                         "aps": {
                             "content-available": 1
@@ -418,6 +421,9 @@ mod tests {
                     "reference": "6a6d250ecefb518253db4c0d7759b2f4ff2862217ed2c8343879a77e0c2c97a2",
                 },
                 "apns": {
+                    "headers": {
+                        "apns-push-type": "background",
+                    },
                     "payload": {
                         "aps": {
                             "content-available": 1
@@ -492,6 +498,9 @@ mod tests {
                     "reference": "494d7848e389d44a2c2fe81eeee6dc427ce33ab1d0c92cba23be321d495be110",
                 },
                 "apns": {
+                    "headers": {
+                        "apns-push-type": "background",
+                    },
                     "payload": {
                         "aps": {
                             "content-available": 1
@@ -565,6 +574,9 @@ mod tests {
                     "reference": "8a3a09bffa6ead269f79be4192fcb7773cc4e10a2e90c0dec3eb9ca5200c06bc"
                 },
                 "apns": {
+                    "headers": {
+                        "apns-push-type": "background",
+                    },
                     "payload": {
                         "aps": {
                             "content-available": 1
