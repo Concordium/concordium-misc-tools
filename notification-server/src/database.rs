@@ -242,7 +242,7 @@ mod tests {
         let bitmask = preferences_to_bitmask(preferences.clone().into_iter());
 
         let decoded_preferences = bitmask_to_preferences(bitmask);
-        let expected_preferences_set = HashSet::from_iter(preferences.into_iter());
+        let expected_preferences_set = HashSet::from_iter(preferences);
         let decoded_preferences_set = decoded_preferences;
 
         assert_eq!(decoded_preferences_set, expected_preferences_set);
@@ -455,15 +455,16 @@ mod tests {
             .prepared
             .insert_block(
                 &BlockHash::new(expected_hash),
-                &AbsoluteBlockHeight::from(AbsoluteBlockHeight::from(2)),
+                &AbsoluteBlockHeight::from(2),
             )
             .await
             .unwrap();
 
-        if let Err(_) = db_connection
+        if db_connection
             .prepared
             .insert_block(&BlockHash::new(expected_hash), &expected_height)
             .await
+            .is_err()
         {
             panic!("Expected ok result");
         }
@@ -479,10 +480,7 @@ mod tests {
 
         db_connection
             .prepared
-            .insert_block(
-                &BlockHash::new([0; 32]),
-                &AbsoluteBlockHeight::from(expected_height),
-            )
+            .insert_block(&BlockHash::new([0; 32]), &expected_height)
             .await
             .unwrap();
 

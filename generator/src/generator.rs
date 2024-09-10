@@ -740,13 +740,6 @@ struct RegisterCredentialsInitParams {
     revocation_keys: Vec<CredentialHolderId>,
 }
 
-#[derive(concordium_std::Serial)]
-struct RegisterCredentialParams {
-    credential_info: CredentialInfo,
-    #[concordium(size_length = 2)]
-    auxiliary_data:  Vec<u8>,
-}
-
 impl RegisterCredentialsGenerator {
     pub async fn instantiate(mut client: v2::Client, args: CommonArgs) -> anyhow::Result<Self> {
         // Get the initial nonce.

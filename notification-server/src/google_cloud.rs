@@ -218,8 +218,7 @@ mod tests {
     use std::{cmp::PartialEq, str::FromStr, sync::Arc, time::Duration};
 
     pub struct MockTokenProvider {
-        pub token_response: Arc<String>,
-        pub should_fail:    bool,
+        pub should_fail: bool,
     }
 
     fn generate_mock_token() -> Token {
@@ -334,10 +333,7 @@ mod tests {
     #[tokio::test]
     async fn test_send_push_notification_ccd() {
         let mut server = mockito::Server::new_async().await;
-        let mock_provider = MockTokenProvider {
-            token_response: Arc::new("mock_token".to_string()),
-            should_fail:    false,
-        };
+        let mock_provider = MockTokenProvider { should_fail: false };
 
         let expected_body = json!({
             "message": {
@@ -378,11 +374,7 @@ mod tests {
             ..ExponentialBackoff::default()
         };
         let mut gc = GoogleCloud::new(client, backoff_policy, mock_provider, "mock_project_id");
-        gc.url = format!(
-            "{}{}",
-            server.url(),
-            "/v1/projects/fake_project_id/messages:send".to_string()
-        );
+        gc.url = format!("{}/v1/projects/fake_project_id/messages:send", server.url());
         let notification_information =
             NotificationInformation::CCD(CCDTransactionNotificationInformation::new(
                 AccountAddress::from_str("4FmiTW2L2AccyR9VjzsnpWFSAcohXWf7Vf797i36y526mqiEcp")
@@ -403,10 +395,7 @@ mod tests {
     #[tokio::test]
     async fn test_send_push_notification_cis2_without_metadata_url() {
         let mut server = mockito::Server::new_async().await;
-        let mock_provider = MockTokenProvider {
-            token_response: Arc::new("mock_token".to_string()),
-            should_fail:    false,
-        };
+        let mock_provider = MockTokenProvider { should_fail: false };
 
         let expected_body = json!({
             "message": {
@@ -450,11 +439,7 @@ mod tests {
             ..ExponentialBackoff::default()
         };
         let mut gc = GoogleCloud::new(client, backoff_policy, mock_provider, "mock_project_id");
-        gc.url = format!(
-            "{}{}",
-            server.url(),
-            "/v1/projects/fake_project_id/messages:send".to_string()
-        );
+        gc.url = format!("{}/v1/projects/fake_project_id/messages:send", server.url());
         let notification_information =
             NotificationInformation::CIS2(CIS2EventNotificationInformation::new(
                 AccountAddress::from_str("3kBx2h5Y2veb4hZgAJWPrr8RyQESKm5TjzF3ti1QQ4VSYLwK1G")
@@ -479,10 +464,7 @@ mod tests {
     #[tokio::test]
     async fn test_send_push_notification_cis2_with_metadata_url() {
         let mut server = mockito::Server::new_async().await;
-        let mock_provider = MockTokenProvider {
-            token_response: Arc::new("mock_token".to_string()),
-            should_fail:    false,
-        };
+        let mock_provider = MockTokenProvider { should_fail: false };
 
         let expected_body = json!({
             "message": {
@@ -526,11 +508,7 @@ mod tests {
             ..ExponentialBackoff::default()
         };
         let mut gc = GoogleCloud::new(client, backoff_policy, mock_provider, "mock_project_id");
-        gc.url = format!(
-            "{}{}",
-            server.url(),
-            "/v1/projects/fake_project_id/messages:send".to_string()
-        );
+        gc.url = format!("{}/v1/projects/fake_project_id/messages:send", server.url());
         let notification_information =
             NotificationInformation::CIS2(CIS2EventNotificationInformation::new(
                 AccountAddress::from_str("3kBx2h5Y2veb4hZgAJWPrr8RyQESKm5TjzF3ti1QQ4VSYLwK1G")
@@ -555,10 +533,7 @@ mod tests {
     #[tokio::test]
     async fn test_send_push_notification_cis2_with_metadata_url_and_hash() {
         let mut server = mockito::Server::new_async().await;
-        let mock_provider = MockTokenProvider {
-            token_response: Arc::new("mock_token".to_string()),
-            should_fail:    false,
-        };
+        let mock_provider = MockTokenProvider { should_fail: false };
 
         let expected_body = json!({
             "message": {
@@ -602,11 +577,7 @@ mod tests {
             ..ExponentialBackoff::default()
         };
         let mut gc = GoogleCloud::new(client, backoff_policy, mock_provider, "mock_project_id");
-        gc.url = format!(
-            "{}{}",
-            server.url(),
-            "/v1/projects/fake_project_id/messages:send".to_string()
-        );
+        gc.url = format!("{}/v1/projects/fake_project_id/messages:send", server.url());
         let notification_information =
             NotificationInformation::CIS2(CIS2EventNotificationInformation::new(
                 AccountAddress::from_str("3kBx2h5Y2veb4hZgAJWPrr8RyQESKm5TjzF3ti1QQ4VSYLwK1G")
@@ -642,10 +613,7 @@ mod tests {
     #[tokio::test]
     async fn test_validate_device_token_success() {
         let mut server = mockito::Server::new_async().await;
-        let mock_provider = MockTokenProvider {
-            token_response: Arc::new("mock_token".to_string()),
-            should_fail:    false,
-        };
+        let mock_provider = MockTokenProvider { should_fail: false };
         let mock = server
             .mock("POST", "/v1/projects/fake_project_id/messages:send")
             .with_status(200)
@@ -657,11 +625,7 @@ mod tests {
         let client = Client::new();
         let backoff_policy = ExponentialBackoff::default();
         let mut gc = GoogleCloud::new(client, backoff_policy, mock_provider, "mock_project_id");
-        gc.url = format!(
-            "{}{}",
-            server.url(),
-            "/v1/projects/fake_project_id/messages:send".to_string()
-        );
+        gc.url = format!("{}/v1/projects/fake_project_id/messages:send", server.url());
         assert!(gc.validate_device_token("valid_device_token").await.is_ok());
         mock.assert();
     }
@@ -669,10 +633,7 @@ mod tests {
     #[quickcheck]
     fn test_retry_on_retry_status_codes(status_code: RetryStatusCode) -> bool {
         let mut server = mockito::Server::new();
-        let mock_provider = MockTokenProvider {
-            token_response: Arc::new("mock_token".to_string()),
-            should_fail:    false,
-        };
+        let mock_provider = MockTokenProvider { should_fail: false };
 
         let mock = server
             .mock("POST", "/v1/projects/fake_project_id/messages:send")
@@ -690,11 +651,7 @@ mod tests {
         };
 
         let mut gc = GoogleCloud::new(client, backoff_policy, mock_provider, "mock_project_id");
-        gc.url = format!(
-            "{}{}",
-            server.url(),
-            "/v1/projects/fake_project_id/messages:send".to_string()
-        );
+        gc.url = format!("{}/v1/projects/fake_project_id/messages:send", server.url());
         let runtime = tokio::runtime::Runtime::new().unwrap();
         let result = runtime.block_on(gc.validate_device_token("valid_device_token"));
         mock.assert();
@@ -707,10 +664,7 @@ mod tests {
     #[quickcheck]
     fn test_retry_on_zero_retry_status_codes(status_code: ZeroRetryStatusCode) -> bool {
         let mut server = mockito::Server::new();
-        let mock_provider = MockTokenProvider {
-            token_response: Arc::new("mock_token".to_string()),
-            should_fail:    false,
-        };
+        let mock_provider = MockTokenProvider { should_fail: false };
 
         let mock = server
             .mock("POST", "/v1/projects/fake_project_id/messages:send")
@@ -728,11 +682,7 @@ mod tests {
         };
 
         let mut gc = GoogleCloud::new(client, backoff_policy, mock_provider, "mock_project_id");
-        gc.url = format!(
-            "{}{}",
-            server.url(),
-            "/v1/projects/fake_project_id/messages:send".to_string()
-        );
+        gc.url = format!("{}/v1/projects/fake_project_id/messages:send", server.url());
         let runtime = tokio::runtime::Runtime::new().unwrap();
         let result = runtime.block_on(gc.validate_device_token("valid_device_token"));
         mock.assert();
@@ -747,10 +697,7 @@ mod tests {
         server_side_status_code: RetryStatusCode,
     ) -> bool {
         let mut server = mockito::Server::new();
-        let mock_provider = MockTokenProvider {
-            token_response: Arc::new("mock_token".to_string()),
-            should_fail:    false,
-        };
+        let mock_provider = MockTokenProvider { should_fail: false };
 
         let failing_calls = server
             .mock("POST", "/v1/projects/fake_project_id/messages:send")
@@ -775,11 +722,7 @@ mod tests {
         };
 
         let mut gc = GoogleCloud::new(client, backoff_policy, mock_provider, "mock_project_id");
-        gc.url = format!(
-            "{}{}",
-            server.url(),
-            "/v1/projects/fake_project_id/messages:send".to_string()
-        );
+        gc.url = format!("{}/v1/projects/fake_project_id/messages:send", server.url());
         let runtime = tokio::runtime::Runtime::new().unwrap();
         let result = runtime.block_on(gc.validate_device_token("valid_device_token"));
         failing_calls.assert();
@@ -790,10 +733,7 @@ mod tests {
     #[tokio::test]
     async fn should_not_continue_on_auth_failed() {
         let mut server = mockito::Server::new_async().await;
-        let mock_provider = MockTokenProvider {
-            token_response: Arc::new("mock_token".to_string()),
-            should_fail:    true,
-        };
+        let mock_provider = MockTokenProvider { should_fail: true };
         let mock = server
             .mock("POST", "/v1/projects/fake_project_id/messages:send")
             .with_status(200)
@@ -805,11 +745,7 @@ mod tests {
         let client = Client::new();
         let backoff_policy = ExponentialBackoff::default();
         let mut gc = GoogleCloud::new(client, backoff_policy, mock_provider, "mock_project_id");
-        gc.url = format!(
-            "{}{}",
-            server.url(),
-            "/v1/projects/fake_project_id/messages:send".to_string()
-        );
+        gc.url = format!("{}/v1/projects/fake_project_id/messages:send", server.url());
 
         mock.assert();
         let result = gc.validate_device_token("valid_device_token").await;
