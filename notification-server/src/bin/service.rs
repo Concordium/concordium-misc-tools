@@ -1,5 +1,4 @@
 use anyhow::{anyhow, Context};
-use axum::{routing::get, Router};
 use axum_prometheus::{
     metrics::{counter, histogram},
     metrics_exporter_prometheus::PrometheusBuilder,
@@ -12,7 +11,7 @@ use concordium_rust_sdk::{
 };
 use dotenv::dotenv;
 use gcp_auth::CustomServiceAccount;
-use log::{debug, error, info, Level::Error};
+use log::{debug, error, info};
 use notification_server::{
     database,
     database::DatabaseConnection,
@@ -205,8 +204,10 @@ async fn process_block(
                     info!("Device {} is unregistered", device.device_token);
                 } else {
                     error!("Error occurred while sending notification: {:?}", err);
+                    counter!("notification.send_error").increment(1);
                 }
             }
+            counter!("notification.send_total").increment(1);
         }
     }
     let operation = || async {
@@ -295,9 +296,9 @@ async fn traverse_chain(
 ) -> AbsoluteBlockHeight {
     while let Some(v) = receiver.next_timeout(process_timeout).await.transpose() {
         let finalized_block = match v {
-            Some(block) => block,
-            None => {
-                info!("Timeout occurred while reading block. Retrying...");
+            Ok(v) => v,
+            Err(e) => {
+                error!("Error while reading block: {:?}", e);
                 continue;
             }
         };
@@ -314,7 +315,6 @@ async fn traverse_chain(
                 processed_height = block_height;
                 let delta = start.elapsed();
                 histogram!("block.process_successful_duration").record(delta);
-                counter!("block.process_successful").increment(1);
             }
             Err(err) => {
                 error!("Error occurred while processing block: {:?}", err);
