@@ -144,8 +144,13 @@ where
             "token": device_token,
             "data": entity_data,
             "apns": {
+                "headers": {
+                    "apns-push-type": "background",
+                },
                 "payload": {
-                    "content-available": 1
+                    "aps": {
+                        "content-available": 1
+                    }
                 }
             }
         });
@@ -206,11 +211,11 @@ mod tests {
         types::{hashes::Hash, ContractAddress},
     };
     use enum_iterator::{all, Sequence};
-    use gcp_auth::Token;
+    use gcp_auth::{CustomServiceAccount, Token};
     use quickcheck::{Arbitrary, Gen};
     use quickcheck_macros::quickcheck;
     use reqwest::Client;
-    use std::{cmp::PartialEq, str::FromStr, sync::Arc, time::Duration};
+    use std::{cmp::PartialEq, path::PathBuf, str::FromStr, sync::Arc, time::Duration};
 
     pub struct MockTokenProvider {
         pub token_response: Arc<String>,
@@ -345,7 +350,9 @@ mod tests {
                 },
                 "apns": {
                     "payload": {
-                        "content-available": 1
+                        "aps": {
+                            "content-available": 1
+                        }
                     }
                 }
             }
@@ -412,7 +419,9 @@ mod tests {
                 },
                 "apns": {
                     "payload": {
-                        "content-available": 1
+                        "aps": {
+                            "content-available": 1
+                        }
                     }
                 }
             }
@@ -484,7 +493,9 @@ mod tests {
                 },
                 "apns": {
                     "payload": {
-                        "content-available": 1
+                        "aps": {
+                            "content-available": 1
+                        }
                     }
                 }
             }
@@ -555,7 +566,9 @@ mod tests {
                 },
                 "apns": {
                     "payload": {
-                        "content-available": 1
+                        "aps": {
+                            "content-available": 1
+                        }
                     }
                 }
             }
