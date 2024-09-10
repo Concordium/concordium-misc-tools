@@ -302,7 +302,7 @@ async fn traverse_chain(
             }
         };
         let start = Instant::now();
-        if let Ok(block_height) = process_block(
+        match process_block(
             database_connection,
             gcloud,
             concordium_client,
@@ -310,10 +310,15 @@ async fn traverse_chain(
         )
         .await
         {
-            processed_height = block_height;
-            let delta = start.elapsed();
-            histogram!("block.process_successful_duration").record(delta);
-            counter!("block.process_successful").increment(1);
+            Ok(block_height) => {
+                processed_height = block_height;
+                let delta = start.elapsed();
+                histogram!("block.process_successful_duration").record(delta);
+                counter!("block.process_successful").increment(1);
+            }
+            Err(err) => {
+                error!("Error occurred while processing block: {:?}", err);
+            }
         }
         counter!("block.process_total").increment(1);
     }
@@ -394,7 +399,6 @@ async fn main() -> anyhow::Result<()> {
             .await?
             .last_finalized_block_height
     };
-    test();
     loop {
         info!("Establishing stream of finalized blocks");
         let receiver = match concordium_client
