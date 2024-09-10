@@ -142,9 +142,13 @@ where
         };
         payload["message"] = json!({
             "token": device_token,
-            "data": entity_data
+            "data": entity_data,
+            "apns": {
+                "payload": {
+                    "content-available": 1
+                }
+            }
         });
-
         let operation = || async {
             let response = self
                 .client
@@ -338,6 +342,11 @@ mod tests {
                     "amount": "100",
                     "type": "ccd-tx",
                     "reference": "3d1c2f4fb9a0eb468bfe39e75c59897c1a375082a6440f4a5da77102182ba055",
+                },
+                "apns": {
+                    "payload": {
+                        "content-available": 1
+                    }
                 }
             }
         });
@@ -400,6 +409,11 @@ mod tests {
                     "contract_address": "{\"index\":3,\"subindex\":0}",
                     "contract_name": "contract",
                     "reference": "6a6d250ecefb518253db4c0d7759b2f4ff2862217ed2c8343879a77e0c2c97a2",
+                },
+                "apns": {
+                    "payload": {
+                        "content-available": 1
+                    }
                 }
             }
         });
@@ -467,6 +481,11 @@ mod tests {
                     "token_id": "ffffff",
                     "token_metadata": "{\"url\":\"https://example.com\",\"hash\":null}",
                     "reference": "494d7848e389d44a2c2fe81eeee6dc427ce33ab1d0c92cba23be321d495be110",
+                },
+                "apns": {
+                    "payload": {
+                        "content-available": 1
+                    }
                 }
             }
         });
@@ -533,6 +552,11 @@ mod tests {
                     "token_id": "ffffff",
                     "token_metadata": "{\"url\":\"https://example.com\",\"hash\":\"9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08\"}",
                     "reference": "8a3a09bffa6ead269f79be4192fcb7773cc4e10a2e90c0dec3eb9ca5200c06bc"
+                },
+                "apns": {
+                    "payload": {
+                        "content-available": 1
+                    }
                 }
             }
         });
