@@ -77,7 +77,7 @@ struct Args {
         default_value_t = 180  // 3 minutes
     )]
     google_client_max_interval_time_secs: u64,
-    #[clap(
+    #[arg(
         long = "log-level",
         default_value = "info",
         help = "The maximum log level. Possible values are: `trace`, `debug`, `info`, `warn`, and \
@@ -85,13 +85,21 @@ struct Args {
         env = "LOG_LEVEL"
     )]
     log_level: tracing_subscriber::filter::LevelFilter,
-    #[clap(
+    #[arg(
         long = "process-timeout-secs",
         default_value_t = 60,
         help = "Specifies in seconds the maximum wait for the next block to be processed.",
         env = "NOTIFICATION_SERVER_PROCESS_TIMEOUT_SEC"
     )]
     block_process_timeout_sec: u64,
+    #[arg(
+        long = "listen-address",
+        help = "Listen address for the server.",
+        env = "NOTIFICATION_SERVER_METRICS_LISTEN_ADDRESS",
+        default_value = "0.0.0.0:9090"
+    )]
+    listen_address: std::net::SocketAddr,
+
 }
 
 const DATABASE_RETRY_DELAY: Duration = Duration::from_secs(1);
@@ -140,22 +148,23 @@ async fn process_block(
     };
 
     for result in process(transactions).await.into_iter() {
-        info!(
-            "Sending notification to account {} with type {:?}",
+        debug!(
+            "Sending notifications to account {} with type {:?}",
             result.address(),
             result.transaction_type()
         );
+        let address = result.clone().address();
         let operation = || async {
             match database_connection
                 .prepared
-                .get_devices_from_account(result.address())
+                .get_devices_from_account(address)
                 .await
             {
                 Ok(devices) => Ok(devices),
                 Err(err) => {
                     error!(
                         "Error retrieving devices for account {}: {:?}. Retrying...",
-                        result.address(),
+                        address,
                         err
                     );
                     Err(backoff::Error::transient(err))
@@ -171,7 +180,6 @@ async fn process_block(
             error!("Error occurred while reading devices. We should never be here");
             Vec::new()
         });
-
         let devices: Vec<_> = devices
             .iter()
             .filter(|device| device.preferences.contains(result.transaction_type()))
@@ -179,7 +187,7 @@ async fn process_block(
         if devices.is_empty() {
             debug!(
                 "No devices subscribed to account {} having preference {:?}",
-                result.address(),
+                address,
                 result.transaction_type()
             );
             return Ok(finalized_block.height);
@@ -196,6 +204,10 @@ async fn process_block(
             };
 
         for device in devices {
+            info!(
+                "Sending a notification to account {}",
+                address,
+            );
             if let Err(err) = gcloud
                 .send_push_notification(&device.device_token, &enriched_notification_information)
                 .await
@@ -342,7 +354,7 @@ async fn main() -> anyhow::Result<()> {
 
     let builder = PrometheusBuilder::new();
     builder
-        .with_http_listener(([0, 0, 0, 0], 9090))
+        .with_http_listener(args.listen_address)
         .install()
         .expect("failed to install prometheus");
 
