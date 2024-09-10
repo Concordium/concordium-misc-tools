@@ -152,9 +152,6 @@ async fn process_block(
             result.address(),
             result.transaction_type()
         );
-
-        let transaction_type = result.transaction_type();
-
         let operation = || async {
             match database_connection
                 .prepared
@@ -184,13 +181,13 @@ async fn process_block(
 
         let devices: Vec<_> = devices
             .iter()
-            .filter(|device| device.preferences.contains(&transaction_type))
+            .filter(|device| device.preferences.contains(result.transaction_type()))
             .collect();
 
         if devices.is_empty() {
             debug!(
                 "No devices subscribed to account {} having preference {:?}",
-                result.address(), transaction_type
+                result.address(), result.transaction_type()
             );
             continue;
         }
