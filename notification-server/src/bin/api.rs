@@ -3,9 +3,10 @@ use axum::{
     extract::{Json, State},
     http::StatusCode,
     response::IntoResponse,
-    routing::put,
+    routing::{get, put},
     Router,
 };
+use axum_prometheus::PrometheusMetricLayer;
 use backoff::ExponentialBackoff;
 use clap::Parser;
 use concordium_rust_sdk::base::contracts_common::AccountAddress;
@@ -20,8 +21,6 @@ use notification_server::{
 };
 use serde_json::json;
 use std::{collections::HashSet, path::PathBuf, str::FromStr, sync::Arc, time::Duration};
-use axum::routing::get;
-use axum_prometheus::PrometheusMetricLayer;
 use tokio_postgres::Config;
 use tracing::{error, info};
 
