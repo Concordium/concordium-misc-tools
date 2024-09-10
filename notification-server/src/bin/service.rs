@@ -153,20 +153,19 @@ async fn process_block(
             result.transaction_type()
         );
 
-        let address = result.address().clone();
         let transaction_type = result.transaction_type();
 
         let operation = || async {
             match database_connection
                 .prepared
-                .get_devices_from_account(&address)
+                .get_devices_from_account(result.address())
                 .await
             {
                 Ok(devices) => Ok(devices),
                 Err(err) => {
                     error!(
                         "Error retrieving devices for account {}: {:?}. Retrying...",
-                        address, err
+                        result.address(), err
                     );
                     Err(backoff::Error::transient(err))
                 }
@@ -191,12 +190,12 @@ async fn process_block(
         if devices.is_empty() {
             debug!(
                 "No devices subscribed to account {} having preference {:?}",
-                &address, transaction_type
+                result.address(), transaction_type
             );
-            continue; // Continue instead of return, assuming you want to
-                      // process the next transaction.
+            continue;
         }
 
+        info!("Sending notification to {} devices for address {}", devices.len(), result.address());
         let enriched_notification_information =
             match result.enrich(concordium_client.clone(), block_hash).await {
                 Ok(information) => information,
@@ -207,9 +206,7 @@ async fn process_block(
                     ));
                 }
             };
-
         for device in devices {
-            info!("Sending a notification to account {}", &address);
             match gcloud
                 .send_push_notification(&device.device_token, &enriched_notification_information)
                 .await
