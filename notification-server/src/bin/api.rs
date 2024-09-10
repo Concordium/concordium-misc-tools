@@ -20,6 +20,8 @@ use notification_server::{
 };
 use serde_json::json;
 use std::{collections::HashSet, path::PathBuf, str::FromStr, sync::Arc, time::Duration};
+use axum::routing::get;
+use axum_prometheus::PrometheusMetricLayer;
 use tokio_postgres::Config;
 use tracing::{error, info};
 
@@ -226,6 +228,7 @@ async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
     tracing_subscriber::fmt::init();
+    let (prometheus_layer, metric_handle) = PrometheusMetricLayer::pair();
 
     let retry_policy = ExponentialBackoff {
         max_elapsed_time: Some(Duration::from_secs(
@@ -255,7 +258,9 @@ async fn main() -> anyhow::Result<()> {
 
     let app = Router::new()
         .route("/api/v1/subscription", put(upsert_account_device))
-        .with_state(app_state);
+        .with_state(app_state)
+        .route("/metrics", get(|| async move { metric_handle.render() }))
+        .layer(prometheus_layer);
     let listener = tokio::net::TcpListener::bind(args.listen_address).await?;
     axum::serve(listener, app).await?;
     Ok(())

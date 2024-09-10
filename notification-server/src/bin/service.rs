@@ -15,6 +15,11 @@ use notification_server::{
     processor::process,
 };
 use std::{path::PathBuf, time::Duration};
+use std::time::Instant;
+use axum::Router;
+use axum::routing::get;
+use axum_prometheus::metrics::{counter, histogram};
+use axum_prometheus::metrics_exporter_prometheus::PrometheusBuilder;
 use tonic::{codegen::http, transport::ClientTlsConfig};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -146,6 +151,9 @@ async fn traverse_chain(
     mut height: AbsoluteBlockHeight,
 ) -> AbsoluteBlockHeight {
     while let Some(v) = receiver.next_timeout(process_timeout).await.transpose() {
+
+
+        let start = Instant::now();
         let finalized_block = match v {
             Ok(v) => v,
             Err(e) => {
@@ -158,7 +166,6 @@ async fn traverse_chain(
             finalized_block.block_hash, finalized_block.height
         );
         let block_hash = finalized_block.block_hash;
-
         let operation = || async {
             concordium_client
                 .clone()
@@ -307,6 +314,9 @@ async fn main() -> anyhow::Result<()> {
         .with(log_filter)
         .init();
 
+    let builder = PrometheusBuilder::new();
+    builder.with_http_listener(([0, 0, 0, 0], 9090)).install().expect("failed to install prometheus");
+
     let endpoint = if args
         .endpoint
         .uri()
@@ -360,6 +370,7 @@ async fn main() -> anyhow::Result<()> {
             .await?
             .last_finalized_block_height
     };
+    test();
     loop {
         info!("Establishing stream of finalized blocks");
         let receiver = match concordium_client
