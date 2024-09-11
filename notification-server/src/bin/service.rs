@@ -96,9 +96,8 @@ struct Args {
         long = "listen-address",
         help = "Listen address for the server.",
         env = "NOTIFICATION_SERVER_METRICS_LISTEN_ADDRESS",
-        default_value = "0.0.0.0:9090"
     )]
-    listen_address: std::net::SocketAddr,
+    listen_address: Option<std::net::SocketAddr>,
 }
 
 const DATABASE_RETRY_DELAY: Duration = Duration::from_secs(1);
@@ -212,6 +211,7 @@ async fn process_block(
                 Err(err) => {
                     if err == UnregisteredError {
                         info!("Device {} is unregistered", device.device_token);
+                        counter!("notification.send_unregistered").increment(1);
                     } else {
                         error!("Error occurred while sending notification: {:?}", err);
                         counter!("notification.send_error").increment(1);
@@ -350,11 +350,13 @@ async fn main() -> anyhow::Result<()> {
         .with(log_filter)
         .init();
 
-    let builder = PrometheusBuilder::new();
-    builder
-        .with_http_listener(args.listen_address)
-        .install()
-        .expect("failed to install prometheus");
+    if let Some(listen_address) = args.listen_address {
+        let builder = PrometheusBuilder::new();
+        builder
+            .with_http_listener(listen_address)
+            .install()
+            .expect("failed to install metrics exporter");
+    }
 
     let endpoint = if args
         .endpoint
