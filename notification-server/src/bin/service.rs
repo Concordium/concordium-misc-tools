@@ -95,7 +95,7 @@ struct Args {
     #[arg(
         long = "listen-address",
         help = "Listen address for the server.",
-        env = "NOTIFICATION_SERVER_METRICS_LISTEN_ADDRESS",
+        env = "NOTIFICATION_SERVER_METRICS_LISTEN_ADDRESS"
     )]
     listen_address: Option<std::net::SocketAddr>,
 }
@@ -161,7 +161,8 @@ async fn process_block(
                 Err(err) => {
                     error!(
                         "Error retrieving devices for account {}: {:?}. Retrying...",
-                        result.address(), err
+                        result.address(),
+                        err
                     );
                     Err(backoff::Error::transient(err))
                 }
@@ -186,12 +187,17 @@ async fn process_block(
         if devices.is_empty() {
             debug!(
                 "No devices subscribed to account {} having preference {:?}",
-                result.address(), result.transaction_type()
+                result.address(),
+                result.transaction_type()
             );
             continue;
         }
 
-        info!("Sending notification to {} devices for address {}", devices.len(), result.address());
+        info!(
+            "Sending notification to {} devices for address {}",
+            devices.len(),
+            result.address()
+        );
         let enriched_notification_information =
             match result.enrich(concordium_client.clone(), block_hash).await {
                 Ok(information) => information,

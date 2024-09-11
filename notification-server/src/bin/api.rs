@@ -6,7 +6,10 @@ use axum::{
     routing::{get, put},
     Router,
 };
-use axum_prometheus::PrometheusMetricLayer;
+use axum_prometheus::{
+    metrics_exporter_prometheus::PrometheusHandle, GenericMetricLayer, Handle,
+    PrometheusMetricLayerBuilder,
+};
 use backoff::ExponentialBackoff;
 use clap::Parser;
 use concordium_rust_sdk::base::contracts_common::AccountAddress;
@@ -40,7 +43,11 @@ struct Args {
         default_value = "0.0.0.0:3030"
     )]
     listen_address: std::net::SocketAddr,
-    /// Logging level of the application
+    #[arg(
+        long = "prometheus-address",
+        env = "NOTIFICATION_SERVER_PROMETHEUS_ADDRESS"
+    )]
+    prometheus_address: Option<std::net::SocketAddr>,
     #[arg(long = "log-level", default_value_t = log::LevelFilter::Info)]
     log_level: log::LevelFilter,
     #[arg(
@@ -90,6 +97,35 @@ const MAX_RESOURCES_LENGTH: usize = 1000;
 
 lazy_static! {
     static ref MAX_PREFERENCES_LENGTH: usize = all::<Preference>().collect::<Vec<_>>().len();
+}
+
+fn setup_prometheus(
+    prometheus_address: std::net::SocketAddr,
+) -> (
+    GenericMetricLayer<'static, PrometheusHandle, Handle>,
+    tokio::task::JoinHandle<Result<(), anyhow::Error>>,
+) {
+    let (prometheus_layer, metric_handle) = PrometheusMetricLayerBuilder::new()
+        .with_prefix("notification_server")
+        .with_default_metrics()
+        .build_pair();
+    let prometheus_api =
+        Router::new().route("/metrics", get(|| async move { metric_handle.render() }));
+
+    let prometheus_handle = tokio::spawn(async move {
+        let listener = tokio::net::TcpListener::bind(prometheus_address)
+            .await
+            .with_context(|| {
+                format!(
+                    "Could not create tcp listener on address: {}",
+                    prometheus_address
+                )
+            })?;
+        axum::serve(listener, prometheus_api)
+            .await
+            .context("Prometheus server has shut down")
+    });
+    (prometheus_layer, prometheus_handle)
 }
 
 /// Processes a device subscription by validating and updating the device's
@@ -230,7 +266,6 @@ async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
     tracing_subscriber::fmt::init();
-    let (prometheus_layer, metric_handle) = PrometheusMetricLayer::pair();
 
     let retry_policy = ExponentialBackoff {
         max_elapsed_time: Some(Duration::from_secs(
@@ -260,10 +295,42 @@ async fn main() -> anyhow::Result<()> {
 
     let app = Router::new()
         .route("/api/v1/subscription", put(upsert_account_device))
-        .with_state(app_state)
-        .route("/metrics", get(|| async move { metric_handle.render() }))
-        .layer(prometheus_layer);
-    let listener = tokio::net::TcpListener::bind(args.listen_address).await?;
-    axum::serve(listener, app).await?;
+        .with_state(app_state);
+
+    let (app, prometheus_handle) = if let Some(prometheus_address) = args.prometheus_address {
+        let (prometheus_layer, prometheus_handle) = setup_prometheus(prometheus_address);
+        (app.layer(prometheus_layer), Some(prometheus_handle))
+    } else {
+        (app, None)
+    };
+
+    let listen_address = args.listen_address;
+    let http_handle = tokio::spawn(async move {
+        let listener = tokio::net::TcpListener::bind(listen_address)
+            .await
+            .with_context(|| {
+                format!(
+                    "Could not create tcp listener on address: {}",
+                    listen_address
+                )
+            })?;
+
+        info!("Listening for requests at {}", listen_address);
+        axum::serve(listener, app)
+            .await
+            .context("HTTP server has shut down")
+    });
+    if let Some(prometheus_handle) = prometheus_handle {
+        tokio::select! {
+            result = prometheus_handle => {
+                result.context("Prometheus task panicked")??;
+            },
+            result = http_handle => {
+                result??;
+            }
+        }
+    } else {
+        http_handle.await??;
+    }
     Ok(())
 }
