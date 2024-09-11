@@ -2,7 +2,7 @@
 authors = ["Concordium AG developers@concordium.com"]
 edition = "2021"
 name = "notification-server"
-version = "0.2.4"
+version = "0.2.5"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
