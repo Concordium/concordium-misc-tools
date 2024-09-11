@@ -1,9 +1,13 @@
-use anyhow::Context;
+use anyhow::{anyhow, Context};
+use axum_prometheus::{
+    metrics::{counter, histogram},
+    metrics_exporter_prometheus::PrometheusBuilder,
+};
 use backoff::{future::retry, ExponentialBackoff};
 use clap::Parser;
 use concordium_rust_sdk::{
     types::AbsoluteBlockHeight,
-    v2::{Client, Endpoint, FinalizedBlocksStream},
+    v2::{Client, Endpoint, FinalizedBlockInfo, FinalizedBlocksStream},
 };
 use dotenv::dotenv;
 use gcp_auth::CustomServiceAccount;
@@ -14,7 +18,10 @@ use notification_server::{
     google_cloud::{GoogleCloud, NotificationError::UnregisteredError},
     processor::process,
 };
-use std::{path::PathBuf, time::Duration};
+use std::{
+    path::PathBuf,
+    time::{Duration, Instant},
+};
 use tonic::{codegen::http, transport::ClientTlsConfig};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -70,7 +77,7 @@ struct Args {
         default_value_t = 180  // 3 minutes
     )]
     google_client_max_interval_time_secs: u64,
-    #[clap(
+    #[arg(
         long = "log-level",
         default_value = "info",
         help = "The maximum log level. Possible values are: `trace`, `debug`, `info`, `warn`, and \
@@ -78,16 +85,174 @@ struct Args {
         env = "LOG_LEVEL"
     )]
     log_level: tracing_subscriber::filter::LevelFilter,
-    #[clap(
+    #[arg(
         long = "process-timeout-secs",
         default_value_t = 60,
         help = "Specifies in seconds the maximum wait for the next block to be processed.",
         env = "NOTIFICATION_SERVER_PROCESS_TIMEOUT_SEC"
     )]
     block_process_timeout_sec: u64,
+    #[arg(
+        long = "listen-address",
+        help = "Listen address for the server.",
+        env = "NOTIFICATION_SERVER_METRICS_LISTEN_ADDRESS"
+    )]
+    listen_address: Option<std::net::SocketAddr>,
 }
 
 const DATABASE_RETRY_DELAY: Duration = Duration::from_secs(1);
+
+async fn process_block(
+    database_connection: &DatabaseConnection,
+    gcloud: &GoogleCloud<CustomServiceAccount>,
+    concordium_client: &mut Client,
+    finalized_block: FinalizedBlockInfo,
+) -> anyhow::Result<AbsoluteBlockHeight> {
+    info!(
+        "Processed block {} at height {}",
+        finalized_block.block_hash, finalized_block.height
+    );
+    let block_hash = finalized_block.block_hash;
+    let operation = || async {
+        concordium_client
+            .clone()
+            .get_block_transaction_events(block_hash)
+            .await
+            .map_err(|err| {
+                error!(
+                    "Error occurred while trying to read transactions: {:?}",
+                    err
+                );
+                backoff::Error::transient(err)
+            })
+    };
+
+    let transactions = match retry(
+        ExponentialBackoff {
+            max_elapsed_time: Some(Duration::from_secs(5)),
+            ..ExponentialBackoff::default()
+        },
+        operation,
+    )
+    .await
+    {
+        Ok(transactions) => transactions.response,
+        Err(err) => {
+            return Err(anyhow!(
+                "Error occurred while reading transactions: {}. Proceeding",
+                err
+            ));
+        }
+    };
+
+    for result in process(transactions).await.into_iter() {
+        debug!(
+            "Sending notifications to account {} with type {:?}",
+            result.address(),
+            result.transaction_type()
+        );
+        let operation = || async {
+            match database_connection
+                .prepared
+                .get_devices_from_account(result.address())
+                .await
+            {
+                Ok(devices) => Ok(devices),
+                Err(err) => {
+                    error!(
+                        "Error retrieving devices for account {}: {:?}. Retrying...",
+                        result.address(),
+                        err
+                    );
+                    Err(backoff::Error::transient(err))
+                }
+            }
+        };
+
+        let devices = retry(
+            backoff::backoff::Constant::new(DATABASE_RETRY_DELAY),
+            operation,
+        )
+        .await
+        .unwrap_or_else(|_| {
+            error!("Error occurred while reading devices. We should never be here");
+            Vec::new()
+        });
+
+        let devices: Vec<_> = devices
+            .iter()
+            .filter(|device| device.preferences.contains(result.transaction_type()))
+            .collect();
+
+        if devices.is_empty() {
+            debug!(
+                "No devices subscribed to account {} having preference {:?}",
+                result.address(),
+                result.transaction_type()
+            );
+            continue;
+        }
+
+        info!(
+            "Sending notification to {} devices for address {}",
+            devices.len(),
+            result.address()
+        );
+        let enriched_notification_information =
+            match result.enrich(concordium_client.clone(), block_hash).await {
+                Ok(information) => information,
+                Err(err) => {
+                    return Err(anyhow!(
+                        "Error occurred while enriching notification information: {}. Proceeding",
+                        err
+                    ));
+                }
+            };
+        for device in devices {
+            match gcloud
+                .send_push_notification(&device.device_token, &enriched_notification_information)
+                .await
+            {
+                Ok(_) => counter!("notification.send_total").increment(1),
+                Err(err) => {
+                    if err == UnregisteredError {
+                        info!("Device {} is unregistered", device.device_token);
+                        counter!("notification.send_unregistered").increment(1);
+                    } else {
+                        error!("Error occurred while sending notification: {:?}", err);
+                        counter!("notification.send_error").increment(1);
+                    }
+                }
+            }
+        }
+    }
+    let operation = || async {
+        database_connection
+            .prepared
+            .insert_block(&block_hash, &finalized_block.height)
+            .await
+            .map_err(|err| match err {
+                database::Error::DatabaseConnection(_) | database::Error::PoolError(_) => {
+                    error!("Error writing to database {:?}. Retrying...", err);
+                    backoff::Error::transient(err)
+                }
+                database::Error::ConstraintViolation(_, _) => backoff::Error::permanent(err),
+            })
+    };
+
+    if let Err(err) = retry(
+        backoff::backoff::Constant::new(DATABASE_RETRY_DELAY),
+        operation,
+    )
+    .await
+    {
+        return Err(anyhow!(
+            "Error occurred while writing to database: {}. Proceeding",
+            err
+        ));
+    };
+    Ok(finalized_block.height)
+}
 
 /// This function continuously processes blocks received from a
 /// `FinalizedBlocksStream`, retrieves the associated transactions, and sends
@@ -143,7 +308,7 @@ async fn traverse_chain(
     gcloud: &GoogleCloud<CustomServiceAccount>,
     mut receiver: FinalizedBlocksStream,
     process_timeout: Duration,
-    mut height: AbsoluteBlockHeight,
+    mut processed_height: AbsoluteBlockHeight,
 ) -> AbsoluteBlockHeight {
     while let Some(v) = receiver.next_timeout(process_timeout).await.transpose() {
         let finalized_block = match v {
@@ -153,143 +318,27 @@ async fn traverse_chain(
                 continue;
             }
         };
-        info!(
-            "Processed block {} at height {}",
-            finalized_block.block_hash, finalized_block.height
-        );
-        let block_hash = finalized_block.block_hash;
-
-        let operation = || async {
-            concordium_client
-                .clone()
-                .get_block_transaction_events(block_hash)
-                .await
-                .map_err(|err| {
-                    error!(
-                        "Error occurred while trying to read transactions: {:?}",
-                        err
-                    );
-                    backoff::Error::transient(err)
-                })
-        };
-
-        let transactions = match retry(
-            ExponentialBackoff {
-                max_elapsed_time: Some(Duration::from_secs(5)),
-                ..ExponentialBackoff::default()
-            },
-            operation,
+        let start = Instant::now();
+        match process_block(
+            database_connection,
+            gcloud,
+            concordium_client,
+            finalized_block,
         )
         .await
         {
-            Ok(transactions) => transactions.response,
+            Ok(block_height) => {
+                processed_height = block_height;
+                let delta = start.elapsed();
+                histogram!("block.process_successful_duration").record(delta);
+            }
             Err(err) => {
-                error!("Error occurred while reading transactions: {:?}", err);
-                continue;
-            }
-        };
-
-        for result in process(transactions).await.into_iter() {
-            info!(
-                "Sending notification to account {} with type {:?}",
-                result.address(),
-                result.transaction_type()
-            );
-            let operation = || async {
-                match database_connection
-                    .prepared
-                    .get_devices_from_account(result.address())
-                    .await
-                {
-                    Ok(devices) => Ok(devices),
-                    Err(err) => {
-                        error!(
-                            "Error retrieving devices for account {}: {:?}. Retrying...",
-                            result.address(),
-                            err
-                        );
-                        Err(backoff::Error::transient(err))
-                    }
-                }
-            };
-            let devices = retry(
-                backoff::backoff::Constant::new(DATABASE_RETRY_DELAY),
-                operation,
-            )
-            .await
-            .unwrap_or_else(|_| {
-                error!("Error occurred while reading devices. We should never be here");
-                Vec::new()
-            });
-
-            let devices: Vec<_> = devices
-                .iter()
-                .filter(|device| device.preferences.contains(result.transaction_type()))
-                .collect();
-            if devices.is_empty() {
-                debug!(
-                    "No devices subscribed to account {} having preference {:?}",
-                    result.address(),
-                    result.transaction_type()
-                );
-                continue;
-            }
-            let enriched_notification_information =
-                match result.enrich(concordium_client.clone(), block_hash).await {
-                    Ok(information) => information,
-                    Err(err) => {
-                        error!(
-                            "Error occurred while enriching notification information: {:?}",
-                            err
-                        );
-                        continue;
-                    }
-                };
-
-            for device in devices {
-                if let Err(err) = gcloud
-                    .send_push_notification(
-                        &device.device_token,
-                        &enriched_notification_information,
-                    )
-                    .await
-                {
-                    if err == UnregisteredError {
-                        info!("Device {} is unregistered", device.device_token);
-                    } else {
-                        error!("Error occurred while sending notification: {:?}", err);
-                    }
-                }
+                error!("Error occurred while processing block: {:?}", err);
             }
         }
-        let operation = || async {
-            database_connection
-                .prepared
-                .insert_block(&block_hash, &finalized_block.height)
-                .await
-                .map_err(|err| match err {
-                    database::Error::DatabaseConnection(_) | database::Error::PoolError(_) => {
-                        error!("Error writing to database {:?}. Retrying...", err);
-                        backoff::Error::transient(err)
-                    }
-                    database::Error::ConstraintViolation(_, _) => backoff::Error::permanent(err),
-                })
-        };
-
-        if let Err(err) = retry(
-            backoff::backoff::Constant::new(DATABASE_RETRY_DELAY),
-            operation,
-        )
-        .await
-        {
-            error!(
-                "Error occurred while writing to database: {:?}. Proceeding",
-                err
-            );
-        };
-        height = finalized_block.height;
+        counter!("block.process_total").increment(1);
     }
-    height
+    processed_height
 }
 
 #[tokio::main(flavor = "multi_thread")]
@@ -306,6 +355,14 @@ async fn main() -> anyhow::Result<()> {
         .with(tracing_subscriber::fmt::layer())
         .with(log_filter)
         .init();
+
+    if let Some(listen_address) = args.listen_address {
+        let builder = PrometheusBuilder::new();
+        builder
+            .with_http_listener(listen_address)
+            .install()
+            .expect("failed to install metrics exporter");
+    }
 
     let endpoint = if args
         .endpoint
