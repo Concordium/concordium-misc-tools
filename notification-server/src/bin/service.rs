@@ -95,7 +95,7 @@ struct Args {
     #[arg(
         long = "listen-address",
         help = "Listen address for the server.",
-        env = "NOTIFICATION_SERVER_METRICS_LISTEN_ADDRESS"
+        env = "NOTIFICATION_SERVER_PROMETHEUS_ADDRESS"
     )]
     listen_address: Option<std::net::SocketAddr>,
 }
