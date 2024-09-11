@@ -29,6 +29,7 @@ pub enum Error {
 #[derive(Clone, Debug)]
 pub struct PreparedStatements {
     get_devices_from_account: tokio_postgres::Statement,
+    delete_device:            tokio_postgres::Statement,
     upsert_device:            tokio_postgres::Statement,
     get_latest_block_height:  tokio_postgres::Statement,
     insert_block:             tokio_postgres::Statement,
@@ -57,6 +58,12 @@ impl PreparedStatements {
             )
             .await
             .context("Failed to create account device mapping")?;
+        let delete_device = transaction
+            .prepare(
+                "DELETE FROM account_device_mapping WHERE device_id = $1;",
+            )
+            .await
+            .context("Failed to create delete device")?;
         let get_latest_block_height = transaction
             .prepare(
                 "SELECT blocks.height FROM blocks WHERE blocks.id = (SELECT MAX(blocks.id) FROM \
@@ -74,6 +81,7 @@ impl PreparedStatements {
             .context("Failed to commit transaction")?;
         Ok(PreparedStatements {
             get_devices_from_account,
+            delete_device,
             upsert_device,
             get_latest_block_height,
             insert_block,
@@ -106,6 +114,14 @@ impl PreparedStatements {
                 Ok(Device::new(preferences, device_token))
             })
             .collect::<Result<Vec<Device>, _>>()
+    }
+
+    pub async fn remove_subscription(
+        &self,
+        device_token: &str,
+    ) -> Result<(), Error> {
+        let mut client = self.pool.get().await.map_err(Into::<Error>::into)?;
+        Ok(())
     }
 
     pub async fn upsert_subscription(
