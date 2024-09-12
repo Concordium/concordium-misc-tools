@@ -1,4 +1,4 @@
-## 1.2.0
+## 1.2.1
 - Updated the Concordium Rust SDK to support the changes introduced in protocol 7.
 
 ## 1.1.2
