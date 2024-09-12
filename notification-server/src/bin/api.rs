@@ -45,6 +45,7 @@ struct Args {
     listen_address: std::net::SocketAddr,
     #[arg(
         long = "prometheus-address",
+        help = "Listen address for the prometheus metrics server.",
         env = "NOTIFICATION_SERVER_PROMETHEUS_ADDRESS"
     )]
     prometheus_address: Option<std::net::SocketAddr>,

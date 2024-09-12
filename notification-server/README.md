@@ -1,6 +1,6 @@
-# Notification server
+# Notification api
 
-Server to obtain information about particular account to device mappings and store them in a persistence layer.
+API to obtain information about particular account to device mappings and store them in a persistence layer.
 
 # Notification service
 

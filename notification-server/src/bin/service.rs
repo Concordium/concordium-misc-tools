@@ -93,9 +93,9 @@ struct Args {
     )]
     block_process_timeout_sec: u64,
     #[arg(
-        long = "listen-address",
-        help = "Listen address for the server.",
-        env = "NOTIFICATION_SERVER_METRICS_LISTEN_ADDRESS"
+        long = "prometheus-address",
+        help = "Listen address for the prometheus metrics server.",
+        env = "NOTIFICATION_SERVER_PROMETHEUS_ADDRESS"
     )]
     listen_address: Option<std::net::SocketAddr>,
 }
