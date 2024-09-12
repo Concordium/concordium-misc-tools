@@ -1,6 +1,6 @@
-# Notification server
+# Notification api
 
-Server to obtain information about particular account to device mappings and store them in a persistence layer.
+API to obtain information about particular account to device mappings and store them in a persistence layer.
 
 # Notification service
 
@@ -10,7 +10,7 @@ associated with the account that received the transaction.
 ## Setting up local dev
 
 ```shell
-make setup-db && make setup-credentials && make
+make setup && make
 ```
 
 where `make setup` will be a onetime setup and `make` will be continuously used to ensure containers are valid.

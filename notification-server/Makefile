@@ -2,6 +2,8 @@
 
 all: docker-up wait-for-db create-tables
 
+setup: setup-db setup-credentials
+
 setup-db:
 	@echo "Setting default password"
 	@DB_PASSWORD=$$(openssl rand -base64 12) && \
@@ -40,4 +42,4 @@ create-tables:
 		docker compose exec -T db psql --username=postgres < $$sql_file; \
 	done
 
-.PHONY: setup-credential setup-db all docker-up wait-for-db create-tables
+.PHONY: setup setup-credential setup-db all docker-up wait-for-db create-tables
