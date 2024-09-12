@@ -10,7 +10,7 @@ associated with the account that received the transaction.
 ## Setting up local dev
 
 ```shell
-make setup && make
+make setup-db && make setup-credentials && make
 ```
 
 where `make setup` will be a onetime setup and `make` will be continuously used to ensure containers are valid.
