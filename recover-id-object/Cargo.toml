@@ -1,6 +1,6 @@
 [package]
 name = "recover-id-object"
-version = "2.0.1"
+version = "2.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -20,5 +20,3 @@ reqwest = { version = "0.11", features = ["json"] }
 url = { version = "2.3", features = ["serde"] }
 http = "0.2"
 chrono = "0.4.24"
-
-
