@@ -3,6 +3,9 @@ name: Fmt and Clippy
 # This job runs rustfmt and clippy linting,
 
 on:
+  push:
+    branches: main
+
   pull_request:
     branches: main
 
