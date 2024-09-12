@@ -34,34 +34,34 @@ jobs:
           filters: |
             wallet-proxy-load-simulator/Cargo.toml:
               - 'wallet-proxy-load-simulator/**'
-              - '.github/**'
+              - '.github/workflows/ci.yaml'
             state-compare/Cargo.toml:
               - 'state-compare/**'
-              - '.github/**'
+              - '.github/workflows/ci.yaml'
             genesis-creator/Cargo.toml:
               - 'genesis-creator/**'
-              - '.github/**'
+              - '.github/workflows/ci.yaml'
             id-verifier/Cargo.toml:
               - 'id-verifier/**'
-              - '.github/**'
+              - '.github/workflows/ci.yaml'
             kpi-tracker/Cargo.toml:
               - 'kpi-tracker/**'
-              - '.github/**'
+              - '.github/workflows/ci.yaml'
             chain-prometheus-exporter/Cargo.toml:
               - 'chain-prometheus-exporter/**'
-              - '.github/**'
+              - '.github/workflows/ci.yaml'
             recover-id-object/Cargo.toml:
               - 'recover-id-object/**'
-              - '.github/**'
+              - '.github/workflows/ci.yaml'
             generator/Cargo.toml:
               - 'generator/**'
-              - '.github/**'
+              - '.github/workflows/ci.yaml'
             wallet-connect-test-bench/smart-contract/Cargo.toml:
               - 'wallet-connect-test-bench/**'
-              - '.github/**'
+              - '.github/workflows/ci.yaml'
             notification-server/Cargo.toml:
               - 'notification-server/**'
-              - '.github/**'
+              - '.github/workflows/ci.yaml'
 
   "lint_fmt":
     name: lint:fmt
