@@ -31,7 +31,7 @@ Everything in this repository should build with stable rust at the moment (at le
  cargo +nightly-2022-06-09 fmt
 ```
 (the exact version used by the CI can be found in [.github/workflows/ci.yaml](.github/workflows/ci.yaml) file).
-You will need to have a recent enough nightly version installed, which can be done via
+You will need to have a recent enough nightly version installed, which can be done via asd
 
 ```shell
 rustup toolchain install nightly-2022-06-09
