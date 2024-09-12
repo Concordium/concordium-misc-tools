@@ -9,10 +9,10 @@ setup-db:
 	cat .env.template | envsubst > .env
 
 setup-credentials:
-	echo "Please enter the path to your Google application credentials file:" && \
+	@echo "Please enter the path to your Google application credentials file:"
 	read GOOGLE_APPLICATION_CREDENTIALS_PATH && \
 	mkdir -p secrets && \
-	cp $$GOOGLE_APPLICATION_CREDENTIALS_PATH secrets/google-credentials.json && \
+	cp $$GOOGLE_APPLICATION_CREDENTIALS_PATH secrets/google-credentials.json
 
 docker-up:
 	@echo "Starting Docker containers..."
@@ -40,4 +40,4 @@ create-tables:
 		docker compose exec -T db psql --username=postgres < $$sql_file; \
 	done
 
-.PHONY: setup all docker-up wait-for-db create-tables
+.PHONY: setup-credential setup-db all docker-up wait-for-db create-tables
