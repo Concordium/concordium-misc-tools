@@ -1,6 +1,6 @@
 # Changelog for the kpi-tracker service
 
-## Unreleased changes
+## 2.1.0
 - Updated the Concordium Rust SDK to support the changes introduced in protocol 7.
 
 ## 2.0.0

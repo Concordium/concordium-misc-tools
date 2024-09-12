@@ -93,8 +93,7 @@ fn crypto_parameters(
 /// Function for creating the genesis identity providers. The arguments are
 /// - idp_out - where to write the identity providers
 /// - cfgs - A vector of configurations, each deciding whether to use an
-///   existing identity provider or
-/// to generate one or more freshly.
+///   existing identity provider or to generate one or more freshly.
 ///
 /// For each generated anonymity revoker, the private identity provider data
 /// will be written to a file. The function returns a in a `anyhow::Result`,
@@ -177,8 +176,7 @@ fn identity_providers(
 /// Function for creating the genesis anonymity revokers. The arguments are
 /// - ars_out - where to write the anonymity revokers
 /// - cfgs - A vector of configurations, each deciding whether to use an
-///   existing anonymity revoker or
-/// to generate one or more freshly.
+///   existing anonymity revoker or to generate one or more freshly.
 ///
 /// For each generated anonymity revoker, the private anonymity revoker data
 /// will be written to a file. The function returns a in a `anyhow::Result`,

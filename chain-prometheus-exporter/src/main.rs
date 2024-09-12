@@ -127,7 +127,7 @@ async fn main() -> anyhow::Result<()> {
         tracing::info!("Tracking account {address} with label {label}.");
         let opts = Opts::new(
             format!("{label}_balance"),
-            &format!("Balance of account {address} in microCCD."),
+            format!("Balance of account {address} in microCCD."),
         );
         let gauge: GenericGauge<AtomicU64> = GenericGauge::with_opts(opts)?;
         gauges.push((address, gauge.clone()));
