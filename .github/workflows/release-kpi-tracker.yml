@@ -10,7 +10,7 @@ on:
 env:
   REGISTRY: docker.io
   SERVICE_NAME: kpi-tracker
-  RUST_VERSION: rust:1.76-buster
+  RUST_VERSION: rust:1.76-bookworm
 
 jobs:
   publish-docker-image:
@@ -53,3 +53,5 @@ jobs:
           push: true
           platforms: linux/amd64
           tags: ${{ steps.meta.outputs.tag }}
+          build-args: |
+            build_image=${{ env.RUST_VERSION }}
