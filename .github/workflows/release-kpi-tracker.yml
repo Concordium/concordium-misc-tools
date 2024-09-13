@@ -5,9 +5,12 @@ on:
     tags:
       - kpi-tracker/*.*.*
 
+  workflow_dispatch:
+
 env:
   REGISTRY: docker.io
-  IMAGE_NAME: kpi-tracker
+  SERVICE_NAME: kpi-tracker
+  RUST_VERSION: rust:1.76-bookworm
 
 jobs:
   publish-docker-image:
@@ -28,14 +31,14 @@ jobs:
       - name: Extract version tag from Cargo.toml manifest.
         id: meta
         run: |
-          export VERSION=$(yq .package.version kpi-tracker/Cargo.toml)
-          export FULL_IMAGE_TAG="${{ env.REGISTRY }}/concordium/$IMAGE_NAME:$VERSION"
+          export VERSION=$(yq .package.version ${{ env.SERVICE_NAME }}/Cargo.toml)
+          export FULL_IMAGE_TAG="${{ env.REGISTRY }}/concordium/${{ env.SERVICE_NAME }}:$VERSION"
           echo "::notice FULL_IMAGE_TAG=${FULL_IMAGE_TAG}"
           # Make sure the image does not exist. Abort if we can retrieve any metadata.
           if docker manifest inspect ${FULL_IMAGE_TAG} > /dev/null; then
              echo "::error ${FULL_IMAGE_TAG} already exists"
              exit 1
-          elif [ ! "${{ github.ref_name }}" = "kpi-tracker/${VERSION}" ]; then
+          elif [ ! "${{ github.ref_name }}" = "${{ env.SERVICE_NAME }}/${VERSION}" ]; then
              echo "::error Expected tag ${EXPECTED_TAG} does not match the version ${VERSION}."
              exit 1
           else
@@ -46,7 +49,9 @@ jobs:
         uses: docker/build-push-action@f2a1d5e99d037542a71f64918e516c093c6f3fc4
         with:
           context: .
-          file: ./kpi-tracker/scripts/Dockerfile
+          file: ./${{ SERVICE_NAME }}/scripts/Dockerfile
           push: true
           platforms: linux/amd64
           tags: ${{ steps.meta.outputs.tag }}
+          build-args: |
+            build_image=${{ env.RUST_VERSION }}
