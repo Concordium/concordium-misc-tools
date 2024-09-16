@@ -1,3 +1,6 @@
+## 0.3.2
+- Initiate prepared statements from within each function call
+
 ## 0.3.0
 - Updated the Concordium Rust SDK to support the changes introduced in protocol 7.
 
