@@ -1,5 +1,4 @@
 use crate::models::device::{Device, Preference};
-use anyhow::Context;
 use concordium_rust_sdk::{
     base::hashes::BlockHash, common::types::AccountAddress, types::AbsoluteBlockHeight,
 };
@@ -52,7 +51,7 @@ impl DatabaseConnection {
                  blocks);",
             )
             .await
-            .unwrap();
+            .map_err(Into::<Error>::into)?;
         let row = client.query_opt(&stmt, &[]).await?;
         row.map(|row| row.try_get::<_, i64>(0).map(|raw| (raw as u64).into()))
             .transpose()
@@ -70,7 +69,7 @@ impl DatabaseConnection {
                  LIMIT 1000",
             )
             .await
-            .unwrap();
+            .map_err(Into::<Error>::into)?;
         let params: &[&(dyn ToSql + Sync)] = &[&account_address.0.as_ref()];
         let rows = client
             .query(&stmt, params)
@@ -99,7 +98,7 @@ impl DatabaseConnection {
                  EXCLUDED.preferences;",
             )
             .await
-            .unwrap();
+            .map_err(Into::<Error>::into)?;
         let preferences_mask = preferences_to_bitmask(preferences.into_iter());
         let transaction = client.transaction().await?;
         for account in account_address {
@@ -122,7 +121,7 @@ impl DatabaseConnection {
         let stmt = client
             .prepare_cached("INSERT INTO blocks (hash, height) VALUES ($1, $2);")
             .await
-            .unwrap();
+            .map_err(Into::<Error>::into)?;
         let params: &[&(dyn ToSql + Sync); 2] = &[&hash.as_ref(), &(height.height as i64)];
         client.execute(&stmt, params).await.map_or_else(
             |err| {
