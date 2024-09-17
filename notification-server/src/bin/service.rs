@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Context};
 use axum_prometheus::{
-    metrics::{counter, histogram},
+    metrics::{counter, gauge, histogram},
     metrics_exporter_prometheus::PrometheusBuilder,
 };
 use backoff::{future::retry, ExponentialBackoff};
@@ -20,10 +20,8 @@ use notification_server::{
 };
 use std::{
     path::PathBuf,
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
-use std::time::{SystemTime, UNIX_EPOCH};
-use axum_prometheus::metrics::gauge;
 use tonic::{codegen::http, transport::ClientTlsConfig};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
