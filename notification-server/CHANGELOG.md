@@ -1,6 +1,9 @@
+## 0.3.3
+- Add latest successful processed block
+
 ## 0.3.2
 - Initiate prepared statements from within each function call
-- 
+
 ## 0.3.1
 - No longer use aspn specific information
 
