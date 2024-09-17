@@ -14,8 +14,12 @@ FROM ${base_image}
 WORKDIR /usr/app
 
 RUN apt-get update && \
+    apt-get install -y gnupg wget lsb-release && \
+    sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/postgres.list' && \
+    wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add - && \
+    apt-get update && \
     apt-get -y install \
-      postgresql-client \
+      postgresql-client-14 \
       ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 

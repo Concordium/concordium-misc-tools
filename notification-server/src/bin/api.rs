@@ -219,7 +219,6 @@ async fn process_device_subscription(
     let decoded_accounts = decoded_accounts?;
     state
         .db_connection
-        .prepared
         .upsert_subscription(
             decoded_accounts,
             subscription.preferences,
