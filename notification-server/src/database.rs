@@ -26,9 +26,7 @@ pub enum Error {
 }
 
 #[derive(Clone, Debug)]
-pub struct DatabaseConnection {
-    pool: Pool,
-}
+pub struct DatabaseConnection(Pool);
 
 impl DatabaseConnection {
     pub async fn create(config: tokio_postgres::config::Config) -> anyhow::Result<Self> {
@@ -40,11 +38,11 @@ impl DatabaseConnection {
             .max_size(16)
             .build()
             .expect("Failed to create pool");
-        Ok(DatabaseConnection { pool })
+        Ok(DatabaseConnection(pool))
     }
 
     pub async fn get_processed_block_height(&self) -> Result<Option<AbsoluteBlockHeight>, Error> {
-        let client = self.pool.get().await.map_err(Into::<Error>::into)?;
+        let client = self.0.get().await.map_err(Into::<Error>::into)?;
         let stmt = client
             .prepare_cached(
                 "SELECT blocks.height FROM blocks WHERE blocks.id = (SELECT MAX(blocks.id) FROM \
@@ -62,7 +60,7 @@ impl DatabaseConnection {
         &self,
         account_address: &AccountAddress,
     ) -> Result<Vec<Device>, Error> {
-        let client = self.pool.get().await.map_err(Into::<Error>::into)?;
+        let client = self.0.get().await.map_err(Into::<Error>::into)?;
         let stmt = client
             .prepare_cached(
                 "SELECT device_id, preferences FROM account_device_mapping WHERE address = $1 \
@@ -90,7 +88,7 @@ impl DatabaseConnection {
         preferences: Vec<Preference>,
         device_token: &str,
     ) -> Result<(), Error> {
-        let mut client = self.pool.get().await.map_err(Into::<Error>::into)?;
+        let mut client = self.0.get().await.map_err(Into::<Error>::into)?;
         let stmt = client
             .prepare_cached(
                 "INSERT INTO account_device_mapping (address, device_id, preferences) VALUES ($1, \
@@ -117,7 +115,7 @@ impl DatabaseConnection {
         hash: &BlockHash,
         height: &AbsoluteBlockHeight,
     ) -> Result<(), Error> {
-        let client = self.pool.get().await.map_err(Into::<Error>::into)?;
+        let client = self.0.get().await.map_err(Into::<Error>::into)?;
         let stmt = client
             .prepare_cached("INSERT INTO blocks (hash, height) VALUES ($1, $2);")
             .await
@@ -287,7 +285,7 @@ mod tests {
             .unwrap();
         let db_connection = DatabaseConnection::create(config).await?;
 
-        let client = db_connection.pool.get().await?;
+        let client = db_connection.0.get().await?;
         drop_all_tables(&client).await?;
         create_sql(&client).await?;
 
