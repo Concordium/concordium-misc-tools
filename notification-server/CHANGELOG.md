@@ -1,5 +1,5 @@
 ## 0.3.3
-- Add latest successful processed block
+- Add timestamp for when a block was last processed to tracked metrics
 
 ## 0.3.2
 - Initiate prepared statements from within each function call
