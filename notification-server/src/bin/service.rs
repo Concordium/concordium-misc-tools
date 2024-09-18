@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Context};
 use axum_prometheus::{
-    metrics::{counter, histogram},
+    metrics::{counter, gauge, histogram},
     metrics_exporter_prometheus::PrometheusBuilder,
 };
 use backoff::{future::retry, ExponentialBackoff};
@@ -20,7 +20,7 @@ use notification_server::{
 };
 use std::{
     path::PathBuf,
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use tonic::{codegen::http, transport::ClientTlsConfig};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -329,6 +329,10 @@ async fn traverse_chain(
                 processed_height = block_height;
                 let delta = start.elapsed();
                 histogram!("block.process_successful_duration").record(delta);
+                if let Ok(duration_since_epoch) = SystemTime::now().duration_since(UNIX_EPOCH) {
+                    let current_timestamp = duration_since_epoch.as_secs() as f64;
+                    gauge!("block.process_successful_last_unix").set(current_timestamp);
+                }
             }
             Err(err) => {
                 error!("Error occurred while processing block: {:?}", err);
