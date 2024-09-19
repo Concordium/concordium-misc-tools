@@ -215,6 +215,9 @@ async fn process_block(
                 Ok(_) => counter!("notification.send_total").increment(1),
                 Err(err) => {
                     if err == UnregisteredError {
+                        database_connection
+                            .remove_subscription(&device.device_token)
+                            .await?;
                         info!("Device {} is unregistered", device.device_token);
                         counter!("notification.send_unregistered").increment(1);
                     } else {
