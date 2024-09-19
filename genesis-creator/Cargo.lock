@@ -551,7 +551,7 @@ dependencies = [
 
 [[package]]
 name = "concordium-contracts-common"
-version = "9.1.0"
+version = "9.2.0"
 dependencies = [
  "base64",
  "bs58",
@@ -580,7 +580,7 @@ dependencies = [
 
 [[package]]
 name = "concordium-rust-sdk"
-version = "4.3.0"
+version = "5.0.0"
 dependencies = [
  "aes-gcm",
  "anyhow",
@@ -611,7 +611,7 @@ dependencies = [
 
 [[package]]
 name = "concordium-smart-contract-engine"
-version = "5.0.0"
+version = "6.0.0"
 dependencies = [
  "anyhow",
  "byteorder",
@@ -634,7 +634,7 @@ dependencies = [
 
 [[package]]
 name = "concordium-wasm"
-version = "4.0.0"
+version = "5.0.0"
 dependencies = [
  "anyhow",
  "concordium-contracts-common",
@@ -645,7 +645,7 @@ dependencies = [
 
 [[package]]
 name = "concordium_base"
-version = "5.0.0"
+version = "6.0.0"
 dependencies = [
  "aes",
  "anyhow",
@@ -1080,7 +1080,7 @@ dependencies = [
 
 [[package]]
 name = "genesis-creator"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "chrono",

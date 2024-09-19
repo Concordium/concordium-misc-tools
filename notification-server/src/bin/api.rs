@@ -45,6 +45,7 @@ struct Args {
     listen_address: std::net::SocketAddr,
     #[arg(
         long = "prometheus-address",
+        help = "Listen address for the prometheus metrics server.",
         env = "NOTIFICATION_SERVER_PROMETHEUS_ADDRESS"
     )]
     prometheus_address: Option<std::net::SocketAddr>,
@@ -218,7 +219,6 @@ async fn process_device_subscription(
     let decoded_accounts = decoded_accounts?;
     state
         .db_connection
-        .prepared
         .upsert_subscription(
             decoded_accounts,
             subscription.preferences,

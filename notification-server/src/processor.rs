@@ -194,17 +194,6 @@ mod tests {
     use std::{fmt::Debug, str::FromStr};
 
     #[derive(Clone, Debug)]
-    struct ArbitraryTransactionIndex(pub TransactionIndex);
-
-    // Implement Arbitrary for the wrapper
-    impl Arbitrary for ArbitraryTransactionIndex {
-        fn arbitrary(g: &mut Gen) -> Self {
-            let index = u64::arbitrary(g);
-            ArbitraryTransactionIndex(TransactionIndex { index })
-        }
-    }
-
-    #[derive(Clone, Debug)]
     struct ArbitraryEnergy(pub Energy);
 
     impl Arbitrary for ArbitraryEnergy {
@@ -285,35 +274,27 @@ mod tests {
             let receiver_address = AccountAddress(random_account_address());
 
             let details = |effects| AccountTransactionDetails {
-                cost: amount.clone(),
+                cost: amount,
                 effects,
-                sender: receiver_address.clone(),
+                sender: receiver_address,
             };
             let effects = vec![
                 AccountTransactionEffects::AccountTransfer {
-                    amount: amount.clone(),
-                    to:     receiver_address.clone(),
+                    amount,
+                    to: receiver_address,
                 },
                 AccountTransactionEffects::AccountTransferWithMemo {
-                    amount: amount.clone(),
-                    to:     receiver_address.clone(),
-                    memo:   random_memo(),
+                    amount,
+                    to: receiver_address,
+                    memo: random_memo(),
                 },
                 AccountTransactionEffects::TransferredWithSchedule {
-                    to:     receiver_address.clone(),
-                    amount: create_random_release_schedules_from_amount(
-                        amount.clone().micro_ccd,
-                        2,
-                        g,
-                    ),
+                    to:     receiver_address,
+                    amount: create_random_release_schedules_from_amount(amount.micro_ccd, 2, g),
                 },
                 AccountTransactionEffects::TransferredWithScheduleAndMemo {
-                    to:     receiver_address.clone(),
-                    amount: create_random_release_schedules_from_amount(
-                        amount.clone().micro_ccd,
-                        2,
-                        g,
-                    ),
+                    to:     receiver_address,
+                    amount: create_random_release_schedules_from_amount(amount.micro_ccd, 2, g),
                     memo:   random_memo(),
                 },
             ];
@@ -321,10 +302,10 @@ mod tests {
             let effect = g.choose(&effects).unwrap().clone();
             let hash = fixed_hash();
             let summary = BlockItemSummary {
-                index:       random_transaction_index(),
+                index: random_transaction_index(),
                 energy_cost: ArbitraryEnergy::arbitrary(g).0,
-                hash:        hash.clone(),
-                details:     BlockItemSummaryDetails::AccountTransaction(details(effect.clone())),
+                hash,
+                details: BlockItemSummaryDetails::AccountTransaction(details(effect.clone())),
             };
 
             let notification =
@@ -356,9 +337,9 @@ mod tests {
             let receiver_address = AccountAddress(random_account_address());
 
             let account_transaction_details = |effects| AccountTransactionDetails {
-                cost: amount.clone(),
+                cost: amount,
                 effects,
-                sender: receiver_address.clone(),
+                sender: receiver_address,
             };
 
             let silent_block_summaries = vec![
@@ -398,8 +379,8 @@ mod tests {
                     hash: fixed_hash(),
                     details: BlockItemSummaryDetails::AccountTransaction(account_transaction_details(AccountTransactionEffects::TransferredToEncrypted {
                         data: Box::new(EncryptedSelfAmountAddedEvent {
-                            amount: amount.clone(),
-                            account: receiver_address.clone(),
+                            amount,
+                            account: receiver_address,
                             new_amount: EncryptedAmount {
                                 encryptions: [get_random_cipher(), get_random_cipher()],
                             },

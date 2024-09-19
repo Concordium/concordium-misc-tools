@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Context};
 use axum_prometheus::{
-    metrics::{counter, histogram},
+    metrics::{counter, gauge, histogram},
     metrics_exporter_prometheus::PrometheusBuilder,
 };
 use backoff::{future::retry, ExponentialBackoff};
@@ -20,7 +20,7 @@ use notification_server::{
 };
 use std::{
     path::PathBuf,
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use tonic::{codegen::http, transport::ClientTlsConfig};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -93,9 +93,9 @@ struct Args {
     )]
     block_process_timeout_sec: u64,
     #[arg(
-        long = "listen-address",
-        help = "Listen address for the server.",
-        env = "NOTIFICATION_SERVER_METRICS_LISTEN_ADDRESS"
+        long = "prometheus-address",
+        help = "Listen address for the prometheus metrics server.",
+        env = "NOTIFICATION_SERVER_PROMETHEUS_ADDRESS"
     )]
     listen_address: Option<std::net::SocketAddr>,
 }
@@ -153,7 +153,6 @@ async fn process_block(
         );
         let operation = || async {
             match database_connection
-                .prepared
                 .get_devices_from_account(result.address())
                 .await
             {
@@ -228,7 +227,6 @@ async fn process_block(
     }
     let operation = || async {
         database_connection
-            .prepared
             .insert_block(&block_hash, &finalized_block.height)
             .await
             .map_err(|err| match err {
@@ -331,6 +329,10 @@ async fn traverse_chain(
                 processed_height = block_height;
                 let delta = start.elapsed();
                 histogram!("block.process_successful_duration").record(delta);
+                if let Ok(duration_since_epoch) = SystemTime::now().duration_since(UNIX_EPOCH) {
+                    let current_timestamp = duration_since_epoch.as_secs() as f64;
+                    gauge!("block.process_successful_last_unix").set(current_timestamp);
+                }
             }
             Err(err) => {
                 error!("Error occurred while processing block: {:?}", err);
@@ -405,7 +407,6 @@ async fn main() -> anyhow::Result<()> {
     let database_connection = DatabaseConnection::create(args.db_connection).await?;
     let mut concordium_client = Client::new(endpoint).await?;
     let mut height = if let Some(height) = database_connection
-        .prepared
         .get_processed_block_height()
         .await
         .context("Failed to get processed block height")?
