@@ -82,6 +82,19 @@ impl DatabaseConnection {
             .collect::<Result<Vec<Device>, _>>()
     }
 
+    pub async fn remove_subscription(&self, device_token: &str) -> Result<u64, Error> {
+        let client = self.0.get().await.map_err(Into::<Error>::into)?;
+        let params: &[&(dyn ToSql + Sync)] = &[&device_token];
+        let stmt = client
+            .prepare_cached("DELETE FROM account_device_mapping WHERE device_id = $1;")
+            .await
+            .map_err(Into::<Error>::into)?;
+        client
+            .execute(&stmt, params)
+            .await
+            .map_err(Error::DatabaseConnection)
+    }
+
     pub async fn upsert_subscription(
         &self,
         account_address: Vec<AccountAddress>,
@@ -431,5 +444,76 @@ mod tests {
             }
             _ => panic!("Expected ConstraintViolation error"),
         }
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_remove_single_subscription() {
+        let db_connection = setup_database().await.expect("Failed to setup database");
+        let account_address =
+            AccountAddress::from_str("3144VUDLmyeNppwnRY91nP7H5bJoUbaBxiVBN7YN8XFLxMZLgH").unwrap();
+        let device_not_to_delete = "device-1";
+        db_connection
+            .upsert_subscription(
+                vec![account_address],
+                vec![CIS2Transaction],
+                device_not_to_delete,
+            )
+            .await
+            .unwrap();
+        let account_address =
+            AccountAddress::from_str("3BY1qpYqmK8P5FBcyfvrMv72bRqvrD7sdHdim9L7oaVGZ71uFq").unwrap();
+        let device_to_delete = "device-2";
+        db_connection
+            .upsert_subscription(
+                vec![account_address],
+                vec![CIS2Transaction],
+                device_to_delete,
+            )
+            .await
+            .expect("Failed to upsert");
+        assert_eq!(
+            db_connection
+                .remove_subscription(device_to_delete)
+                .await
+                .expect("Failed to remove subscription"),
+            1
+        );
+        let client = &db_connection.0.get().await.unwrap();
+        let stmt = client
+            .prepare_cached("SELECT device_id FROM account_device_mapping WHERE device_id = $1")
+            .await
+            .unwrap();
+        let params: &[&(dyn ToSql + Sync)] = &[&device_not_to_delete];
+        let rows = client.query(&stmt, params).await.unwrap();
+        assert_eq!(rows.len(), 1);
+        let params: &[&(dyn ToSql + Sync)] = &[&device_to_delete];
+        let rows = client.query(&stmt, params).await.unwrap();
+        assert_eq!(rows.len(), 0);
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_remove_nonexistent_subscription() {
+        let db_connection = setup_database().await.expect("Failed to setup database");
+        let account_address =
+            AccountAddress::from_str("3144VUDLmyeNppwnRY91nP7H5bJoUbaBxiVBN7YN8XFLxMZLgH").unwrap();
+        let device_existing = "device-existing";
+        db_connection
+            .upsert_subscription(
+                vec![account_address],
+                vec![CIS2Transaction],
+                device_existing,
+            )
+            .await
+            .unwrap();
+        let device_not_existing = "device-none-existent";
+        assert_eq!(
+            db_connection
+                .remove_subscription(device_not_existing)
+                .await
+                .expect("Failed to remove subscription"),
+            0
+        );
     }
 }
