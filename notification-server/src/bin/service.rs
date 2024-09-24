@@ -355,7 +355,7 @@ async fn traverse_chain(
     processed_height
 }
 
-async fn catch_up(
+async fn catch_up_to_limit(
     concordium_client: &mut Client,
     current_height: AbsoluteBlockHeight,
     notification_ttl: Duration,
@@ -453,7 +453,7 @@ async fn main() -> anyhow::Result<()> {
         .await
         .context("Failed to get processed block height")?
     {
-        catch_up(
+        catch_up_to_limit(
             &mut concordium_client,
             height,
             Duration::from_secs(args.notification_ttl_min * 60),
