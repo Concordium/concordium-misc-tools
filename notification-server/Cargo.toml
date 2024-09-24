@@ -12,6 +12,7 @@ axum = "0.7"
 axum-prometheus = "0.7"
 backoff = { version = "0.4", features = ["tokio"] }
 bytes = "1.6"
+chrono = "0.4.38"
 clap = { version = "4.5", features = ["derive", "env"] }
 concordium-rust-sdk = { version = "*", path = "../deps/concordium-rust-sdk" }
 deadpool-postgres = "0.14"
@@ -33,7 +34,6 @@ tokio-postgres = "0.7"
 tonic = {version = "0.10", features = ["tls", "tls-roots"]} # Use system trust roots.
 tracing = { version = "0.1" }
 tracing-subscriber = { version = "0.3" }
-chrono = "0.4.38"
 
 [dev-dependencies]
 async-trait = "0.1"
