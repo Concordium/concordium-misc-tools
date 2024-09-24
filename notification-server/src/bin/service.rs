@@ -373,7 +373,7 @@ async fn catch_up_to_limit(
         .find_first_finalized_block_no_earlier_than(lower_bound.., lower_bound_time)
         .await?;
 
-    if &time_ago_block.block_height > &current_height {
+    if time_ago_block.block_height > current_height {
         info!(
             "Skipping {} blocks",
             time_ago_block.block_height.height - current_height.height
