@@ -100,8 +100,8 @@ struct Args {
     )]
     listen_address: Option<std::net::SocketAddr>,
     #[arg(
-        long = "notification-ttl-min",
-        default_value_t = 2,
+        long = "notification-ttl-mins",
+        default_value_t = 60,
         help = "This variable defines the maximum allowable time (in minutes) after which a notification is no longer being emitted.",
         env = "NOTIFICATION_SERVER_NOTIFICATION_TTL_MIN"
     )]
