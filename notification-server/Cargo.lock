@@ -2109,6 +2109,7 @@ dependencies = [
  "axum-prometheus",
  "backoff",
  "bytes",
+ "chrono",
  "clap",
  "concordium-rust-sdk",
  "deadpool-postgres",

@@ -5,6 +5,7 @@ use axum_prometheus::{
 };
 use backoff::{future::retry, ExponentialBackoff};
 use clap::Parser;
+use chrono::Utc;
 use concordium_rust_sdk::{
     types::AbsoluteBlockHeight,
     v2::{Client, Endpoint, FinalizedBlockInfo, FinalizedBlocksStream},
@@ -98,6 +99,13 @@ struct Args {
         env = "NOTIFICATION_SERVER_PROMETHEUS_ADDRESS"
     )]
     listen_address: Option<std::net::SocketAddr>,
+    #[arg(
+        long = "notification-ttl-min",
+        default_value_t = 2,
+        help = "This variable defines the maximum allowable time (in minutes) after which a notification is no longer being emitted.",
+        env = "NOTIFICATION_SERVER_NOTIFICATION_TTL_MIN"
+    )]
+    notification_ttl_min: u64,
 }
 
 const DATABASE_RETRY_DELAY: Duration = Duration::from_secs(1);
@@ -346,6 +354,26 @@ async fn traverse_chain(
     processed_height
 }
 
+async fn catch_up(concordium_client: &mut Client, current_height: AbsoluteBlockHeight, notification_ttl: Duration) -> anyhow::Result<AbsoluteBlockHeight> {
+    let current_block_height = concordium_client
+            .get_consensus_info()
+            .await?
+            .last_finalized_block_height;
+    let lower_bound = AbsoluteBlockHeight {
+        // We are not fast than 2 sec per block, hence this should be conservative enough
+        height: current_block_height.height - notification_ttl.as_secs(),
+    };
+    let lower_bound_time: chrono::DateTime<Utc> = Utc::now() - notification_ttl;
+    let time_ago_block = concordium_client.find_first_finalized_block_no_earlier_than(lower_bound.., lower_bound_time).await?;
+
+    if &time_ago_block.block_height > &current_height {
+        info!("Skipping {} blocks", time_ago_block.block_height.height - current_height.height);
+        counter!("block.process_skipped").increment(time_ago_block.block_height.height - current_height.height);
+        return Ok(time_ago_block.block_height);
+    }
+    Ok(current_height)
+}
+
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> anyhow::Result<()> {
     dotenv().ok();
@@ -414,7 +442,7 @@ async fn main() -> anyhow::Result<()> {
         .await
         .context("Failed to get processed block height")?
     {
-        height
+        catch_up(&mut concordium_client, height, Duration::from_secs(args.notification_ttl_min * 60)).await?
     } else {
         concordium_client
             .get_consensus_info()
