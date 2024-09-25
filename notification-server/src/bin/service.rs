@@ -359,10 +359,10 @@ async fn traverse_chain(
 /// the current time minus the notification TTL. Compares this height with the
 /// current block height processed and returns the max function of those two
 /// values. If an error occurs while obtaining this value it returns an error.
-async fn catch_up_to_limit(
+async fn max_block_height(
     concordium_client: &mut Client,
     current_height: AbsoluteBlockHeight,
-    notification_ttl: Duration,
+    lower_bound_block_time: Duration,
 ) -> anyhow::Result<AbsoluteBlockHeight> {
     let current_block_height = concordium_client
         .get_consensus_info()
@@ -370,9 +370,9 @@ async fn catch_up_to_limit(
         .last_finalized_block_height;
     let lower_bound_block_height = AbsoluteBlockHeight {
         // We are not faster than 2 sec per block, hence this should be conservative enough
-        height: current_block_height.height - notification_ttl.as_secs(),
+        height: current_block_height.height - lower_bound_block_time.as_secs(),
     };
-    let lower_bound_time: chrono::DateTime<Utc> = Utc::now() - notification_ttl;
+    let lower_bound_time: chrono::DateTime<Utc> = Utc::now() - lower_bound_block_time;
     let time_ago_block = concordium_client
         .find_first_finalized_block_no_earlier_than(lower_bound_block_height.., lower_bound_time)
         .await?;
@@ -452,14 +452,14 @@ async fn main() -> anyhow::Result<()> {
     let gcloud = GoogleCloud::new(http_client, retry_policy, service_account, &project_id);
     let database_connection = DatabaseConnection::create(args.db_connection).await?;
     let mut concordium_client = Client::new(endpoint).await?;
-    let mut height = if let Some(height) = database_connection
+    let mut height = if let Some(current_height) = database_connection
         .get_processed_block_height()
         .await
         .context("Failed to get processed block height")?
     {
-        catch_up_to_limit(
+        max_block_height(
             &mut concordium_client,
-            height,
+            current_height,
             Duration::from_secs(args.notification_ttl_min * 60),
         )
         .await?
