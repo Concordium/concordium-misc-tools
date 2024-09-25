@@ -379,12 +379,8 @@ async fn catch_up_to_limit(
 
     if time_ago_block.block_height > current_height {
         let blocks_skipped_count = time_ago_block.block_height.height - current_height.height;
-        info!(
-            "Skipping {} blocks",
-            blocks_skipped_count
-        );
-        counter!("block.process_skipped")
-            .increment(blocks_skipped_count);
+        info!("Skipping {} blocks", blocks_skipped_count);
+        counter!("block.process_skipped").increment(blocks_skipped_count);
         return Ok(time_ago_block.block_height);
     }
     Ok(current_height)
