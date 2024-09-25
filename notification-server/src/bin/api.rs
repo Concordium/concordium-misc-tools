@@ -1,4 +1,4 @@
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use axum::{
     extract::{Json, State},
     http::StatusCode,
@@ -24,6 +24,7 @@ use notification_server::{
 };
 use serde_json::json;
 use std::{collections::HashSet, path::PathBuf, str::FromStr, sync::Arc, time::Duration};
+use axum::routing::delete;
 use tokio_postgres::Config;
 use tracing::{error, info};
 
@@ -200,18 +201,27 @@ async fn process_device_subscription(
                 StatusCode::NOT_FOUND,
                 "The device token has not been registered".to_string(),
             ),
-            NotificationError::AuthenticationError(_) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Authentication towards the external messaging service failed".to_string(),
-            ),
-            NotificationError::ClientError(_) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Client error received from external message service".to_string(),
-            ),
-            NotificationError::ServerError(_) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Server error received from external message service".to_string(),
-            ),
+            NotificationError::AuthenticationError(msg) => {
+                error!("Authentication error: {}", msg);
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Authentication towards the external messaging service failed".to_string(),
+                )
+            },
+            NotificationError::ClientError(msg) => {
+                error!("Client error: {}", msg);
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Client error received from external message service".to_string(),
+                )
+            },
+            NotificationError::ServerError(msg) => {
+                error!("Server error: {}", msg);
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Server error received from external message service".to_string(),
+                )
+            },
         };
         return Err((status, message));
     }
@@ -236,6 +246,64 @@ async fn process_device_subscription(
     Ok("Subscribed accounts to device".to_string())
 }
 
+async fn process_unsubscribe(state: Arc<AppState>, device_tokens: Vec<String>) -> anyhow::Result<Vec<String>> {
+    if device_tokens.len() > MAX_RESOURCES_LENGTH {
+        return Err(anyhow!("Device tokens exceed maximum length of {}", MAX_RESOURCES_LENGTH));
+    }
+    if device_tokens.is_empty() {
+        return Ok(vec![]);
+    }
+    let mut validated_device_tokens: HashSet<&str> = HashSet::new();
+    for device_token in &device_tokens {
+        match state.google_cloud.validate_device_token(device_token).await {
+            Ok(_) => {
+                validated_device_tokens.insert(device_token);
+            }
+            Err(err) => {
+                match err {
+                    NotificationError::UnregisteredError => {
+                        validated_device_tokens.insert(device_token);
+                    }
+                    NotificationError::InvalidArgumentError => {
+                        info!("Device token has an invalid format");
+                    }
+                    NotificationError::ServerError(msg) => {
+                        error!("Server error: {}", msg);
+                        return Err(anyhow!("Server error received from external message service"));
+                    }
+                    NotificationError::ClientError(msg) => {
+                        error!("Client error: {}", msg);
+                        return Err(anyhow!("Client error received from external message service"));
+                    }
+                    NotificationError::AuthenticationError(msg) => {
+                        error!("Authentication error: {}", msg);
+                        return Err(anyhow!("Authentication towards the external messaging service failed"));
+                    }
+                }
+            }
+        }
+    }
+    state.db_connection.remove_subscriptions(&validated_device_tokens).await.map_err(|e| {
+        error!("Database error: {}", e);
+        anyhow!("Internal server error occurred while removing subscriptions from database")
+    })?;
+    Ok(validated_device_tokens.into_iter().map(|s| s.to_string()).collect())
+}
+async fn delete_subscriptions(
+    State(state): State<Arc<AppState>>,
+    Json(device_tokens): Json<Vec<String>>,
+) -> impl IntoResponse {
+    info!("Unsubscribing device tokens");
+    match process_unsubscribe(state, device_tokens).await {
+        Ok(device_tokens) => (StatusCode::OK, Json(json!(device_tokens))),
+        Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, Json(provide_error_message(err.to_string()))),
+    }
+}
+
+fn provide_error_message(message: String) -> serde_json::Value {
+    json!({"errorMessage": message })
+}
+
 async fn upsert_account_device(
     State(state): State<Arc<AppState>>,
     Json(subscription): Json<DeviceSubscription>,
@@ -244,21 +312,13 @@ async fn upsert_account_device(
         "Subscribing accounts {:?} to a device token with preferences: {:?}",
         &subscription.accounts, subscription.preferences
     );
-    let response: Result<String, (StatusCode, String)> =
-        process_device_subscription(subscription, state).await;
-    match response {
+    match process_device_subscription(subscription, state).await {
         Ok(message) => (StatusCode::OK, Json(json!({ "message": message }))),
-        Err((status_code, message)) => {
-            if status_code.is_server_error() {
-                error!("Server error: {}", message);
-            }
-            if status_code.is_client_error() {
-                info!("Invalid request: {}", message);
-            }
-            (status_code, Json(json!({ "errorMessage": message })))
-        }
+        Err((status_code, message)) => (status_code, Json(provide_error_message(message)))
     }
 }
+
+
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -295,6 +355,7 @@ async fn main() -> anyhow::Result<()> {
 
     let app = Router::new()
         .route("/api/v1/subscription", put(upsert_account_device))
+        .route("/api/v1/subscriptions", delete(delete_subscriptions))
         .with_state(app_state);
 
     let (app, prometheus_handle) = if let Some(prometheus_address) = args.prometheus_address {
