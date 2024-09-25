@@ -551,8 +551,6 @@ mod tests {
         }
     }
 
-
-
     impl Arbitrary for DeviceSubscription {
         fn arbitrary(g: &mut quickcheck::Gen) -> Self {
             let device = g.choose(&VALID_DEVICES).expect("Failed to choose").to_string();
@@ -582,7 +580,6 @@ mod tests {
                 }
             }
         }
-
         account_to_device_map
     }
 
