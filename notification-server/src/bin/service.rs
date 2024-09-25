@@ -377,13 +377,16 @@ async fn catch_up_to_limit(
         .find_first_finalized_block_no_earlier_than(lower_bound_block_height.., lower_bound_time)
         .await?;
 
-    if time_ago_block.block_height > current_height {
-        let blocks_skipped_count = time_ago_block.block_height.height - current_height.height;
-        info!("Skipping {} blocks", blocks_skipped_count);
-        counter!("block.process_skipped").increment(blocks_skipped_count);
-        return Ok(time_ago_block.block_height);
-    }
-    Ok(current_height)
+    let max_height = {
+        if time_ago_block.block_height > current_height {
+            let blocks_skipped_count = time_ago_block.block_height.height - current_height.height;
+            info!("Skipping {} blocks", blocks_skipped_count);
+            counter!("block.process_skipped").increment(blocks_skipped_count);
+            return Ok(time_ago_block.block_height);
+        }
+        Ok(current_height)
+    };
+    max_height
 }
 
 #[tokio::main(flavor = "multi_thread")]
