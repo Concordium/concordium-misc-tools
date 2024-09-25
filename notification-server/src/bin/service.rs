@@ -355,6 +355,10 @@ async fn traverse_chain(
     processed_height
 }
 
+/// Retrieves the block height from the earliest block which is no earlier than
+/// the current time minus the notification TTL. Compares this height with the
+/// current block height processed and returns the max function of those two
+/// values. If an error occurs while obtaining this value it returns an error.
 async fn catch_up_to_limit(
     concordium_client: &mut Client,
     current_height: AbsoluteBlockHeight,
@@ -364,22 +368,23 @@ async fn catch_up_to_limit(
         .get_consensus_info()
         .await?
         .last_finalized_block_height;
-    let lower_bound = AbsoluteBlockHeight {
-        // We are not fast than 2 sec per block, hence this should be conservative enough
+    let lower_bound_block_height = AbsoluteBlockHeight {
+        // We are not faster than 2 sec per block, hence this should be conservative enough
         height: current_block_height.height - notification_ttl.as_secs(),
     };
     let lower_bound_time: chrono::DateTime<Utc> = Utc::now() - notification_ttl;
     let time_ago_block = concordium_client
-        .find_first_finalized_block_no_earlier_than(lower_bound.., lower_bound_time)
+        .find_first_finalized_block_no_earlier_than(lower_bound_block_height.., lower_bound_time)
         .await?;
 
     if time_ago_block.block_height > current_height {
+        let blocks_skipped_count = time_ago_block.block_height.height - current_height.height;
         info!(
             "Skipping {} blocks",
-            time_ago_block.block_height.height - current_height.height
+            blocks_skipped_count
         );
         counter!("block.process_skipped")
-            .increment(time_ago_block.block_height.height - current_height.height);
+            .increment(blocks_skipped_count);
         return Ok(time_ago_block.block_height);
     }
     Ok(current_height)
