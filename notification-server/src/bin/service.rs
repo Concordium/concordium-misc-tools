@@ -359,7 +359,7 @@ async fn traverse_chain(
 /// the current time minus the notification TTL. Compares this height with the
 /// current block height processed and returns the max function of those two
 /// values. If an error occurs while obtaining this value it returns an error.
-async fn max_block_height(
+async fn max_block_height_of_current_and_time_based_lower_bound(
     concordium_client: &mut Client,
     current_height: AbsoluteBlockHeight,
     lower_bound_block_time: Duration,
@@ -377,16 +377,13 @@ async fn max_block_height(
         .find_first_finalized_block_no_earlier_than(lower_bound_block_height.., lower_bound_time)
         .await?;
 
-    let max_height = {
-        if time_ago_block.block_height > current_height {
-            let blocks_skipped_count = time_ago_block.block_height.height - current_height.height;
-            info!("Skipping {} blocks", blocks_skipped_count);
-            counter!("block.process_skipped").increment(blocks_skipped_count);
-            return Ok(time_ago_block.block_height);
-        }
-        Ok(current_height)
-    };
-    max_height
+    if time_ago_block.block_height > current_height {
+        let blocks_skipped_count = time_ago_block.block_height.height - current_height.height;
+        info!("Skipping {} blocks", blocks_skipped_count);
+        counter!("block.process_skipped").increment(blocks_skipped_count);
+        return Ok(time_ago_block.block_height);
+    }
+    Ok(current_height)
 }
 
 #[tokio::main(flavor = "multi_thread")]
@@ -457,7 +454,7 @@ async fn main() -> anyhow::Result<()> {
         .await
         .context("Failed to get processed block height")?
     {
-        max_block_height(
+        max_block_height_of_current_and_time_based_lower_bound(
             &mut concordium_client,
             current_height,
             Duration::from_secs(args.notification_ttl_min * 60),
