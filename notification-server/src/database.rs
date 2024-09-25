@@ -83,10 +83,14 @@ impl DatabaseConnection {
     }
 
     pub async fn remove_subscription(&self, device_token: &str) -> Result<u64, Error> {
+        self.remove_subscriptions(&HashSet::from([device_token])).await
+    }
+
+    pub async fn remove_subscriptions(&self, device_tokens: &HashSet<&str>) -> Result<u64, Error> {
         let client = self.0.get().await.map_err(Into::<Error>::into)?;
-        let params: &[&(dyn ToSql + Sync)] = &[&device_token];
+        let params: &[&(dyn ToSql + Sync)] = &[&device_tokens.iter().cloned().collect::<Vec<&str>>()];
         let stmt = client
-            .prepare_cached("DELETE FROM account_device_mapping WHERE device_id = $1;")
+            .prepare_cached("DELETE FROM account_device_mapping WHERE device_id = ANY($1);")
             .await
             .map_err(Into::<Error>::into)?;
         client
@@ -185,7 +189,10 @@ mod tests {
     use enum_iterator::all;
     use serial_test::serial;
     use std::{collections::HashSet, env, fs, path::Path, str::FromStr};
+    use quickcheck::Arbitrary;
+    use quickcheck_macros::quickcheck;
     use tokio_postgres::Client;
+    use crate::models::device::DeviceSubscription;
 
     #[test]
     fn test_preference_map_coverage_and_uniqueness() {
@@ -515,5 +522,110 @@ mod tests {
                 .expect("Failed to remove subscription"),
             0
         );
+    }
+
+
+    const VALID_DEVICES: [&str; 6] = [
+        "device-1",
+        "device-2",
+        "device-3",
+        "device-4",
+        "device-5",
+        "device-6",
+    ];
+
+
+    #[derive(Clone, Debug, Eq, Hash, PartialEq)]
+    struct ValidDevice(pub String);
+
+    impl Arbitrary for ValidDevice {
+        fn arbitrary(g: &mut quickcheck::Gen) -> Self {
+            let device = g.choose(&VALID_DEVICES).expect("Failed to choose").to_string();
+            ValidDevice(device)
+        }
+    }
+
+    impl PartialEq<String> for ValidDevice {
+        fn eq(&self, other: &String) -> bool {
+            &self.0 == other
+        }
+    }
+
+
+
+    impl Arbitrary for DeviceSubscription {
+        fn arbitrary(g: &mut quickcheck::Gen) -> Self {
+            let device = g.choose(&VALID_DEVICES).expect("Failed to choose").to_string();
+            let valid_account_addresses = vec![
+                "4BH5qnFPDfaD3MxnDzfhnu1jAHoBWXnq2i57T6G1eZn1kC194e",
+                "4pnANgHUqq2tcqnq1jDRMcYyk1M5sHDSNgMFhN15M6gaU6qEvS",
+                "4SEFw5gN9723STzTWj1Rf4f6EQjs8TBf5JUDMiypUEvBdfN2Cj",
+                "3gMjPhoz5qbDtT9ThJD7QnGqakAHA5fCxR1NC8bgBzG9pDQjtd",
+            ];
+            let account_address = g.choose(&valid_account_addresses).expect("Failed to choose").to_string();
+            DeviceSubscription::new(vec![CIS2Transaction], vec![account_address], device)
+        }
+    }
+
+    fn create_account_to_device_map(
+        created_device_subscriptions: Vec<DeviceSubscription>,
+        devices_to_be_removed: HashSet<&str>
+    ) -> HashMap<String, HashSet<String>> {
+        let mut account_to_device_map: HashMap<String, HashSet<String>> = HashMap::new();
+        for subscription in created_device_subscriptions {
+            for account in subscription.accounts.clone() {
+                if !devices_to_be_removed.contains(subscription.device_token.as_str()) {
+                    account_to_device_map
+                        .entry(account)
+                        .or_insert_with(HashSet::new)
+                        .insert(subscription.device_token.clone());
+                }
+            }
+        }
+
+        account_to_device_map
+    }
+
+    #[quickcheck]
+    #[serial]
+    fn test_remove_subscriptions(created_device_subscriptions: Vec<DeviceSubscription>, devices_to_be_removed: HashSet<ValidDevice>) -> bool {
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+            runtime.block_on(async {
+                let db_connection = setup_database().await.expect("Failed to setup database");
+                for device in created_device_subscriptions.clone() {
+                    db_connection
+                        .upsert_subscription(
+                            device
+                                .accounts
+                                .iter()
+                                .map(|acc| AccountAddress::from_str(acc).expect("Failed to parse"))
+                                .collect(),
+                            device.preferences,
+                            device.device_token.as_str(),
+                        )
+                        .await
+                        .unwrap();
+                }
+
+                let devices_to_remove: HashSet<&str> = devices_to_be_removed.iter().map(|device| device.0.as_str()).collect();
+                db_connection
+                    .remove_subscriptions(&devices_to_remove)
+                    .await
+                    .expect("Failed to remove subscriptions");
+                for (account, devices) in create_account_to_device_map(created_device_subscriptions, devices_to_remove) {
+                    let account = AccountAddress::from_str(account.as_str()).expect("Failed to parse");
+                    let db_devices: HashSet<String> = db_connection
+                        .get_devices_from_account(&account)
+                        .await
+                        .expect("Failed to get devices")
+                        .iter()
+                        .map(|device| device.device_token.clone()) // Clone here
+                        .collect();
+                    if db_devices != devices {
+                        return false;
+                    }
+                }
+                true
+        })
     }
 }
