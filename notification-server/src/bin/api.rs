@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context};
+use anyhow::Context;
 use axum::{
     extract::{Json, State},
     http::StatusCode,
@@ -24,7 +24,6 @@ use notification_server::{
 };
 use serde_json::json;
 use std::{collections::HashSet, path::PathBuf, str::FromStr, sync::Arc, time::Duration};
-use axum::routing::delete;
 use tokio_postgres::Config;
 use tracing::{error, info};
 
@@ -246,58 +245,22 @@ async fn process_device_subscription(
     Ok("Subscribed accounts to device".to_string())
 }
 
-async fn process_unsubscribe(state: Arc<AppState>, device_tokens: Vec<String>) -> anyhow::Result<Vec<String>> {
-    if device_tokens.len() > MAX_RESOURCES_LENGTH {
-        return Err(anyhow!("Device tokens exceed maximum length of {}", MAX_RESOURCES_LENGTH));
-    }
-    if device_tokens.is_empty() {
-        return Ok(vec![]);
-    }
-    let mut validated_device_tokens: HashSet<&str> = HashSet::new();
-    for device_token in &device_tokens {
-        match state.google_cloud.validate_device_token(device_token).await {
-            Ok(_) => {
-                validated_device_tokens.insert(device_token);
-            }
-            Err(err) => {
-                match err {
-                    NotificationError::UnregisteredError => {
-                        validated_device_tokens.insert(device_token);
-                    }
-                    NotificationError::InvalidArgumentError => {
-                        info!("Device token has an invalid format");
-                    }
-                    NotificationError::ServerError(msg) => {
-                        error!("Server error: {}", msg);
-                        return Err(anyhow!("Server error received from external message service"));
-                    }
-                    NotificationError::ClientError(msg) => {
-                        error!("Client error: {}", msg);
-                        return Err(anyhow!("Client error received from external message service"));
-                    }
-                    NotificationError::AuthenticationError(msg) => {
-                        error!("Authentication error: {}", msg);
-                        return Err(anyhow!("Authentication towards the external messaging service failed"));
-                    }
-                }
-            }
-        }
-    }
-    state.db_connection.remove_subscriptions(&validated_device_tokens).await.map_err(|e| {
-        error!("Database error: {}", e);
-        anyhow!("Internal server error occurred while removing subscriptions from database")
-    })?;
-    Ok(validated_device_tokens.into_iter().map(|s| s.to_string()).collect())
-}
-async fn delete_subscriptions(
+async fn unsubscribe(
     State(state): State<Arc<AppState>>,
-    Json(device_tokens): Json<Vec<String>>,
+    Json(device_token): Json<String>,
 ) -> impl IntoResponse {
     info!("Unsubscribing device tokens");
-    match process_unsubscribe(state, device_tokens).await {
-        Ok(device_tokens) => (StatusCode::OK, Json(json!(device_tokens))),
-        Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, Json(provide_error_message(err.to_string()))),
+    match state.db_connection.remove_subscription(device_token.as_str()).await {
+        Ok(0) => (StatusCode::NOT_FOUND, Json(provide_error_message("Device token not found".to_string()))),
+        Ok(_) => (StatusCode::OK, Json(provide_message("Device token removed".to_string()))),
+        Err(err) => {
+            error!("Database error: {}", err);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(provide_error_message("Internal server error occurred while removing subscriptions from database".to_string())))
+        },
     }
+}
+fn provide_message(message: String) -> serde_json::Value {
+    json!({ "message": message })
 }
 
 fn provide_error_message(message: String) -> serde_json::Value {
@@ -313,7 +276,7 @@ async fn upsert_account_device(
         &subscription.accounts, subscription.preferences
     );
     match process_device_subscription(subscription, state).await {
-        Ok(message) => (StatusCode::OK, Json(json!({ "message": message }))),
+        Ok(message) => (StatusCode::OK, Json(provide_message(message))),
         Err((status_code, message)) => (status_code, Json(provide_error_message(message)))
     }
 }
@@ -355,7 +318,7 @@ async fn main() -> anyhow::Result<()> {
 
     let app = Router::new()
         .route("/api/v1/subscription", put(upsert_account_device))
-        .route("/api/v1/subscriptions", delete(delete_subscriptions))
+        .route("/api/v1/unsubscribe", put(unsubscribe))
         .with_state(app_state);
 
     let (app, prometheus_handle) = if let Some(prometheus_address) = args.prometheus_address {
