@@ -24,6 +24,7 @@ use notification_server::{
 };
 use serde_json::json;
 use std::{collections::HashSet, path::PathBuf, str::FromStr, sync::Arc, time::Duration};
+use serde::{Deserialize, Serialize};
 use tokio_postgres::Config;
 use tracing::{error, info};
 
@@ -245,12 +246,19 @@ async fn process_device_subscription(
     Ok("Subscribed accounts to device".to_string())
 }
 
+
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DeviceInput {
+    pub device_token: String,
+}
+
 async fn unsubscribe(
     State(state): State<Arc<AppState>>,
-    Json(device_token): Json<String>,
+    Json(device_token): Json<DeviceInput>,
 ) -> impl IntoResponse {
     info!("Unsubscribing device tokens");
-    match state.db_connection.remove_subscription(device_token.as_str()).await {
+    match state.db_connection.remove_subscription(device_token.device_token.as_str()).await {
         Ok(0) => (StatusCode::NOT_FOUND, Json(provide_error_message("Device token not found".to_string()))),
         Ok(_) => (StatusCode::OK, Json(provide_message("Device token removed".to_string()))),
         Err(err) => {
