@@ -22,7 +22,7 @@ use notification_server::{
     google_cloud::{GoogleCloud, NotificationError},
     models::device::{DeviceSubscription, Preference},
 };
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize};
 use serde_json::json;
 use std::{collections::HashSet, path::PathBuf, str::FromStr, sync::Arc, time::Duration};
 use tokio_postgres::Config;
@@ -246,9 +246,9 @@ async fn process_device_subscription(
     Ok("Subscribed accounts to device".to_string())
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct DeviceInput {
-    pub device_token: String,
+#[derive(Debug, Deserialize)]
+struct DeviceInput {
+    device_token: String,
 }
 
 async fn unsubscribe(
