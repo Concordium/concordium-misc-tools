@@ -10,7 +10,7 @@ use deadpool_postgres::{GenericClient, Manager, ManagerConfig, Pool, PoolError, 
 use lazy_static::lazy_static;
 use log::error;
 use thiserror::Error;
-use tokio_postgres::{error::SqlState, NoTls, types::ToSql};
+use tokio_postgres::{error::SqlState, types::ToSql, NoTls};
 
 use crate::models::device::{Device, Preference};
 
@@ -181,13 +181,13 @@ pub fn bitmask_to_preferences(bitmask: i32) -> HashSet<Preference> {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashSet, env, fs, path::Path, str::FromStr};
+    use super::*;
+    use crate::models::device::Preference::{CCDTransaction, CIS2Transaction};
     use dotenv::dotenv;
     use enum_iterator::all;
     use serial_test::serial;
+    use std::{collections::HashSet, env, fs, path::Path, str::FromStr};
     use tokio_postgres::Client;
-    use crate::models::device::Preference::{CCDTransaction, CIS2Transaction};
-    use super::*;
 
     #[test]
     fn test_preference_map_coverage_and_uniqueness() {

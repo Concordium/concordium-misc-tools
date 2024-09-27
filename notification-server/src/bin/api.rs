@@ -22,9 +22,9 @@ use notification_server::{
     google_cloud::{GoogleCloud, NotificationError},
     models::device::{DeviceSubscription, Preference},
 };
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{collections::HashSet, path::PathBuf, str::FromStr, sync::Arc, time::Duration};
-use serde::{Deserialize, Serialize};
 use tokio_postgres::Config;
 use tracing::{error, info};
 
@@ -207,21 +207,21 @@ async fn process_device_subscription(
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "Authentication towards the external messaging service failed".to_string(),
                 )
-            },
+            }
             NotificationError::ClientError(msg) => {
                 error!("Client error: {}", msg);
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "Client error received from external message service".to_string(),
                 )
-            },
+            }
             NotificationError::ServerError(msg) => {
                 error!("Server error: {}", msg);
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "Server error received from external message service".to_string(),
                 )
-            },
+            }
         };
         return Err((status, message));
     }
@@ -246,8 +246,6 @@ async fn process_device_subscription(
     Ok("Subscribed accounts to device".to_string())
 }
 
-
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DeviceInput {
     pub device_token: String,
@@ -258,21 +256,35 @@ async fn unsubscribe(
     Json(device_token): Json<DeviceInput>,
 ) -> impl IntoResponse {
     info!("Unsubscribing device tokens");
-    match state.db_connection.remove_subscription(device_token.device_token.as_str()).await {
-        Ok(0) => (StatusCode::NOT_FOUND, Json(provide_error_message("Device token not found".to_string()))),
-        Ok(_) => (StatusCode::OK, Json(provide_message("Device token removed".to_string()))),
+    match state
+        .db_connection
+        .remove_subscription(device_token.device_token.as_str())
+        .await
+    {
+        Ok(0) => (
+            StatusCode::NOT_FOUND,
+            Json(provide_error_message("Device token not found".to_string())),
+        ),
+        Ok(_) => (
+            StatusCode::OK,
+            Json(provide_message("Device token removed".to_string())),
+        ),
         Err(err) => {
             error!("Database error: {}", err);
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(provide_error_message("Internal server error occurred while removing subscriptions from database".to_string())))
-        },
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(provide_error_message(
+                    "Internal server error occurred while removing subscriptions from database"
+                        .to_string(),
+                )),
+            )
+        }
     }
 }
-fn provide_message(message: String) -> serde_json::Value {
-    json!({ "message": message })
-}
+fn provide_message(message: String) -> serde_json::Value { json!({ "message": message }) }
 
 fn provide_error_message(message: String) -> serde_json::Value {
-    json!({"errorMessage": message })
+    json!({ "errorMessage": message })
 }
 
 async fn upsert_account_device(
@@ -285,11 +297,9 @@ async fn upsert_account_device(
     );
     match process_device_subscription(subscription, state).await {
         Ok(message) => (StatusCode::OK, Json(provide_message(message))),
-        Err((status_code, message)) => (status_code, Json(provide_error_message(message)))
+        Err((status_code, message)) => (status_code, Json(provide_error_message(message))),
     }
 }
-
-
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
