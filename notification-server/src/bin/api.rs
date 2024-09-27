@@ -297,7 +297,15 @@ async fn upsert_account_device(
     );
     match process_device_subscription(subscription, state).await {
         Ok(message) => (StatusCode::OK, Json(provide_message(message))),
-        Err((status_code, message)) => (status_code, Json(provide_error_message(message))),
+        Err((status_code, message)) => {
+            if status_code.is_server_error() {
+                error!("Server error: {}", message);
+            }
+            if status_code.is_client_error() {
+                info!("Invalid request: {}", message);
+            }
+            (status_code, Json(provide_error_message(message)))
+        },
     }
 }
 
