@@ -25,6 +25,7 @@ use notification_server::{
 use serde::{Deserialize};
 use serde_json::json;
 use std::{collections::HashSet, path::PathBuf, str::FromStr, sync::Arc, time::Duration};
+use axum::routing::post;
 use tokio_postgres::Config;
 use tracing::{error, info};
 
@@ -344,7 +345,7 @@ async fn main() -> anyhow::Result<()> {
 
     let app = Router::new()
         .route("/api/v1/subscription", put(upsert_account_device))
-        .route("/api/v1/unsubscribe", put(unsubscribe))
+        .route("/api/v1/unsubscribe", post(unsubscribe))
         .with_state(app_state);
 
     let (app, prometheus_handle) = if let Some(prometheus_address) = args.prometheus_address {
