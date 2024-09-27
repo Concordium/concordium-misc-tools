@@ -2,7 +2,7 @@ use enum_iterator::Sequence;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct DeviceSubscription {
     pub preferences:  Vec<Preference>,
     pub accounts:     Vec<String>,
