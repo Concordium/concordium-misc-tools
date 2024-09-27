@@ -1,18 +1,16 @@
-use std::{
-    collections::{HashMap, HashSet},
-    vec::IntoIter,
-};
-
+use crate::models::device::{Device, Preference};
 use concordium_rust_sdk::{
     base::hashes::BlockHash, common::types::AccountAddress, types::AbsoluteBlockHeight,
 };
 use deadpool_postgres::{GenericClient, Manager, ManagerConfig, Pool, PoolError, RecyclingMethod};
 use lazy_static::lazy_static;
 use log::error;
+use std::{
+    collections::{HashMap, HashSet},
+    vec::IntoIter,
+};
 use thiserror::Error;
 use tokio_postgres::{error::SqlState, types::ToSql, NoTls};
-
-use crate::models::device::{Device, Preference};
 
 #[derive(Debug, Error)]
 pub enum Error {
