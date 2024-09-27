@@ -1,3 +1,12 @@
+## 0.3.6
+- Add a new endpoint to remove all accounts belonging to a device token
+
+## 0.3.5
+- Ensure notifications only loads from a specified amount of time on startup
+
+## 0.3.4
+- Removal of unsubscribed device tokens
+
 ## 0.3.3
 - Add timestamp for when a block was last processed to tracked metrics
 
