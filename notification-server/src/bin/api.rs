@@ -3,7 +3,7 @@ use axum::{
     extract::{Json, State},
     http::StatusCode,
     response::IntoResponse,
-    routing::{get, put},
+    routing::{get, post, put},
     Router,
 };
 use axum_prometheus::{
@@ -22,10 +22,9 @@ use notification_server::{
     google_cloud::{GoogleCloud, NotificationError},
     models::device::{DeviceSubscription, Preference},
 };
-use serde::{Deserialize};
+use serde::Deserialize;
 use serde_json::json;
 use std::{collections::HashSet, path::PathBuf, str::FromStr, sync::Arc, time::Duration};
-use axum::routing::post;
 use tokio_postgres::Config;
 use tracing::{error, info};
 
@@ -306,7 +305,7 @@ async fn upsert_account_device(
                 info!("Invalid request: {}", message);
             }
             (status_code, Json(provide_error_message(message)))
-        },
+        }
     }
 }
 
