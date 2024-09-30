@@ -1,3 +1,6 @@
+## 0.3.7
+- Change type of image to be bookworm instead
+
 ## 0.3.6
 - Add a new endpoint to remove all accounts belonging to a device token
 
