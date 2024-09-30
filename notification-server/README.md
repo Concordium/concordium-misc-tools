@@ -34,7 +34,7 @@ At most 1000 accounts can be registered in one call and only 1000 accounts be qu
 
 Should conflicts occur upon subscription updates, then only the preferences are updated.
 
-### Example:
+### Example subscribe request
 
 ```shell
 curl -X PUT "http://localhost:3030/api/v1/subscription" \
@@ -42,6 +42,15 @@ curl -X PUT "http://localhost:3030/api/v1/subscription" \
     -d '{
         "preferences": ["cis2-tx", "ccd-tx"],
         "accounts": ["4FmiTW2L2AccyR9VjzsnpWFSAcohXWf7Vf797i36y526mqiEcp"],
+        "device_token": "<device_token>"
+    }'
+```
+
+### Example unsubscribe request
+```shell
+curl -X POST "http://localhost:3030/api/v1/unsubscribe" \
+    -H "Content-Type: application/json" \
+    -d '{
         "device_token": "<device_token>"
     }'
 ```
