@@ -1,5 +1,5 @@
-ARG build_image=rust:1.76-buster
-ARG base_image=debian:buster-slim
+ARG build_image=rust:1.76-bookworm
+ARG base_image=debian:bookworm-slim
 FROM ${build_image} AS build
 
 WORKDIR /usr/app/notification-server
