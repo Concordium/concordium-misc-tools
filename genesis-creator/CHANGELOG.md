@@ -1,3 +1,7 @@
+## 0.4.0
+
+- Support genesis data format of protocol version 8.
+
 ## 0.3.0
 
 - Support genesis data format of protocol version 7.
