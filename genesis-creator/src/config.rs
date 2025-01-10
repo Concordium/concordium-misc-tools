@@ -1,5 +1,5 @@
 //! Input configuration structures and parsing.
-use crate::genesis::{GenesisParametersConfigV0, GenesisParametersConfigV1};
+use crate::{genesis::{GenesisParametersConfigV0, GenesisParametersConfigV1}, GenesisParametersConfigV2};
 use anyhow::ensure;
 
 use concordium_rust_sdk::{
@@ -254,6 +254,10 @@ pub enum ProtocolConfig {
     P7 {
         parameters: GenesisParametersConfigV1,
     },
+    #[serde(rename = "8")]
+    P8 {
+        parameters: GenesisParametersConfigV2,
+    },
 }
 
 impl ProtocolConfig {
@@ -266,6 +270,7 @@ impl ProtocolConfig {
             ProtocolConfig::P5 { .. } => ProtocolVersion::P5,
             ProtocolConfig::P6 { .. } => ProtocolVersion::P6,
             ProtocolConfig::P7 { .. } => ProtocolVersion::P7,
+            ProtocolConfig::P8 { .. } => ProtocolVersion::P8,
         }
     }
 }

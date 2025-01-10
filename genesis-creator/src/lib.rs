@@ -994,6 +994,21 @@ pub fn handle_assemble(config_path: &Path, verbose: bool) -> anyhow::Result<()> 
                 _ => unreachable!("Already checked."),
             }
         }
+        ProtocolConfig::P8 { parameters } => {
+            let update_keys = read_json(&make_relative(config_path, &config.governance_keys)?)?;
+
+            let initial_state = GenesisStateCPV3 {
+                cryptographic_parameters: global.value,
+                identity_providers: idps.value,
+                anonymity_revokers: ars.value,
+                update_keys,
+                chain_parameters: parameters.chain.chain_parameters(AccountIndex::from(idx))?,
+                leadership_election_nonce: parameters.leadership_election_nonce,
+                accounts,
+            };
+            let core = parameters.core.try_into()?;
+            GenesisData::P8 { core, initial_state }
+        }
     };
 
     write_genesis(
@@ -1220,7 +1235,22 @@ pub fn handle_generate(config_path: &Path, verbose: bool) -> anyhow::Result<()> 
                 _ => unreachable!("Already checked."),
             }
         }
-    };
+        ProtocolConfig::P8 { parameters } => {
+            let update_keys = updates_v1(config.out.update_keys, config.updates)?;
+
+            let initial_state = GenesisStateCPV3 {
+                cryptographic_parameters,
+                identity_providers,
+                anonymity_revokers,
+                update_keys,
+                chain_parameters: parameters.chain.chain_parameters(foundation_idx)?,
+                leadership_election_nonce: parameters.leadership_election_nonce,
+                accounts,
+            };
+            let core = parameters.core.try_into()?;
+            GenesisData::P8 { core, initial_state }
+        }
+};
     write_genesis(
         config.out.genesis.as_path(),
         config.out.genesis_hash.as_path(),

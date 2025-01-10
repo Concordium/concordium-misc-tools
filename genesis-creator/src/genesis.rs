@@ -5,23 +5,20 @@ use concordium_rust_sdk::{
         types::{Amount, CredentialIndex, Ratio, Timestamp},
         Buffer, SerdeDeserialize, SerdeSerialize, Serial, Serialize, Versioned,
     },
-    id,
-    id::{
-        constants::{ArCurve, IpPairing},
-        types::{
+    id::{self, constants::{ArCurve, IpPairing}, types::{
             AccCredentialInfo, AccountAddress, AccountCredentialWithoutProofs, AccountKeys,
             ArIdentity, ArInfo, GlobalContext, IpIdentity, IpInfo,
-        },
-    },
+        }},
     smart_contracts::common::Duration,
     types::{
         hashes::{BlockHash, LeadershipElectionNonce},
         AccountIndex, AccountThreshold, BakerAggregationVerifyKey, BakerElectionVerifyKey, BakerId,
         BakerSignatureVerifyKey, BlockHeight, ChainParameterVersion0, ChainParameterVersion1,
-        ChainParameterVersion2, ChainParameters, ChainParametersV0, ChainParametersV1,
-        ChainParametersV2, CooldownParameters, ElectionDifficulty, Energy, Epoch, ExchangeRate,
-        PartsPerHundredThousands, PoolParameters, ProtocolVersion, RewardParameters, Slot,
-        SlotDuration, TimeParameters, TimeoutParameters, UpdateKeysCollection,
+        ChainParameterVersion2, ChainParameterVersion3, ChainParameters, ChainParametersV0,
+        ChainParametersV1, ChainParametersV2, ChainParametersV3, CooldownParameters,
+        ElectionDifficulty, Energy, Epoch, ExchangeRate, PartsPerHundredThousands, PoolParameters,
+        ProtocolVersion, RewardParameters, Slot, SlotDuration, TimeParameters, TimeoutParameters,
+        UpdateKeysCollection, ValidatorScoreParameters,
     },
 };
 use serde::de;
@@ -243,6 +240,51 @@ impl GenesisChainParametersV2 {
     }
 }
 
+/// Genesis chain parameters version 3.
+#[derive(SerdeDeserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct GenesisChainParametersV3 {
+    /// Consensus protocol version 2 timeout parameters.
+    pub timeout_parameters:                TimeoutParameters,
+    /// Minimum time interval between blocks.
+    pub min_block_time:                    Duration,
+    /// Maximum energy allowed per block.
+    pub block_energy_limit:                Energy,
+    pub euro_per_energy:                   ExchangeRate,
+    #[serde(rename = "microCCDPerEuro")]
+    pub micro_ccd_per_euro:                ExchangeRate,
+    pub account_creation_limit:            u16,
+    pub reward_parameters:                 RewardParameters<ChainParameterVersion2>,
+    pub time_parameters:                   TimeParameters,
+    pub pool_parameters:                   PoolParameters,
+    pub cooldown_parameters:               CooldownParameters,
+    pub finalization_committee_parameters: FinalizationCommitteeParametersConfig,
+    pub validator_score_parameters:        ValidatorScoreParameters,
+}
+
+impl GenesisChainParametersV3 {
+    pub fn chain_parameters(
+        self,
+        foundation_account_index: AccountIndex,
+    ) -> anyhow::Result<ChainParametersV3> {
+        Ok(ChainParametersV3 {
+            timeout_parameters: self.timeout_parameters,
+            min_block_time: self.min_block_time,
+            block_energy_limit: self.block_energy_limit,
+            euro_per_energy: self.euro_per_energy,
+            micro_ccd_per_euro: self.micro_ccd_per_euro,
+            time_parameters: self.time_parameters,
+            pool_parameters: self.pool_parameters,
+            cooldown_parameters: self.cooldown_parameters,
+            account_creation_limit: self.account_creation_limit.into(),
+            reward_parameters: self.reward_parameters,
+            foundation_account_index,
+            finalization_committee_parameters: self.finalization_committee_parameters.try_into()?,
+            validator_score_parameters: self.validator_score_parameters,
+        })
+    }
+}
+
 #[derive(SerdeDeserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct FinalizationCommitteeParametersConfig {
@@ -368,6 +410,20 @@ pub struct GenesisParametersConfigV1 {
     #[serde(flatten)]
     pub core: CoreGenesisParametersConfigV1,
     pub chain: GenesisChainParametersV2,
+}
+
+/// The core genesis parameters, the leadership election nonce and the chain
+/// parameters (except the foundation account index).
+///
+/// Used to derive parsing for the genesis parameter section of the TOML config.
+#[derive(SerdeDeserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct GenesisParametersConfigV2 {
+    /// Leadership election nonce.
+    pub leadership_election_nonce: LeadershipElectionNonce,
+    #[serde(flatten)]
+    pub core: CoreGenesisParametersConfigV1,
+    pub chain: GenesisChainParametersV3,
 }
 
 /// The core genesis parameters. This corresponds to the Haskell type in
@@ -533,8 +589,8 @@ impl Serial for GenesisStateCPV1 {
 
 /// The genesis state in chain parameters version 2. This corresponds to the
 /// Haskell type `GenesisState` from haskell-src/Concordium/Genesis/Data/Base.hs
-/// for those protocol versions having chain parameters version 2, currently
-/// only P6.
+/// for those protocol versions having chain parameters version 2, i.e. P6 and
+/// P7.
 #[derive(Debug)]
 pub struct GenesisStateCPV2 {
     pub cryptographic_parameters:  GlobalContext<ArCurve>,
@@ -547,6 +603,41 @@ pub struct GenesisStateCPV2 {
 }
 
 impl Serial for GenesisStateCPV2 {
+    fn serial<B: Buffer>(&self, out: &mut B) {
+        let mut tmp = Vec::new();
+        serialize_with_length_header(&self.cryptographic_parameters, &mut tmp, out);
+        (self.identity_providers.len() as u32).serial(out);
+        for (k, v) in self.identity_providers.iter() {
+            k.serial(out);
+            serialize_with_length_header(v, &mut tmp, out);
+        }
+        (self.anonymity_revokers.len() as u32).serial(out);
+        for (k, v) in self.anonymity_revokers.iter() {
+            k.serial(out);
+            serialize_with_length_header(v, &mut tmp, out);
+        }
+        self.update_keys.serial(out);
+        self.chain_parameters.serial(out);
+        self.leadership_election_nonce.serial(out);
+        self.accounts.serial(out)
+    }
+}
+
+/// The genesis state in chain parameters version 3. This corresponds to the
+/// Haskell type `GenesisState` from haskell-src/Concordium/Genesis/Data/Base.hs
+/// for those protocol versions having chain parameters version 3, i.e. P8.
+#[derive(Debug)]
+pub struct GenesisStateCPV3 {
+    pub cryptographic_parameters:  GlobalContext<ArCurve>,
+    pub identity_providers:        BTreeMap<IpIdentity, IpInfo<IpPairing>>,
+    pub anonymity_revokers:        BTreeMap<ArIdentity, ArInfo<ArCurve>>,
+    pub update_keys:               UpdateKeysCollection<ChainParameterVersion3>,
+    pub chain_parameters:          ChainParameters<ChainParameterVersion3>,
+    pub leadership_election_nonce: LeadershipElectionNonce,
+    pub accounts:                  Vec<GenesisAccountPublic>,
+}
+
+impl Serial for GenesisStateCPV3 {
     fn serial<B: Buffer>(&self, out: &mut B) {
         let mut tmp = Vec::new();
         serialize_with_length_header(&self.cryptographic_parameters, &mut tmp, out);
@@ -597,6 +688,10 @@ pub enum GenesisData {
     P7 {
         core:          CoreGenesisParametersV1,
         initial_state: GenesisStateCPV2,
+    },
+    P8 {
+        core:          CoreGenesisParametersV1,
+        initial_state: GenesisStateCPV3,
     },
 }
 
@@ -675,6 +770,16 @@ impl GenesisData {
                 core.serial(&mut hasher);
                 initial_state.serial(&mut hasher);
             }
+            GenesisData::P8 {
+                core,
+                initial_state,
+            } => {
+                ProtocolVersion::P8.serial(&mut hasher);
+                // tag of initial genesis
+                0u8.serial(&mut hasher);
+                core.serial(&mut hasher);
+                initial_state.serial(&mut hasher);
+            }
         }
         let bytes: [u8; 32] = hasher.finalize().into();
         bytes.into()
@@ -703,6 +808,7 @@ pub fn make_genesis_data_cpv0(
         ProtocolVersion::P5 => None,
         ProtocolVersion::P6 => None,
         ProtocolVersion::P7 => None,
+        ProtocolVersion::P8 => None,
     }
 }
 
@@ -775,6 +881,16 @@ impl Serial for GenesisData {
                 initial_state,
             } => {
                 9u8.serial(out);
+                // tag of initial genesis
+                0u8.serial(out);
+                core.serial(out);
+                initial_state.serial(out)
+            }
+            GenesisData::P8 {
+                core,
+                initial_state,
+            } => {
+                10u8.serial(out);
                 // tag of initial genesis
                 0u8.serial(out);
                 core.serial(out);
