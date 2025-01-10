@@ -5,10 +5,14 @@ use concordium_rust_sdk::{
         types::{Amount, CredentialIndex, Ratio, Timestamp},
         Buffer, SerdeDeserialize, SerdeSerialize, Serial, Serialize, Versioned,
     },
-    id::{self, constants::{ArCurve, IpPairing}, types::{
+    id::{
+        self,
+        constants::{ArCurve, IpPairing},
+        types::{
             AccCredentialInfo, AccountAddress, AccountCredentialWithoutProofs, AccountKeys,
             ArIdentity, ArInfo, GlobalContext, IpIdentity, IpInfo,
-        }},
+        },
+    },
     smart_contracts::common::Duration,
     types::{
         hashes::{BlockHash, LeadershipElectionNonce},

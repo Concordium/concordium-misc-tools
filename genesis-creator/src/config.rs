@@ -1,5 +1,8 @@
 //! Input configuration structures and parsing.
-use crate::{genesis::{GenesisParametersConfigV0, GenesisParametersConfigV1}, GenesisParametersConfigV2};
+use crate::{
+    genesis::{GenesisParametersConfigV0, GenesisParametersConfigV1},
+    GenesisParametersConfigV2,
+};
 use anyhow::ensure;
 
 use concordium_rust_sdk::{

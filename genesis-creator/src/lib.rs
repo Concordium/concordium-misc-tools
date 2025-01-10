@@ -1007,7 +1007,10 @@ pub fn handle_assemble(config_path: &Path, verbose: bool) -> anyhow::Result<()> 
                 accounts,
             };
             let core = parameters.core.try_into()?;
-            GenesisData::P8 { core, initial_state }
+            GenesisData::P8 {
+                core,
+                initial_state,
+            }
         }
     };
 
@@ -1248,9 +1251,12 @@ pub fn handle_generate(config_path: &Path, verbose: bool) -> anyhow::Result<()> 
                 accounts,
             };
             let core = parameters.core.try_into()?;
-            GenesisData::P8 { core, initial_state }
+            GenesisData::P8 {
+                core,
+                initial_state,
+            }
         }
-};
+    };
     write_genesis(
         config.out.genesis.as_path(),
         config.out.genesis_hash.as_path(),
