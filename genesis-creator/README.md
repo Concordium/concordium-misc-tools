@@ -408,9 +408,9 @@ transactionFeeDistribution = { baker = 0.45, gasAccount = 0.45 }
 gASRewards = { baker = 0.25, finalizationProof = 0.005, accountCreation = 0.02, chainUpdate = 0.005 }
 ```
 
-#### Protocol version 6
+#### Protocol version 6 and 7
 
-Protocol version 6 parameters are provided in the following form:
+Protocol version 6 and 7 parameters are provided in the following form:
 
 ```toml
 [parameters]
@@ -461,6 +461,14 @@ gASRewards = { baker = 0.25, accountCreation = 0.02, chainUpdate = 0.005 }
 ```
 where the concrete values above are replaced with those desired.
 
+#### Protocol version 8
+
+Protocol version 8 parameters extend the version 6/7 parameters with one additional parameter:
+
+```toml
+[parameters.chain.validatorScoreParameters]
+maxMissedRounds = 10
+```
 
 ## The `assemble` mode
 To generate a genesis from existing file, run
