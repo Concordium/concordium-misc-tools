@@ -6,7 +6,10 @@ use axum_prometheus::{
 use backoff::{future::retry, ExponentialBackoff};
 use chrono::Utc;
 use clap::Parser;
-use concordium_rust_sdk::{types::AbsoluteBlockHeight, v2::{Client, Endpoint, FinalizedBlockInfo, FinalizedBlocksStream}};
+use concordium_rust_sdk::{
+    types::AbsoluteBlockHeight,
+    v2::{Client, Endpoint, FinalizedBlockInfo, FinalizedBlocksStream, Scheme},
+};
 use dotenv::dotenv;
 use gcp_auth::CustomServiceAccount;
 use log::{debug, error, info};
@@ -20,8 +23,7 @@ use std::{
     path::PathBuf,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
-use concordium_rust_sdk::v2::Scheme;
-use tonic::{transport::ClientTlsConfig};
+use tonic::transport::ClientTlsConfig;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[derive(Debug, Parser)]
