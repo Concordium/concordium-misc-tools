@@ -2312,7 +2312,7 @@ dependencies = [
  "once_cell",
  "quickcheck",
  "quickcheck_macros",
- "rand 0.9.0",
+ "rand 0.8.5",
  "reqwest",
  "serde",
  "serde_json",
