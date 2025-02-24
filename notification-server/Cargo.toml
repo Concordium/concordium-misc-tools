@@ -2,7 +2,7 @@
 authors = ["Concordium AG developers@concordium.com"]
 edition = "2021"
 name = "notification-server"
-version = "0.3.8"
+version = "0.3.9"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -37,7 +37,7 @@ tracing-subscriber = { version = "0.3" }
 
 [dev-dependencies]
 async-trait = "0.1"
-mockito = "1.4"
+mockito = "1.6"
 quickcheck = "1.0"
 quickcheck_macros = "1.0"
 rand = "0.9"
