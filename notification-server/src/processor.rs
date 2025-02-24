@@ -190,7 +190,7 @@ mod tests {
     use quickcheck::{Arbitrary, Gen};
     use quickcheck_macros::quickcheck;
     use rand::{random, thread_rng, Rng};
-    use sha2::{digest::crypto_common::rand_core::block::BlockRngCore, Digest};
+    use sha2::Digest;
     use std::{fmt::Debug, str::FromStr};
 
     #[derive(Clone, Debug)]
