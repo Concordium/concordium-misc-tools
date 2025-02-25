@@ -1,3 +1,6 @@
+## 0.3.9
+- Dependency updates
+
 ## 0.3.7
 - Change type of image to be bookworm instead
 
