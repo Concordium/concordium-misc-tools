@@ -2,6 +2,10 @@
 
 API to obtain information about particular account to device mappings and store them in a persistence layer.
 
+## Component Interaction Diagram
+
+![Component Interaction Diagram](docs/diagrams/notification-server.drawio.png)
+
 # Notification service
 
 Service indexing the CCD chain and given incoming transactions, emit a notification to the device
