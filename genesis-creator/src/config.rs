@@ -261,7 +261,7 @@ pub enum ProtocolConfig {
     P8 {
         parameters: GenesisParametersConfigV2,
     },
-    #[serde(rename = "8")]
+    #[serde(rename = "9")]
     P9 {
         parameters: GenesisParametersConfigV2,
     },

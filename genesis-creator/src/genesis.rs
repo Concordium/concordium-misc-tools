@@ -915,11 +915,11 @@ impl Serial for GenesisData {
                 core.serial(out);
                 initial_state.serial(out)
             }
-            GenesisData::P9{
+            GenesisData::P9 {
                 core,
                 initial_state,
             } => {
-                10u8.serial(out);
+                11u8.serial(out);
                 // tag of initial genesis
                 0u8.serial(out);
                 core.serial(out);
