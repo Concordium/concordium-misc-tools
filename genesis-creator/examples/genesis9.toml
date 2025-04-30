@@ -1,4 +1,4 @@
-# An example genesis configuration file to construct a protocol 6 genesis.
+# An example genesis configuration file to construct a protocol 9 genesis.
 # This creates a genesis with
 # - 5 bakers
 # - one additional foundation account
