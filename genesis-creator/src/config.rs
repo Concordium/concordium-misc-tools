@@ -261,6 +261,10 @@ pub enum ProtocolConfig {
     P8 {
         parameters: GenesisParametersConfigV2,
     },
+    #[serde(rename = "9")]
+    P9 {
+        parameters: GenesisParametersConfigV2,
+    },
 }
 
 impl ProtocolConfig {
@@ -274,6 +278,7 @@ impl ProtocolConfig {
             ProtocolConfig::P6 { .. } => ProtocolVersion::P6,
             ProtocolConfig::P7 { .. } => ProtocolVersion::P7,
             ProtocolConfig::P8 { .. } => ProtocolVersion::P8,
+            ProtocolConfig::P9 { .. } => ProtocolVersion::P9,
         }
     }
 }
