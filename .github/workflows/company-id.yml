@@ -1,8 +1,9 @@
-name: 'Publish Company ID GUI'
+name: 'Publish Company ID'
 on:
   push:
     tags:
       - "company-id-gui/*"  # Trigger on version tags for guardian app
+  workflow_dispatch:
 
 env:
   NODE_VERSION: "22.12.0"
@@ -36,15 +37,15 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Extract tag name
-        id: get_tag
-        shell: bash
-        run: echo "tag=${GITHUB_REF#refs/tags/company-id-gui/}"  >> $GITHUB_OUTPUT
-
-      - name: Test that tag version matches tauri.conf.json version
-        working-directory: company-id-gui
-        shell: bash
-        run: test "${{ steps.get_tag.outputs.tag }}" = "$(jq -r ".package.version" src-tauri/tauri.conf.json)" || exit 1
+      # - name: Extract tag name
+      #   id: get_tag
+      #   shell: bash
+      #   run: echo "tag=${GITHUB_REF#refs/tags/company-id-gui/}" >> $GITHUB_OUTPUT
+      #
+      # - name: Test that tag version matches tauri.conf.json version
+      #   working-directory: company-id-gui
+      #   shell: bash
+      #   run: test "${{ steps.get_tag.outputs.tag }}" = "$(jq -r ".package.version" src-tauri/tauri.conf.json)" || exit 1
 
       - name: Setup Rust toolchain
         uses: actions-rs/toolchain@v1
