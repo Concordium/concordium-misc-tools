@@ -1,0 +1,9 @@
+{
+    "tauri": {
+        "bundle": {
+            "windows": {
+                "signCommand": "../scripts/sign-windows.bat %1"
+            }
+        }
+    }
+}
