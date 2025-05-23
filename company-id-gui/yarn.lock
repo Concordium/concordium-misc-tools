@@ -519,7 +519,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@tauri-apps/api@npm:1":
+"@tauri-apps/api@npm:^1":
   version: 1.6.0
   resolution: "@tauri-apps/api@npm:1.6.0"
   checksum: f99cdb6c7ed01b78995cb936a31dde09f04b34a2317a1c6833969f6cc2f7de577ab1464f9cdecf9e96aab070c16a5526a3a0efcda04fa35960e487eb20653ee0
@@ -596,7 +596,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@tauri-apps/cli@npm:1":
+"@tauri-apps/cli@npm:^1":
   version: 1.6.3
   resolution: "@tauri-apps/cli@npm:1.6.3"
   dependencies:
@@ -1242,8 +1242,8 @@ __metadata:
   resolution: "company-id-gui@workspace:."
   dependencies:
     "@fontsource/ibm-plex-sans": ^5.0.17
-    "@tauri-apps/api": 1
-    "@tauri-apps/cli": 1
+    "@tauri-apps/api": ^1
+    "@tauri-apps/cli": ^1
     "@types/react": ^18.2.15
     "@types/react-dom": ^18.2.7
     "@typescript-eslint/eslint-plugin": ^6.0.0
