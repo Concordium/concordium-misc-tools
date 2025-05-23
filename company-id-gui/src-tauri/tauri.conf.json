@@ -1,10 +1,9 @@
 {
     "build": {
         "beforeDevCommand": "yarn dev",
-        "beforeBuildCommand": "corepack yarn build",
+        "beforeBuildCommand": "yarn build",
         "devPath": "http://localhost:1420",
-        "distDir": "../dist",
-        "withGlobalTauri": false
+        "distDir": "../dist"
     },
     "package": {
         "productName": "Concordium Company ID",
