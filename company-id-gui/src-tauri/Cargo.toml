@@ -19,9 +19,8 @@ misc_tools = { version = "*", path = "../../deps/concordium-rust-sdk/concordium-
 concordium-rust-sdk = { version = "*", path = "../../deps/concordium-rust-sdk" }
 serde_json = "1.0"
 bitvec = "1.0"
-rand = "0.7"
-http = "0.2"
-tonic = { version = "0.10", features = ["tls", "tls-roots"] } # Use system trust roots.
+rand = "0.8"
+tonic = { version = "0.12", features = ["tls", "tls-roots"] } # Use system trust roots.
 thiserror = "1.0"
 chrono = "0.4"
 anyhow = "1.0"
