@@ -1,13 +1,13 @@
 {
     "build": {
         "beforeDevCommand": "yarn dev",
-        "beforeBuildCommand": "corepack yarn build",
+        "beforeBuildCommand": "yarn build",
         "devPath": "http://localhost:1420",
-        "distDir": "../dist",
-        "withGlobalTauri": false
+        "distDir": "../dist"
     },
     "package": {
-        "productName": "Concordium Company ID"
+        "productName": "Concordium Company ID",
+        "version": "1.0.3"
     },
     "tauri": {
         "allowlist": {
@@ -23,14 +23,9 @@
             }
         },
         "bundle": {
-            "windows": {
-                "certificateThumbprint": "3a5016ad02802c21ca5867aec72b9594af5cac57",
-                "digestAlgorithm": "sha256",
-                "timestampUrl": "http://timestamp.comodoca.com"
-            },
             "active": true,
-            "targets": "all",
-            "identifier": "software.concordium",
+            "targets": ["msi", "nsis", "dmg", "appimage"],
+            "identifier": "com.concordium.companyid",
             "icon": [
                 "icons/32x32.png",
                 "icons/128x128.png",

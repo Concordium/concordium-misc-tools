@@ -10,7 +10,7 @@ on:
 env:
   REGISTRY: docker.io
   SERVICE_NAME: kpi-tracker
-  RUST_VERSION: rust:1.76-bookworm
+  RUST_VERSION: rust:1.81-bookworm
 
 jobs:
   publish-docker-image:

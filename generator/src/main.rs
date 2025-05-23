@@ -67,7 +67,7 @@ async fn main() -> anyhow::Result<()> {
             .endpoint
             .uri()
             .scheme()
-            .map_or(false, |x| x == &http::uri::Scheme::HTTPS)
+            .map_or(false, |x| x == &v2::Scheme::HTTPS)
         {
             app.endpoint
                 .tls_config(tonic::transport::channel::ClientTlsConfig::new())

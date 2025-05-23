@@ -1,6 +1,6 @@
 [package]
 name = "company-id-gui"
-version = "1.0.2"
+version = "1.0.3"
 description = "Concordium Company ID GUI"
 authors = ["Concordium <developers@concordium.com>"]
 license = "Apache-2.0"
@@ -12,16 +12,15 @@ edition = "2021"
 tauri-build = { version = "1.5", features = [] }
 
 [dependencies]
-tauri = { version = "1.5", features = ["clipboard-write-text", "dialog", "shell-open"] }
+tauri = { version = "1.6", features = ["clipboard-write-text", "dialog", "shell-open"] }
 serde = { version = "1.0", features = ["derive"] }
 key_derivation = { version = "*", path = "../../deps/concordium-rust-sdk/concordium-base/rust-src/key_derivation" }
 misc_tools = { version = "*", path = "../../deps/concordium-rust-sdk/concordium-base/rust-bins" }
 concordium-rust-sdk = { version = "*", path = "../../deps/concordium-rust-sdk" }
 serde_json = "1.0"
 bitvec = "1.0"
-rand = "0.7"
-http = "0.2"
-tonic = { version = "0.10", features = ["tls", "tls-roots"] } # Use system trust roots.
+rand = "0.8"
+tonic = { version = "0.12", features = ["tls", "tls-roots"] } # Use system trust roots.
 thiserror = "1.0"
 chrono = "0.4"
 anyhow = "1.0"

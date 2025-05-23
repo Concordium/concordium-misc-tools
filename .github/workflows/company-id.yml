@@ -1,46 +1,133 @@
 name: 'Publish Company ID'
 on:
-  # push:
-  #   branches:
-  #     - release
+  push:
+    tags:
+      - "company-id-gui/*"  # Trigger on version tags for guardian app
 
-  workflow_dispatch: # allows manual trigger
+env:
+  NODE_VERSION: "22.12.0"
+  RUST_VERSION: "1.82.0"
 
 jobs:
-  publish-tauri:
-    permissions:
-      contents: write
+  build-and-release:
+    environment: release-tauri-app
     strategy:
       fail-fast: false
       matrix:
-        platform: [macos-latest, ubuntu-20.04, windows-latest]
+        include:
+          - platform: macos-latest
+            arch: x64
+            target: x86_64-apple-darwin
+          - platform: macos-latest
+            arch: arm64
+            target: aarch64-apple-darwin
+          - platform: ubuntu-latest
+            arch: x64
+            target: x86_64-unknown-linux-gnu
+          - platform: windows-latest
+            arch: x64
+            target: x86_64-pc-windows-msvc
 
     runs-on: ${{ matrix.platform }}
+    
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
           submodules: recursive
-      - name: setup node
+
+      - name: Extract tag name
+        id: get_tag
+        shell: bash
+        run: echo "tag=${GITHUB_REF#refs/tags/company-id-gui/}" >> $GITHUB_OUTPUT
+
+      - name: Test that tag version matches tauri.conf.json version
+        working-directory: company-id-gui
+        shell: bash
+        run: test "${{ steps.get_tag.outputs.tag }}" = "$(jq -r ".package.version" src-tauri/tauri.conf.json)" || exit 1
+
+      - name: Setup Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ env.RUST_VERSION }}
+          target: ${{ matrix.target }}
+          override: true
+
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-      - name: install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-      - name: install dependencies (ubuntu only)
-        if: matrix.platform == 'ubuntu-20.04'
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'yarn'
+          cache-dependency-path: "company-id-gui/yarn.lock"
+
+      - name: add legacy deb repository # see https://github.com/tauri-apps/tauri/issues/9662
+        if: matrix.platform == 'ubuntu-latest'
+        uses: myci-actions/add-deb-repo@11
+        with:
+          repo: deb http://archive.ubuntu.com/ubuntu jammy main universe
+          repo-name: ubuntu-legacy
+
+      - uses: awalsh128/cache-apt-pkgs-action@latest
+        if: matrix.platform == 'ubuntu-latest'
+        with:
+          # Needed to support tauri
+          packages: libwebkit2gtk-4.0-dev libappindicator3-dev librsvg2-dev patchelf
+          version: 1.0
+
+      - name: Install dependencies
+        working-directory: company-id-gui
+        run: yarn install --frozen-lockfile
+
+      - name: Install DigiCert Client tools (Windows only)
+        if: matrix.platform == 'windows-latest'
+        id: digicert_client
+        uses: digicert/ssm-code-signing@v1.0.0
+        
+      - name: Import Windows certificate (Windows only)
+        id: windows_certificate
+        if: matrix.platform == 'windows-latest'
+        env:
+          # Base64 encoding of the pfx/p12 certificate for Windows code signing.
+          SM_CLIENT_CERT_FILE_B64: ${{ secrets.WINDOWS_SM_CLIENT_CERT_FILE_B64 }}
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev libappindicator3-dev librsvg2-dev patchelf
-      - name: install frontend dependencies
-        working-directory: ./company-id-gui
-        run: yarn install # change this to npm or pnpm depending on which one you use
-      - uses: tauri-apps/tauri-action@v0
+          $CERTIFICATE_PATH_BASE64="$env:RUNNER_TEMP\cert-b64.txt"
+          $CERTIFICATE_PATH="$env:RUNNER_TEMP\cert.pfx"
+
+          Set-Content -Path $CERTIFICATE_PATH_BASE64 -Value $env:SM_CLIENT_CERT_FILE_B64
+          certutil -decode $CERTIFICATE_PATH_BASE64 $CERTIFICATE_PATH
+          echo "CERTIFICATE_PATH=$CERTIFICATE_PATH" >> $env:GITHUB_OUTPUT
+
+      # Build the app
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
+          # macOS signing
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+          # windows signing
+          WINDOWS_SIGN: 1
+          WINDOWS_PKCS11_CONFIG: ${{ steps.digicert_client.outputs.PKCS11_CONFIG }}
+          WINDOWS_SM_KEYPAIR_ALIAS: ${{ secrets.WINDOWS_SM_KEYPAIR_ALIAS }}
+          SM_HOST: ${{ secrets.WINDOWS_SM_HOST }}
+          SM_API_KEY: ${{ secrets.WINDOWS_SM_API_KEY }}
+          SM_CLIENT_CERT_FILE: ${{ steps.windows_certificate.outputs.CERTIFICATE_PATH }}
+          SM_CLIENT_CERT_PASSWORD: ${{ secrets.WINDOWS_SM_CLIENT_CERT_PASSWORD }}
+
         with:
-          projectPath: 'company-id-gui'
-          tagName: company-id-gui/v__VERSION__ # the action automatically replaces \_\_VERSION\_\_ with the app version
-          releaseName: 'Company ID GUI v__VERSION__'
-          releaseBody: 'See the assets to download this version and install.'
+          tagName: company-id-gui/__VERSION__  # This will replace __VERSION__ with the app version
+          releaseName: "Concordium Company ID GUI v__VERSION__"
+          releaseBody: "See the assets to download and install this version."
           releaseDraft: true
           prerelease: false
+          tauriScript: yarn tauri
+          args: --target ${{ matrix.target }} --verbose
+          projectPath: company-id-gui
+

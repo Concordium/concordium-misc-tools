@@ -4,11 +4,12 @@
 use anyhow::Context;
 use concordium_rust_sdk::{
     base::{
+        ed25519::SigningKey,
         random_oracle::RandomOracle,
         sigma_protocols::{common::prove, dlog},
     },
     common::{
-        types::{KeyIndex, KeyPair, TransactionTime},
+        types::{KeyIndex, TransactionTime},
         Versioned, VERSION_0,
     },
     id::{
@@ -30,7 +31,7 @@ use concordium_rust_sdk::{
         transactions::{BlockItem, Payload},
         AggregateSigPairing, BlockItemSummaryDetails, CredentialRegistrationID,
     },
-    v2,
+    v2::{self, Scheme},
 };
 use either::Either;
 use key_derivation::{words_to_seed, ConcordiumHdWallet, CredentialContext, Net};
@@ -95,7 +96,7 @@ impl State {
             return Err(Error::InvalidSeedphrase);
         }
         let wallet = ConcordiumHdWallet {
-            seed: words_to_seed(&seedphrase),
+            seed: words_to_seed(&seedphrase).context("Failed to create seed from seedphrase")?,
             net:  self.net.lock().await.context("No network set.")?,
         };
 
@@ -129,7 +130,7 @@ enum Error {
     #[error("Error querying node: {0}")]
     Query(#[from] v2::QueryError),
     #[error("Failed to create file: {0}")]
-    FileError(#[from] Box<dyn std::error::Error>),
+    File(#[from] Box<dyn std::error::Error>),
     #[error("Node is not on the {0} network.")]
     WrongNetwork(&'static str),
     #[error("Node is not caught up. Please try again later.")]
@@ -168,7 +169,7 @@ async fn set_node_and_network(
     let endpoint = if endpoint
         .uri()
         .scheme()
-        .map_or(false, |x| x == &http::uri::Scheme::HTTPS)
+        .map_or(false, |x| x == &Scheme::HTTPS)
     {
         endpoint.tls_config(ClientTlsConfig::new())?
     } else {
@@ -450,8 +451,8 @@ async fn create_account(
         return Ok(account);
     };
 
-    let file = std::fs::File::create(path).map_err(|e| Error::FileError(e.into()))?;
-    serde_json::to_writer_pretty(file, &file_data).map_err(|e| Error::FileError(e.into()))?;
+    let file = std::fs::File::create(path).map_err(|e| Error::File(e.into()))?;
+    serde_json::to_writer_pretty(file, &file_data).map_err(|e| Error::File(e.into()))?;
 
     Ok(account)
 }
@@ -540,9 +541,8 @@ fn get_account_keys(
     let secret = wallet
         .get_account_signing_key(ip_index, id_index, acc_index as u32)
         .context("Failed to get account signing key.")?;
-    let public = (&secret).into();
     let mut keys = std::collections::BTreeMap::new();
-    keys.insert(KeyIndex(0), KeyPair { secret, public });
+    keys.insert(KeyIndex(0), SigningKey::from_bytes(&secret).into());
 
     Ok(CredentialData {
         keys,
@@ -574,7 +574,7 @@ async fn save_keys(
         .prf_exponent(account.acc_index)
         .context("Failed to compute PRF exponent.")?;
     let cred_reg_id =
-        CredentialRegistrationID::from_exponent(&ip_context.global_context, cred_id_exp);
+        CredentialRegistrationID::from_exponent(ip_context.global_context, cred_id_exp);
 
     let file_data = json!({
         "type": "concordium-browser-wallet-account",
@@ -601,8 +601,8 @@ async fn save_keys(
         return Ok(());
     };
 
-    let file = std::fs::File::create(path).map_err(|e| Error::FileError(e.into()))?;
-    serde_json::to_writer_pretty(file, &file_data).map_err(|e| Error::FileError(e.into()))?;
+    let file = std::fs::File::create(path).map_err(|e| Error::File(e.into()))?;
+    serde_json::to_writer_pretty(file, &file_data).map_err(|e| Error::File(e.into()))?;
 
     Ok(())
 }
@@ -732,8 +732,8 @@ async fn generate_recovery_request(
         return Ok(());
     };
 
-    let file = std::fs::File::create(path).map_err(|e| Error::FileError(e.into()))?;
-    serde_json::to_writer_pretty(file, &json).map_err(|e| Error::FileError(e.into()))?;
+    let file = std::fs::File::create(path).map_err(|e| Error::File(e.into()))?;
+    serde_json::to_writer_pretty(file, &json).map_err(|e| Error::File(e.into()))?;
 
     Ok(())
 }

@@ -519,97 +519,98 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@tauri-apps/api@npm:^1.5.1":
-  version: 1.5.1
-  resolution: "@tauri-apps/api@npm:1.5.1"
-  checksum: d69f8f2cf856aa2bd17bc6ba71dc9c11f683be6e95ad7d3657fd107d994fd96a1f609baac13bd1677cd813770c1d4c818d115c9581b86ecc67adafad0b7bedf0
+"@tauri-apps/api@npm:^1":
+  version: 1.6.0
+  resolution: "@tauri-apps/api@npm:1.6.0"
+  checksum: f99cdb6c7ed01b78995cb936a31dde09f04b34a2317a1c6833969f6cc2f7de577ab1464f9cdecf9e96aab070c16a5526a3a0efcda04fa35960e487eb20653ee0
   languageName: node
   linkType: hard
 
-"@tauri-apps/cli-darwin-arm64@npm:1.5.6":
-  version: 1.5.6
-  resolution: "@tauri-apps/cli-darwin-arm64@npm:1.5.6"
+"@tauri-apps/cli-darwin-arm64@npm:1.6.3":
+  version: 1.6.3
+  resolution: "@tauri-apps/cli-darwin-arm64@npm:1.6.3"
   conditions: os=darwin & cpu=arm64
   languageName: node
   linkType: hard
 
-"@tauri-apps/cli-darwin-x64@npm:1.5.6":
-  version: 1.5.6
-  resolution: "@tauri-apps/cli-darwin-x64@npm:1.5.6"
+"@tauri-apps/cli-darwin-x64@npm:1.6.3":
+  version: 1.6.3
+  resolution: "@tauri-apps/cli-darwin-x64@npm:1.6.3"
   conditions: os=darwin & cpu=x64
   languageName: node
   linkType: hard
 
-"@tauri-apps/cli-linux-arm-gnueabihf@npm:1.5.6":
-  version: 1.5.6
-  resolution: "@tauri-apps/cli-linux-arm-gnueabihf@npm:1.5.6"
+"@tauri-apps/cli-linux-arm-gnueabihf@npm:1.6.3":
+  version: 1.6.3
+  resolution: "@tauri-apps/cli-linux-arm-gnueabihf@npm:1.6.3"
   conditions: os=linux & cpu=arm
   languageName: node
   linkType: hard
 
-"@tauri-apps/cli-linux-arm64-gnu@npm:1.5.6":
-  version: 1.5.6
-  resolution: "@tauri-apps/cli-linux-arm64-gnu@npm:1.5.6"
+"@tauri-apps/cli-linux-arm64-gnu@npm:1.6.3":
+  version: 1.6.3
+  resolution: "@tauri-apps/cli-linux-arm64-gnu@npm:1.6.3"
   conditions: os=linux & cpu=arm64 & libc=glibc
   languageName: node
   linkType: hard
 
-"@tauri-apps/cli-linux-arm64-musl@npm:1.5.6":
-  version: 1.5.6
-  resolution: "@tauri-apps/cli-linux-arm64-musl@npm:1.5.6"
+"@tauri-apps/cli-linux-arm64-musl@npm:1.6.3":
+  version: 1.6.3
+  resolution: "@tauri-apps/cli-linux-arm64-musl@npm:1.6.3"
   conditions: os=linux & cpu=arm64 & libc=musl
   languageName: node
   linkType: hard
 
-"@tauri-apps/cli-linux-x64-gnu@npm:1.5.6":
-  version: 1.5.6
-  resolution: "@tauri-apps/cli-linux-x64-gnu@npm:1.5.6"
+"@tauri-apps/cli-linux-x64-gnu@npm:1.6.3":
+  version: 1.6.3
+  resolution: "@tauri-apps/cli-linux-x64-gnu@npm:1.6.3"
   conditions: os=linux & cpu=x64 & libc=glibc
   languageName: node
   linkType: hard
 
-"@tauri-apps/cli-linux-x64-musl@npm:1.5.6":
-  version: 1.5.6
-  resolution: "@tauri-apps/cli-linux-x64-musl@npm:1.5.6"
+"@tauri-apps/cli-linux-x64-musl@npm:1.6.3":
+  version: 1.6.3
+  resolution: "@tauri-apps/cli-linux-x64-musl@npm:1.6.3"
   conditions: os=linux & cpu=x64 & libc=musl
   languageName: node
   linkType: hard
 
-"@tauri-apps/cli-win32-arm64-msvc@npm:1.5.6":
-  version: 1.5.6
-  resolution: "@tauri-apps/cli-win32-arm64-msvc@npm:1.5.6"
+"@tauri-apps/cli-win32-arm64-msvc@npm:1.6.3":
+  version: 1.6.3
+  resolution: "@tauri-apps/cli-win32-arm64-msvc@npm:1.6.3"
   conditions: os=win32 & cpu=arm64
   languageName: node
   linkType: hard
 
-"@tauri-apps/cli-win32-ia32-msvc@npm:1.5.6":
-  version: 1.5.6
-  resolution: "@tauri-apps/cli-win32-ia32-msvc@npm:1.5.6"
+"@tauri-apps/cli-win32-ia32-msvc@npm:1.6.3":
+  version: 1.6.3
+  resolution: "@tauri-apps/cli-win32-ia32-msvc@npm:1.6.3"
   conditions: os=win32 & cpu=ia32
   languageName: node
   linkType: hard
 
-"@tauri-apps/cli-win32-x64-msvc@npm:1.5.6":
-  version: 1.5.6
-  resolution: "@tauri-apps/cli-win32-x64-msvc@npm:1.5.6"
+"@tauri-apps/cli-win32-x64-msvc@npm:1.6.3":
+  version: 1.6.3
+  resolution: "@tauri-apps/cli-win32-x64-msvc@npm:1.6.3"
   conditions: os=win32 & cpu=x64
   languageName: node
   linkType: hard
 
-"@tauri-apps/cli@npm:^1.5.0":
-  version: 1.5.6
-  resolution: "@tauri-apps/cli@npm:1.5.6"
+"@tauri-apps/cli@npm:^1":
+  version: 1.6.3
+  resolution: "@tauri-apps/cli@npm:1.6.3"
   dependencies:
-    "@tauri-apps/cli-darwin-arm64": 1.5.6
-    "@tauri-apps/cli-darwin-x64": 1.5.6
-    "@tauri-apps/cli-linux-arm-gnueabihf": 1.5.6
-    "@tauri-apps/cli-linux-arm64-gnu": 1.5.6
-    "@tauri-apps/cli-linux-arm64-musl": 1.5.6
-    "@tauri-apps/cli-linux-x64-gnu": 1.5.6
-    "@tauri-apps/cli-linux-x64-musl": 1.5.6
-    "@tauri-apps/cli-win32-arm64-msvc": 1.5.6
-    "@tauri-apps/cli-win32-ia32-msvc": 1.5.6
-    "@tauri-apps/cli-win32-x64-msvc": 1.5.6
+    "@tauri-apps/cli-darwin-arm64": 1.6.3
+    "@tauri-apps/cli-darwin-x64": 1.6.3
+    "@tauri-apps/cli-linux-arm-gnueabihf": 1.6.3
+    "@tauri-apps/cli-linux-arm64-gnu": 1.6.3
+    "@tauri-apps/cli-linux-arm64-musl": 1.6.3
+    "@tauri-apps/cli-linux-x64-gnu": 1.6.3
+    "@tauri-apps/cli-linux-x64-musl": 1.6.3
+    "@tauri-apps/cli-win32-arm64-msvc": 1.6.3
+    "@tauri-apps/cli-win32-ia32-msvc": 1.6.3
+    "@tauri-apps/cli-win32-x64-msvc": 1.6.3
+    semver: ">=7.5.2"
   dependenciesMeta:
     "@tauri-apps/cli-darwin-arm64":
       optional: true
@@ -633,7 +634,7 @@ __metadata:
       optional: true
   bin:
     tauri: tauri.js
-  checksum: 29addd5f51a485465b2465db85711c3cca1187292d03b7a8719c8b8abc21824142e25174d76747ce82ad542436e32fd2ee3cac3422f0a87b1ffc5904044bdffb
+  checksum: c4798ea721bb8449b747f41b3df282c68256d326ad8288d998e4793477deb61116f98f7197520b5db547bca4436a746a1234c9e22b64c509278a2603f68890ee
   languageName: node
   linkType: hard
 
@@ -1241,8 +1242,8 @@ __metadata:
   resolution: "company-id-gui@workspace:."
   dependencies:
     "@fontsource/ibm-plex-sans": ^5.0.17
-    "@tauri-apps/api": ^1.5.1
-    "@tauri-apps/cli": ^1.5.0
+    "@tauri-apps/api": ^1
+    "@tauri-apps/cli": ^1
     "@types/react": ^18.2.15
     "@types/react-dom": ^18.2.7
     "@typescript-eslint/eslint-plugin": ^6.0.0
@@ -3442,6 +3443,15 @@ __metadata:
   dependencies:
     loose-envify: ^1.1.0
   checksum: d79192eeaa12abef860c195ea45d37cbf2bbf5f66e3c4dcd16f54a7da53b17788a70d109ee3d3dde1a0fd50e6a8fc171f4300356c5aee4fc0171de526bf35f8a
+  languageName: node
+  linkType: hard
+
+"semver@npm:>=7.5.2":
+  version: 7.7.2
+  resolution: "semver@npm:7.7.2"
+  bin:
+    semver: bin/semver.js
+  checksum: dd94ba8f1cbc903d8eeb4dd8bf19f46b3deb14262b6717d0de3c804b594058ae785ef2e4b46c5c3b58733c99c83339068203002f9e37cfe44f7e2cc5e3d2f621
   languageName: node
   linkType: hard
 
