@@ -10,7 +10,7 @@ on:
 env:
   REGISTRY: docker.io
   IMAGE_NAME: recover-id-object
-  RUST_VERSION: rust:1.76-buster  # Define the Rust version here
+  RUST_VERSION: rust:1.81-bookworm
 
 jobs:
   publish-docker-image:

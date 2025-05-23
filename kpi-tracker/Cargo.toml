@@ -15,4 +15,4 @@ futures = "0.3"
 log = "0.4"
 tokio = { version = "1.23", features = ["rt-multi-thread", "signal"] }
 tokio-postgres = "0.7"
-tonic = {version = "0.10", features = ["tls", "tls-roots"]} # Use system trust roots.
+tonic = {version = "0.12", features = ["tls", "tls-roots"]} # Use system trust roots.
