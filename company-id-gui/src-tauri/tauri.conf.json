@@ -7,7 +7,8 @@
         "withGlobalTauri": false
     },
     "package": {
-        "productName": "Concordium Company ID"
+        "productName": "Concordium Company ID",
+        "version": "1.0.3"
     },
     "tauri": {
         "allowlist": {
@@ -23,14 +24,9 @@
             }
         },
         "bundle": {
-            "windows": {
-                "certificateThumbprint": "3a5016ad02802c21ca5867aec72b9594af5cac57",
-                "digestAlgorithm": "sha256",
-                "timestampUrl": "http://timestamp.comodoca.com"
-            },
             "active": true,
-            "targets": "all",
-            "identifier": "software.concordium",
+            "targets": ["msi", "nsis", "dmg", "appimage"],
+            "identifier": "com.concordium.company-id-gui",
             "icon": [
                 "icons/32x32.png",
                 "icons/128x128.png",
