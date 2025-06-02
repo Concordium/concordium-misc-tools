@@ -1,9 +1,10 @@
 use anyhow::{self, bail, Context};
 use clap::Parser;
-use concordium_rust_sdk::{common::Serial, endpoints::Endpoint, types::hashes::TransactionHash, v2};
+use concordium_rust_sdk::{
+    common::Serial, endpoints::Endpoint, types::hashes::TransactionHash, v2,
+};
 use futures::stream::StreamExt;
-use std::path::PathBuf;
-use std::io::Write;
+use std::{io::Write, path::PathBuf};
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about)]
@@ -52,12 +53,12 @@ async fn main() -> anyhow::Result<()> {
         let mut buffer = Vec::new();
         transaction.serial(&mut buffer);
         if let Some(path) = app.output {
-            std::fs::write(path, buffer)
-                .context("Unable to write transaction to file")?;
+            std::fs::write(path, buffer).context("Unable to write transaction to file")?;
         } else {
             let stdout = std::io::stdout();
             let mut stdout = stdout.lock();
-            stdout.write_all(&buffer)
+            stdout
+                .write_all(&buffer)
                 .context("Unable to write transaction to stdout")?;
         }
     } else {
