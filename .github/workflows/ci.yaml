@@ -62,6 +62,9 @@ jobs:
             notification-server/Cargo.toml:
               - 'notification-server/**'
               - '.github/**'
+            dump-transaction/Cargo.toml:
+              - 'dump-transaction/**'
+              - '.github/**'
 
   "lint_fmt":
     name: lint:fmt
