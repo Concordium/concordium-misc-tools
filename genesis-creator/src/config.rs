@@ -156,6 +156,7 @@ pub struct Level2KeysConfig {
     // Optional because it is not needed in P1-P3,
     pub cooldown_parameters: Option<Level2UpdateConfig>,
     pub time_parameters: Option<Level2UpdateConfig>,
+    pub create_plt: Option<Level2UpdateConfig>,
 }
 
 /// Struct holding the root or the level 1 keys, together with a threshold.

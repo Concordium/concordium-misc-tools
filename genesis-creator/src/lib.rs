@@ -33,8 +33,7 @@ use concordium_rust_sdk::{
     },
     types::{
         AccountIndex, AuthorizationsV0, AuthorizationsV1, BakerCredentials, BakerId, BakerKeyPairs,
-        ChainParameterVersion0, ChainParameterVersion1, HigherLevelAccessStructure,
-        ProtocolVersion, UpdateKeyPair, UpdateKeysCollection, UpdateKeysCollectionSkeleton,
+        HigherLevelAccessStructure, ProtocolVersion, UpdateKeyPair, UpdateKeysCollectionSkeleton,
         UpdatePublicKey,
     },
 };
@@ -307,7 +306,7 @@ fn read_or_generate_update_keys<R: rand::Rng + rand::CryptoRng>(
 fn updates_v0(
     updates_out: Option<PathBuf>,
     update_cfg: UpdateKeysConfig,
-) -> anyhow::Result<UpdateKeysCollection<ChainParameterVersion0>> {
+) -> anyhow::Result<UpdateKeysCollectionSkeleton<AuthorizationsV0>> {
     let mut csprng = rand::thread_rng();
     let root_keys = read_or_generate_update_keys(
         "root",
@@ -410,13 +409,12 @@ fn updates_v0(
 /// - updates_out - where to put all chain update keys
 /// - update_cfg - the configuration specifying all keys and thresholds
 ///
-/// The function returns a `anyhow::Result`, whic upon success contains the
-/// version 1 `UpdateKeysCollection`. NB: To be used only in chain parameters
-/// version 1.
+/// The function returns a `anyhow::Result`, which upon success contains the
+/// version 1 `UpdateKeysCollection`.
 fn updates_v1(
     updates_out: Option<PathBuf>,
     update_cfg: UpdateKeysConfig,
-) -> anyhow::Result<UpdateKeysCollection<ChainParameterVersion1>> {
+) -> anyhow::Result<UpdateKeysCollectionSkeleton<AuthorizationsV1>> {
     let mut csprng = rand::thread_rng();
     let root_keys = read_or_generate_update_keys(
         "root",
@@ -502,6 +500,133 @@ fn updates_v1(
         v0,
         cooldown_parameters,
         time_parameters,
+        create_plt: None,
+    };
+
+    let uks = UpdateKeysCollectionSkeleton {
+        root_keys: HigherLevelAccessStructure {
+            keys:      root_keys,
+            threshold: update_cfg.root.threshold,
+            _phantom:  Default::default(),
+        },
+        level_1_keys: HigherLevelAccessStructure {
+            keys:      level1_keys,
+            threshold: update_cfg.level1.threshold,
+            _phantom:  Default::default(),
+        },
+        level_2_keys,
+    };
+
+    if let Some(mut path) = updates_out {
+        path.push("governance-keys.json");
+        std::fs::write(path, serde_json::to_string_pretty(&uks).unwrap())
+            .context("Unable to write authorizations.")?;
+    }
+
+    Ok(uks)
+}
+
+/// Function for creating a version 2 `UpdateKeysCollection` containing all
+/// root, level 1 and level 2 keys. The arguments are
+/// - updates_out - where to put all chain update keys
+/// - update_cfg - the configuration specifying all keys and thresholds
+///
+/// The function returns a `anyhow::Result`, which upon success contains the
+/// version 2 `UpdateKeysCollection`.
+fn updates_v2(
+    updates_out: Option<PathBuf>,
+    update_cfg: UpdateKeysConfig,
+) -> anyhow::Result<UpdateKeysCollectionSkeleton<AuthorizationsV1>> {
+    let mut csprng = rand::thread_rng();
+    let root_keys = read_or_generate_update_keys(
+        "root",
+        updates_out.as_deref(),
+        &mut csprng,
+        &update_cfg.root.keys,
+    )?;
+    ensure!(
+        usize::from(u16::from(update_cfg.root.threshold)) <= root_keys.len(),
+        "The number of root keys ({}) is less than the threshold ({}).",
+        root_keys.len(),
+        update_cfg.root.threshold
+    );
+
+    let level1_keys = read_or_generate_update_keys(
+        "level1",
+        updates_out.as_deref(),
+        &mut csprng,
+        &update_cfg.level1.keys,
+    )?;
+    ensure!(
+        usize::from(u16::from(update_cfg.level1.threshold)) <= level1_keys.len(),
+        "The number of level_1 keys ({}) is less than the threshold ({}).",
+        level1_keys.len(),
+        update_cfg.level1.threshold
+    );
+
+    let level2_keys = read_or_generate_update_keys(
+        "level2",
+        updates_out.as_deref(),
+        &mut csprng,
+        &update_cfg.level2.keys,
+    )?;
+    ensure!(
+        !level2_keys.is_empty(),
+        "There must be at least one level 2 key.",
+    );
+
+    let level2 = update_cfg.level2;
+    let emergency = level2.emergency.access_structure(&level2_keys)?;
+    let protocol = level2.protocol.access_structure(&level2_keys)?;
+    let election_difficulty = level2.election_difficulty.access_structure(&level2_keys)?;
+    let euro_per_energy = level2.euro_per_energy.access_structure(&level2_keys)?;
+    let micro_gtu_per_euro = level2.micro_ccd_per_euro.access_structure(&level2_keys)?;
+    let foundation_account = level2.foundation_account.access_structure(&level2_keys)?;
+    let mint_distribution = level2.mint_distribution.access_structure(&level2_keys)?;
+    let transaction_fee_distribution = level2
+        .transaction_fee_distribution
+        .access_structure(&level2_keys)?;
+    let param_gas_rewards = level2.gas_rewards.access_structure(&level2_keys)?;
+    let pool_parameters = level2.pool_parameters.access_structure(&level2_keys)?;
+    let add_anonymity_revoker = level2
+        .add_anonymity_revoker
+        .access_structure(&level2_keys)?;
+    let add_identity_provider = level2
+        .add_identity_provider
+        .access_structure(&level2_keys)?;
+    let cooldown_parameters = level2
+        .cooldown_parameters
+        .ok_or_else(|| anyhow!("Cooldown parameters missing"))?
+        .access_structure(&level2_keys)?;
+    let time_parameters = level2
+        .time_parameters
+        .ok_or_else(|| anyhow!("Time parameters missing"))?
+        .access_structure(&level2_keys)?;
+    let create_plt = level2
+        .create_plt
+        .ok_or_else(|| anyhow!("Create PLT authorizations missing"))?
+        .access_structure(&level2_keys)?;
+
+    let v0 = AuthorizationsV0 {
+        keys: level2_keys,
+        emergency,
+        protocol,
+        election_difficulty,
+        euro_per_energy,
+        micro_gtu_per_euro,
+        foundation_account,
+        mint_distribution,
+        transaction_fee_distribution,
+        param_gas_rewards,
+        pool_parameters,
+        add_anonymity_revoker,
+        add_identity_provider,
+    };
+    let level_2_keys = AuthorizationsV1 {
+        v0,
+        cooldown_parameters,
+        time_parameters,
+        create_plt: Some(create_plt),
     };
 
     let uks = UpdateKeysCollectionSkeleton {
@@ -1276,7 +1401,7 @@ pub fn handle_generate(config_path: &Path, verbose: bool) -> anyhow::Result<()> 
             }
         }
         ProtocolConfig::P9 { parameters } => {
-            let update_keys = updates_v1(config.out.update_keys, config.updates)?;
+            let update_keys = updates_v2(config.out.update_keys, config.updates)?;
 
             let initial_state = GenesisStateCPV3 {
                 cryptographic_parameters,
