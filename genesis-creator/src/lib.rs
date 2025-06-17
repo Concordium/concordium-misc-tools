@@ -1067,8 +1067,15 @@ pub fn handle_assemble(config_path: &Path, verbose: bool) -> anyhow::Result<()> 
                         .context("P4 does not have CPV0")?
                 }
                 GenesisChainParameters::V1(params) => {
-                    let update_keys =
+                    let update_keys: UpdateKeysCollectionSkeleton<AuthorizationsV1> =
                         read_json(&make_relative(config_path, &config.governance_keys)?)?;
+
+                    if update_keys.level_2_keys.create_plt.is_some() {
+                        bail!(
+                            "{} does not support createPLT authorization.",
+                            protocol_version
+                        );
+                    }
                     let initial_state = GenesisStateCPV1 {
                         cryptographic_parameters: global.value,
                         identity_providers: idps.value,
@@ -1095,7 +1102,15 @@ pub fn handle_assemble(config_path: &Path, verbose: bool) -> anyhow::Result<()> 
             }
         }
         ProtocolConfig::P6 { parameters } | ProtocolConfig::P7 { parameters } => {
-            let update_keys = read_json(&make_relative(config_path, &config.governance_keys)?)?;
+            let update_keys: UpdateKeysCollectionSkeleton<AuthorizationsV1> =
+                read_json(&make_relative(config_path, &config.governance_keys)?)?;
+
+            if update_keys.level_2_keys.create_plt.is_some() {
+                bail!(
+                    "{} does not support createPLT authorization.",
+                    protocol_version
+                );
+            }
 
             let initial_state = GenesisStateCPV2 {
                 cryptographic_parameters: global.value,
@@ -1120,7 +1135,12 @@ pub fn handle_assemble(config_path: &Path, verbose: bool) -> anyhow::Result<()> 
             }
         }
         ProtocolConfig::P8 { parameters } => {
-            let update_keys = read_json(&make_relative(config_path, &config.governance_keys)?)?;
+            let update_keys: UpdateKeysCollectionSkeleton<AuthorizationsV1> =
+                read_json(&make_relative(config_path, &config.governance_keys)?)?;
+
+            if update_keys.level_2_keys.create_plt.is_some() {
+                bail!("P8 does not support createPLT authorization.");
+            }
 
             let initial_state = GenesisStateCPV3 {
                 cryptographic_parameters: global.value,
@@ -1139,7 +1159,12 @@ pub fn handle_assemble(config_path: &Path, verbose: bool) -> anyhow::Result<()> 
         }
 
         ProtocolConfig::P9 { parameters } => {
-            let update_keys = read_json(&make_relative(config_path, &config.governance_keys)?)?;
+            let update_keys: UpdateKeysCollectionSkeleton<AuthorizationsV1> =
+                read_json(&make_relative(config_path, &config.governance_keys)?)?;
+
+            if update_keys.level_2_keys.create_plt.is_none() {
+                bail!("P9 requires createPLT authorization.");
+            }
 
             let initial_state = GenesisStateCPV3 {
                 cryptographic_parameters: global.value,
