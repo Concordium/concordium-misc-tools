@@ -598,8 +598,8 @@ enum BlockEvent {
 /// represented by the `block_hash`
 fn account_details(account_creation_details: &AccountCreationDetails) -> AccountDetails {
     let is_initial = match account_creation_details.credential_type {
-        CredentialType::Initial { .. } => true,
-        CredentialType::Normal { .. } => false,
+        CredentialType::Initial {} => true,
+        CredentialType::Normal {} => false,
     };
 
     AccountDetails { is_initial }
