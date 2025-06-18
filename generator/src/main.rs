@@ -63,12 +63,7 @@ async fn main() -> anyhow::Result<()> {
     let client = {
         // Use TLS if the URI scheme is HTTPS.
         // This uses whatever system certificates have been installed as trusted roots.
-        let endpoint = if app
-            .endpoint
-            .uri()
-            .scheme()
-            .map_or(false, |x| x == &v2::Scheme::HTTPS)
-        {
+        let endpoint = if app.endpoint.uri().scheme() == Some(&v2::Scheme::HTTPS) {
             app.endpoint
                 .tls_config(tonic::transport::channel::ClientTlsConfig::new())
                 .context("Unable to construct TLS configuration for the Concordium API.")?

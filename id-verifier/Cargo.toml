@@ -20,6 +20,7 @@ anyhow = "1.0"
 chrono = "0.4.19"
 thiserror = "1"
 rand = "0.8"
+concordium_base = { path = "../deps/concordium-rust-sdk/concordium-base/rust-src/concordium_base", version = "8.0.0-alpha" }
 
 [dependencies.concordium-rust-sdk]
 path = "../deps/concordium-rust-sdk/"
