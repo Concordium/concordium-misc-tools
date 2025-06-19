@@ -108,9 +108,9 @@ pub struct Level2UpdateConfig {
 }
 
 impl Level2UpdateConfig {
-    pub fn access_structure(self, ctx: &[UpdatePublicKey]) -> anyhow::Result<AccessStructure> {
+    pub fn access_structure(&self, ctx: &[UpdatePublicKey]) -> anyhow::Result<AccessStructure> {
         let num_given_keys = self.authorized_keys.len();
-        let authorized_keys: BTreeSet<_> = self.authorized_keys.into_iter().collect();
+        let authorized_keys: BTreeSet<_> = self.authorized_keys.iter().copied().collect();
         ensure!(
             authorized_keys.len() == num_given_keys,
             "Duplicate key index provided."
