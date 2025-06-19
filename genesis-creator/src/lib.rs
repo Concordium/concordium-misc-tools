@@ -540,8 +540,10 @@ fn updates_v2(
     update_cfg: &UpdateKeysConfig,
 ) -> anyhow::Result<UpdateKeysCollectionSkeleton<AuthorizationsV1>> {
     let mut updates = updates_v1(updates_out, update_cfg)?;
-    let create_plt = update_cfg.level2
-        .create_plt.as_ref()
+    let create_plt = update_cfg
+        .level2
+        .create_plt
+        .as_ref()
         .ok_or_else(|| anyhow!("Create PLT authorizations missing"))?
         .access_structure(&updates.level_2_keys.v0.keys)?;
     updates.level_2_keys.create_plt = Some(create_plt);
@@ -1322,7 +1324,7 @@ pub fn handle_generate(config_path: &Path, verbose: bool) -> anyhow::Result<()> 
             }
         }
         ProtocolConfig::P9 { parameters } => {
-            let update_keys = updates_v2(config.out.update_keys, config.updates)?;
+            let update_keys = updates_v2(config.out.update_keys, &config.updates)?;
 
             let initial_state = GenesisStateCPV3 {
                 cryptographic_parameters,
