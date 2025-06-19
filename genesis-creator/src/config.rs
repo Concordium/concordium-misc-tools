@@ -108,9 +108,9 @@ pub struct Level2UpdateConfig {
 }
 
 impl Level2UpdateConfig {
-    pub fn access_structure(self, ctx: &[UpdatePublicKey]) -> anyhow::Result<AccessStructure> {
+    pub fn access_structure(&self, ctx: &[UpdatePublicKey]) -> anyhow::Result<AccessStructure> {
         let num_given_keys = self.authorized_keys.len();
-        let authorized_keys: BTreeSet<_> = self.authorized_keys.into_iter().collect();
+        let authorized_keys: BTreeSet<_> = self.authorized_keys.iter().copied().collect();
         ensure!(
             authorized_keys.len() == num_given_keys,
             "Duplicate key index provided."
@@ -156,6 +156,7 @@ pub struct Level2KeysConfig {
     // Optional because it is not needed in P1-P3,
     pub cooldown_parameters: Option<Level2UpdateConfig>,
     pub time_parameters: Option<Level2UpdateConfig>,
+    pub create_plt: Option<Level2UpdateConfig>,
 }
 
 /// Struct holding the root or the level 1 keys, together with a threshold.

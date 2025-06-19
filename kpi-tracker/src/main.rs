@@ -306,9 +306,9 @@ impl PreparedStatements {
     }
 
     /// Add block to DB transaction `db_tx`.
-    async fn insert_block<'a, 'b>(
-        &'a self,
-        db_tx: &tokio_postgres::Transaction<'b>,
+    async fn insert_block(
+        &self,
+        db_tx: &tokio_postgres::Transaction<'_>,
         block_details: &BlockDetails,
     ) -> Result<i64, tokio_postgres::Error> {
         let block_hash = block_details.block_hash;
@@ -348,9 +348,9 @@ impl PreparedStatements {
     }
 
     /// Add account to DB transaction `db_tx`.
-    async fn insert_account<'a, 'b>(
-        &'a self,
-        db_tx: &tokio_postgres::Transaction<'b>,
+    async fn insert_account(
+        &self,
+        db_tx: &tokio_postgres::Transaction<'_>,
         block_id: i64,
         account_address: CanonicalAccountAddress,
         account_details: &AccountDetails,
@@ -367,9 +367,9 @@ impl PreparedStatements {
     }
 
     /// Add contract module to DB transaction `db_tx`.
-    async fn insert_contract_module<'a, 'b>(
-        &'a self,
-        db_tx: &tokio_postgres::Transaction<'b>,
+    async fn insert_contract_module(
+        &self,
+        db_tx: &tokio_postgres::Transaction<'_>,
         block_id: i64,
         module_ref: ModuleReference,
     ) -> Result<(), tokio_postgres::Error> {
@@ -383,9 +383,9 @@ impl PreparedStatements {
     }
 
     /// Add contract instance to DB transaction `db_tx`.
-    async fn insert_contract_instance<'a, 'b>(
-        &'a self,
-        db_tx: &tokio_postgres::Transaction<'b>,
+    async fn insert_contract_instance(
+        &self,
+        db_tx: &tokio_postgres::Transaction<'_>,
         block_id: i64,
         contract_address: ContractAddress,
         contract_details: &ContractInstanceDetails,
@@ -419,12 +419,12 @@ impl PreparedStatements {
 
     /// Add transaction to DB transaction `db_tx`. This also adds relations
     /// between the transaction and contracts/accounts.
-    async fn insert_transactions<'a, 'b>(
-        &'a self,
+    async fn insert_transactions(
+        &self,
         tx_num: &mut i64,
-        db_tx: &tokio_postgres::Transaction<'b>,
+        db_tx: &tokio_postgres::Transaction<'_>,
         block_id: i64,
-        txs: &'b [(TransactionHash, TransactionDetails)],
+        txs: &[(TransactionHash, TransactionDetails)],
     ) -> Result<Vec<(i64, Vec<CanonicalAccountAddress>, Vec<ContractAddress>)>, tokio_postgres::Error>
     {
         let mut futs = Vec::with_capacity(txs.len());
@@ -463,9 +463,9 @@ impl PreparedStatements {
 
     /// Add transaction to DB transaction `db_tx`. This also adds relations
     /// between the transaction and contracts/accounts.
-    async fn insert_transaction<'a, 'b>(
-        &'a self,
-        db_tx: &tokio_postgres::Transaction<'b>,
+    async fn insert_transaction(
+        &self,
+        db_tx: &tokio_postgres::Transaction<'_>,
         block_time: i64,
         id: i64,
         affected_accounts: &[CanonicalAccountAddress],
@@ -488,9 +488,9 @@ impl PreparedStatements {
     }
 
     /// Add account-transaction relation to DB transaction `db_tx`.
-    async fn insert_account_transaction_relation<'a, 'b>(
-        &'a self,
-        db_tx: &tokio_postgres::Transaction<'b>,
+    async fn insert_account_transaction_relation(
+        &self,
+        db_tx: &tokio_postgres::Transaction<'_>,
         transaction_id: i64,
         account_address: CanonicalAccountAddress,
         block_time: i64,
@@ -506,9 +506,9 @@ impl PreparedStatements {
     }
 
     /// Add contract-transaction relation to DB transaction `db_tx`.
-    async fn insert_contract_transaction_relation<'a, 'b>(
-        &'a self,
-        db_tx: &tokio_postgres::Transaction<'b>,
+    async fn insert_contract_transaction_relation(
+        &self,
+        db_tx: &tokio_postgres::Transaction<'_>,
         transaction_id: i64,
         contract_address: ContractAddress,
         block_time: i64,
@@ -598,8 +598,8 @@ enum BlockEvent {
 /// represented by the `block_hash`
 fn account_details(account_creation_details: &AccountCreationDetails) -> AccountDetails {
     let is_initial = match account_creation_details.credential_type {
-        CredentialType::Initial { .. } => true,
-        CredentialType::Normal { .. } => false,
+        CredentialType::Initial => true,
+        CredentialType::Normal => false,
     };
 
     AccountDetails { is_initial }
@@ -626,13 +626,13 @@ async fn accounts_in_block(
             }
         })
         .map_ok(|(account, info)| {
-            let is_initial = info
-                .account_credentials
-                .get(&0.into())
-                .map_or(false, |cdi| match cdi.value {
-                    AccountCredentialWithoutProofs::Initial { .. } => true,
-                    AccountCredentialWithoutProofs::Normal { .. } => false,
-                });
+            let is_initial =
+                info.account_credentials
+                    .get(&0.into())
+                    .is_some_and(|cdi| match cdi.value {
+                        AccountCredentialWithoutProofs::Initial { .. } => true,
+                        AccountCredentialWithoutProofs::Normal { .. } => false,
+                    });
 
             let canonical_account = CanonicalAccountAddress::from(account);
             let details = AccountDetails { is_initial };
@@ -1343,11 +1343,7 @@ async fn main() -> anyhow::Result<()> {
         .into_iter()
         .map(|node_endpoint| {
             // This uses whatever system certificates have been installed as trusted roots.
-            if node_endpoint
-                .uri()
-                .scheme()
-                .map_or(false, |x| x == &v2::Scheme::HTTPS)
-            {
+            if node_endpoint.uri().scheme() == Some(&v2::Scheme::HTTPS) {
                 node_endpoint.tls_config(ClientTlsConfig::new())
             } else {
                 Ok(node_endpoint)

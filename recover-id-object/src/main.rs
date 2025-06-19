@@ -110,12 +110,7 @@ async fn main() -> anyhow::Result<()> {
     let concordium_client = {
         // Use TLS if the URI scheme is HTTPS.
         // This uses whatever system certificates have been installed as trusted roots.
-        let endpoint = if app
-            .api
-            .uri()
-            .scheme()
-            .map_or(false, |x| x == &v2::Scheme::HTTPS)
-        {
+        let endpoint = if app.api.uri().scheme() == Some(&v2::Scheme::HTTPS) {
             app.api
                 .tls_config(ClientTlsConfig::new())
                 .context("Unable to construct TLS configuration for the Concordium API.")?

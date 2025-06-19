@@ -409,12 +409,7 @@ async fn main() -> anyhow::Result<()> {
             .expect("failed to install metrics exporter");
     }
 
-    let endpoint = if args
-        .endpoint
-        .uri()
-        .scheme()
-        .map_or(false, |x| x == &Scheme::HTTPS)
-    {
+    let endpoint = if args.endpoint.uri().scheme() == Some(&Scheme::HTTPS) {
         args.endpoint.tls_config(ClientTlsConfig::new())?
     } else {
         args.endpoint

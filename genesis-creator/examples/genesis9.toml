@@ -72,6 +72,7 @@ addAnonymityRevoker = {authorizedKeys = [0,1,2,3,4,5,6], threshold = 7}
 addIdentityProvider = {authorizedKeys = [0,1,2,3,4,5,6], threshold = 7}
 cooldownParameters = {authorizedKeys = [0,1,2,3,4,5,6], threshold = 7}
 timeParameters = {authorizedKeys = [0,1,2,3,4,5,6], threshold = 7}
+createPlt = {authorizedKeys = [0,1,2,3,4,5,6], threshold = 7}
 
 [parameters]
 # genesisTime = "2022-06-24T11:12:43Z" # Falls back to use the current time for genesis time.

@@ -6,7 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-concordium-rust-sdk = { path = "../deps/concordium-rust-sdk", version = "*" }
+concordium-rust-sdk = { path = "../deps/concordium-rust-sdk" }
+concordium_base = { path = "../deps/concordium-rust-sdk/concordium-base/rust-src/concordium_base" }
 clap = {version = "3.2", features = ["derive"] }
 toml = "0.5"
 serde_json = "1"

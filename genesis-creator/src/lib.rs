@@ -33,8 +33,7 @@ use concordium_rust_sdk::{
     },
     types::{
         AccountIndex, AuthorizationsV0, AuthorizationsV1, BakerCredentials, BakerId, BakerKeyPairs,
-        ChainParameterVersion0, ChainParameterVersion1, HigherLevelAccessStructure,
-        ProtocolVersion, UpdateKeyPair, UpdateKeysCollection, UpdateKeysCollectionSkeleton,
+        HigherLevelAccessStructure, ProtocolVersion, UpdateKeyPair, UpdateKeysCollectionSkeleton,
         UpdatePublicKey,
     },
 };
@@ -307,7 +306,7 @@ fn read_or_generate_update_keys<R: rand::Rng + rand::CryptoRng>(
 fn updates_v0(
     updates_out: Option<PathBuf>,
     update_cfg: UpdateKeysConfig,
-) -> anyhow::Result<UpdateKeysCollection<ChainParameterVersion0>> {
+) -> anyhow::Result<UpdateKeysCollectionSkeleton<AuthorizationsV0>> {
     let mut csprng = rand::thread_rng();
     let root_keys = read_or_generate_update_keys(
         "root",
@@ -410,13 +409,12 @@ fn updates_v0(
 /// - updates_out - where to put all chain update keys
 /// - update_cfg - the configuration specifying all keys and thresholds
 ///
-/// The function returns a `anyhow::Result`, whic upon success contains the
-/// version 1 `UpdateKeysCollection`. NB: To be used only in chain parameters
-/// version 1.
+/// The function returns a `anyhow::Result`, which upon success contains the
+/// version 1 `UpdateKeysCollection`.
 fn updates_v1(
     updates_out: Option<PathBuf>,
-    update_cfg: UpdateKeysConfig,
-) -> anyhow::Result<UpdateKeysCollection<ChainParameterVersion1>> {
+    update_cfg: &UpdateKeysConfig,
+) -> anyhow::Result<UpdateKeysCollectionSkeleton<AuthorizationsV1>> {
     let mut csprng = rand::thread_rng();
     let root_keys = read_or_generate_update_keys(
         "root",
@@ -455,7 +453,7 @@ fn updates_v1(
         "There must be at least one level 2 key.",
     );
 
-    let level2 = update_cfg.level2;
+    let level2 = &update_cfg.level2;
     let emergency = level2.emergency.access_structure(&level2_keys)?;
     let protocol = level2.protocol.access_structure(&level2_keys)?;
     let election_difficulty = level2.election_difficulty.access_structure(&level2_keys)?;
@@ -476,10 +474,12 @@ fn updates_v1(
         .access_structure(&level2_keys)?;
     let cooldown_parameters = level2
         .cooldown_parameters
+        .as_ref()
         .ok_or_else(|| anyhow!("Cooldown parameters missing"))?
         .access_structure(&level2_keys)?;
     let time_parameters = level2
         .time_parameters
+        .as_ref()
         .ok_or_else(|| anyhow!("Time parameters missing"))?
         .access_structure(&level2_keys)?;
 
@@ -502,6 +502,7 @@ fn updates_v1(
         v0,
         cooldown_parameters,
         time_parameters,
+        create_plt: None,
     };
 
     let uks = UpdateKeysCollectionSkeleton {
@@ -525,6 +526,28 @@ fn updates_v1(
     }
 
     Ok(uks)
+}
+
+/// Function for creating a version 2 `UpdateKeysCollection` containing all
+/// root, level 1 and level 2 keys. The arguments are
+/// - updates_out - where to put all chain update keys
+/// - update_cfg - the configuration specifying all keys and thresholds
+///
+/// The function returns a `anyhow::Result`, which upon success contains the
+/// version 2 `UpdateKeysCollection`.
+fn updates_v2(
+    updates_out: Option<PathBuf>,
+    update_cfg: &UpdateKeysConfig,
+) -> anyhow::Result<UpdateKeysCollectionSkeleton<AuthorizationsV1>> {
+    let mut updates = updates_v1(updates_out, update_cfg)?;
+    let create_plt = update_cfg
+        .level2
+        .create_plt
+        .as_ref()
+        .ok_or_else(|| anyhow!("Create PLT authorizations missing"))?
+        .access_structure(&updates.level_2_keys.v0.keys)?;
+    updates.level_2_keys.create_plt = Some(create_plt);
+    Ok(updates)
 }
 
 /// Function for creating a vector of genesis accounts, where each key is either
@@ -942,8 +965,15 @@ pub fn handle_assemble(config_path: &Path, verbose: bool) -> anyhow::Result<()> 
                         .context("P4 does not have CPV0")?
                 }
                 GenesisChainParameters::V1(params) => {
-                    let update_keys =
+                    let update_keys: UpdateKeysCollectionSkeleton<AuthorizationsV1> =
                         read_json(&make_relative(config_path, &config.governance_keys)?)?;
+
+                    if update_keys.level_2_keys.create_plt.is_some() {
+                        bail!(
+                            "{} does not support createPLT authorization.",
+                            protocol_version
+                        );
+                    }
                     let initial_state = GenesisStateCPV1 {
                         cryptographic_parameters: global.value,
                         identity_providers: idps.value,
@@ -970,7 +1000,15 @@ pub fn handle_assemble(config_path: &Path, verbose: bool) -> anyhow::Result<()> 
             }
         }
         ProtocolConfig::P6 { parameters } | ProtocolConfig::P7 { parameters } => {
-            let update_keys = read_json(&make_relative(config_path, &config.governance_keys)?)?;
+            let update_keys: UpdateKeysCollectionSkeleton<AuthorizationsV1> =
+                read_json(&make_relative(config_path, &config.governance_keys)?)?;
+
+            if update_keys.level_2_keys.create_plt.is_some() {
+                bail!(
+                    "{} does not support createPLT authorization.",
+                    protocol_version
+                );
+            }
 
             let initial_state = GenesisStateCPV2 {
                 cryptographic_parameters: global.value,
@@ -995,7 +1033,12 @@ pub fn handle_assemble(config_path: &Path, verbose: bool) -> anyhow::Result<()> 
             }
         }
         ProtocolConfig::P8 { parameters } => {
-            let update_keys = read_json(&make_relative(config_path, &config.governance_keys)?)?;
+            let update_keys: UpdateKeysCollectionSkeleton<AuthorizationsV1> =
+                read_json(&make_relative(config_path, &config.governance_keys)?)?;
+
+            if update_keys.level_2_keys.create_plt.is_some() {
+                bail!("P8 does not support createPLT authorization.");
+            }
 
             let initial_state = GenesisStateCPV3 {
                 cryptographic_parameters: global.value,
@@ -1014,7 +1057,12 @@ pub fn handle_assemble(config_path: &Path, verbose: bool) -> anyhow::Result<()> 
         }
 
         ProtocolConfig::P9 { parameters } => {
-            let update_keys = read_json(&make_relative(config_path, &config.governance_keys)?)?;
+            let update_keys: UpdateKeysCollectionSkeleton<AuthorizationsV1> =
+                read_json(&make_relative(config_path, &config.governance_keys)?)?;
+
+            if update_keys.level_2_keys.create_plt.is_none() {
+                bail!("P9 requires createPLT authorization.");
+            }
 
             let initial_state = GenesisStateCPV3 {
                 cryptographic_parameters: global.value,
@@ -1203,7 +1251,7 @@ pub fn handle_generate(config_path: &Path, verbose: bool) -> anyhow::Result<()> 
                             ))
                         }
                     };
-                    let update_keys = updates_v1(config.out.update_keys, config.updates)?;
+                    let update_keys = updates_v1(config.out.update_keys, &config.updates)?;
                     let initial_state = GenesisStateCPV1 {
                         cryptographic_parameters,
                         identity_providers,
@@ -1233,7 +1281,7 @@ pub fn handle_generate(config_path: &Path, verbose: bool) -> anyhow::Result<()> 
             }
         }
         ProtocolConfig::P6 { parameters } | ProtocolConfig::P7 { parameters } => {
-            let update_keys = updates_v1(config.out.update_keys, config.updates)?;
+            let update_keys = updates_v1(config.out.update_keys, &config.updates)?;
 
             let initial_state = GenesisStateCPV2 {
                 cryptographic_parameters,
@@ -1258,7 +1306,7 @@ pub fn handle_generate(config_path: &Path, verbose: bool) -> anyhow::Result<()> 
             }
         }
         ProtocolConfig::P8 { parameters } => {
-            let update_keys = updates_v1(config.out.update_keys, config.updates)?;
+            let update_keys = updates_v1(config.out.update_keys, &config.updates)?;
 
             let initial_state = GenesisStateCPV3 {
                 cryptographic_parameters,
@@ -1276,7 +1324,7 @@ pub fn handle_generate(config_path: &Path, verbose: bool) -> anyhow::Result<()> 
             }
         }
         ProtocolConfig::P9 { parameters } => {
-            let update_keys = updates_v1(config.out.update_keys, config.updates)?;
+            let update_keys = updates_v2(config.out.update_keys, &config.updates)?;
 
             let initial_state = GenesisStateCPV3 {
                 cryptographic_parameters,

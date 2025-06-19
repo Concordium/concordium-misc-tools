@@ -85,12 +85,7 @@ async fn main() -> anyhow::Result<()> {
     log_builder.filter_level(app.log_level);
     log_builder.init();
 
-    let endpoint = if app
-        .endpoint
-        .uri()
-        .scheme()
-        .map_or(false, |x| x == &Scheme::HTTPS)
-    {
+    let endpoint = if app.endpoint.uri().scheme() == Some(&Scheme::HTTPS) {
         app.endpoint
             .tls_config(ClientTlsConfig::new())
             .context("Unable to construct TLS configuration for Concordium API.")?

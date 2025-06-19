@@ -10,7 +10,7 @@ on:
 env:
   REGISTRY: docker.io
   SERVICE_NAME: chain-prometheus-exporter
-  RUST_VERSION: rust:1.81-bookworm
+  RUST_VERSION: rust:1.85-bookworm
 
 jobs:
   publish-docker-image:
