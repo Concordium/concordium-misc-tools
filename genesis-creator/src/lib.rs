@@ -127,7 +127,7 @@ fn identity_providers(
                         "Duplicate identity provider {}",
                         ip_identity
                     );
-                    let ip_description = mk_dummy_description(format!("Generated IP {}", n));
+                    let ip_description = mk_dummy_description(format!("Generated IP {n}"));
                     // using 30 as the key capacity. That is enough given the current list of
                     // attributes.
                     let ip_secret_key =
@@ -150,7 +150,7 @@ fn identity_providers(
                     };
                     {
                         let mut path = idp_out.clone();
-                        path.push(format!("ip-data-{}.json", n));
+                        path.push(format!("ip-data-{n}.json"));
                         std::fs::write(path, serde_json::to_string_pretty(&ip_data).unwrap())
                             .context("Unable to write the identity provider.")?;
                     }
@@ -213,7 +213,7 @@ fn anonymity_revokers(
                         "Duplicate anonymity revoker {}",
                         ar_identity
                     );
-                    let ar_description = mk_dummy_description(format!("Generated AR {}", n));
+                    let ar_description = mk_dummy_description(format!("Generated AR {n}"));
                     let ar_secret_key =
                         id::elgamal::SecretKey::generate(params.elgamal_generator(), &mut csprng);
                     let ar_data = ArData {
@@ -226,7 +226,7 @@ fn anonymity_revokers(
                     };
                     {
                         let mut path = ars_out.clone();
-                        path.push(format!("ar-data-{}.json", n));
+                        path.push(format!("ar-data-{n}.json"));
                         std::fs::write(path, serde_json::to_string_pretty(&ar_data).unwrap())
                             .context("Unable to write the anonymity revoker.")?;
                     }
@@ -275,7 +275,7 @@ fn read_or_generate_update_keys<R: rand::Rng + rand::CryptoRng>(
                     source.display()
                 ))?;
                 let key: UpdatePublicKey = serde_json::from_slice(&data)
-                    .context(format!("Could not parse the {} key.", ctx))?;
+                    .context(format!("Could not parse the {ctx} key."))?;
                 out.push(key);
             }
             HigherLevelKey::Fresh { repeat } => {
@@ -285,7 +285,7 @@ fn read_or_generate_update_keys<R: rand::Rng + rand::CryptoRng>(
                         let mut path = root_out.to_path_buf();
                         path.push(format!("{}-key-{}.json", ctx, out.len()));
                         std::fs::write(path, serde_json::to_string_pretty(&new_key).unwrap())
-                            .context(format!("Unable to write {} key.", ctx))?;
+                            .context(format!("Unable to write {ctx} key."))?;
                     }
                     out.push((&new_key).into());
                 }
@@ -629,7 +629,7 @@ fn accounts(
                                 BakerKeyPairs::generate(&mut csprng),
                             );
                             let mut path = baker_keys_out.clone();
-                            path.push(format!("baker-{}-credentials.json", idx));
+                            path.push(format!("baker-{idx}-credentials.json"));
                             std::fs::write(path, serde_json::to_string_pretty(&creds).unwrap())
                                 .context("Unable to output baker keys.")?;
                             creds
@@ -802,7 +802,7 @@ fn accounts(
 
                         {
                             let mut path = account_keys_out.clone();
-                            path.push(format!("{}-{}.json", template, n));
+                            path.push(format!("{template}-{n}.json"));
                             std::fs::write(path, serde_json::to_string_pretty(&ga).unwrap())
                                 .context("Unable to output account keys.")?;
                         }
@@ -818,7 +818,7 @@ fn accounts(
                             let creds = BakerCredentials::new(baker_id, keys);
 
                             let mut path = baker_keys_out.clone();
-                            path.push(format!("baker-{}-credentials.json", n));
+                            path.push(format!("baker-{n}-credentials.json"));
                             std::fs::write(path, serde_json::to_string_pretty(&creds).unwrap())
                                 .context("Unable to output baker keys.")?;
 
@@ -915,7 +915,7 @@ pub fn handle_assemble(config_path: &Path, verbose: bool) -> anyhow::Result<()> 
 
     if verbose {
         println!("Using the following configuration structure for generating genesis.");
-        println!("{:#?}", config);
+        println!("{config:#?}");
     }
 
     let idx = accounts
@@ -1102,7 +1102,7 @@ pub fn handle_generate(config_path: &Path, verbose: bool) -> anyhow::Result<()> 
         toml::from_slice(&config_source).context("Unable to parse the configuration file.")?;
     if verbose {
         println!("Using the following configuration structure for generating genesis.");
-        println!("{:#?}", config);
+        println!("{config:#?}");
     }
 
     if config.out.delete_existing {
@@ -1205,13 +1205,13 @@ pub fn handle_generate(config_path: &Path, verbose: bool) -> anyhow::Result<()> 
             let genesis_time = chrono::DateTime::<chrono::Utc>::from(std::time::UNIX_EPOCH)
                 + chrono::Duration::milliseconds(core.time.millis as i64);
 
-            println!("Genesis time is set to {}.", genesis_time);
+            println!("Genesis time is set to {genesis_time}.");
             let slot_duration = rust_decimal::Decimal::from_u64(parameters.slot_duration.millis)
                 .context("Too large slot duration.")?;
             let elect_diff = parameters.chain.election_difficulty();
             let average_block_time: rust_decimal::Decimal =
                 slot_duration / rust_decimal::Decimal::from(elect_diff);
-            println!("Average block time is set to {}ms.", average_block_time);
+            println!("Average block time is set to {average_block_time}ms.");
 
             match protocol_version {
                 ProtocolVersion::P1 | ProtocolVersion::P2 | ProtocolVersion::P3 => {
