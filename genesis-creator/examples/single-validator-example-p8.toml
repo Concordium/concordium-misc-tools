@@ -1,0 +1,131 @@
+# An example genesis configuration for a single validator at protocol version 8.
+# This creates a genesis with
+# - 1 validator with 3_000_000_000 CCD staked out of 3_500_000_000 CCD total
+# - a foundation account with 10_000_000_000 CCD
+# - 100 extra accounts with 2_000_000 CCD each
+# - minimum block time set to 2s
+
+protocolVersion = "8"
+
+[out]
+updateKeys = "./update-keys"
+accountKeys = "./accounts"
+bakerKeys = "./bakers"
+identityProviders = "./idps"
+anonymityRevokers = "./ars"
+genesis = "./genesis.dat"
+cryptographicParameters = "./global"
+deleteExisting = true
+genesisHash = "./genesis_hash"
+
+[cryptographicParameters]
+kind = "generate"
+genesisString = "Local genesis parameters."
+
+[[anonymityRevokers]]
+kind = "fresh"
+id = 1
+repeat = 3
+
+[[identityProviders]]
+kind = "fresh"
+id = 0
+repeat = 3
+
+# the baker account
+[[accounts]]
+kind = "fresh"
+balance = "3500000000000000"
+stake =   "3000000000000000"
+template = "baker"
+identityProvider = 0
+numKeys = 1
+threshold = 1
+repeat = 1
+
+# the foundation account
+[[accounts]]
+kind = "fresh"
+balance = "10000000000000000"
+template = "foundation"
+identityProvider = 0
+numKeys = 1
+threshold = 1
+repeat = 1
+foundation = true
+
+# the extra accounts
+[[accounts]]
+kind = "fresh"
+balance = "2000000000000"
+template = "stagenet"
+identityProvider = 0
+numKeys = 1
+threshold = 1
+repeat = 100
+
+# update key configuration
+[updates]
+root = { threshold = 5, keys = [{kind = "fresh", repeat = 7}]}
+level1 = { threshold = 7, keys = [{kind = "fresh", repeat = 15}]}
+
+[updates.level2]
+keys = [{kind = "fresh", repeat = 7}] # 7 keys in total
+emergency = {authorizedKeys = [0,1,2,3,4,5,6], threshold = 7}
+protocol = {authorizedKeys = [0,1,2,3,4,5,6], threshold = 7}
+electionDifficulty = {authorizedKeys = [0,1,2,3,4,5,6], threshold = 7}
+euroPerEnergy = {authorizedKeys = [0,1,2,3,4,5,6], threshold = 7}
+microCCDPerEuro = {authorizedKeys = [0,1,2,3,4,5,6], threshold = 7}
+foundationAccount = {authorizedKeys = [0,1,2,3,4,5,6], threshold = 7}
+mintDistribution = {authorizedKeys = [0,1,2,3,4,5,6], threshold = 7}
+transactionFeeDistribution = {authorizedKeys = [0,1,2,3,4,5,6], threshold = 7}
+gasRewards = {authorizedKeys = [0,1,2,3,4,5,6], threshold = 7}
+poolParameters = {authorizedKeys = [0,1,2,3,4,5,6], threshold = 7}
+addAnonymityRevoker = {authorizedKeys = [0,1,2,3,4,5,6], threshold = 7}
+addIdentityProvider = {authorizedKeys = [0,1,2,3,4,5,6], threshold = 7}
+cooldownParameters = {authorizedKeys = [0,1,2,3,4,5,6], threshold = 7}
+timeParameters = {authorizedKeys = [0,1,2,3,4,5,6], threshold = 7}
+
+[parameters]
+# Default genesis time to current time.
+# genesisTime = "2022-11-11T11:00:00Z" # 
+leadershipElectionNonce = "d1bc8d3ba4afc7e109612cb73acbdddac052c93025aa1f82942edabb7deb82a1"
+epochDuration = "1h" # Meaning 1 hour.
+signatureThreshold = {numerator = 2, denominator = 3} # Must be between 2/3 and 1.
+
+[parameters.chain]
+minBlockTime = "2s" # Meaning 2 seconds.
+euroPerEnergy = 0.00002
+microCCDPerEuro = 500_000
+accountCreationLimit = 10
+blockEnergyLimit = 3_000_000
+[parameters.chain.finalizationCommitteeParameters]
+minFinalizers = 5
+maxFinalizers = 5
+finalizersRelativeStakeThreshold = 200 # parts per hundred thousand (n / 100000).
+[parameters.chain.timeParameters]
+rewardPeriodLength = 4 # 4 epochs
+mintPerPayday = 2.61157877e-4
+[parameters.chain.poolParameters]
+passiveFinalizationCommission = 1.0
+passiveBakingCommission = 0.1
+passiveTransactionCommission = 0.1
+finalizationCommissionRange = {min = 0.5,max = 1.0}
+bakingCommissionRange = {min = 0.05,max = 0.1}
+transactionCommissionRange = {min = 0.05,max = 0.2}
+minimumEquityCapital = "500000000000"
+capitalBound = 0.10
+leverageBound = { denominator = 1, numerator = 3}
+[parameters.chain.cooldownParameters]
+poolOwnerCooldown = 800 # in seconds
+delegatorCooldown = 1000 # in seconds
+[parameters.chain.rewardParameters]
+mintDistribution = { bakingReward = 0.85, finalizationReward = 0.05 }
+transactionFeeDistribution = { baker = 0.45, gasAccount = 0.45 }
+gASRewards = { baker = 0.25, accountCreation = 0.02, chainUpdate = 0.005 }
+[parameters.chain.timeoutParameters]
+base = "2s" # Meaning 2 seconds
+increase = 1.2 # Must be greater than 1.
+decrease = 0.8 # Must be between 0 and 1.
+[parameters.chain.validatorScoreParameters]
+maxMissedRounds = 10
