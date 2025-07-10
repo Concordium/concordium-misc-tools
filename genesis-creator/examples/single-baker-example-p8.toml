@@ -1,9 +1,9 @@
-# An example genesis configuration for a single baker at protocol version 8.
+# An example genesis configuration for a single validator at protocol version 8.
 # This creates a genesis with
-# - 1 baker with 3_000_000_000 CCD staked out of 3_500_000_000 CCD total
+# - 1 validator with 3_000_000_000 CCD staked out of 3_500_000_000 CCD total
 # - a foundation account with 10_000_000_000 CCD
 # - 100 extra accounts with 2_000_000 CCD each
-# - mininum block time set for 2s
+# - minimum block time set to 2s
 
 protocolVersion = "8"
 
