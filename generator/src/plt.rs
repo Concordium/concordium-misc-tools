@@ -1,47 +1,53 @@
-use std::path::PathBuf;
+use crate::generator::{CommonArgs, Generate};
 use anyhow::Context;
-use clap::Args;
+use clap::{Args, Subcommand};
 use concordium_rust_sdk::common::types::{AccountAddress, Amount, TransactionTime};
-use concordium_rust_sdk::protocol_level_tokens::{TokenAmount, TokenId};
-use concordium_rust_sdk::types::Nonce;
+use concordium_rust_sdk::protocol_level_tokens::{operations, ConversionRule, TokenAmount, TokenId, TokenInfo};
 use concordium_rust_sdk::types::transactions::{send, AccountTransaction, EncodedPayload};
+use concordium_rust_sdk::types::Nonce;
 use concordium_rust_sdk::v2;
 use concordium_rust_sdk::v2::BlockIdentifier;
 use futures::TryStreamExt;
 use rand::rngs::StdRng;
+use rand::seq::SliceRandom;
 use rand::{Rng, SeedableRng};
 use rust_decimal::Decimal;
-use crate::generator::{CommonArgs, Generate};
+use std::path::PathBuf;
 
 #[derive(Debug, Args)]
 pub struct PltArgs {
     #[arg(long = "receivers", help = "Path to file containing receivers.")]
     receivers: Option<PathBuf>,
-    #[clap(
-        long = "token",
-        help = "PLT token to use",
-    )]
-    token:    TokenId,
-    
+    #[clap(long = "token", help = "PLT token to use")]
+    token: TokenId,
+
     #[clap(
         long = "amount",
         help = "token amount to send in each transaction",
         default_value = "0.0"
     )]
-    amount:    Decimal,
-    
+    amount: Decimal,
+
+    #[command(subcommand)]
+    plt_operation: PltOperation,
 }
 
+#[derive(Debug, Subcommand)]
+enum PltOperation {
+    Transfer,
+    MintBurn,
+}
 
-/// A generator that makes CCD transactions for a list of accounts.
+/// A generator that creates PLT operations
 pub struct PltGenerator {
-    args:     CommonArgs,
-    amount:   TokenAmount,
+    args: CommonArgs,
+    plt_operation: PltOperation,
+    amount: TokenAmount,
     accounts: Vec<AccountAddress>,
-    random:   bool,
-    rng:      StdRng,
-    count:    usize,
-    nonce:    Nonce,
+    rng: StdRng,
+    count: usize,
+    nonce: Nonce,
+    token_info: TokenInfo,
 }
 
 impl PltGenerator {
@@ -50,7 +56,6 @@ impl PltGenerator {
         args: CommonArgs,
         plt_args: PltArgs,
     ) -> anyhow::Result<Self> {
-        // Get the list of receivers.
         let accounts: Vec<AccountAddress> = match plt_args.receivers {
             None => {
                 client
@@ -65,58 +70,79 @@ impl PltGenerator {
                 &std::fs::read_to_string(receivers)
                     .context("Could not read the receivers file.")?,
             )
-                .context("Could not parse the receivers file.")?,
+            .context("Could not parse the receivers file.")?,
         };
         anyhow::ensure!(!accounts.is_empty(), "List of receivers must not be empty.");
 
-        // Filter accounts based on mode.
         let (random, accounts) = (false, accounts);
 
-        // Get the initial nonce.
         let nonce = client
             .get_next_account_sequence_number(&args.keys.address)
             .await?;
-        anyhow::ensure!(nonce.all_final, "Not all transactions are finalized.");
-        
-        let token_info = client.get_token_info(plt_args.token.clone(), BlockIdentifier::LastFinal).await?.response;
-let amount = TokenAmount:: plt_args.amount
-        
+        anyhow::ensure!(nonce.all_final, "not all transactions are finalized.");
+
+        let token_info = client
+            .get_token_info(plt_args.token.clone(), BlockIdentifier::LastFinal)
+            .await
+            .context("fetch token info for token id")?
+            .response;
+        let amount = TokenAmount::try_from_rust_decimal(
+            plt_args.amount,
+            token_info.token_state.decimals,
+            ConversionRule::Exact,
+        )
+        .context("convert token amount")?;
+
         let rng = StdRng::from_rng(rand::thread_rng())?;
         Ok(Self {
             args,
-            amount: todo!(),
+            amount,
             accounts,
-            random,
             rng,
+            token_info,
             count: 0,
             nonce: nonce.nonce,
+            plt_operation: plt_args.plt_operation,
         })
     }
 }
 
 impl Generate for PltGenerator {
     fn generate(&mut self) -> anyhow::Result<AccountTransaction<EncodedPayload>> {
-        // let next_account = if self.random {
-        //     let n = self.rng.gen_range(0..self.accounts.len());
-        //     self.accounts[n]
-        // } else {
-        //     self.accounts[self.count % self.accounts.len()]
-        // };
-        // 
-        // let expiry = TransactionTime::seconds_after(self.args.expiry);
-        // let tx = send::transfer(
-        //     &self.args.keys,
-        //     self.args.keys.address,
-        //     self.nonce,
-        //     expiry,
-        //     next_account,
-        //     self.amount,
-        // );
-        // 
-        // self.nonce.next_mut();
-        // self.count += 1;
-        // 
-        // Ok(tx)
-        todo!()
+        let expiry = TransactionTime::seconds_after(self.args.expiry);
+        
+        let operation= match self.plt_operation {
+            PltOperation::Transfer => {
+                let receiver = self
+                    .accounts
+                    .choose(&mut self.rng)
+                    .expect("accounts never initialized empty")
+                    .clone();
+
+                operations::transfer_tokens(receiver, self.amount)
+            }
+            PltOperation::MintBurn => {
+                let mint: bool = self.rng.gen();
+                if mint {
+                    operations::mint_tokens(self.amount)
+                } else {
+                    operations::burn_tokens(self.amount)
+                }
+            }
+        };
+        
+        let txn = send::token_update_operations(
+            &self.args.keys,
+            self.args.keys.address,
+            self.nonce,
+            expiry,
+            self.token_info.token_id.clone(),
+            [operation].into_iter().collect(),
+        )?;
+
+        self.nonce.next_mut();
+        self.count += 1;
+
+        Ok(txn)
     }
 }

@@ -56,7 +56,7 @@ enum Command {
     RegisterCredentials,
     /// Register data
     RegisterData(generator::RegisterDataArgs),
-    PltOperations(plt::PltArgs),
+    Plt(plt::PltArgs),
 }
 
 #[tokio::main(flavor = "multi_thread")]
@@ -115,7 +115,7 @@ async fn main() -> anyhow::Result<()> {
                     .await?;
             generate_transactions(client, generator, app.tps).await
         }
-        Command::PltOperations(plt_args) => {
+        Command::Plt(plt_args) => {
             let generator = PltGenerator::instantiate(client.clone(), args, plt_args).await?;
             generate_transactions(client, generator, app.tps).await
         }
