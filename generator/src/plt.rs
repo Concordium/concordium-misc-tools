@@ -16,18 +16,16 @@ use std::path::PathBuf;
 
 #[derive(Debug, Args)]
 pub struct PltArgs {
-    #[arg(long = "receivers", help = "Path to file containing receivers.")]
-    receivers: Option<PathBuf>,
+    #[arg(long = "targets", help = "path to file containing receivers/targets")]
+    targets: Option<PathBuf>,
     #[clap(long = "token", help = "PLT token to use")]
     token: TokenId,
-
     #[clap(
         long = "amount",
-        help = "token amount to send in each transaction",
-        default_value = "0.0"
+        help = "token amount to use in each PLT operation (transfer/mint/burn)",
+        default_value = "0.00001"
     )]
     amount: Decimal,
-
     #[command(subcommand)]
     plt_operation: PltOperation,
 }
@@ -36,6 +34,7 @@ pub struct PltArgs {
 enum PltOperation {
     Transfer,
     MintBurn,
+    AddRemoveAllowDeny,
 }
 
 /// A generator that creates PLT operations
@@ -56,7 +55,7 @@ impl PltGenerator {
         args: CommonArgs,
         plt_args: PltArgs,
     ) -> anyhow::Result<Self> {
-        let accounts: Vec<AccountAddress> = match plt_args.receivers {
+        let accounts: Vec<AccountAddress> = match plt_args.targets {
             None => {
                 client
                     .get_account_list(BlockIdentifier::LastFinal)
@@ -73,8 +72,6 @@ impl PltGenerator {
             .context("Could not parse the receivers file.")?,
         };
         anyhow::ensure!(!accounts.is_empty(), "List of receivers must not be empty.");
-
-        let (random, accounts) = (false, accounts);
 
         let nonce = client
             .get_next_account_sequence_number(&args.keys.address)
@@ -105,6 +102,14 @@ impl PltGenerator {
             plt_operation: plt_args.plt_operation,
         })
     }
+    
+    fn random_account(&mut self) -> AccountAddress {
+        self
+            .accounts
+            .choose(&mut self.rng)
+            .expect("accounts never initialized empty")
+            .clone()
+    }
 }
 
 impl Generate for PltGenerator {
@@ -113,13 +118,9 @@ impl Generate for PltGenerator {
         
         let operation= match self.plt_operation {
             PltOperation::Transfer => {
-                let receiver = self
-                    .accounts
-                    .choose(&mut self.rng)
-                    .expect("accounts never initialized empty")
-                    .clone();
-
-                operations::transfer_tokens(receiver, self.amount)
+                
+                
+                operations::transfer_tokens(self.random_account(), self.amount)
             }
             PltOperation::MintBurn => {
                 let mint: bool = self.rng.gen();
@@ -128,6 +129,23 @@ impl Generate for PltGenerator {
                 } else {
                     operations::burn_tokens(self.amount)
                 }
+            }
+            PltOperation::AddRemoveAllowDeny => {
+                 match rand::thread_rng().gen_range(0..4) {
+                     0 => {
+                         operations::add_token_allow_list(self.random_account())     
+                     }
+                     1 => {
+                         operations::remove_token_allow_list(self.random_account())
+                     }
+                     2 => {
+                         operations::add_token_deny_list(self.random_account())
+                     }
+                     3 => {
+                         operations::remove_token_deny_list(self.random_account())
+                     }
+                     _ => unreachable!()
+                 }
             }
         };
         
