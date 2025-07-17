@@ -6,8 +6,10 @@ use generator::{
     RegisterCredentialsGenerator, RegisterDataGenerator, TransferCis2Generator, WccdGenerator,
 };
 use std::path::PathBuf;
+use crate::plt::PltGenerator;
 
 mod generator;
+mod plt;
 
 #[derive(clap::Parser, Debug)]
 #[clap(author, version, about)]
@@ -54,6 +56,7 @@ enum Command {
     RegisterCredentials,
     /// Register data
     RegisterData(generator::RegisterDataArgs),
+    PltOperations(plt::PltArgs),
 }
 
 #[tokio::main(flavor = "multi_thread")]
@@ -110,6 +113,10 @@ async fn main() -> anyhow::Result<()> {
             let generator =
                 RegisterDataGenerator::instantiate(client.clone(), args, register_data_args)
                     .await?;
+            generate_transactions(client, generator, app.tps).await
+        }
+        Command::PltOperations(plt_args) => {
+            let generator = PltGenerator::instantiate(client.clone(), args, plt_args).await?;
             generate_transactions(client, generator, app.tps).await
         }
     }
