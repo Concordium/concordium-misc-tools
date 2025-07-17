@@ -1,5 +1,5 @@
 use crate::generator::{CommonArgs, Generate};
-use anyhow::Context;
+use anyhow::{ensure, Context};
 use clap::{Args, Subcommand};
 use concordium_rust_sdk::common::types::{AccountAddress, Amount, TransactionTime};
 use concordium_rust_sdk::protocol_level_tokens::{operations, CborHolderAccount, CborTokenHolder, CoinInfo, ConversionRule, MetadataUrl, RawCbor, TokenAmount, TokenId, TokenInfo, TokenModuleInitializationParameters, TokenModuleRef};
@@ -51,7 +51,6 @@ pub struct PltOperationGenerator {
     amount: TokenAmount,
     accounts: Vec<AccountAddress>,
     rng: StdRng,
-    count: usize,
     nonce: Nonce,
     token_info: TokenInfo,
 }
@@ -106,7 +105,6 @@ impl PltOperationGenerator {
             accounts,
             rng,
             token_info,
-            count: 0,
             nonce: nonce.nonce,
             plt_operation: plt_args.plt_operation,
         })
@@ -122,10 +120,6 @@ impl PltOperationGenerator {
 
 impl Generate for PltOperationGenerator {
     fn generate(&mut self) -> anyhow::Result<AccountTransaction<EncodedPayload>> {
-        unreachable!()
-    }
-
-    fn generate_block_item(&mut self) -> anyhow::Result<BlockItem<EncodedPayload>> {
         let expiry = TransactionTime::seconds_after(self.args.expiry);
 
         let operation = match self.plt_operation {
@@ -159,7 +153,6 @@ impl Generate for PltOperationGenerator {
         )?;
 
         self.nonce.next_mut();
-        self.count += 1;
 
         Ok(txn)
     }
@@ -175,6 +168,8 @@ pub struct CreatePltArgs {
     amount: Decimal,
     #[clap(long = "update-key", help = "path to file containing update key")]
     update_keys:  Vec<PathBuf>,
+    #[clap(long = "count", help = "number of PLTs to create")]
+    count: Option<usize>,
 }
 
 /// A generator that creates PLTs
@@ -182,7 +177,8 @@ pub struct CreatePltGenerator {
     args: CommonArgs,
     initial_supply: TokenAmount,
     rng: StdRng,
-    count: usize,
+    created: usize,
+    count: Option<usize>,
     update_sequence: UpdateSequenceNumber,
     governance_account: AccountAddress,
 }
@@ -216,7 +212,8 @@ impl CreatePltGenerator {
             args,
             initial_supply: amount,
             rng,
-            count: 0,
+            created: 0,
+            count: plt_args.count,
             update_sequence,
         })
     }
@@ -228,6 +225,10 @@ impl Generate for CreatePltGenerator {
     }
 
     fn generate_block_item(&mut self) -> anyhow::Result<BlockItem<EncodedPayload>> {
+        if let Some(count) = self.count {
+            ensure!(self.created < count, "already created {} PLTs", self.created);
+        }
+
         let timeout = TransactionTime::seconds_after(self.args.expiry);
 
         let token_id: String = (0..16).map(|_| (self.rng.gen_range('A'..'Z'))).collect();
@@ -269,11 +270,11 @@ impl Generate for CreatePltGenerator {
                 payload_size: u32::try_from(common::to_bytes(&payload).len())?.into(),
             },
             payload,
-            signatures: UpdateInstructionSignature {},
+            signatures: UpdateInstructionSignature { signatures: Default::default() },// todo ar
         };
 
         self.update_sequence.next_mut();
-        self.count += 1;
+        self.created += 1;
 
         Ok(BlockItem::UpdateInstruction(update_instr))
     }
