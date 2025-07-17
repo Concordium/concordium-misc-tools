@@ -38,14 +38,14 @@ pub struct CcdArgs {
         help = "CCD amount to send in each transaction",
         default_value = "0"
     )]
-    amount:    Amount,
+    amount: Amount,
     #[clap(
         long = "mode",
         help = "If set this provides the mode when selecting accounts. It can either be `random` \
                 or a non-negative integer. If it is an integer then the set of receivers is \
                 partitioned based on baker id into the given amount of chunks."
     )]
-    mode:      Option<Mode>,
+    mode: Option<Mode>,
 }
 
 #[derive(Debug, Args)]
@@ -91,9 +91,9 @@ const REGISTER_CREDENTIALS_MODULE: &[u8] =
 /// Info needed to deploy and initialize a contract.
 struct ContractDeploymentInfo {
     /// The module to deploy.
-    module:      &'static [u8],
+    module: &'static [u8],
     /// The name of the init function, e.g. "init_cis2_nft".
-    name:        &'static str,
+    name: &'static str,
     /// The energy needed to initialize the contract.
     init_energy: Energy,
 }
@@ -161,7 +161,7 @@ impl ContractDeploymentInfo {
 
 /// Arguments used by all transaction generators.
 pub struct CommonArgs {
-    pub keys:   WalletAccount,
+    pub keys: WalletAccount,
     pub expiry: u32,
 }
 
@@ -169,6 +169,14 @@ pub struct CommonArgs {
 pub trait Generate {
     /// Generate a transaction. Will be called in a loop.
     fn generate(&mut self) -> anyhow::Result<AccountTransaction<EncodedPayload>>;
+
+    /// Generate a block item. Will be called in a loop. 
+    /// 
+    /// If this function is overridden, [`Self::generate`] will not be called.
+    fn generate_block_item(&mut self) -> anyhow::Result<BlockItem<EncodedPayload>> {
+        self.generate()
+            .map(|txn| BlockItem::AccountTransaction(txn))
+    }
 }
 
 pub async fn generate_transactions(
@@ -183,8 +191,8 @@ pub async fn generate_transactions(
     // background.
     tokio::spawn(async move {
         loop {
-            let tx = generator.generate();
-            sender.send(tx).await.expect("Error in receiver");
+            let item = generator.generate_block_item();
+            sender.send(item).await.expect("Error in receiver");
         }
     });
 
@@ -193,16 +201,34 @@ pub async fn generate_transactions(
     ));
     loop {
         interval.tick().await;
-        if let Some(tx) = rx.recv().await.transpose()? {
-            let nonce = tx.header.nonce;
-            let energy = tx.header.energy_amount;
-            let item = BlockItem::AccountTransaction(tx);
+        if let Some(item) = rx.recv().await.transpose()? {
             let transaction_hash = client.send_block_item(&item).await?;
-            println!(
-                "{}: Transaction {} submitted (nonce = {nonce}, energy = {energy}).",
-                chrono::Utc::now(),
-                transaction_hash,
-            );
+            match item {
+                BlockItem::AccountTransaction(txn) => {
+                    println!(
+                        "{}: Transaction {} submitted (nonce = {}, energy = {}).",
+                        chrono::Utc::now(),
+                        transaction_hash,
+                        txn.header.nonce,
+                        txn.header.energy_amount,
+                    );
+                }
+                BlockItem::CredentialDeployment(_) => {
+                    println!(
+                        "{}: Credential deployment {} submitted",
+                        chrono::Utc::now(),
+                        transaction_hash,
+                    );
+                }
+                BlockItem::UpdateInstruction(update) => {
+                    println!(
+                        "{}: Update instruction {} submitted (sequence = {}).",
+                        chrono::Utc::now(),
+                        transaction_hash,
+                        update.header.seq_number,
+                    );
+                }
+            }
         } else {
             break Ok(());
         }
@@ -211,13 +237,13 @@ pub async fn generate_transactions(
 
 /// A generator that makes CCD transactions for a list of accounts.
 pub struct CcdGenerator {
-    args:     CommonArgs,
-    amount:   Amount,
+    args: CommonArgs,
+    amount: Amount,
     accounts: Vec<AccountAddress>,
-    random:   bool,
-    rng:      StdRng,
-    count:    usize,
-    nonce:    Nonce,
+    random: bool,
+    rng: StdRng,
+    count: usize,
+    nonce: Nonce,
 }
 
 impl CcdGenerator {
@@ -316,15 +342,15 @@ impl Generate for CcdGenerator {
 /// A generator that makes transactions that mints CIS-2 NFT tokens for the
 /// sender.
 pub struct MintCis2Generator {
-    client:  Cis2Contract,
-    args:    CommonArgs,
-    nonce:   Nonce,
+    client: Cis2Contract,
+    args: CommonArgs,
+    nonce: Nonce,
     next_id: u32,
 }
 
 #[derive(concordium_std::Serial)]
 struct MintCis2NftParams {
-    owner:  concordium_std::Address,
+    owner: concordium_std::Address,
     #[concordium(size_length = 1)]
     tokens: collections::BTreeSet<TokenId>,
 }
@@ -338,8 +364,8 @@ impl MintCis2Generator {
 
         // Deploy and initialize the contract.
         let info = ContractDeploymentInfo {
-            module:      MINT_CIS2_MODULE,
-            name:        "init_cis2_nft",
+            module: MINT_CIS2_MODULE,
+            name: "init_cis2_nft",
             // Determined by running the transaction and inspecting the energy cost with
             // concordium-client.
             init_energy: Energy::from(2397),
@@ -368,18 +394,18 @@ impl Generate for MintCis2Generator {
     fn generate(&mut self) -> anyhow::Result<AccountTransaction<EncodedPayload>> {
         // We mint a single token for ourselves.
         let params = MintCis2NftParams {
-            owner:  Address::Account(self.args.keys.address),
+            owner: Address::Account(self.args.keys.address),
             tokens: [TokenId::new_u32(self.next_id)].into(),
         };
 
         let metadata = ContractTransactionMetadata {
             sender_address: self.args.keys.address,
-            nonce:          self.nonce,
-            expiry:         TransactionTime::seconds_after(self.args.expiry),
+            nonce: self.nonce,
+            expiry: TransactionTime::seconds_after(self.args.expiry),
             // Determined by running the transaction and inspecting the energy cost with
             // concordium-client and then adding extra to account for variance.
-            energy:         GivenEnergy::Absolute(Energy::from(3500)),
-            amount:         Amount::zero(),
+            energy: GivenEnergy::Absolute(Energy::from(3500)),
+            amount: Amount::zero(),
         };
         let tx = self.client.make_update::<_, anyhow::Error>(
             &self.args.keys,
@@ -397,11 +423,11 @@ impl Generate for MintCis2Generator {
 /// A generator that makes transactions that transfer CIS-2 tokens to a list of
 /// accounts.
 pub struct TransferCis2Generator {
-    client:   Cis2Contract,
-    args:     CommonArgs,
+    client: Cis2Contract,
+    args: CommonArgs,
     accounts: Vec<AccountAddress>,
-    nonce:    Nonce,
-    count:    usize,
+    nonce: Nonce,
+    count: usize,
 }
 
 #[derive(concordium_std::Serial)]
@@ -412,7 +438,7 @@ struct MintCis2TokenParam {
 
 #[derive(concordium_std::Serial)]
 struct MintCis2TokenParams {
-    owner:  Address,
+    owner: Address,
     tokens: BTreeMap<TokenId, MintCis2TokenParam>,
 }
 
@@ -448,8 +474,8 @@ impl TransferCis2Generator {
 
         // Deploy and initialize the contract.
         let info = ContractDeploymentInfo {
-            module:      TRANSFER_CIS2_MODULE,
-            name:        "init_cis2_multi",
+            module: TRANSFER_CIS2_MODULE,
+            name: "init_cis2_multi",
             // Determined by running the transaction and inspecting the energy cost with
             // concordium-client.
             init_energy: Energy::from(2353),
@@ -474,18 +500,18 @@ impl TransferCis2Generator {
             metadata_url: MetadataUrl::new("https://example.com".into(), None)?,
         };
         let params = MintCis2TokenParams {
-            owner:  Address::Account(args.keys.address),
+            owner: Address::Account(args.keys.address),
             tokens: [(TokenId::new_u8(0), param)].into(),
         };
 
         let metadata = ContractTransactionMetadata {
             sender_address: args.keys.address,
-            nonce:          nonce.nonce,
-            expiry:         TransactionTime::seconds_after(args.expiry),
+            nonce: nonce.nonce,
+            expiry: TransactionTime::seconds_after(args.expiry),
             // Determined by running the transaction and inspecting the energy cost with
             // concordium-client.
-            energy:         GivenEnergy::Absolute(Energy::from(2740)),
-            amount:         Amount::zero(),
+            energy: GivenEnergy::Absolute(Energy::from(2740)),
+            amount: Amount::zero(),
         };
         let transaction_hash = client
             .update::<_, anyhow::Error>(&args.keys, &metadata, "mint", &params)
@@ -520,20 +546,20 @@ impl Generate for TransferCis2Generator {
         let next_account = self.accounts[self.count % self.accounts.len()];
         let transfer = Transfer {
             token_id: TokenId::new_u8(0),
-            amount:   TokenAmount::from(1u32),
-            from:     Address::Account(self.args.keys.address),
-            to:       Receiver::Account(next_account),
-            data:     AdditionalData::new(vec![])?,
+            amount: TokenAmount::from(1u32),
+            from: Address::Account(self.args.keys.address),
+            to: Receiver::Account(next_account),
+            data: AdditionalData::new(vec![])?,
         };
 
         let metadata = Cis2TransactionMetadata {
             sender_address: self.args.keys.address,
-            nonce:          self.nonce,
-            expiry:         TransactionTime::seconds_after(self.args.expiry),
+            nonce: self.nonce,
+            expiry: TransactionTime::seconds_after(self.args.expiry),
             // Determined by running the transaction and inspecting the energy cost with
             // concordium-client and then adding extra to account for variance.
-            energy:         GivenEnergy::Absolute(Energy::from(3500)),
-            amount:         Amount::zero(),
+            energy: GivenEnergy::Absolute(Energy::from(3500)),
+            amount: Amount::zero(),
         };
         let tx = self
             .client
@@ -547,31 +573,31 @@ impl Generate for TransferCis2Generator {
 
 /// A generator that makes transactions that wrap, unwrap, and transfer WCCDs.
 pub struct WccdGenerator {
-    client:   Cis2Contract,
-    args:     CommonArgs,
-    nonce:    Nonce,
-    count:    usize,
+    client: Cis2Contract,
+    args: CommonArgs,
+    nonce: Nonce,
+    count: usize,
     accounts: Vec<AccountAddress>,
 }
 
 #[derive(concordium_std::Serial)]
 struct SetMetadataUrlParams {
-    url:  String,
+    url: String,
     hash: Option<[u8; 32]>,
 }
 
 #[derive(concordium_std::Serial)]
 struct WrapParams {
-    to:   Receiver,
+    to: Receiver,
     data: AdditionalData,
 }
 
 #[derive(concordium_std::Serial)]
 struct UnwrapParams {
-    amount:   TokenAmount,
-    owner:    Address,
+    amount: TokenAmount,
+    owner: Address,
     receiver: Address,
-    data:     AdditionalData,
+    data: AdditionalData,
 }
 
 impl WccdGenerator {
@@ -582,14 +608,14 @@ impl WccdGenerator {
             .await?;
 
         let info = ContractDeploymentInfo {
-            module:      WCCD_MODULE,
-            name:        "init_cis2_wCCD",
+            module: WCCD_MODULE,
+            name: "init_cis2_wCCD",
             // Determined by running the transaction and inspecting the energy cost with
             // concordium-client.
             init_energy: Energy::from(2596),
         };
         let params = SetMetadataUrlParams {
-            url:  "https://example.com".into(),
+            url: "https://example.com".into(),
             hash: None,
         };
         let contract_address = info
@@ -628,12 +654,12 @@ impl Generate for WccdGenerator {
     fn generate(&mut self) -> anyhow::Result<AccountTransaction<EncodedPayload>> {
         let mut metadata = ContractTransactionMetadata {
             sender_address: self.args.keys.address,
-            nonce:          self.nonce,
-            expiry:         TransactionTime::seconds_after(self.args.expiry),
+            nonce: self.nonce,
+            expiry: TransactionTime::seconds_after(self.args.expiry),
             // Determined by running the transaction and inspecting the energy cost with
             // concordium-client and then adding extra to account for variance.
-            energy:         GivenEnergy::Absolute(Energy::from(3500)),
-            amount:         Amount::zero(),
+            energy: GivenEnergy::Absolute(Energy::from(3500)),
+            amount: Amount::zero(),
         };
 
         // Before doing anything else, we transfer a single wCCD to each account on the
@@ -641,7 +667,7 @@ impl Generate for WccdGenerator {
         if self.count < self.accounts.len() {
             let recv = self.accounts[self.count];
             let params = WrapParams {
-                to:   Receiver::Account(recv),
+                to: Receiver::Account(recv),
                 data: AdditionalData::new(vec![])?,
             };
             metadata.amount = Amount::from_micro_ccd(1);
@@ -665,7 +691,7 @@ impl Generate for WccdGenerator {
             // Wrap
             0 => {
                 let params = WrapParams {
-                    to:   Receiver::Account(self.args.keys.address),
+                    to: Receiver::Account(self.args.keys.address),
                     data: AdditionalData::new(vec![])?,
                 };
                 metadata.amount = Amount::from_micro_ccd(1);
@@ -682,10 +708,10 @@ impl Generate for WccdGenerator {
                 let transfer = Transfer {
                     // The token id of wCCD is the empty list of bytes.
                     token_id: TokenId::new(vec![])?,
-                    amount:   TokenAmount::from(1u32),
-                    from:     Address::Account(self.args.keys.address),
-                    to:       Receiver::Account(self.args.keys.address),
-                    data:     AdditionalData::new(vec![])?,
+                    amount: TokenAmount::from(1u32),
+                    from: Address::Account(self.args.keys.address),
+                    to: Receiver::Account(self.args.keys.address),
+                    data: AdditionalData::new(vec![])?,
                 };
 
                 self.client
@@ -694,10 +720,10 @@ impl Generate for WccdGenerator {
             // Unwrap
             _ => {
                 let params = UnwrapParams {
-                    amount:   TokenAmount::from(1u32),
-                    owner:    Address::Account(self.args.keys.address),
+                    amount: TokenAmount::from(1u32),
+                    owner: Address::Account(self.args.keys.address),
                     receiver: Address::Account(self.args.keys.address),
-                    data:     AdditionalData::new(vec![])?,
+                    data: AdditionalData::new(vec![])?,
                 };
 
                 self.client.make_update::<_, anyhow::Error>(
@@ -718,9 +744,9 @@ impl Generate for WccdGenerator {
 /// A generator that makes transactions that register dummy Web3 ID credentials.
 pub struct RegisterCredentialsGenerator {
     client: Cis4Contract,
-    args:   CommonArgs,
-    nonce:  Nonce,
-    rng:    StdRng,
+    args: CommonArgs,
+    nonce: Nonce,
+    rng: StdRng,
 }
 
 #[derive(concordium_std::Serial)]
@@ -733,9 +759,9 @@ struct CredentialType {
 struct RegisterCredentialsInitParams {
     issuer_metadata: MetadataUrl,
     credential_type: CredentialType,
-    schema:          SchemaRef,
-    issuer_account:  Option<AccountAddress>,
-    issuer_key:      CredentialHolderId,
+    schema: SchemaRef,
+    issuer_account: Option<AccountAddress>,
+    issuer_key: CredentialHolderId,
     #[concordium(size_length = 1)]
     revocation_keys: Vec<CredentialHolderId>,
 }
@@ -751,8 +777,8 @@ impl RegisterCredentialsGenerator {
         let issuer_public_key = KeyPair::generate(&mut rng).public();
 
         let info = ContractDeploymentInfo {
-            module:      REGISTER_CREDENTIALS_MODULE,
-            name:        "init_credential_registry",
+            module: REGISTER_CREDENTIALS_MODULE,
+            name: "init_credential_registry",
             // Determined by running the transaction and inspecting the energy cost with
             // concordium-client.
             init_energy: Energy::from(2970),
@@ -764,11 +790,11 @@ impl RegisterCredentialsGenerator {
             credential_type: CredentialType {
                 credential_type: "TestCredential".into(),
             },
-            schema:          SchemaRef {
+            schema: SchemaRef {
                 schema_ref: MetadataUrl::new("https://example.com".into(), None)?,
             },
-            issuer_account:  None,
-            issuer_key:      CredentialHolderId::new(issuer_public_key),
+            issuer_account: None,
+            issuer_key: CredentialHolderId::new(issuer_public_key),
             revocation_keys: vec![],
         };
 
@@ -798,21 +824,21 @@ impl Generate for RegisterCredentialsGenerator {
         let public_key = KeyPair::generate(&mut self.rng).public();
 
         let cred_info = CredentialInfo {
-            holder_id:        CredentialHolderId::new(public_key),
+            holder_id: CredentialHolderId::new(public_key),
             holder_revocable: false,
-            valid_from:       Timestamp::from_timestamp_millis(0),
-            valid_until:      None,
-            metadata_url:     MetadataUrl::new("https://example.com".into(), None)?,
+            valid_from: Timestamp::from_timestamp_millis(0),
+            valid_until: None,
+            metadata_url: MetadataUrl::new("https://example.com".into(), None)?,
         };
 
         let metadata = Cis4TransactionMetadata {
             sender_address: self.args.keys.address,
-            nonce:          self.nonce,
-            expiry:         TransactionTime::seconds_after(self.args.expiry),
+            nonce: self.nonce,
+            expiry: TransactionTime::seconds_after(self.args.expiry),
             // Determined by running the transaction and inspecting the energy cost with
             // concordium-client and then adding extra to account for variance.
-            energy:         GivenEnergy::Absolute(Energy::from(5000)),
-            amount:         Amount::zero(),
+            energy: GivenEnergy::Absolute(Energy::from(5000)),
+            amount: Amount::zero(),
         };
         let tx =
             self.client
@@ -826,10 +852,10 @@ impl Generate for RegisterCredentialsGenerator {
 /// A generator that makes register data transactions with random data of a
 /// specified size.
 pub struct RegisterDataGenerator {
-    args:  CommonArgs,
+    args: CommonArgs,
     nonce: Nonce,
-    rng:   StdRng,
-    size:  u16,
+    rng: StdRng,
+    size: u16,
 }
 
 impl RegisterDataGenerator {
