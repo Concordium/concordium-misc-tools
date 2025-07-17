@@ -48,10 +48,10 @@ impl PltGenerator {
     pub async fn instantiate(
         mut client: v2::Client,
         args: CommonArgs,
-        ccd_args: PltArgs,
+        plt_args: PltArgs,
     ) -> anyhow::Result<Self> {
         // Get the list of receivers.
-        let accounts: Vec<AccountAddress> = match ccd_args.receivers {
+        let accounts: Vec<AccountAddress> = match plt_args.receivers {
             None => {
                 client
                     .get_account_list(BlockIdentifier::LastFinal)
@@ -77,7 +77,10 @@ impl PltGenerator {
             .get_next_account_sequence_number(&args.keys.address)
             .await?;
         anyhow::ensure!(nonce.all_final, "Not all transactions are finalized.");
-
+        
+        let token_info = client.get_token_info(plt_args.token.clone(), BlockIdentifier::LastFinal).await?.response;
+let amount = TokenAmount:: plt_args.amount
+        
         let rng = StdRng::from_rng(rand::thread_rng())?;
         Ok(Self {
             args,
