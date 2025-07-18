@@ -176,8 +176,7 @@ pub trait Generate {
     ///
     /// If this function is overridden, [`Self::generate`] will not be called.
     fn generate_block_item(&mut self) -> anyhow::Result<BlockItem<EncodedPayload>> {
-        self.generate()
-            .map(|txn| BlockItem::AccountTransaction(txn))
+        self.generate().map(BlockItem::AccountTransaction)
     }
 }
 
@@ -198,7 +197,7 @@ pub async fn generate_transactions(
         }
     });
 
-    let mut interval = tokio::time::interval(txn_interval.into());
+    let mut interval = tokio::time::interval(txn_interval);
     loop {
         interval.tick().await;
         if let Some(item) = rx.recv().await.transpose()? {

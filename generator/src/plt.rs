@@ -176,10 +176,10 @@ impl PltOperationGenerator {
     }
 
     fn random_account(&mut self) -> AccountAddress {
-        self.accounts
+        *self
+            .accounts
             .choose(&mut self.rng)
             .expect("accounts never initialized empty")
-            .clone()
     }
 
     fn random_token_for_operation(
@@ -267,8 +267,6 @@ impl Generate for PltOperationGenerator {
                 {
                     operations.insert(0, operations::add_token_allow_list(self.args.keys.address));
                 }
-
-                println!("{:#?}", operations);
 
                 operations
             }
@@ -412,7 +410,7 @@ impl Generate for CreatePltGenerator {
 
         let timeout = TransactionTime::seconds_after(self.args.expiry);
 
-        let token_id: String = (0..16).map(|_| (self.rng.gen_range('A'..'Z'))).collect();
+        let token_id: String = (0..16).map(|_| (self.rng.gen_range('A'..='Z'))).collect();
 
         let mint_burn: bool = self.rng.gen();
         let allow_deny: bool = self.rng.gen();
