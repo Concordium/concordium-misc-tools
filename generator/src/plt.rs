@@ -1,14 +1,18 @@
 use crate::generator::{CommonArgs, Generate};
 use anyhow::{ensure, Context};
 use clap::{Args, Subcommand};
+use concordium_rust_sdk::common::cbor;
 use concordium_rust_sdk::common::types::{AccountAddress, Amount, TransactionTime};
-use concordium_rust_sdk::protocol_level_tokens::{operations, CborHolderAccount, CborTokenHolder, CoinInfo, ConversionRule, MetadataUrl, RawCbor, TokenAmount, TokenId, TokenInfo, TokenModuleInitializationParameters, TokenModuleRef};
+use concordium_rust_sdk::protocol_level_tokens::{
+    operations, CborHolderAccount, CborTokenHolder, CoinInfo, ConversionRule, MetadataUrl, RawCbor,
+    TokenAmount, TokenId, TokenInfo, TokenModuleInitializationParameters, TokenModuleRef,
+};
 use concordium_rust_sdk::types::transactions::{
     send, AccountTransaction, BlockItem, EncodedPayload,
 };
 use concordium_rust_sdk::types::{
-    CreatePlt, Nonce, UpdateHeader, UpdateInstruction, UpdateInstructionSignature, UpdatePayload,
-    UpdateSequenceNumber,
+    update, CreatePlt, Nonce, UpdateHeader, UpdateInstruction, UpdateInstructionSignature,
+    UpdateKeyPair, UpdateKeysIndex, UpdatePayload, UpdateSequenceNumber,
 };
 use concordium_rust_sdk::v2::BlockIdentifier;
 use concordium_rust_sdk::{common, v2};
@@ -19,7 +23,6 @@ use rand::{Rng, SeedableRng};
 use rust_decimal::Decimal;
 use std::path::PathBuf;
 use std::str::FromStr;
-use concordium_rust_sdk::common::cbor;
 
 #[derive(Debug, Args)]
 pub struct PltOperationArgs {
@@ -78,13 +81,14 @@ impl PltOperationGenerator {
             .context("Could not parse the receivers file.")?,
         };
         anyhow::ensure!(!accounts.is_empty(), "List of receivers must not be empty.");
-        println!("found {} accounts", accounts.len());
+        println!("found {} accounts to use as receiver/target", accounts.len());
 
         let nonce = client
             .get_next_account_sequence_number(&args.keys.address)
             .await?;
         anyhow::ensure!(nonce.all_final, "not all transactions are finalized.");
-        println!("current account nonce: {}", nonce.nonce);
+        println!("current sender account nonce: {}", nonce.nonce);
+
 
         let token_info = client
             .get_token_info(plt_args.token.clone(), BlockIdentifier::LastFinal)
@@ -167,7 +171,7 @@ pub struct CreatePltArgs {
     )]
     amount: Decimal,
     #[clap(long = "update-key", help = "path to file containing update key")]
-    update_keys:  Vec<PathBuf>,
+    update_keys: Vec<PathBuf>,
     #[clap(long = "count", help = "number of PLTs to create")]
     count: Option<usize>,
 }
@@ -181,6 +185,7 @@ pub struct CreatePltGenerator {
     count: Option<usize>,
     update_sequence: UpdateSequenceNumber,
     governance_account: AccountAddress,
+    update_keys: Vec<(UpdateKeysIndex, UpdateKeyPair)>,
 }
 
 impl CreatePltGenerator {
@@ -206,6 +211,30 @@ impl CreatePltGenerator {
         )
         .context("convert token amount")?;
 
+        let update_keys = plt_args
+            .update_keys
+            .iter()
+            .map(|path| {
+                // extract update key index from the file name
+                let key_index: u16 = path
+                    .to_str()
+                    .context("not utf8 path")?
+                    .strip_suffix(".json")
+                    .context("update key file path must end with '.json'")?
+                    .rsplit_once("-")
+                    .context("update key path must have format 'level2-key-x.json'")?
+                    .1
+                    .parse()
+                    .context(
+                        "update key path must have format 'level2-key-x.json' where x is a number",
+                    )?;
+                let file = std::fs::File::open(path).context("unable to open key file")?;
+                let key_pair: UpdateKeyPair =
+                    serde_json::from_reader(file).context("parse update key JSON")?;
+                Ok((UpdateKeysIndex::from(key_index), key_pair))
+            })
+            .collect::<anyhow::Result<Vec<_>>>()?;
+
         let rng = StdRng::from_rng(rand::thread_rng())?;
         Ok(Self {
             governance_account: args.keys.address,
@@ -215,6 +244,7 @@ impl CreatePltGenerator {
             created: 0,
             count: plt_args.count,
             update_sequence,
+            update_keys,
         })
     }
 }
@@ -226,12 +256,19 @@ impl Generate for CreatePltGenerator {
 
     fn generate_block_item(&mut self) -> anyhow::Result<BlockItem<EncodedPayload>> {
         if let Some(count) = self.count {
-            ensure!(self.created < count, "already created {} PLTs", self.created);
+            ensure!(
+                self.created < count,
+                "already created {} PLTs",
+                self.created
+            );
         }
 
         let timeout = TransactionTime::seconds_after(self.args.expiry);
 
         let token_id: String = (0..16).map(|_| (self.rng.gen_range('A'..'Z'))).collect();
+
+        let mint_burn: bool = self.rng.gen();
+        let allow_deny: bool = self.rng.gen();
 
         let initialization_parameters = TokenModuleInitializationParameters {
             name: token_id.clone(),
@@ -244,11 +281,11 @@ impl Generate for CreatePltGenerator {
                 coin_info: Some(CoinInfo::CCD),
                 address: self.governance_account,
             }),
-            allow_list: Some(self.rng.gen()),
-            deny_list: Some(self.rng.gen()),
+            allow_list: Some(allow_deny),
+            deny_list: Some(allow_deny),
             initial_supply: Some(self.initial_supply),
-            mintable: Some(self.rng.gen()),
-            burnable: Some(self.rng.gen()),
+            mintable: Some(mint_burn),
+            burnable: Some(mint_burn),
         };
 
         let create_plt = CreatePlt {
@@ -257,21 +294,20 @@ impl Generate for CreatePltGenerator {
                 "5c5c2645db84a7026d78f2501740f60a8ccb8fae5c166dc2428077fd9a699a4a",
             )?,
             decimals: Self::DECIMALS,
-            initialization_parameters: RawCbor::from(cbor::cbor_encode(&initialization_parameters)?),
+            initialization_parameters: RawCbor::from(cbor::cbor_encode(
+                &initialization_parameters,
+            )?),
         };
 
         let payload = UpdatePayload::CreatePlt(create_plt);
 
-        let update_instr = UpdateInstruction {
-            header: UpdateHeader {
-                seq_number: self.update_sequence,
-                effective_time: 0.into(),
-                timeout,
-                payload_size: u32::try_from(common::to_bytes(&payload).len())?.into(),
-            },
+        let update_instr = update::update(
+            self.update_keys.as_slice(),
+            self.update_sequence,
+            0.into(),
+            timeout,
             payload,
-            signatures: UpdateInstructionSignature { signatures: Default::default() },// todo ar
-        };
+        );
 
         self.update_sequence.next_mut();
         self.created += 1;
