@@ -19,10 +19,10 @@ use concordium_rust_sdk::{
     v2,
     v2::BlockIdentifier,
 };
-use futures::{StreamExt, TryStreamExt};
+use futures::{future::try_join_all, stream, StreamExt, TryStreamExt};
 use rand::{rngs::StdRng, seq::SliceRandom, Rng, SeedableRng};
 use rust_decimal::Decimal;
-use std::{collections::HashSet, path::PathBuf, str::FromStr};
+use std::{path::PathBuf, str::FromStr};
 
 #[derive(Debug, Args)]
 pub struct PltOperationArgs {
@@ -77,17 +77,15 @@ enum PltOperation {
 
 /// A generator that creates PLT operations
 pub struct PltOperationGenerator {
-    args:                 CommonArgs,
-    amount:               Decimal,
+    args:              CommonArgs,
+    amount:            Decimal,
     /// Accounts to use as receivers/targets
-    accounts:             Vec<AccountAddress>,
-    rng:                  StdRng,
-    nonce:                Nonce,
+    accounts:          Vec<AccountAddress>,
+    rng:               StdRng,
+    nonce:             Nonce,
     /// Tokens to use
-    tokens:               Vec<TokenInfo>,
-    /// Tokens for which sender is on allow list
-    sender_on_allow_list: HashSet<TokenId>,
-    operation_weights:    OperationWeights,
+    tokens:            Vec<TokenInfo>,
+    operation_weights: OperationWeights,
 }
 
 impl PltOperationGenerator {
@@ -97,14 +95,13 @@ impl PltOperationGenerator {
         plt_args: PltOperationArgs,
     ) -> anyhow::Result<Self> {
         // find available accounts to use as receivers/targets
-        let accounts: Vec<AccountAddress> = match plt_args.targets {
+        let all_accounts: Vec<AccountAddress> = match plt_args.targets {
             None => {
                 client
                     .get_account_list(BlockIdentifier::LastFinal)
                     .await
                     .context("Could not obtain a list of accounts.")?
                     .response
-                    .try_filter(|&account| async move { account != args.keys.address })
                     .try_collect()
                     .await?
             }
@@ -114,19 +111,24 @@ impl PltOperationGenerator {
             )
             .context("Could not parse the receivers file.")?,
         };
+        let accounts = all_accounts
+            .iter()
+            .filter(|account| **account != args.keys.address)
+            .copied()
+            .collect::<Vec<_>>();
         anyhow::ensure!(!accounts.is_empty(), "List of receivers must not be empty.");
         println!(
             "found {} accounts to use as receiver/target",
             accounts.len()
         );
 
-        let nonce = client
+        let mut nonce = client
             .get_next_account_sequence_number(&args.keys.address)
             .await?;
         anyhow::ensure!(nonce.all_final, "not all transactions are finalized.");
         println!("current sender account nonce: {}", nonce.nonce);
 
-        // find tokens suiteable for testing the given PLT operations
+        // find tokens suitable for testing the given PLT operations
         let client_clone = client.clone();
         let all_tokens = client
             .get_token_list(BlockIdentifier::LastFinal)
@@ -144,11 +146,10 @@ impl PltOperationGenerator {
                         .response)
                 }
             })
-            .collect::<Vec<_>>()
+            .try_collect::<Vec<_>>()
             .await
-            .into_iter()
-            .collect::<anyhow::Result<Vec<_>>>()
             .context("fetch token info for all tokens")?;
+        // filter to tokens owned by the account we use as sender of transactions
         let tokens = all_tokens
             .into_iter()
             .filter_map(|token| {
@@ -157,10 +158,62 @@ impl PltOperationGenerator {
 
             })
             .collect::<Vec<_>>();
-
         println!("found {} tokens that are suited for testing", tokens.len(),);
-
         anyhow::ensure!(!tokens.is_empty(), "available tokens must not be empty");
+
+        // add all accounts to allow list for all tokens
+        let allow_list_txn_hashes = stream::iter(tokens.iter().filter_map(|token| {
+            let module_state = token.token_state.decode_module_state().ok()?;
+            module_state.allow_list.unwrap_or_default().then_some(token)
+        }))
+        .then(|token| {
+            let expiry = TransactionTime::seconds_after(args.expiry);
+
+            let operations = all_accounts
+                .iter()
+                .map(|account| operations::add_token_allow_list(*account))
+                .collect();
+
+            let txn = send::token_update_operations(
+                &args.keys,
+                args.keys.address,
+                nonce.nonce,
+                expiry,
+                token.token_id.clone(),
+                operations,
+            );
+
+            nonce.nonce.next_mut();
+
+            let mut client_clone = client.clone();
+
+            async move {
+                let hash = client_clone
+                    .send_account_transaction(txn?)
+                    .await
+                    .context("send add allow list txn")?;
+
+                Ok::<_, anyhow::Error>(hash)
+            }
+        })
+        .try_collect::<Vec<_>>()
+        .await?;
+
+        try_join_all(allow_list_txn_hashes.into_iter().map(|hash| {
+            let mut client_clone = client.clone();
+
+            async move {
+                let (_, summary) = client_clone
+                    .wait_until_finalized(&hash)
+                    .await
+                    .context("wait for add allow list txn finalized")?;
+                anyhow::ensure!(summary.is_success(), "add allow list txn success");
+
+                Ok(())
+            }
+        }))
+        .await
+        .context("add allow list txns")?;
 
         let rng = StdRng::from_rng(rand::thread_rng())?;
         Ok(Self {
@@ -170,7 +223,6 @@ impl PltOperationGenerator {
             rng,
             tokens,
             nonce: nonce.nonce,
-            sender_on_allow_list: Default::default(),
             operation_weights: plt_args.operation_weights,
         })
     }
@@ -257,18 +309,7 @@ impl Generate for PltOperationGenerator {
 
         let operations = match plt_operation {
             PltOperation::Transfer => {
-                let mut operations =
-                    vec![operations::transfer_tokens(self.random_account(), amount)];
-                let module_state = token_info.token_state.decode_module_state()?;
-                if module_state.allow_list.unwrap_or_default()
-                    && self
-                        .sender_on_allow_list
-                        .insert(token_info.token_id.clone())
-                {
-                    operations.insert(0, operations::add_token_allow_list(self.args.keys.address));
-                }
-
-                operations
+                vec![operations::transfer_tokens(self.random_account(), amount)]
             }
             PltOperation::MintBurn => {
                 vec![
