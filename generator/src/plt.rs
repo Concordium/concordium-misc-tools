@@ -238,27 +238,27 @@ impl PltOperationGenerator {
         &mut self,
         plt_operation: PltOperation,
     ) -> anyhow::Result<TokenInfo> {
-        loop {
-            let token = self
-                .tokens
-                .choose(&mut self.rng)
-                .expect("tokens never initialized empty");
+        let start_index = self.rng.gen_range(0..self.tokens.len());
 
-            let module_state = token.token_state.decode_module_state()?;
-            let usable = match plt_operation {
-                PltOperation::Transfer => true,
-                PltOperation::MintBurn => {
-                    module_state.mintable.unwrap_or_default()
-                        && module_state.burnable.unwrap_or_default()
-                }
-                PltOperation::RemoveAddAllow => module_state.allow_list.unwrap_or_default(),
-                PltOperation::AddRemoveDeny => module_state.deny_list.unwrap_or_default(),
-            };
+        self.tokens[start_index..]
+            .iter()
+            .chain(self.tokens[..start_index].iter())
+            .filter_map(|token| {
+                let module_state = token.token_state.decode_module_state().ok()?;
+                let usable = match plt_operation {
+                    PltOperation::Transfer => true,
+                    PltOperation::MintBurn => {
+                        module_state.mintable.unwrap_or_default()
+                            && module_state.burnable.unwrap_or_default()
+                    }
+                    PltOperation::RemoveAddAllow => module_state.allow_list.unwrap_or_default(),
+                    PltOperation::AddRemoveDeny => module_state.deny_list.unwrap_or_default(),
+                };
 
-            if usable {
-                return Ok(token.clone());
-            }
-        }
+                usable.then_some(token.clone())
+            })
+            .next()
+            .with_context(|| format!("no token suitable for testing {:?}", plt_operation))
     }
 
     fn random_operation(&mut self) -> PltOperation {
