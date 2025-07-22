@@ -12,7 +12,7 @@ members = [
    "state-compare",
    "wallet-connect-test-bench/smart-contract",
    "wallet-proxy-load-simulator",
-   "company-id-gui/src-tauri"
+#   "company-id-gui/src-tauri" todo ar
 ]
 
 # The crates in the concordium-rust-sdk submodule are implicitly members
@@ -30,5 +30,5 @@ default-members = [
    "state-compare",
    "wallet-connect-test-bench/smart-contract",
    "wallet-proxy-load-simulator",
-   "company-id-gui/src-tauri"
+#   "company-id-gui/src-tauri"
 ]
