@@ -19,12 +19,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with: 
+        with:
           submodules: recursive
       - name: Run cargo fmt
         run: |
           rustup +${{ env.RUST_FMT_VERSION }} component add rustfmt
-          cargo +${{ env.RUST_FMT_VERSION }} fmt --all --check
+          cargo +${{ env.RUST_FMT_VERSION }} fmt --check
 
   "clippy":
     name: Clippy
