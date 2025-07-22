@@ -15,3 +15,20 @@ members = [
    "company-id-gui/src-tauri"
 ]
 
+# The crates in the concordium-rust-sdk submodule are implicitly members
+# of the workspace since they are local path dependencies of the explicit members.
+# Hence, we list the explicit members here as default members such that cargo commands
+# on these by default.
+default-members = [
+   "chain-prometheus-exporter",
+   "generator",
+   "genesis-creator",
+   "id-verifier",
+   "kpi-tracker",
+   "notification-server",
+   "recover-id-object",
+   "state-compare",
+   "wallet-connect-test-bench/smart-contract",
+   "wallet-proxy-load-simulator",
+   "company-id-gui/src-tauri"
+]
