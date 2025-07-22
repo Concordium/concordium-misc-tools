@@ -1,0 +1,17 @@
+[workspace]
+resolver = "2"
+
+members = [
+   "chain-prometheus-exporter",
+   "generator",
+   "genesis-creator",
+   "id-verifier",
+   "kpi-tracker",
+   "notification-server",
+   "recover-id-object",
+   "state-compare",
+   "wallet-connect-test-bench/smart-contract",
+   "wallet-proxy-load-simulator",
+   "company-id-gui/src-tauri"
+]
+
