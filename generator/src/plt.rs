@@ -240,6 +240,7 @@ impl PltOperationGenerator {
     ) -> anyhow::Result<TokenInfo> {
         let start_index = self.rng.gen_range(0..self.tokens.len());
 
+        #[allow(clippy::uninlined_format_args)]
         self.tokens[start_index..]
             .iter()
             .chain(self.tokens[..start_index].iter())
@@ -390,6 +391,7 @@ impl CreatePltGenerator {
             .context("could not fetch update sequence numbers")?
             .response
             .protocol_level_tokens;
+        #[allow(clippy::uninlined_format_args)]
         println!("current PLT update sequence: {}", update_sequence);
 
         let amount = TokenAmount::try_from_rust_decimal(
