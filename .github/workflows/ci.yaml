@@ -11,6 +11,8 @@ on:
 env:
   RUST_FMT_VERSION: nightly-2023-04-01-x86_64-unknown-linux-gnu
 
+# todo ar releases
+
 jobs:
 
   rustfmt:

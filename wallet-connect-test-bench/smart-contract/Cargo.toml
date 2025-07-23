@@ -16,6 +16,7 @@ concordium-std = {version = "10", default-features = false}
 [lib]
 crate-type=["cdylib", "rlib"]
 
+# todo ar handle this
 [profile.release]
 panic = "abort"
 opt-level = "s"
