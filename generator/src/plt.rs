@@ -21,15 +21,25 @@ use concordium_rust_sdk::{
     v2,
     v2::BlockIdentifier,
 };
-use futures::{future::try_join_all, stream, StreamExt, TryStreamExt};
+use futures::{future, stream, StreamExt, TryStreamExt};
 use rand::{rngs::StdRng, seq::SliceRandom, Rng, SeedableRng};
 use rust_decimal::Decimal;
 use std::{path::PathBuf, str::FromStr};
 
 #[derive(Debug, Args)]
 pub struct PltOperationArgs {
-    #[arg(long = "targets", help = "path to file containing receivers/targets")]
+    #[arg(
+        long = "targets",
+        help = "Path to file containing JSON array of receivers/targets. If not specified, all \
+                accounts on the chain, except the sender, will be used."
+    )]
     targets:           Option<PathBuf>,
+    #[arg(
+        long = "tokens",
+        help = "Path to file containing JSON array of tokens ids. If not specified, all tokens on \
+                the chain governed by the sender will be used."
+    )]
+    tokens:            Option<PathBuf>,
     #[clap(
         long = "amount",
         help = "token amount to use in each PLT operation (transfer/mint/burn)",
@@ -131,26 +141,37 @@ impl PltOperationGenerator {
         println!("current sender account nonce: {}", nonce.nonce);
 
         // find tokens suitable for testing the given PLT operations
-        let client_clone = client.clone();
-        let all_tokens = client
-            .get_token_list(BlockIdentifier::LastFinal)
-            .await
-            .context("get token list")?
-            .response
-            .map_err(anyhow::Error::from)
-            .and_then(|token_id| {
-                let mut client = client_clone.clone();
-                async move {
-                    Ok(client
+        let all_token_ids: Vec<TokenId> = match plt_args.tokens {
+            None => {
+                client
+                    .get_token_list(BlockIdentifier::LastFinal)
+                    .await
+                    .context("fetch all token ids")?
+                    .response
+                    .try_collect()
+                    .await?
+            }
+            Some(tokens) => {
+                serde_json::from_str(&std::fs::read_to_string(tokens).context("read tokens file")?)
+                    .context("parse tokens file")?
+            }
+        };
+        let all_tokens = future::try_join_all(all_token_ids.into_iter().map(|token_id| {
+            let mut client_clone = client.clone();
+
+            async move {
+                Ok::<_, anyhow::Error>(
+                    client_clone
                         .get_token_info(token_id, BlockIdentifier::LastFinal)
                         .await
                         .context("fetch token info for token id")?
-                        .response)
-                }
-            })
-            .try_collect::<Vec<_>>()
-            .await
-            .context("fetch token info for all tokens")?;
+                        .response,
+                )
+            }
+        }))
+        .await
+        .context("fetch token info for tokens")?;
+
         // filter to tokens owned by the account we use as sender of transactions
         let tokens = all_tokens
             .into_iter()
@@ -160,7 +181,7 @@ impl PltOperationGenerator {
 
             })
             .collect::<Vec<_>>();
-        println!("found {} tokens that are suited for testing", tokens.len(),);
+        println!("found {} tokens for testing", tokens.len(),);
         anyhow::ensure!(!tokens.is_empty(), "available tokens must not be empty");
 
         // add all accounts to allow list for all tokens
@@ -201,7 +222,7 @@ impl PltOperationGenerator {
         .try_collect::<Vec<_>>()
         .await?;
 
-        try_join_all(allow_list_txn_hashes.into_iter().map(|hash| {
+        future::try_join_all(allow_list_txn_hashes.into_iter().map(|hash| {
             let mut client_clone = client.clone();
 
             async move {
