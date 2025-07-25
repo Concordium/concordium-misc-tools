@@ -27,7 +27,9 @@ use concordium_rust_sdk::{
 };
 use futures::TryStreamExt;
 use rand::{rngs::StdRng, Rng, SeedableRng};
-use std::{collections, collections::BTreeMap, io::Cursor, path::PathBuf, str::FromStr};
+use std::{
+    collections, collections::BTreeMap, io::Cursor, path::PathBuf, str::FromStr, time::Duration,
+};
 
 #[derive(Debug, Args)]
 pub struct CcdArgs {
@@ -169,12 +171,19 @@ pub struct CommonArgs {
 pub trait Generate {
     /// Generate a transaction. Will be called in a loop.
     fn generate(&mut self) -> anyhow::Result<AccountTransaction<EncodedPayload>>;
+
+    /// Generate a block item. Will be called in a loop.
+    ///
+    /// If this function is overridden, [`Self::generate`] will not be called.
+    fn generate_block_item(&mut self) -> anyhow::Result<BlockItem<EncodedPayload>> {
+        self.generate().map(BlockItem::AccountTransaction)
+    }
 }
 
 pub async fn generate_transactions(
     mut client: v2::Client,
     mut generator: impl Generate + Send + 'static,
-    tps: u16,
+    txn_interval: Duration,
 ) -> anyhow::Result<()> {
     // Create a channel between the task signing and the task sending transactions.
     let (sender, mut rx) = tokio::sync::mpsc::channel(100);
@@ -183,26 +192,42 @@ pub async fn generate_transactions(
     // background.
     tokio::spawn(async move {
         loop {
-            let tx = generator.generate();
-            sender.send(tx).await.expect("Error in receiver");
+            let item = generator.generate_block_item();
+            sender.send(item).await.expect("Error in receiver");
         }
     });
 
-    let mut interval = tokio::time::interval(tokio::time::Duration::from_micros(
-        1_000_000 / u64::from(tps),
-    ));
+    let mut interval = tokio::time::interval(txn_interval);
     loop {
         interval.tick().await;
-        if let Some(tx) = rx.recv().await.transpose()? {
-            let nonce = tx.header.nonce;
-            let energy = tx.header.energy_amount;
-            let item = BlockItem::AccountTransaction(tx);
+        if let Some(item) = rx.recv().await.transpose()? {
             let transaction_hash = client.send_block_item(&item).await?;
-            println!(
-                "{}: Transaction {} submitted (nonce = {nonce}, energy = {energy}).",
-                chrono::Utc::now(),
-                transaction_hash,
-            );
+            match item {
+                BlockItem::AccountTransaction(txn) => {
+                    println!(
+                        "{}: Transaction {} submitted (nonce = {}, energy = {}).",
+                        chrono::Utc::now(),
+                        transaction_hash,
+                        txn.header.nonce,
+                        txn.header.energy_amount,
+                    );
+                }
+                BlockItem::CredentialDeployment(_) => {
+                    println!(
+                        "{}: Credential deployment {} submitted",
+                        chrono::Utc::now(),
+                        transaction_hash,
+                    );
+                }
+                BlockItem::UpdateInstruction(update) => {
+                    println!(
+                        "{}: Update instruction {} submitted (sequence = {}).",
+                        chrono::Utc::now(),
+                        transaction_hash,
+                        update.header.seq_number,
+                    );
+                }
+            }
         } else {
             break Ok(());
         }
