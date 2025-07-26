@@ -3,8 +3,7 @@ ARG base_image=debian:bookworm-slim
 FROM ${build_image} AS build
 
 WORKDIR /build
-COPY chain-prometheus-exporter chain-prometheus-exporter
-COPY deps/concordium-rust-sdk deps/concordium-rust-sdk
+COPY . .
 RUN cargo build --locked -p chain-prometheus-exporter --release
 
 FROM ${base_image}
