@@ -19,7 +19,7 @@ Navigate into this folder:
 ```shell
 cd ../wallet-connect-test-bench/smart-contract
 ```
-
+todo ar test this
 Building the smart contract (with embedded schema) or running the tests, use the following commands:
 
 ```shell

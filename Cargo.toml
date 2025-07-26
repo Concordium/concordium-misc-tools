@@ -32,3 +32,9 @@ default-members = [
    "wallet-proxy-load-simulator",
 #   "company-id-gui/src-tauri"
 ]
+
+[profile.smart-contract]
+inherits = "release"
+panic = "abort"
+opt-level = "s"
+codegen-units = 1
