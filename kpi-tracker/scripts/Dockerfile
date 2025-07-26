@@ -4,6 +4,7 @@ FROM ${build_image} AS build
 
 WORKDIR /build
 COPY . .
+RUN ls
 RUN cargo build --locked -p concordium-kpi-tracker --release
 
 FROM ${base_image}

@@ -4,10 +4,8 @@ FROM ${build_image} AS build
 
 WORKDIR /usr/app/notification-server
 
-COPY notification-server/Cargo.toml notification-server/Cargo.lock ./
-COPY notification-server/src ./src
-COPY deps /usr/app/deps
-RUN cargo build --release --locked
+COPY . .
+RUN cargo build --release --locked -p notification-server
 
 FROM ${base_image}
 
