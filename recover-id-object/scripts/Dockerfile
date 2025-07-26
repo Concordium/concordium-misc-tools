@@ -1,12 +1,10 @@
-ARG build_image=rust:1.70-buster
-ARG base_image=debian:buster-slim
+ARG build_image=rust:1.70-bookworm
+ARG base_image=debian:bookworm-slim
 FROM ${build_image} AS build
 
 WORKDIR /usr/app/recover-id-object
-
-COPY recover-id-object .
-COPY deps /usr/app/deps
-RUN cargo build --release --locked
+COPY . .
+RUN cargo build --release --locked -p recover-id-object
 
 FROM ${base_image}
 
