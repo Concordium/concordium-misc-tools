@@ -68,3 +68,18 @@ cargo build --release
 The tool should build with at least rust 1.65 or later.
 
 This produces a single binary `target/release/concordium-state-compare`.
+
+
+## How to run examples
+
+```shell
+STATE_COMPARE_NODE1=http://<ip>:<port> cargo run
+
+OR
+
+cargo run -- --node1 http://<ip>:<port>
+
+OR
+
+cargo run -- --node1 http://<ip>:<port> --node2 http://<ip>:<port>
+```

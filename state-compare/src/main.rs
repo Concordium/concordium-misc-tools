@@ -14,7 +14,7 @@ use concordium_rust_sdk::{
     types::{
         hashes::BlockHash, smart_contracts::ModuleReference, ContractAddress, ProtocolVersion,
     },
-    v2,
+    v2::{self, Scheme},
 };
 use futures::{StreamExt, TryStreamExt};
 use indicatif::ProgressBar;
@@ -75,7 +75,21 @@ async fn main() -> anyhow::Result<()> {
         )
         .init();
 
-    let mut client1 = v2::Client::new(args.node1).await?;
+    print!("Attempt to create client 1 here..."); 
+
+    // create the client - if https is un the URI, we need to create and add TLS config, otherwise client can be created directly
+    let mut client1 = if args.node1.uri().scheme() == Some(&Scheme::HTTPS) {
+        info!("Scheme contained https - will attempt to construct client with TLS");
+        v2::Client::new(
+    args.node1
+                .tls_config(tonic::transport::channel::ClientTlsConfig::new())
+                .context("Unable to construct tls")?
+        )
+    } else {
+        v2::Client::new(args.node1)
+    }.await?;
+
+
     let mut client2 = match args.node2 {
         Some(ep) => v2::Client::new(ep).await?,
         None => client1.clone(),
@@ -107,6 +121,7 @@ async fn main() -> anyhow::Result<()> {
          version {pv2})."
     );
 
+
     compare!(ci1.genesis_block, ci2.genesis_block, "Genesis blocks");
 
     compare_accounts(&mut client1, &mut client2, block1, block2).await?;
@@ -122,6 +137,8 @@ async fn main() -> anyhow::Result<()> {
     compare_baker_pools(&mut client1, &mut client2, block1, block2).await?;
 
     compare_update_queues(&mut client1, &mut client2, block1, block2).await?;
+
+    get_plt_token_info(&mut client1, &mut client2, block1, block2).await?;
 
     info!("Done!");
 
@@ -543,6 +560,37 @@ async fn compare_baker_pools(
 
         compare!(p1, p2, "Pool {pool}");
     }
+
+    Ok(())
+}
+
+async fn get_plt_token_info(
+    client1: &mut v2::Client,
+    client2: &mut v2::Client,
+    block1: BlockHash,
+    block2: BlockHash,
+) -> anyhow::Result<()> {
+
+    info!("Checking get plt tokens");
+
+    let mut tokens_node_1 = client1
+        .get_token_list(block1)
+        .await?
+        .response
+        .try_collect::<Vec<_>>()
+        .await?;
+
+    info!("Tokens are: {:?}", tokens_node_1);
+
+    let mut tokens_node_2 = client2
+        .get_token_list(block2)
+        .await?
+        .response
+        .try_collect::<Vec<_>>()
+        .await?;
+
+    info!("Tokens are: {:?}", tokens_node_2);
+
 
     Ok(())
 }
