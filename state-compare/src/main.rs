@@ -9,25 +9,22 @@ use std::fmt::Display;
 use anyhow::Context;
 use clap::Parser;
 use concordium_rust_sdk::{
-    cis2::TokenId, endpoints, id::types::AccountAddress, protocol_level_tokens::{self, TokenState}, types::{
+    endpoints, 
+    id::types::AccountAddress,
+    types::{
         hashes::BlockHash, smart_contracts::ModuleReference, ContractAddress, ProtocolVersion,
-    }, v2::{self, IntoBlockIdentifier, Scheme}
+    }, 
+    v2::{self, Scheme}
 };
 use futures::{StreamExt, TryStreamExt};
 use indicatif::ProgressBar;
-use pretty_assertions::Comparison;
 use tracing::{info, level_filters::LevelFilter, warn};
 use tracing_subscriber::EnvFilter;
 
-/// Compares the given values and prints a pretty diff with the given message if
-/// they are not equal.
-macro_rules! compare {
-    ($v1:expr, $v2:expr, $($arg:tt)*) => {
-        if $v1 != $v2 {
-            warn!("{} differs:\n{}", format!($($arg)*), Comparison::new(&$v1, &$v2))
-        }
-    };
-}
+use concordium_state_compare::token_compare::{compare_token_info_for_ids, fetch_token_lists, compare_token_identities};
+
+#[macro_use]
+mod macros;
 
 #[derive(Parser, Debug)]
 #[clap(version)]
@@ -573,98 +570,3 @@ async fn compare_baker_pools(
     Ok(())
 }
 
-
-async fn fetch_token_lists(  
-    client1: &mut v2::Client,
-    client2: &mut v2::Client,
-    block1: BlockHash,
-    block2: BlockHash,) -> anyhow::Result<(Vec<protocol_level_tokens::TokenId>, Vec<protocol_level_tokens::TokenId>)> {
-     
-    info!("Fetching PLT token lists.");
-    let tokens1 = client1.get_token_list(block1).await?.response
-        .try_collect::<Vec<_>>()
-        .await?;
-    let tokens2 = client2.get_token_list(block2).await?.response
-        .try_collect::<Vec<_>>()
-        .await?;
-
-    Ok((tokens1, tokens2))
-}
-
-async fn compare_token_identities(
-    tokens_node_1: &[protocol_level_tokens::TokenId],
-    tokens_node_2: &[protocol_level_tokens::TokenId],
-    _block1: BlockHash,
-    _block2: BlockHash,
-) -> anyhow::Result<Vec<protocol_level_tokens::TokenId>> {
-
-    info!("Comparing PLT token identities.");
-
-    // We need to clone the tokens to sort them, otherwise the borrowing would not complain
-    let mut tokens_node_1 = tokens_node_1.to_vec();
-    let mut tokens_node_2 = tokens_node_2.to_vec();
-
-    info!("Node 1 has {} tokens, Node 2 has {} tokens.", tokens_node_1.len(), tokens_node_2.len());
-    info!(tokens_node_1 = ?tokens_node_1, tokens_node_2 = ?tokens_node_2, "Token identities");
-    // Sort the tokens to ensure a consistent order for comparison.
-    tokens_node_1.sort_unstable();
-    tokens_node_2.sort_unstable();
-
-    compare!(tokens_node_1, tokens_node_2, "PLT Token identities");
-
-    info!("after comparison, Node 1 has {} tokens, Node 2 has {} tokens.", tokens_node_1.len(), tokens_node_2.len());
-    let result: Vec<protocol_level_tokens::TokenId> = tokens_node_1
-    .iter()
-    .filter(|id| tokens_node_2.contains(id))
-    .cloned()
-    .collect();
-
-    info!("Returning result with {} common tokens.", result.len());
-    Ok(result)
-}
-
-
-
-async fn compare_token_info_for_ids(
-    client1: &mut v2::Client,
-    client2: &mut v2::Client,
-    block1: BlockHash,
-    block2: BlockHash,
-    token_ids: &[protocol_level_tokens::TokenId],
-) -> anyhow::Result<()> {
-
-    info!("compare_token_info_for_ids");
-    for token_id in token_ids {
-        info!("Getting token info for token ID {:?} from block {}", token_id, block1.into_block_identifier());
-        let info1 = client1.get_token_info(token_id.clone(), &block1.into_block_identifier()).await;
-        info!("Getting token info for token ID {:?} from block {}", token_id, block2.into_block_identifier());
-        let info2 = client2.get_token_info(token_id.clone(), &block2.into_block_identifier()).await;
-
-       match (info1, info2) {
-            (Ok(info1), Ok(info2)) => {
-                info!(?token_id, "Comparing token info");
-                compare!(
-                    info1.response.token_state.decimals,
-                    info2.response.token_state.decimals,
-                    "Token Info for ID {:?}",
-                    token_id
-                );
-
-                // check token module state is matching for paused
-                let decoded_mod_state1 = TokenState::decode_module_state(&info1.response.token_state);
-                let decoded_mod_state2 = TokenState::decode_module_state(&info2.response.token_state);
-                compare!(decoded_mod_state1.as_ref().unwrap().paused , decoded_mod_state2.as_ref().unwrap().paused, "Token module state check");
-            }
-            (Err(e1), Err(e2)) => {
-                warn!(?token_id, "Token info not found on either node: {:?} / {:?}", e1, e2);
-            }
-            (Err(e), _) => {
-                warn!(?token_id, "Token info missing on node 1: {:?}", e);
-            }
-            (_, Err(e)) => {
-                warn!(?token_id, "Token info missing on node 2: {:?}", e);
-            }
-        }
-    }
-    Ok(())
-}
