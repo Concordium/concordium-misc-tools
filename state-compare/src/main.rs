@@ -118,7 +118,7 @@ async fn main() -> anyhow::Result<()> {
          version {pv2})."
     );
 
-
+    /* 
     compare!(ci1.genesis_block, ci2.genesis_block, "Genesis blocks");
 
     compare_accounts(&mut client1, &mut client2, block1, block2).await?;
@@ -135,6 +135,8 @@ async fn main() -> anyhow::Result<()> {
 
     compare_update_queues(&mut client1, &mut client2, block1, block2).await?;
 
+    */
+    
     let (tokens_node_1, tokens_node_2) = fetch_token_lists(&mut client1, &mut client2, block1, block2).await?;
     let token_ids = compare_token_identities(&tokens_node_1, &tokens_node_2, block1, block2).await?;
     compare_token_info_for_ids(&mut client1, &mut client2, block1, block2, &token_ids).await?;
