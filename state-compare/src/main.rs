@@ -9,12 +9,9 @@ use std::fmt::Display;
 use anyhow::Context;
 use clap::Parser;
 use concordium_rust_sdk::{
-    endpoints,
-    id::types::AccountAddress,
-    types::{
+    cis2::TokenId, endpoints, id::types::AccountAddress, protocol_level_tokens, types::{
         hashes::BlockHash, smart_contracts::ModuleReference, ContractAddress, ProtocolVersion,
-    },
-    v2::{self, Scheme},
+    }, v2::{self, IntoBlockIdentifier, Scheme}
 };
 use futures::{StreamExt, TryStreamExt};
 use indicatif::ProgressBar;
@@ -138,7 +135,9 @@ async fn main() -> anyhow::Result<()> {
 
     compare_update_queues(&mut client1, &mut client2, block1, block2).await?;
 
-    compare_plt_token_list(&mut client1, &mut client2, block1, block2).await?;
+    let (tokens_node_1, tokens_node_2) = fetch_token_lists(&mut client1, &mut client2, block1, block2).await?;
+    let token_ids = compare_token_identities(&tokens_node_1, &tokens_node_2, block1, block2).await?;
+    compare_token_info_for_ids(&mut client1, &mut client2, block1, block2, &token_ids).await?;
 
     info!("Done!");
 
@@ -572,32 +571,93 @@ async fn compare_baker_pools(
     Ok(())
 }
 
-async fn compare_plt_token_list(
+
+async fn fetch_token_lists(  
+    client1: &mut v2::Client,
+    client2: &mut v2::Client,
+    block1: BlockHash,
+    block2: BlockHash,) -> anyhow::Result<(Vec<protocol_level_tokens::TokenId>, Vec<protocol_level_tokens::TokenId>)> {
+     
+    info!("Fetching PLT token lists.");
+    let tokens1 = client1.get_token_list(block1).await?.response
+        .try_collect::<Vec<_>>()
+        .await?;
+    let tokens2 = client2.get_token_list(block2).await?.response
+        .try_collect::<Vec<_>>()
+        .await?;
+
+    Ok((tokens1, tokens2))
+}
+
+async fn compare_token_identities(
+    tokens_node_1: &[protocol_level_tokens::TokenId],
+    tokens_node_2: &[protocol_level_tokens::TokenId],
+    _block1: BlockHash,
+    _block2: BlockHash,
+) -> anyhow::Result<Vec<protocol_level_tokens::TokenId>> {
+
+    info!("Comparing PLT token identities.");
+
+    // We need to clone the tokens to sort them, otherwise the borrowing would not complain
+    let mut tokens_node_1 = tokens_node_1.to_vec();
+    let mut tokens_node_2 = tokens_node_2.to_vec();
+
+    info!("Node 1 has {} tokens, Node 2 has {} tokens.", tokens_node_1.len(), tokens_node_2.len());
+    info!(tokens_node_1 = ?tokens_node_1, tokens_node_2 = ?tokens_node_2, "Token identities");
+    // Sort the tokens to ensure a consistent order for comparison.
+    tokens_node_1.sort_unstable();
+    tokens_node_2.sort_unstable();
+
+    compare!(tokens_node_1, tokens_node_2, "PLT Token identities");
+
+    info!("after comparison, Node 1 has {} tokens, Node 2 has {} tokens.", tokens_node_1.len(), tokens_node_2.len());
+    let result: Vec<protocol_level_tokens::TokenId> = tokens_node_1
+    .iter()
+    .filter(|id| tokens_node_2.contains(id))
+    .cloned()
+    .collect();
+
+    info!("Returning result with {} common tokens.", result.len());
+    Ok(result)
+}
+
+
+
+async fn compare_token_info_for_ids(
     client1: &mut v2::Client,
     client2: &mut v2::Client,
     block1: BlockHash,
     block2: BlockHash,
+    token_ids: &[protocol_level_tokens::TokenId],
 ) -> anyhow::Result<()> {
 
-    info!("Comparing PLT token lists");
+    info!("compare_token_info_for_ids");
+    for token_id in token_ids {
+        info!("Getting token info for token ID {:?} from block {}", token_id, block1.into_block_identifier());
+        let info1 = client1.get_token_info(token_id.clone(), &block1.into_block_identifier()).await;
+        info!("Getting token info for token ID {:?} from block {}", token_id, block2.into_block_identifier());
+        let info2 = client2.get_token_info(token_id.clone(), &block2.into_block_identifier()).await;
 
-    let mut tokens_node_1 = client1
-        .get_token_list(block1)
-        .await?
-        .response
-        .try_collect::<Vec<_>>()
-        .await?;
-
-    let mut tokens_node_2 = client2
-        .get_token_list(block2)
-        .await?
-        .response
-        .try_collect::<Vec<_>>()
-        .await?;
-
-    tokens_node_1.sort_unstable();
-    tokens_node_2.sort_unstable();
-
-    compare!(tokens_node_1, tokens_node_2, "PLT token lists");
+       match (info1, info2) {
+            (Ok(info1), Ok(info2)) => {
+                info!(?token_id, "Comparing token info");
+                compare!(
+                    info1.response.token_state.decimals,
+                    info2.response.token_state.decimals,
+                    "Token Info for ID {:?}",
+                    token_id
+                );
+            }
+            (Err(e1), Err(e2)) => {
+                warn!(?token_id, "Token info not found on either node: {:?} / {:?}", e1, e2);
+            }
+            (Err(e), _) => {
+                warn!(?token_id, "Token info missing on node 1: {:?}", e);
+            }
+            (_, Err(e)) => {
+                warn!(?token_id, "Token info missing on node 2: {:?}", e);
+            }
+        }
+    }
     Ok(())
 }
