@@ -9,7 +9,7 @@ use std::fmt::Display;
 use anyhow::Context;
 use clap::Parser;
 use concordium_rust_sdk::{
-    cis2::TokenId, endpoints, id::types::AccountAddress, protocol_level_tokens, types::{
+    cis2::TokenId, endpoints, id::types::AccountAddress, protocol_level_tokens::{self, TokenState}, types::{
         hashes::BlockHash, smart_contracts::ModuleReference, ContractAddress, ProtocolVersion,
     }, v2::{self, IntoBlockIdentifier, Scheme}
 };
@@ -649,6 +649,11 @@ async fn compare_token_info_for_ids(
                     "Token Info for ID {:?}",
                     token_id
                 );
+
+                // check token module state is matching for paused
+                let decoded_mod_state1 = TokenState::decode_module_state(&info1.response.token_state);
+                let decoded_mod_state2 = TokenState::decode_module_state(&info2.response.token_state);
+                compare!(decoded_mod_state1.as_ref().unwrap().paused , decoded_mod_state2.as_ref().unwrap().paused, "Token module state check");
             }
             (Err(e1), Err(e2)) => {
                 warn!(?token_id, "Token info not found on either node: {:?} / {:?}", e1, e2);
