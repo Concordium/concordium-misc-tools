@@ -138,12 +138,14 @@ async fn main() -> anyhow::Result<()> {
 
     compare_update_queues(&mut client1, &mut client2, block1, block2).await?;
 
-    get_plt_token_info(&mut client1, &mut client2, block1, block2).await?;
+    compare_plt_token_list(&mut client1, &mut client2, block1, block2).await?;
 
     info!("Done!");
 
     Ok(())
 }
+
+
 
 /// Get the protocol version for the two blocks.
 /// This currently uses the rewards overview call since this is the cheapest
@@ -351,6 +353,12 @@ async fn compare_accounts(
             s.transactions.sort_unstable();
         }
 
+        // compare PLT tokens
+        let tokens1 = &a1.tokens;
+        let tokens2 = &a2.tokens;
+        compare!(tokens1, tokens2, "PLT Tokens for account: {accid}");
+
+        // compare account info
         compare!(a1, a2, "Account {accid}");
     }
 
@@ -564,14 +572,14 @@ async fn compare_baker_pools(
     Ok(())
 }
 
-async fn get_plt_token_info(
+async fn compare_plt_token_list(
     client1: &mut v2::Client,
     client2: &mut v2::Client,
     block1: BlockHash,
     block2: BlockHash,
 ) -> anyhow::Result<()> {
 
-    info!("Checking get plt tokens");
+    info!("Comparing PLT token lists");
 
     let mut tokens_node_1 = client1
         .get_token_list(block1)
@@ -580,8 +588,6 @@ async fn get_plt_token_info(
         .try_collect::<Vec<_>>()
         .await?;
 
-    info!("Tokens are: {:?}", tokens_node_1);
-
     let mut tokens_node_2 = client2
         .get_token_list(block2)
         .await?
@@ -589,8 +595,9 @@ async fn get_plt_token_info(
         .try_collect::<Vec<_>>()
         .await?;
 
-    info!("Tokens are: {:?}", tokens_node_2);
+    tokens_node_1.sort_unstable();
+    tokens_node_2.sort_unstable();
 
-
+    compare!(tokens_node_1, tokens_node_2, "PLT token lists");
     Ok(())
 }
