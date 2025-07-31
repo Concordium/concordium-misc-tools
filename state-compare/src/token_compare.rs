@@ -88,7 +88,7 @@ pub async fn compare_token_info_for_ids(
                 // check token module state is matching for paused
                 let decoded_mod_state1 = TokenState::decode_module_state(&info1.response.token_state);
                 let decoded_mod_state2 = TokenState::decode_module_state(&info2.response.token_state);
-                compare!(decoded_mod_state1.as_ref().unwrap().paused , decoded_mod_state2.as_ref().unwrap().paused, "Token module state check");
+                compare!(decoded_mod_state1.as_ref().unwrap().paused , decoded_mod_state2.as_ref().unwrap().paused, "Token module paused check differs for token: {:?}", token_id);
             }
             (Err(e1), Err(e2)) => {
                 warn!("Token info {:?} not found on either node: {:?} / {:?}", token_id, e1, e2);
