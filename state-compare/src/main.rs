@@ -363,12 +363,6 @@ async fn compare_accounts(
         // compare PLT tokens
         let tokens1 = &a1.tokens;
         let tokens2 = &a2.tokens;
-        assert_eq!(
-            tokens1.len(),
-            tokens2.len(),
-            "plt tokens were not the same length for account: {}",
-            acc
-        );
         compare!(tokens1, tokens2, "PLT Tokens for account: {accid}");
 
         // compare PLT token balances
