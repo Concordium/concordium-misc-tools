@@ -1,5 +1,7 @@
 ## Unreleased changes
 
+- Updated generator with `plt` and `create-plt` arguments
+
 ## 1.2.0
 
 - Updated the Concordium Rust SDK to support the changes introduced in protocol 7.
