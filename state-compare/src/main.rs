@@ -352,6 +352,26 @@ async fn compare_accounts(
         // compare PLT tokens
         let tokens1 = &a1.tokens;
         let tokens2 = &a2.tokens;
+        assert_eq!(tokens1.len(), tokens2.len(), "plt tokens were not the same length for account: {:?}", acc);
+        compare!(tokens1, tokens2, "PLT Tokens for account: {accid}");
+
+        // compare PLT token balances
+        let mut token_index = 0;
+        let length = a1.tokens.len();
+        if length > 0 {
+            while &token_index < &a1.tokens.len() {
+                let token1 = &a1.tokens[token_index].token_id;
+                let token2= &a2.tokens[token_index].token_id;
+                compare!(token1, token2, "PLT token ids comparison did not match for account: {:?}, token 1: {:?}, token 2: {:?}", acc, token1, token2);
+
+                let plt_balance_1 = &a1.tokens[token_index].state.balance;
+                let plt_balance_2 = &a2.tokens[token_index].state.balance;
+                compare!(plt_balance_1, plt_balance_2, "PLT token balance comparison did not match for account: {:?}, plt token: {:?}, balance 1: {:?}, balance 2: {:?}", acc, token1, plt_balance_1, plt_balance_2);
+
+                token_index += 1;
+            }
+        }
+       
         compare!(tokens1, tokens2, "PLT Tokens for account: {accid}");
 
         // compare account info
