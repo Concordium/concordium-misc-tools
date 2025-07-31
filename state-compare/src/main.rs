@@ -9,12 +9,9 @@ use std::fmt::Display;
 use anyhow::Context;
 use clap::Parser;
 use concordium_rust_sdk::{
-    endpoints, 
-    id::types::AccountAddress,
-    types::{
+    endpoints, id::types::AccountAddress, protocol_level_tokens::TokenAccountState, types::{
         hashes::BlockHash, smart_contracts::ModuleReference, ContractAddress, ProtocolVersion,
-    }, 
-    v2::{self, Scheme}
+    }, v2::{self, Scheme}
 };
 use futures::{StreamExt, TryStreamExt};
 use indicatif::ProgressBar;
@@ -364,10 +361,16 @@ async fn compare_accounts(
                 let token2= &a2.tokens[token_index].token_id;
                 compare!(token1, token2, "PLT token ids comparison did not match for account: {:?}, token 1: {:?}, token 2: {:?}", acc, token1, token2);
 
+                // compare plt balances
                 let plt_balance_1 = &a1.tokens[token_index].state.balance;
                 let plt_balance_2 = &a2.tokens[token_index].state.balance;
                 compare!(plt_balance_1, plt_balance_2, "PLT token balance comparison did not match for account: {:?}, plt token: {:?}, balance 1: {:?}, balance 2: {:?}", acc, token1, plt_balance_1, plt_balance_2);
 
+                // check module state differences (allow list, deny list comparisons and additional data)
+                let plt_module_state_1 = TokenAccountState::decode_module_state(&a1.tokens[token_index].state).unwrap();
+                let plt_module_state_2 = TokenAccountState::decode_module_state(&a2.tokens[token_index].state).unwrap();
+                compare!(plt_module_state_1, plt_module_state_2, "Token module state differs for account: {:?}, state 1: {:?}, state 2: {:?}", acc, plt_module_state_1, plt_module_state_2);
+                
                 token_index += 1;
             }
         }
