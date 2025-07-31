@@ -366,7 +366,7 @@ async fn compare_accounts(
         assert_eq!(
             tokens1.len(),
             tokens2.len(),
-            "plt tokens were not the same length for account: {:?}",
+            "plt tokens were not the same length for account: {}",
             acc
         );
         compare!(tokens1, tokens2, "PLT Tokens for account: {accid}");
@@ -381,8 +381,8 @@ async fn compare_accounts(
                 compare!(
                     token1,
                     token2,
-                    "PLT token ids comparison did not match for account: {:?}, token 1: {:?}, \
-                     token 2: {:?}",
+                    "PLT token ids comparison did not match for account: {}, token 1: {:?}, token \
+                     2: {:?}",
                     acc,
                     token1,
                     token2
