@@ -375,7 +375,7 @@ async fn compare_accounts(
         let mut token_index = 0;
         let length = a1.tokens.len();
         if length > 0 {
-            while &token_index < &a1.tokens.len() {
+            while token_index < a1.tokens.len() {
                 let token1 = &a1.tokens[token_index].token_id;
                 let token2 = &a2.tokens[token_index].token_id;
                 compare!(
