@@ -6,19 +6,26 @@
 
 use std::fmt::Display;
 
+use crate::v2::{Client, Endpoint};
 use anyhow::Context;
 use clap::Parser;
 use concordium_rust_sdk::{
-    endpoints, id::types::AccountAddress, protocol_level_tokens::TokenAccountState, types::{
+    endpoints,
+    id::types::AccountAddress,
+    protocol_level_tokens::TokenAccountState,
+    types::{
         hashes::BlockHash, smart_contracts::ModuleReference, ContractAddress, ProtocolVersion,
-    }, v2::{self, Scheme}
+    },
+    v2::{self, Scheme},
 };
 use futures::{StreamExt, TryStreamExt};
 use indicatif::ProgressBar;
 use tracing::{info, level_filters::LevelFilter, warn};
 use tracing_subscriber::EnvFilter;
 
-use concordium_state_compare::token_compare::{compare_token_info_for_ids, fetch_token_lists, compare_token_identities};
+use concordium_state_compare::token_compare::{
+    compare_token_identities, compare_token_info_for_ids, fetch_token_lists,
+};
 
 #[macro_use]
 mod macros;
@@ -66,23 +73,14 @@ async fn main() -> anyhow::Result<()> {
         )
         .init();
 
-    print!("Attempt to create client 1 here..."); 
+    print!("Attempt to create client 1 here...");
 
-    // create the client - if https is un the URI, we need to create and add TLS config, otherwise client can be created directly
-    let mut client1 = if args.node1.uri().scheme() == Some(&Scheme::HTTPS) {
-        info!("Scheme contained https - will attempt to construct client with TLS");
-        v2::Client::new(
-    args.node1
-                .tls_config(tonic::transport::channel::ClientTlsConfig::new())
-                .context("Unable to construct tls")?
-        )
-    } else {
-        v2::Client::new(args.node1)
-    }.await?;
-
+    let mut client1 = build_client(args.node1)
+        .await
+        .expect("Error building client 1 please review node 1 config provided");
 
     let mut client2 = match args.node2 {
-        Some(ep) => v2::Client::new(ep).await?,
+        Some(ep) => build_client(ep).await?,
         None => client1.clone(),
     };
 
@@ -128,9 +126,10 @@ async fn main() -> anyhow::Result<()> {
 
     compare_update_queues(&mut client1, &mut client2, block1, block2).await?;
 
-    
-    let (tokens_node_1, tokens_node_2) = fetch_token_lists(&mut client1, &mut client2, block1, block2).await?;
-    let token_ids = compare_token_identities(&tokens_node_1, &tokens_node_2, block1, block2).await?;
+    let (tokens_node_1, tokens_node_2) =
+        fetch_token_lists(&mut client1, &mut client2, block1, block2).await?;
+    let token_ids =
+        compare_token_identities(&tokens_node_1, &tokens_node_2, block1, block2).await?;
     compare_token_info_for_ids(&mut client1, &mut client2, block1, block2, &token_ids).await?;
 
     info!("Done!");
@@ -138,7 +137,22 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Helper utility to build the client based on the uri scheme that was provided
+async fn build_client(endpoint: Endpoint) -> anyhow::Result<Client> {
+    let client = if endpoint.uri().scheme() == Some(&Scheme::HTTPS) {
+        info!("Scheme contained https - will attempt to construct client with TLS");
+        v2::Client::new(
+            endpoint
+                .tls_config(tonic::transport::channel::ClientTlsConfig::new())
+                .context("Unable to construct tls")?,
+        )
+    } else {
+        v2::Client::new(endpoint)
+    }
+    .await?;
 
+    Ok(client)
+}
 
 /// Get the protocol version for the two blocks.
 /// This currently uses the rewards overview call since this is the cheapest
@@ -349,7 +363,12 @@ async fn compare_accounts(
         // compare PLT tokens
         let tokens1 = &a1.tokens;
         let tokens2 = &a2.tokens;
-        assert_eq!(tokens1.len(), tokens2.len(), "plt tokens were not the same length for account: {:?}", acc);
+        assert_eq!(
+            tokens1.len(),
+            tokens2.len(),
+            "plt tokens were not the same length for account: {:?}",
+            acc
+        );
         compare!(tokens1, tokens2, "PLT Tokens for account: {accid}");
 
         // compare PLT token balances
@@ -358,23 +377,50 @@ async fn compare_accounts(
         if length > 0 {
             while &token_index < &a1.tokens.len() {
                 let token1 = &a1.tokens[token_index].token_id;
-                let token2= &a2.tokens[token_index].token_id;
-                compare!(token1, token2, "PLT token ids comparison did not match for account: {:?}, token 1: {:?}, token 2: {:?}", acc, token1, token2);
+                let token2 = &a2.tokens[token_index].token_id;
+                compare!(
+                    token1,
+                    token2,
+                    "PLT token ids comparison did not match for account: {:?}, token 1: {:?}, \
+                     token 2: {:?}",
+                    acc,
+                    token1,
+                    token2
+                );
 
                 // compare plt balances
                 let plt_balance_1 = &a1.tokens[token_index].state.balance;
                 let plt_balance_2 = &a2.tokens[token_index].state.balance;
-                compare!(plt_balance_1, plt_balance_2, "PLT token balance comparison did not match for account: {:?}, plt token: {:?}, balance 1: {:?}, balance 2: {:?}", acc, token1, plt_balance_1, plt_balance_2);
+                compare!(
+                    plt_balance_1,
+                    plt_balance_2,
+                    "PLT token balance comparison did not match for account: {:?}, plt token: \
+                     {:?}, balance 1: {:?}, balance 2: {:?}",
+                    acc,
+                    token1,
+                    plt_balance_1,
+                    plt_balance_2
+                );
 
-                // check module state differences (allow list, deny list comparisons and additional data)
-                let plt_module_state_1 = TokenAccountState::decode_module_state(&a1.tokens[token_index].state).unwrap();
-                let plt_module_state_2 = TokenAccountState::decode_module_state(&a2.tokens[token_index].state).unwrap();
-                compare!(plt_module_state_1, plt_module_state_2, "Token module state differs for account: {:?}, state 1: {:?}, state 2: {:?}", acc, plt_module_state_1, plt_module_state_2);
-                
+                // check module state differences (allow list, deny list comparisons and
+                // additional data)
+                let plt_module_state_1 =
+                    TokenAccountState::decode_module_state(&a1.tokens[token_index].state).unwrap();
+                let plt_module_state_2 =
+                    TokenAccountState::decode_module_state(&a2.tokens[token_index].state).unwrap();
+                compare!(
+                    plt_module_state_1,
+                    plt_module_state_2,
+                    "Token module state differs for account: {:?}, state 1: {:?}, state 2: {:?}",
+                    acc,
+                    plt_module_state_1,
+                    plt_module_state_2
+                );
+
                 token_index += 1;
             }
         }
-       
+
         compare!(tokens1, tokens2, "PLT Tokens for account: {accid}");
 
         // compare account info
@@ -590,4 +636,3 @@ async fn compare_baker_pools(
 
     Ok(())
 }
-
