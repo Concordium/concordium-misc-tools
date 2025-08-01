@@ -22,5 +22,6 @@ tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 
 # need these to make the tests printing the logs from the token_compare.rs
 # run cargo test -- --nocapture
+[dev-dependencies]
 log = "0.4"
 env_logger = "0.11"

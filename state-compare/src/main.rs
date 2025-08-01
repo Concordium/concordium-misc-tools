@@ -23,12 +23,7 @@ use indicatif::ProgressBar;
 use tracing::{info, level_filters::LevelFilter, warn};
 use tracing_subscriber::EnvFilter;
 
-use concordium_state_compare::token_compare::{
-    compare_token_identities, compare_token_info_for_ids, fetch_token_lists,
-};
-
-#[macro_use]
-mod macros;
+use concordium_state_compare::compare;
 
 #[derive(Parser, Debug)]
 #[clap(version)]
@@ -73,11 +68,9 @@ async fn main() -> anyhow::Result<()> {
         )
         .init();
 
-    print!("Attempt to create client 1 here...");
-
     let mut client1 = build_client(args.node1)
         .await
-        .expect("Error building client 1 please review node 1 config provided");
+        .context("Error building client 1 please review node 1 config provided")?;
 
     let mut client2 = match args.node2 {
         Some(ep) => build_client(ep).await?,
@@ -126,11 +119,22 @@ async fn main() -> anyhow::Result<()> {
 
     compare_update_queues(&mut client1, &mut client2, block1, block2).await?;
 
-    let (tokens_node_1, tokens_node_2) =
-        fetch_token_lists(&mut client1, &mut client2, block1, block2).await?;
     let token_ids =
-        compare_token_identities(&tokens_node_1, &tokens_node_2, block1, block2).await?;
-    compare_token_info_for_ids(&mut client1, &mut client2, block1, block2, &token_ids).await?;
+        concordium_state_compare::protocol_level_token_compare::compare_token_identifiers(
+            &mut client1,
+            &mut client2,
+            block1,
+            block2,
+        )
+        .await?;
+    concordium_state_compare::protocol_level_token_compare::compare_token_info_for_ids(
+        &mut client1,
+        &mut client2,
+        block1,
+        block2,
+        &token_ids,
+    )
+    .await?;
 
     info!("Done!");
 
@@ -366,20 +370,19 @@ async fn compare_accounts(
         compare!(tokens1, tokens2, "PLT Tokens for account: {accid}");
 
         // compare PLT token balances
-        let mut token_index = 0;
         let length = a1.tokens.len();
         if length > 0 {
-            while token_index < a1.tokens.len() {
-                let token1 = &a1.tokens[token_index].token_id;
-                let token2 = &a2.tokens[token_index].token_id;
+            for (token_index, token1) in a1.tokens.iter().enumerate() {
+                let token_id1 = &a1.tokens[token_index].token_id;
+                let token_id2 = &a2.tokens[token_index].token_id;
                 compare!(
-                    token1,
-                    token2,
+                    token_id1,
+                    token_id2,
                     "PLT token ids comparison did not match for account: {}, token 1: {:?}, token \
                      2: {:?}",
                     acc,
-                    token1,
-                    token2
+                    token_id1,
+                    token_id2
                 );
 
                 // compare plt balances
@@ -398,10 +401,14 @@ async fn compare_accounts(
 
                 // check module state differences (allow list, deny list comparisons and
                 // additional data)
-                let plt_module_state_1 =
-                    TokenAccountState::decode_module_state(&a1.tokens[token_index].state).unwrap();
-                let plt_module_state_2 =
-                    TokenAccountState::decode_module_state(&a2.tokens[token_index].state).unwrap();
+                let plt_module_state_1 = TokenAccountState::decode_module_state(
+                    &a1.tokens[token_index].state,
+                )
+                .context("Failed to decode module state for token1 at index {token_index}")?;
+                let plt_module_state_2 = TokenAccountState::decode_module_state(
+                    &a2.tokens[token_index].state,
+                )
+                .context("Failed to decode module state for token2 at index {token_index}")?;
                 compare!(
                     plt_module_state_1,
                     plt_module_state_2,
@@ -410,8 +417,6 @@ async fn compare_accounts(
                     plt_module_state_1,
                     plt_module_state_2
                 );
-
-                token_index += 1;
             }
         }
 
