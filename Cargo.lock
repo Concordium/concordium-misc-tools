@@ -1214,7 +1214,7 @@ dependencies = [
  "base64 0.21.7",
  "bs58",
  "chrono",
- "concordium-contracts-common-derive 4.1.0",
+ "concordium-contracts-common-derive",
  "fnv",
  "getrandom 0.2.16",
  "hashbrown 0.11.2",
@@ -1232,31 +1232,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "concordium-contracts-common"
-version = "9.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8bacf3a0689d3ac154085e322eb98b0db16caa61436421d991d54ba25aaf0da3"
-dependencies = [
- "base64 0.21.7",
- "concordium-contracts-common-derive 4.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "fnv",
- "hashbrown 0.11.2",
-]
-
-[[package]]
 name = "concordium-contracts-common-derive"
 version = "4.1.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.104",
-]
-
-[[package]]
-name = "concordium-contracts-common-derive"
-version = "4.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ee3482ffacf3c18133be976c1b874b6e87e018ac0316e9385888b43df07fa39c"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1323,7 +1300,7 @@ dependencies = [
  "anyhow",
  "arbitrary",
  "byteorder",
- "concordium-contracts-common 9.2.0",
+ "concordium-contracts-common",
  "concordium-wasm",
  "criterion 0.6.0",
  "derive_more",
@@ -1363,20 +1340,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "concordium-std"
-version = "10.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8879375db69e8b0f9918faef9b349427c5ae8ba45b31870946780d16bcfe7fe7"
-dependencies = [
- "concordium-contracts-common 9.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
 name = "concordium-wasm"
 version = "5.1.0"
 dependencies = [
  "anyhow",
- "concordium-contracts-common 9.2.0",
+ "concordium-contracts-common",
  "criterion 0.4.0",
  "derive_more",
  "leb128",
@@ -1402,7 +1370,7 @@ dependencies = [
  "chrono",
  "ciborium-io",
  "ciborium-ll",
- "concordium-contracts-common 9.2.0",
+ "concordium-contracts-common",
  "concordium_base_derive",
  "criterion 0.4.0",
  "curve25519-dalek",
@@ -6487,13 +6455,6 @@ name = "smallvec"
 version = "1.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
-
-[[package]]
-name = "smart_contract_test_bench"
-version = "1.1.0"
-dependencies = [
- "concordium-std",
-]
 
 [[package]]
 name = "socket2"
