@@ -60,12 +60,12 @@ jobs:
   # Smart contracts currently has to be standalone crates and not part of the repo workspace
   # due to how cargo-concordium verifiable build works
   smart_contracts:
+    name: "Smart contract build and test: ${{ matrix.crate }}"
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        crates: ["wallet-connect-test-bench/smart-contract"]
-    name: "Smart contract build and test: ${{ matrix.crate }}"
+        crate: ["wallet-connect-test-bench/smart-contract"]
     steps:
       - name: Checkout
         uses: actions/checkout@v4

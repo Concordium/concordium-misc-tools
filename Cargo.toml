@@ -1,6 +1,9 @@
 [workspace]
 resolver = "2"
 
+# Smart contracts currently has to be standalone crates and not part of the repo workspace
+# due to how cargo-concordium verifiable build works. Hence, smart contract crates in teh repo
+# are not members of the workspace.
 members = [
    "chain-prometheus-exporter",
    "generator",
