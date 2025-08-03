@@ -56,3 +56,32 @@ jobs:
       - name: Run tests
         run: |
           cargo test --locked --all-features --release
+
+  # Smart contracts currently has to be standalone crates and not part of the repo workspace
+  # due to how cargo-concordium verifiable build works
+  smart_contracts:
+    name: Build and test ${{ matrix.crate }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        crates: ["wallet-connect-test-bench/smart-contract"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install rustfmt and Clippy
+        run: |
+          rustup +${{ env.RUST_FMT_VERSION }} component add rustfmt          
+          rustup component add clippy
+      - name: Run cargo fmt
+        run: |
+          cargo --manifest-path=${{ matrix.crate }}/Cargo.toml +${{ env.RUST_FMT_VERSION }} fmt --check
+      - name: Run Clippy
+        run: |
+          cargo --manifest-path=${{ matrix.crate }}/Cargo.toml clippy --locked --all-targets --all-features --no-deps -- -D warnings
+      - name: Run tests
+        run: |
+          cargo --manifest-path=${{ matrix.crate }}/Cargo.toml test --locked --all-features --release
+
