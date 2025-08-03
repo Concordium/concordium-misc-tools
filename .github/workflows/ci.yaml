@@ -60,7 +60,7 @@ jobs:
   # Smart contracts currently has to be standalone crates and not part of the repo workspace
   # due to how cargo-concordium verifiable build works
   smart_contracts:
-    name: "Smart contract build and test: ${{ matrix.crate }}"
+    name: "Smart contract: ${{ matrix.crate }}"
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
