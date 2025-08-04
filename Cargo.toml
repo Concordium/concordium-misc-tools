@@ -31,6 +31,6 @@ default-members = [
    "recover-id-object",
    "state-compare",
    "wallet-proxy-load-simulator",
-   # The package in company-id-gui/src-tauri is currently not among the default members, since it requires additinal tools to build, but there should be nothing wrong with adding it, if the build works
+   # The package in company-id-gui/src-tauri is currently not among the default members, since it requires additional tools to build, but there should be nothing wrong with adding it, if the build works
 #   "company-id-gui/src-tauri"
 ]
