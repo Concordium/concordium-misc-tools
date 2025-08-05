@@ -20,26 +20,19 @@ The tools are
 
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.0-4baaaa.svg)](https://github.com/Concordium/.github/blob/main/.github/CODE_OF_CONDUCT.md)
 
-This repository's CI automatically checks formatting and common problems in rust.
-Changes to any of the packages must be such that
-- ```cargo clippy --all``` produces no warnings
-- ```rust fmt``` makes no changes.
+In order to build and check the repository code locally, the following software is required:
 
-Everything in this repository should build with stable rust at the moment (at least version 1.57 and up), however the fmt tool must be from a nightly release since some of the configuration options are not stable. One way to run the `fmt` tool is
+- [rustup](https://www.rust-lang.org/tools/install)
 
-```shell
- cargo +nightly-2022-06-09 fmt
-```
-(the exact version used by the CI can be found in [.github/workflows/ci.yaml](.github/workflows/ci.yaml) file).
-You will need to have a recent enough nightly version installed, which can be done via
+To perform the build and checks equivalent to the CI, run these commands locally:
 
-```shell
-rustup toolchain install nightly-2022-06-09
-```
-or similar, using the [rustup](https://rustup.rs/) tool. See the documentation of the tool for more details.
+- Check: `cargo check --all-targets --all-features`
+- Clippy (includes check): `cargo clippy --all-targets --all-features --no-deps`
+- Test: `cargo test --all-features --release`
+- Format code: `cargo +nightly-2023-04-01 fmt`
 
-In order to contribute you should make a pull request and ask a person familiar
-with the codebase for a review.
+Notice that the nightly version is only used for formatting. Running tests for
+`notification-server` requires additional setup, see the [`README.md`](notification-server/README.md)
 
-If a new tool is added to the repository it should be accompanied with
+If a new tool is added to the repository it should be accompanied by
 documentation, and put on the list of tools in the README above.
