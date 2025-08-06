@@ -372,7 +372,7 @@ async fn compare_accounts(
         // compare PLT token balances
         let length = a1.tokens.len();
         if length > 0 {
-            for (token_index, token1) in a1.tokens.iter().enumerate() {
+            for (token_index, _token) in a1.tokens.iter().enumerate() {
                 // check decoded module state differences (allow list, deny list comparisons and
                 // additional data)
                 let decoded_plt_module_state_1 = TokenAccountState::decode_module_state(
