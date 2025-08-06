@@ -6,7 +6,7 @@ use concordium_rust_sdk::{
 };
 use futures::TryStreamExt;
 use tokio::try_join;
-use tracing::{debug, warn};
+use tracing::{info, debug, warn};
 
 /// Compares the protocol level token identifiers of two nodes and returns the
 /// common identifiers.
