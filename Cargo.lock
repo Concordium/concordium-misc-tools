@@ -1332,7 +1332,6 @@ dependencies = [
  "env_logger 0.11.8",
  "futures",
  "indicatif",
- "log",
  "pretty_assertions",
  "serde_json",
  "tokio",
