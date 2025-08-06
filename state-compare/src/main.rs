@@ -373,49 +373,23 @@ async fn compare_accounts(
         let length = a1.tokens.len();
         if length > 0 {
             for (token_index, token1) in a1.tokens.iter().enumerate() {
-                let token_id1 = &a1.tokens[token_index].token_id;
-                let token_id2 = &a2.tokens[token_index].token_id;
-                compare!(
-                    token_id1,
-                    token_id2,
-                    "PLT token ids comparison did not match for account: {}, token 1: {:?}, token \
-                     2: {:?}",
-                    acc,
-                    token_id1,
-                    token_id2
-                );
-
-                // compare plt balances
-                let plt_balance_1 = &a1.tokens[token_index].state.balance;
-                let plt_balance_2 = &a2.tokens[token_index].state.balance;
-                compare!(
-                    plt_balance_1,
-                    plt_balance_2,
-                    "PLT token balance comparison did not match for account: {:?}, plt token: \
-                     {:?}, balance 1: {:?}, balance 2: {:?}",
-                    acc,
-                    token1,
-                    plt_balance_1,
-                    plt_balance_2
-                );
-
-                // check module state differences (allow list, deny list comparisons and
+                // check decoded module state differences (allow list, deny list comparisons and
                 // additional data)
-                let plt_module_state_1 = TokenAccountState::decode_module_state(
+                let decoded_plt_module_state_1 = TokenAccountState::decode_module_state(
                     &a1.tokens[token_index].state,
                 )
                 .context("Failed to decode module state for token1 at index {token_index}")?;
-                let plt_module_state_2 = TokenAccountState::decode_module_state(
+                let decoded_plt_module_state_2 = TokenAccountState::decode_module_state(
                     &a2.tokens[token_index].state,
                 )
                 .context("Failed to decode module state for token2 at index {token_index}")?;
                 compare!(
-                    plt_module_state_1,
-                    plt_module_state_2,
+                    decoded_plt_module_state_1,
+                    decoded_plt_module_state_2,
                     "Token module state differs for account: {:?}, state 1: {:?}, state 2: {:?}",
                     acc,
-                    plt_module_state_1,
-                    plt_module_state_2
+                    decoded_plt_module_state_1,
+                    decoded_plt_module_state_2
                 );
             }
         }
