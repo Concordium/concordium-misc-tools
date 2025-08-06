@@ -1322,15 +1322,17 @@ dependencies = [
 
 [[package]]
 name = "concordium-state-compare"
-version = "2.0.0"
+version = "3.0.0"
 dependencies = [
  "anyhow",
  "chrono",
  "clap 4.5.41",
  "colored 2.2.0",
  "concordium-rust-sdk",
+ "env_logger 0.11.8",
  "futures",
  "indicatif",
+ "log",
  "pretty_assertions",
  "serde_json",
  "tokio",
@@ -4109,7 +4111,7 @@ dependencies = [
 
 [[package]]
 name = "misc_tools"
-version = "2.0.2"
+version = "2.1.0"
 dependencies = [
  "aes",
  "anyhow",
