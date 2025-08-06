@@ -1,5 +1,9 @@
 # Changelog for the kpi-tracker service
 
+## 2.1.5
+
+- Updated the Concordium Rust SDK to support the changes introduced in protocol 9.
+
 ## 2.1.4
 
 - Release environment variable names update
