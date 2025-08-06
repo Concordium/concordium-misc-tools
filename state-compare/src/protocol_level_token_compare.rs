@@ -16,7 +16,7 @@ pub async fn compare_token_identifiers(
     block1: BlockHash,
     block2: BlockHash,
 ) -> anyhow::Result<Vec<protocol_level_tokens::TokenId>> {
-    debug!("Comparing PLT token identifiers.");
+    info!("Comparing PLT token identifiers.");
 
     debug!("Fetching PLT token lists.");
     let (res1, res2) = try_join!(
