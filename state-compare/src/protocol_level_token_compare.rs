@@ -39,16 +39,15 @@ pub async fn compare_token_identifiers(
     Ok(compare_token_identifier_lists(tokens1, tokens2))
 }
 
-pub fn compare_token_identifier_lists(
+fn compare_token_identifier_lists(
     tokens1: Vec<protocol_level_tokens::TokenId>,
     tokens2: Vec<protocol_level_tokens::TokenId>,
 ) -> Vec<protocol_level_tokens::TokenId> {
     compare!(tokens1, tokens2, "PLT Token identifiers");
 
     let result: Vec<protocol_level_tokens::TokenId> = tokens1
-        .iter()
+        .into_iter()
         .filter(|id| tokens2.contains(id))
-        .cloned()
         .collect();
 
     debug!("Returning result with {} common tokens.", result.len());
@@ -84,7 +83,7 @@ pub async fn compare_token_info_for_ids(
         // Compare at the token info level
         compare!(info1, info2, "Token Info for ID {:?}", token_id);
 
-        // check token module state is matching for paused
+        // check the decoded token module states match
         let decoded_mod_state1 = TokenState::decode_module_state(&info1.token_state)
             .context("Error in getting decoded module state1")?;
         let decoded_mod_state2 = TokenState::decode_module_state(&info2.token_state)
@@ -123,7 +122,7 @@ mod tests {
     }
 
     #[test]
-fn test_compare_token_identifiers_different() {
+    fn test_compare_token_identifiers_different() {
         let tokens1: Vec<TokenId> = vec![make_token("TokenA")];
         let tokens2: Vec<TokenId> = vec![make_token("TokenB")];
 

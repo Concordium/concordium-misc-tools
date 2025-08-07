@@ -24,6 +24,7 @@ use tracing::{info, level_filters::LevelFilter, warn};
 use tracing_subscriber::EnvFilter;
 
 use concordium_state_compare::compare;
+use concordium_state_compare::protocol_level_token_compare;
 
 #[derive(Parser, Debug)]
 #[clap(version)]
@@ -120,14 +121,14 @@ async fn main() -> anyhow::Result<()> {
     compare_update_queues(&mut client1, &mut client2, block1, block2).await?;
 
     let token_ids =
-        concordium_state_compare::protocol_level_token_compare::compare_token_identifiers(
+        protocol_level_token_compare::compare_token_identifiers(
             &mut client1,
             &mut client2,
             block1,
             block2,
         )
         .await?;
-    concordium_state_compare::protocol_level_token_compare::compare_token_info_for_ids(
+    protocol_level_token_compare::compare_token_info_for_ids(
         &mut client1,
         &mut client2,
         block1,
@@ -364,37 +365,30 @@ async fn compare_accounts(
             s.transactions.sort_unstable();
         }
 
-        // compare PLT tokens
+        // for plt tokens on the account info we will decode the token state for comparison
         let tokens1 = &a1.tokens;
         let tokens2 = &a2.tokens;
-        compare!(tokens1, tokens2, "PLT Tokens for account: {accid}");
 
-        // compare PLT token balances
-        let length = a1.tokens.len();
-        if length > 0 {
-            for (token_index, _token) in a1.tokens.iter().enumerate() {
-                // check decoded module state differences (allow list, deny list comparisons and
-                // additional data)
-                let decoded_plt_module_state_1 = TokenAccountState::decode_module_state(
-                    &a1.tokens[token_index].state,
-                )
-                .context("Failed to decode module state for token1 at index {token_index}")?;
-                let decoded_plt_module_state_2 = TokenAccountState::decode_module_state(
-                    &a2.tokens[token_index].state,
-                )
-                .context("Failed to decode module state for token2 at index {token_index}")?;
-                compare!(
-                    decoded_plt_module_state_1,
-                    decoded_plt_module_state_2,
-                    "Token module state differs for account: {:?}, state 1: {:?}, state 2: {:?}",
-                    acc,
-                    decoded_plt_module_state_1,
-                    decoded_plt_module_state_2
-                );
-            }
+        for (_token_index, (token1, token2)) in tokens1.iter().zip(tokens2).enumerate() {
+            // check decoded module state differences (allow list, deny list comparisons and
+            // additional data)
+            let decoded_plt_module_state_1 = TokenAccountState::decode_module_state(
+                &token1.state,
+            )
+            .context("Failed to decode module state for token1 at index {token_index}")?;
+            let decoded_plt_module_state_2 = TokenAccountState::decode_module_state(
+                &token2.state,
+            )
+            .context("Failed to decode module state for token2 at index {token_index}")?;
+            compare!(
+                decoded_plt_module_state_1,
+                decoded_plt_module_state_2,
+                "Token module state differs for account: {:?}, state 1: {:?}, state 2: {:?}",
+                acc,
+                decoded_plt_module_state_1,
+                decoded_plt_module_state_2
+            );
         }
-
-        compare!(tokens1, tokens2, "PLT Tokens for account: {accid}");
 
         // compare account info
         compare!(a1, a2, "Account {accid}");
