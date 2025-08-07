@@ -16,7 +16,7 @@ use concordium_rust_sdk::{
     types::{
         hashes::BlockHash, smart_contracts::ModuleReference, ContractAddress, ProtocolVersion,
     },
-    v2::{self, Scheme},
+    v2::{self},
 };
 use futures::{StreamExt, TryStreamExt};
 use indicatif::ProgressBar;
@@ -363,7 +363,7 @@ async fn compare_accounts(
         let tokens1 = &a1.tokens;
         let tokens2 = &a2.tokens;
 
-        for (_token_index, (token1, token2)) in tokens1.iter().zip(tokens2).enumerate() {
+        for (token1, token2) in tokens1.iter().zip(tokens2) {
             // check decoded module state differences (allow list, deny list comparisons and
             // additional data)
             let decoded_plt_module_state_1 = TokenAccountState::decode_module_state(&token1.state)
