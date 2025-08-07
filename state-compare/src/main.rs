@@ -140,19 +140,14 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Helper utility to build the client based on the uri scheme that was provided
+/// Helper utility to build the client
 async fn build_client(endpoint: Endpoint) -> anyhow::Result<Client> {
-    let client = if endpoint.uri().scheme() == Some(&Scheme::HTTPS) {
-        info!("Scheme contained https - will attempt to construct client with TLS");
-        v2::Client::new(
-            endpoint
-                .tls_config(tonic::transport::channel::ClientTlsConfig::new())
-                .context("Unable to construct tls")?,
-        )
-    } else {
-        v2::Client::new(endpoint)
-    }
-    .await?;
+
+    let client = v2::Client::new(
+        endpoint
+            .tls_config(tonic::transport::channel::ClientTlsConfig::new())
+            .context("Unable to construct tls")?,
+    ).await?;
 
     Ok(client)
 }
