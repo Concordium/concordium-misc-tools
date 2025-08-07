@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>FCM Testing device</title>
+        <style>
+         body {
+             font-family: Arial, sans-serif;
+             display: flex;
+             flex-direction: column;
+             align-items: center;
+             justify-content: center;
+             min-height: 100vh;
+             margin: 0;
+             background-color: #f0f2f5;
+             color: #333;
+         }
+         .container {
+             background-color: #fff;
+             padding: 30px;
+             border-radius: 8px;
+             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+             text-align: center;
+             max-width: 1200px;
+         }
+         h1 {
+             color: #4285F4; /* Firebase blue */
+             margin-bottom: 20px;
+         }
+         p {
+             margin-bottom: 15px;
+             line-height: 1.6;
+         }
+         button {
+             background-color: #FBBC04; /* Firebase orange */
+             color: white;
+             border: none;
+             padding: 12px 25px;
+             border-radius: 5px;
+             font-size: 16px;
+             cursor: pointer;
+             transition: background-color 0.3s ease;
+             margin-top: 20px;
+         }
+         button:hover {
+             background-color: #E6A000;
+         }
+         #tokenDisplay {
+             margin-top: 25px;
+             padding: 15px;
+             background-color: #e6e6e6;
+             border-radius: 5px;
+             word-break: break-all; /* Ensures long tokens wrap */
+             font-family: 'Courier New', Courier, monospace;
+             font-size: 14px;
+             text-align: left;
+         }
+         .error-message {
+             color: #d9534f; /* Bootstrap danger red */
+             margin-top: 15px;
+         }
+
+         .flex {
+             display: flex;
+         }
+         .flex-col {
+             flex-direction: column;
+         }
+         .flex-row {
+             flex-direction: row;
+         }
+        </style>
+        <!-- Firebase SDKs -->
+        <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+        <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
+    </head>
+    <body>
+        <div class="container flex flex-col">
+            <div class="flex flex-row">
+                <div>
+                    <h1>Device Token</h1>
+                    <p>Click the button below to request notification permission and <br> generate your Firebase Cloud Messaging (FCM) device token.</p>
+                    <p>This token is unique to *this* browser and *this* app instance.</p>
+                    <button id="getTokenButton">Get your FCM Token</button>
+                    <div id="tokenDisplay">
+                        <strong>Your FCM Token will appear here:</strong> <br>
+                        <span id="fcmToken"></span>
+                    </div>
+                    <div id="errorMessage" class="error-message"></div>
+                </div>
+
+                <div>
+                    <h1>API Client</h1>
+                    <p>Subscribe or unsubscribe from receiving notifications</p>
+                    <label for="apiAddress">Address of the notification service API</label><br>
+                    <input id="apiAddress" value="http://localhost:3030" /><br>
+                    <label for="accountAddress">Address of the account(s) to link with the token<br>Multiple can be listed separated by a newline</label><br>
+                    <textarea id="accountAddress" value="" cols="54"> </textarea> <br>
+                    <input id="ccdTx" checked type="checkbox" /><label for="ccdTx">CCD events</label><br>
+                    <input id="cis2Tx" checked type="checkbox" /><label for="cis2Tx">CIS-2 events</label><br>
+                    <br>
+                    <button id="subscribeButton">Subscribe device</button>
+                    <button id="unsubscribeButton">Unsubscribe device</button>
+                    <div id="apiErrorMessage" class="error-message"></div>
+                    <div id="apiStatus"></div>
+                </div>
+            </div>
+            <div class="flex flex-col">
+                <h1>Notifications</h1>
+                <p>Device notifications will be shown below</p>
+                <div id="notifications" class="flex flex-col">
+                </div>
+            </div>
+        </div>
+
+        <script>
+         // Your Firebase project configuration
+         // IMPORTANT: Replace with YOUR actual project config from Firebase console
+         // Go to Project settings > Your apps > Select your web app > Config
+         const firebaseConfig = {
+             apiKey: "YOUR_API_KEY",
+             authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+             projectId: "YOUR_PROJECT_ID",
+             storageBucket: "YOUR_PROJECT_ID.appspot.com",
+             messagingSenderId: "YOUR_MESSAGING_SENDER_ID", // CRUCIAL for FCM
+             appId: "YOUR_APP_ID"
+         };
+         // --- VAPID Key ---
+         // Get this from Firebase Console: Project settings > Cloud Messaging > Web configuration
+         // You'll see a "Key pair" section. Copy the entire key string.
+         const VAPID_KEY = "YOUR_VAPID_KEY";
+
+         // Initialize Firebase
+         const app = firebase.initializeApp(firebaseConfig);
+         const messaging = firebase.messaging();
+
+         const fcmTokenSpan = document.getElementById('fcmToken');
+         // Get your FCM Token button behavior
+         document.getElementById('getTokenButton').addEventListener('click', async () => {
+             const errorMessageDiv = document.getElementById('errorMessage');
+             fcmTokenSpan.textContent = "Generating...";
+             errorMessageDiv.textContent = "";
+
+             try {
+                 // Request permission and get the token
+                 const currentToken = await messaging.getToken({ vapidKey: VAPID_KEY });
+                 if (currentToken) {
+                     fcmTokenSpan.textContent = currentToken;
+                 } else {
+                     fcmTokenSpan.textContent = "No token received. User might have denied permission.";
+                     errorMessageDiv.textContent = "Notification permission denied or blocked. Please enable notifications for this site in your browser settings.";
+                 }
+             } catch (err) {
+                 fcmTokenSpan.textContent = "Error generating token.";
+                 let displayError = "An error occurred: " + err.message;
+                 if (err.code === 'messaging/permission-blocked') {
+                     displayError = "Notifications are blocked for this site. Please unblock them in your browser settings.";
+                 } else if (err.code === 'messaging/failed-service-worker-registration') {
+                     displayError = "Service Worker registration failed. Ensure your server is set up correctly (e.g., using HTTPS in production).";
+                 }
+                 errorMessageDiv.textContent = displayError;
+             }
+         });
+
+         // Subscribe device button behavior
+         document.getElementById('subscribeButton').addEventListener('click', async () => {
+             const errorMessageDiv = document.getElementById('apiErrorMessage');
+             const token = fcmTokenSpan.textContent
+             if (token.length === 0 && token !== "Generating...") {
+                 errorMessageDiv.textContent = "First generate/get the FCM token";
+                 return;
+             }
+             // Get the API url
+             const apiAddress = document.getElementById('apiAddress');
+             const apiBaseUrl = apiAddress.value.trim();
+             // Get the accounts
+             const accountAddresesInput = document.getElementById('accountAddress');
+             const accounts = accountAddresesInput.value.split("\n").map((addr)=> addr.trim()).filter((n)=>n.length > 0);
+             // Get the preferences
+             let preferences = [];
+             if (document.getElementById('ccdTx').checked) {
+                 preferences.push("ccd-tx");
+             }
+             if (document.getElementById('cis2Tx').checked) {
+                 preferences.push("cis2-tx");
+             }
+             try {
+                 const body = {
+                     "device_token": token,
+                     preferences,
+                     accounts,
+                 };
+                 const url = `${apiBaseUrl}/api/v1/subscription`;
+                 console.log({url, body});
+                 const response = await fetch(url, {
+                     method: "PUT",
+                     headers: {
+                         "Content-Type": "application/json",
+                     },
+                     body: JSON.stringify(body)
+                 });
+                 if (!response.ok) {
+                     throw new Error(`Response status: ${response.status}`);
+                 }
+                 const text = await response.text();
+                 document.getElementById('apiStatus').textContent = text;
+                 errorMessageDiv.textContent = "";
+             } catch (err) {
+                 errorMessageDiv.textContent = "Failed request: " + err;
+             }
+         })
+
+         // Unsubscribe device button behavior
+         document.getElementById('unsubscribeButton').addEventListener('click', async () => {
+             const errorMessageDiv = document.getElementById('apiErrorMessage');
+             const token = fcmTokenSpan.textContent
+             if (token.length === 0 && token !== "Generating...") {
+                 errorMessageDiv.textContent = "First generate/get the FCM token";
+                 return;
+             }
+             // Get the API url
+             const apiAddress = document.getElementById('apiAddress');
+             const apiBaseUrl = apiAddress.value.trim();
+             try {
+                 const body = {
+                     "device_token": token
+                 };
+                 const url = `${apiBaseUrl}/api/v1/unsubscribe`;
+                 console.log({url, body});
+                 const response = await fetch(url, {
+                     method: "POST",
+                     headers: {
+                         "Content-Type": "application/json",
+                     },
+                     body: JSON.stringify(body)
+                 });
+                 if (!response.ok) {
+                     throw new Error(`Response status: ${response.status}`);
+                 }
+                 const text = await response.text();
+                 document.getElementById('apiStatus').textContent = text;
+                 errorMessageDiv.textContent = "";
+             } catch (err) {
+                 errorMessageDiv.textContent = "Failed request: " + err;
+             }
+         })
+
+         // Notification section
+         const notificationsContainer = document.getElementById('notifications');
+         messaging.onMessage((payload) => {
+             console.log('Message received. ', payload);
+             const p = document.createElement("p");
+             p.appendChild(document.createTextNode(JSON.stringify(payload)));
+             notificationsContainer.appendChild(p)
+         });
+        </script>
+    </body>
+</html>
