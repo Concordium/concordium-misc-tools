@@ -142,12 +142,12 @@ async fn main() -> anyhow::Result<()> {
 
 /// Helper utility to build the client
 async fn build_client(endpoint: Endpoint) -> anyhow::Result<Client> {
-
     let client = v2::Client::new(
         endpoint
             .tls_config(tonic::transport::channel::ClientTlsConfig::new())
             .context("Unable to construct tls")?,
-    ).await?;
+    )
+    .await?;
 
     Ok(client)
 }
