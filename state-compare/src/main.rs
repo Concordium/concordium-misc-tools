@@ -6,31 +6,24 @@
 
 use std::fmt::Display;
 
+use crate::v2::{Client, Endpoint};
 use anyhow::Context;
 use clap::Parser;
 use concordium_rust_sdk::{
     endpoints,
     id::types::AccountAddress,
+    protocol_level_tokens::TokenAccountState,
     types::{
         hashes::BlockHash, smart_contracts::ModuleReference, ContractAddress, ProtocolVersion,
     },
-    v2,
+    v2::{self},
 };
 use futures::{StreamExt, TryStreamExt};
 use indicatif::ProgressBar;
-use pretty_assertions::Comparison;
 use tracing::{info, level_filters::LevelFilter, warn};
 use tracing_subscriber::EnvFilter;
 
-/// Compares the given values and prints a pretty diff with the given message if
-/// they are not equal.
-macro_rules! compare {
-    ($v1:expr, $v2:expr, $($arg:tt)*) => {
-        if $v1 != $v2 {
-            warn!("{} differs:\n{}", format!($($arg)*), Comparison::new(&$v1, &$v2))
-        }
-    };
-}
+use concordium_state_compare::{compare, protocol_level_token_compare};
 
 #[derive(Parser, Debug)]
 #[clap(version)]
@@ -75,9 +68,12 @@ async fn main() -> anyhow::Result<()> {
         )
         .init();
 
-    let mut client1 = v2::Client::new(args.node1).await?;
+    let mut client1 = build_client(args.node1)
+        .await
+        .context("Error building client 1 please review node 1 config provided")?;
+
     let mut client2 = match args.node2 {
-        Some(ep) => v2::Client::new(ep).await?,
+        Some(ep) => build_client(ep).await?,
         None => client1.clone(),
     };
 
@@ -123,9 +119,37 @@ async fn main() -> anyhow::Result<()> {
 
     compare_update_queues(&mut client1, &mut client2, block1, block2).await?;
 
+    let token_ids = protocol_level_token_compare::compare_token_identifiers(
+        &mut client1,
+        &mut client2,
+        block1,
+        block2,
+    )
+    .await?;
+    protocol_level_token_compare::compare_token_info_for_ids(
+        &mut client1,
+        &mut client2,
+        block1,
+        block2,
+        &token_ids,
+    )
+    .await?;
+
     info!("Done!");
 
     Ok(())
+}
+
+/// Helper utility to build the client
+async fn build_client(endpoint: Endpoint) -> anyhow::Result<Client> {
+    let client = v2::Client::new(
+        endpoint
+            .tls_config(tonic::transport::channel::ClientTlsConfig::new())
+            .context("Unable to construct tls")?,
+    )
+    .await?;
+
+    Ok(client)
 }
 
 /// Get the protocol version for the two blocks.
@@ -334,6 +358,29 @@ async fn compare_accounts(
             s.transactions.sort_unstable();
         }
 
+        // for plt tokens on the account info we will decode the token state for
+        // comparison
+        let tokens1 = &a1.tokens;
+        let tokens2 = &a2.tokens;
+
+        for (token1, token2) in tokens1.iter().zip(tokens2) {
+            // check decoded module state differences (allow list, deny list comparisons and
+            // additional data)
+            let decoded_plt_module_state_1 = TokenAccountState::decode_module_state(&token1.state)
+                .context("Failed to decode module state for token1 at index {token_index}")?;
+            let decoded_plt_module_state_2 = TokenAccountState::decode_module_state(&token2.state)
+                .context("Failed to decode module state for token2 at index {token_index}")?;
+            compare!(
+                decoded_plt_module_state_1,
+                decoded_plt_module_state_2,
+                "Token module state differs for account: {:?}, state 1: {:?}, state 2: {:?}",
+                acc,
+                decoded_plt_module_state_1,
+                decoded_plt_module_state_2
+            );
+        }
+
+        // compare account info
         compare!(a1, a2, "Account {accid}");
     }
 
