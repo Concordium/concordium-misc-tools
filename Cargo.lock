@@ -1329,7 +1329,6 @@ dependencies = [
  "clap 4.5.41",
  "colored 2.2.0",
  "concordium-rust-sdk",
- "env_logger 0.11.8",
  "futures",
  "indicatif",
  "pretty_assertions",
