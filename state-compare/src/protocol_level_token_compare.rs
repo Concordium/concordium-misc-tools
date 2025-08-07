@@ -123,7 +123,7 @@ mod tests {
     }
 
     #[test]
-    fn test_compare_token_identities_different() {
+fn test_compare_token_identifiers_different() {
         let tokens1: Vec<TokenId> = vec![make_token("TokenA")];
         let tokens2: Vec<TokenId> = vec![make_token("TokenB")];
 
