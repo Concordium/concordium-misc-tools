@@ -99,7 +99,7 @@
                     <textarea id="accountAddress" value="" cols="54"> </textarea> <br>
                     <input id="ccdTx" checked type="checkbox" /><label for="ccdTx">CCD events</label><br>
                     <input id="cis2Tx" checked type="checkbox" /><label for="cis2Tx">CIS-2 events</label><br>
-                    <br>
+                    <input id="pltTx" checked type="checkbox" /><label for="pltTx">PLT events</label><br>
                     <button id="subscribeButton">Subscribe device</button>
                     <button id="unsubscribeButton">Unsubscribe device</button>
                     <div id="apiErrorMessage" class="error-message"></div>
@@ -184,6 +184,9 @@
              }
              if (document.getElementById('cis2Tx').checked) {
                  preferences.push("cis2-tx");
+             }
+             if (document.getElementById('pltTx').checked) {
+                 preferences.push("plt-tx");
              }
              try {
                  const body = {
