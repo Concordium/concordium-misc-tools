@@ -1,14 +1,13 @@
 use crate::models::notification::{
     CCDTransactionNotificationInformation, CIS2EventNotificationInformationBasic,
-    NotificationInformationBasic,
+    NotificationInformationBasic, PLTEventNotificationInformation,
 };
 use concordium_rust_sdk::{
     base::hashes::TransactionHash,
-    cis2,
-    cis2::Event,
-    types,
+    cis2::{self, Event},
+    protocol_level_tokens,
     types::{
-        AccountTransactionEffects, Address, BlockItemSummaryDetails::AccountTransaction,
+        self, AccountTransactionEffects, Address, BlockItemSummaryDetails::AccountTransaction,
         ContractTraceElement,
     },
 };
@@ -108,6 +107,33 @@ fn map_transaction_to_notification_information(
                     reference: transaction_hash,
                 },
             )]
+        }
+        AccountTransactionEffects::TokenUpdate { events } => {
+            use concordium_rust_sdk::protocol_level_tokens::TokenEventDetails;
+            events
+                .iter()
+                .filter_map(|token_event| match &token_event.event {
+                    TokenEventDetails::Mint(protocol_level_tokens::TokenSupplyUpdateEvent {
+                        target: to,
+                        amount,
+                    })
+                    | TokenEventDetails::Transfer(protocol_level_tokens::TokenTransferEvent {
+                        to,
+                        amount,
+                        ..
+                    }) => {
+                        let protocol_level_tokens::TokenHolder::Account { address } = to;
+                        Some(PLTEventNotificationInformation {
+                            address:   *address,
+                            amount:    *amount,
+                            token_id:  token_event.token_id.clone(),
+                            reference: transaction_hash,
+                        })
+                    }
+                    TokenEventDetails::Burn(_) | TokenEventDetails::Module(_) => None,
+                })
+                .map(NotificationInformationBasic::PLT)
+                .collect()
         }
         _ => vec![],
     }

@@ -1,3 +1,11 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+## [Unreleased]
+
+- Extend notifications for receiving PLT tokens, when the relevant preference is set.
+
 ## 0.3.9
 - Dependency updates
 

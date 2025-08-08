@@ -3,6 +3,7 @@ use concordium_rust_sdk::{
     base::{contracts_common::AccountAddress, smart_contracts::OwnedContractName},
     cis2::{Cis2QueryError, Cis2Type, MetadataUrl, TokenId},
     contract_client::ContractClient,
+    protocol_level_tokens,
     types::{hashes::TransactionHash, ContractAddress},
     v2::{Client, IntoBlockIdentifier},
 };
@@ -17,6 +18,7 @@ use std::ops::Deref;
 pub enum NotificationInformationBasic {
     CCD(CCDTransactionNotificationInformation),
     CIS2(CIS2EventNotificationInformationBasic),
+    PLT(PLTEventNotificationInformation),
 }
 
 /// Data transmitted in a notification.
@@ -29,6 +31,8 @@ pub enum NotificationInformation {
     CCD(CCDTransactionNotificationInformation),
     #[serde(rename = "cis2-tx")]
     CIS2(CIS2EventNotificationInformation),
+    #[serde(rename = "plt-tx")]
+    PLT(PLTEventNotificationInformation),
 }
 
 impl NotificationInformationBasic {
@@ -57,6 +61,7 @@ impl NotificationInformationBasic {
                     },
                 ))
             }
+            NotificationInformationBasic::PLT(info) => Ok(NotificationInformation::PLT(info)),
         }
     }
 }
@@ -127,6 +132,7 @@ impl NotificationInformationBasic {
         match self {
             NotificationInformationBasic::CCD(info) => &info.address,
             NotificationInformationBasic::CIS2(info) => &info.address,
+            NotificationInformationBasic::PLT(info) => &info.address,
         }
     }
 
@@ -135,6 +141,7 @@ impl NotificationInformationBasic {
         match self {
             NotificationInformationBasic::CCD(_) => Preference::CCDTransaction,
             NotificationInformationBasic::CIS2(_) => Preference::CIS2Transaction,
+            NotificationInformationBasic::PLT(_) => Preference::PLTTransaction,
         }
     }
 }
@@ -158,4 +165,18 @@ pub struct CIS2EventNotificationInformationBasic {
     pub contract_address: ContractAddress,
     /// Hash of the transaction which cause the notification.
     pub reference:        TransactionHash,
+}
+
+/// Notification information related to protocol-level tokens (PLT).
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct PLTEventNotificationInformation {
+    /// Account address receiving some PLT token.
+    #[serde(rename = "recipient")]
+    pub address:   AccountAddress,
+    /// String encoding of the integer token amount.
+    pub amount:    protocol_level_tokens::TokenAmount,
+    /// The token identifier within the smart contract.
+    pub token_id:  protocol_level_tokens::TokenId,
+    /// Hash of the transaction which cause the notification.
+    pub reference: TransactionHash,
 }
