@@ -190,6 +190,7 @@ mod tests {
     use super::*;
     use crate::models::notification::{
         CCDTransactionNotificationInformation, CIS2EventNotificationInformation,
+        CIS2EventNotificationInformationBasic,
     };
     use anyhow::Result;
     use async_trait::async_trait;
@@ -356,15 +357,17 @@ mod tests {
         let mut gc = GoogleCloud::new(client, backoff_policy, mock_provider, "mock_project_id");
         gc.url = format!("{}/v1/projects/fake_project_id/messages:send", server.url());
         let notification_information =
-            NotificationInformation::CCD(CCDTransactionNotificationInformation::new(
-                AccountAddress::from_str("4FmiTW2L2AccyR9VjzsnpWFSAcohXWf7Vf797i36y526mqiEcp")
-                    .unwrap(),
-                "100".to_string(),
-                TransactionHash::from_str(
+            NotificationInformation::CCD(CCDTransactionNotificationInformation {
+                address:   AccountAddress::from_str(
+                    "4FmiTW2L2AccyR9VjzsnpWFSAcohXWf7Vf797i36y526mqiEcp",
+                )
+                .unwrap(),
+                amount:    "100".to_string(),
+                reference: TransactionHash::from_str(
                     "3d1c2f4fb9a0eb468bfe39e75c59897c1a375082a6440f4a5da77102182ba055",
                 )
                 .unwrap(),
-            ));
+            });
         assert!(gc
             .send_push_notification("valid_device_token", &notification_information)
             .await
@@ -411,19 +414,23 @@ mod tests {
         let mut gc = GoogleCloud::new(client, backoff_policy, mock_provider, "mock_project_id");
         gc.url = format!("{}/v1/projects/fake_project_id/messages:send", server.url());
         let notification_information =
-            NotificationInformation::CIS2(CIS2EventNotificationInformation::new(
-                AccountAddress::from_str("3kBx2h5Y2veb4hZgAJWPrr8RyQESKm5TjzF3ti1QQ4VSYLwK1G")
+            NotificationInformation::CIS2(CIS2EventNotificationInformation {
+                contract_name:  OwnedContractName::new("init_contract".to_string()).unwrap(),
+                info:           CIS2EventNotificationInformationBasic {
+                    address:          AccountAddress::from_str(
+                        "3kBx2h5Y2veb4hZgAJWPrr8RyQESKm5TjzF3ti1QQ4VSYLwK1G",
+                    )
                     .unwrap(),
-                "200".to_string(),
-                TokenId::from_str("ffffff").unwrap(),
-                ContractAddress::new(3, 0),
-                OwnedContractName::new("init_contract".to_string()).unwrap(),
-                None,
-                TransactionHash::from_str(
-                    "6a6d250ecefb518253db4c0d7759b2f4ff2862217ed2c8343879a77e0c2c97a2",
-                )
-                .unwrap(),
-            ));
+                    amount:           "200".to_string(),
+                    token_id:         TokenId::from_str("ffffff").unwrap(),
+                    contract_address: ContractAddress::new(3, 0),
+                    reference:        TransactionHash::from_str(
+                        "6a6d250ecefb518253db4c0d7759b2f4ff2862217ed2c8343879a77e0c2c97a2",
+                    )
+                    .unwrap(),
+                },
+                token_metadata: None,
+            });
         assert!(gc
             .send_push_notification("test_token", &notification_information)
             .await
@@ -470,19 +477,25 @@ mod tests {
         let mut gc = GoogleCloud::new(client, backoff_policy, mock_provider, "mock_project_id");
         gc.url = format!("{}/v1/projects/fake_project_id/messages:send", server.url());
         let notification_information =
-            NotificationInformation::CIS2(CIS2EventNotificationInformation::new(
-                AccountAddress::from_str("3kBx2h5Y2veb4hZgAJWPrr8RyQESKm5TjzF3ti1QQ4VSYLwK1G")
+            NotificationInformation::CIS2(CIS2EventNotificationInformation {
+                contract_name:  OwnedContractName::new("init_contract".to_string()).unwrap(),
+                token_metadata: Some(
+                    MetadataUrl::new("https://example.com".to_string(), None).unwrap(),
+                ),
+                info:           CIS2EventNotificationInformationBasic {
+                    address:          AccountAddress::from_str(
+                        "3kBx2h5Y2veb4hZgAJWPrr8RyQESKm5TjzF3ti1QQ4VSYLwK1G",
+                    )
                     .unwrap(),
-                "200".to_string(),
-                TokenId::from_str("ffffff").unwrap(),
-                ContractAddress::new(112, 2),
-                OwnedContractName::new("init_contract".to_string()).unwrap(),
-                Some(MetadataUrl::new("https://example.com".to_string(), None).unwrap()),
-                TransactionHash::from_str(
-                    "494d7848e389d44a2c2fe81eeee6dc427ce33ab1d0c92cba23be321d495be110",
-                )
-                .unwrap(),
-            ));
+                    amount:           "200".to_string(),
+                    token_id:         TokenId::from_str("ffffff").unwrap(),
+                    contract_address: ContractAddress::new(112, 2),
+                    reference:        TransactionHash::from_str(
+                        "494d7848e389d44a2c2fe81eeee6dc427ce33ab1d0c92cba23be321d495be110",
+                    )
+                    .unwrap(),
+                },
+            });
         assert!(gc
             .send_push_notification("test_token", &notification_information)
             .await
@@ -529,14 +542,9 @@ mod tests {
         let mut gc = GoogleCloud::new(client, backoff_policy, mock_provider, "mock_project_id");
         gc.url = format!("{}/v1/projects/fake_project_id/messages:send", server.url());
         let notification_information =
-            NotificationInformation::CIS2(CIS2EventNotificationInformation::new(
-                AccountAddress::from_str("3kBx2h5Y2veb4hZgAJWPrr8RyQESKm5TjzF3ti1QQ4VSYLwK1G")
-                    .unwrap(),
-                "200".to_string(),
-                TokenId::from_str("ffffff").unwrap(),
-                ContractAddress::new(111, 1),
-                OwnedContractName::new("init_contract".to_string()).unwrap(),
-                Some(
+            NotificationInformation::CIS2(CIS2EventNotificationInformation {
+                contract_name:  OwnedContractName::new("init_contract".to_string()).unwrap(),
+                token_metadata: Some(
                     MetadataUrl::new(
                         "https://example.com".to_string(),
                         Some(
@@ -548,11 +556,20 @@ mod tests {
                     )
                     .unwrap(),
                 ),
-                TransactionHash::from_str(
-                    "8a3a09bffa6ead269f79be4192fcb7773cc4e10a2e90c0dec3eb9ca5200c06bc",
-                )
-                .unwrap(),
-            ));
+                info:           CIS2EventNotificationInformationBasic {
+                    address:          AccountAddress::from_str(
+                        "3kBx2h5Y2veb4hZgAJWPrr8RyQESKm5TjzF3ti1QQ4VSYLwK1G",
+                    )
+                    .unwrap(),
+                    amount:           "200".to_string(),
+                    token_id:         TokenId::from_str("ffffff").unwrap(),
+                    contract_address: ContractAddress::new(111, 1),
+                    reference:        TransactionHash::from_str(
+                        "8a3a09bffa6ead269f79be4192fcb7773cc4e10a2e90c0dec3eb9ca5200c06bc",
+                    )
+                    .unwrap(),
+                },
+            });
         assert!(gc
             .send_push_notification("test_token", &notification_information)
             .await
