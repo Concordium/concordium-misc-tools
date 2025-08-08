@@ -48,7 +48,7 @@ struct Args {
         env = "NOTIFICATION_SERVER_PROMETHEUS_ADDRESS"
     )]
     prometheus_address: Option<std::net::SocketAddr>,
-    #[arg(long = "log-level", default_value_t = tracing::Level::INFO.into())]
+    #[arg(long = "log-level", default_value = "info")]
     log_level: tracing::level_filters::LevelFilter,
     #[arg(
         long = "google-application-credentials",
