@@ -141,6 +141,7 @@ fn preference_to_bitmask(preference: Preference) -> i32 {
     match preference {
         Preference::CIS2Transaction => 1,
         Preference::CCDTransaction => 1 << 1,
+        Preference::PLTTransaction => 1 << 2,
     }
 }
 
@@ -161,7 +162,7 @@ fn bitmap_to_preferences(bitmap: i32) -> HashSet<Preference> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::device::Preference::{CCDTransaction, CIS2Transaction};
+    use crate::models::device::Preference::{CCDTransaction, CIS2Transaction, PLTTransaction};
     use dotenv::dotenv;
     use serial_test::serial;
     use std::{collections::HashSet, env, fs, path::Path, str::FromStr};
@@ -181,30 +182,37 @@ mod tests {
 
     #[test]
     fn test_single_preference_to_bitmask_and_back() {
-        let preferences = vec![CIS2Transaction];
-        let bitmap = preferences_to_bitmap(&preferences);
-        assert_eq!(bitmap, preference_to_bitmask(CIS2Transaction));
+        {
+            let preferences = [CIS2Transaction];
+            let bitmap = preferences_to_bitmap(&preferences);
+            assert_eq!(bitmap, preference_to_bitmask(CIS2Transaction));
 
-        let decoded_preferences = bitmap_to_preferences(bitmap);
-        assert_eq!(
-            decoded_preferences,
-            HashSet::from_iter(preferences.into_iter())
-        );
+            let decoded_preferences = bitmap_to_preferences(bitmap);
+            assert_eq!(decoded_preferences, HashSet::from_iter(preferences));
+        }
 
-        let preferences2 = vec![CCDTransaction];
-        let bitmap2 = preferences_to_bitmap(&preferences2);
-        assert_eq!(bitmap2, preference_to_bitmask(CCDTransaction));
+        {
+            let preferences = [CCDTransaction];
+            let bitmap = preferences_to_bitmap(&preferences);
+            assert_eq!(bitmap, preference_to_bitmask(CCDTransaction));
 
-        let decoded_preferences2 = bitmap_to_preferences(bitmap2);
-        assert_eq!(
-            decoded_preferences2,
-            HashSet::from_iter(preferences2.into_iter())
-        );
+            let decoded_preferences = bitmap_to_preferences(bitmap);
+            assert_eq!(decoded_preferences, HashSet::from_iter(preferences));
+        }
+
+        {
+            let preferences = [PLTTransaction];
+            let bitmap = preferences_to_bitmap(&preferences);
+            assert_eq!(bitmap, preference_to_bitmask(PLTTransaction));
+
+            let decoded_preferences = bitmap_to_preferences(bitmap);
+            assert_eq!(decoded_preferences, HashSet::from_iter(preferences));
+        }
     }
 
     #[test]
     fn test_no_preference() {
-        let preferences = vec![];
+        let preferences = [];
         let bitmap = preferences_to_bitmap(&preferences);
         assert_eq!(bitmap, 0); // No preferences set
 
@@ -301,7 +309,7 @@ mod tests {
         db_connection
             .upsert_subscription(
                 vec![account_address],
-                vec![CIS2Transaction, CCDTransaction],
+                vec![CIS2Transaction, CCDTransaction, PLTTransaction],
                 device,
             )
             .await
@@ -312,7 +320,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(devices, vec![Device::new(
-            HashSet::from_iter(vec![CIS2Transaction, CCDTransaction].into_iter()),
+            HashSet::from([CIS2Transaction, CCDTransaction, PLTTransaction]),
             device.to_string()
         )]);
 
@@ -325,7 +333,7 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(devices, vec![Device::new(
-            HashSet::from_iter(vec![].into_iter()),
+            HashSet::new(),
             device.to_string()
         )]);
     }
