@@ -12,7 +12,6 @@ use concordium_rust_sdk::{
 };
 use dotenv::dotenv;
 use gcp_auth::CustomServiceAccount;
-use log::{debug, error, info};
 use notification_server::{
     database,
     database::DatabaseConnection,
@@ -24,6 +23,7 @@ use std::{
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use tonic::transport::ClientTlsConfig;
+use tracing::{debug, error, info};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[derive(Debug, Parser)]

@@ -3,14 +3,10 @@ use concordium_rust_sdk::{
     base::hashes::BlockHash, common::types::AccountAddress, types::AbsoluteBlockHeight,
 };
 use deadpool_postgres::{GenericClient, Manager, ManagerConfig, Pool, PoolError, RecyclingMethod};
-use lazy_static::lazy_static;
-use log::error;
-use std::{
-    collections::{HashMap, HashSet},
-    vec::IntoIter,
-};
+use std::collections::HashSet;
 use thiserror::Error;
 use tokio_postgres::{error::SqlState, types::ToSql, NoTls};
+use tracing::error;
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -42,53 +38,49 @@ impl DatabaseConnection {
     }
 
     pub async fn get_processed_block_height(&self) -> Result<Option<AbsoluteBlockHeight>, Error> {
-        let client = self.0.get().await.map_err(Into::<Error>::into)?;
+        let client = self.0.get().await?;
         let stmt = client
             .prepare_cached(
                 "SELECT blocks.height FROM blocks WHERE blocks.id = (SELECT MAX(blocks.id) FROM \
                  blocks);",
             )
-            .await
-            .map_err(Into::<Error>::into)?;
-        let row = client.query_opt(&stmt, &[]).await?;
-        row.map(|row| row.try_get::<_, i64>(0).map(|raw| (raw as u64).into()))
-            .transpose()
-            .map_err(Into::into)
+            .await?;
+        let Some(row) = client.query_opt(&stmt, &[]).await? else {
+            return Ok(None);
+        };
+        let raw: i64 = row.try_get(0)?;
+        let height = AbsoluteBlockHeight::from(raw as u64);
+        Ok(Some(height))
     }
 
     pub async fn get_devices_from_account(
         &self,
         account_address: &AccountAddress,
     ) -> Result<Vec<Device>, Error> {
-        let client = self.0.get().await.map_err(Into::<Error>::into)?;
+        let client = self.0.get().await?;
         let stmt = client
             .prepare_cached(
                 "SELECT device_id, preferences FROM account_device_mapping WHERE address = $1 \
                  LIMIT 1000",
             )
-            .await
-            .map_err(Into::<Error>::into)?;
+            .await?;
         let params: &[&(dyn ToSql + Sync)] = &[&account_address.0.as_ref()];
-        let rows = client
-            .query(&stmt, params)
-            .await
-            .map_err(Into::<Error>::into)?;
+        let rows = client.query(&stmt, params).await?;
         rows.iter()
             .map(|row| {
                 let device_token = row.try_get::<_, String>(0)?;
-                let preferences = bitmask_to_preferences(row.try_get::<_, i32>(1)?);
+                let preferences = bitmap_to_preferences(row.try_get::<_, i32>(1)?);
                 Ok(Device::new(preferences, device_token))
             })
             .collect::<Result<Vec<Device>, _>>()
     }
 
     pub async fn remove_subscription(&self, device_token: &str) -> Result<u64, Error> {
-        let client = self.0.get().await.map_err(Into::<Error>::into)?;
+        let client = self.0.get().await?;
         let params: &[&(dyn ToSql + Sync)] = &[&device_token];
         let stmt = client
             .prepare_cached("DELETE FROM account_device_mapping WHERE device_id = $1;")
-            .await
-            .map_err(Into::<Error>::into)?;
+            .await?;
         client
             .execute(&stmt, params)
             .await
@@ -101,16 +93,15 @@ impl DatabaseConnection {
         preferences: Vec<Preference>,
         device_token: &str,
     ) -> Result<(), Error> {
-        let mut client = self.0.get().await.map_err(Into::<Error>::into)?;
+        let mut client = self.0.get().await?;
         let stmt = client
             .prepare_cached(
                 "INSERT INTO account_device_mapping (address, device_id, preferences) VALUES ($1, \
                  $2, $3) ON CONFLICT (address, device_id) DO UPDATE SET preferences = \
                  EXCLUDED.preferences;",
             )
-            .await
-            .map_err(Into::<Error>::into)?;
-        let preferences_mask = preferences_to_bitmask(preferences.into_iter());
+            .await?;
+        let preferences_mask = preferences_to_bitmap(&preferences);
         let transaction = client.transaction().await?;
         for account in account_address {
             let params: &[&(dyn ToSql + Sync)] =
@@ -128,52 +119,42 @@ impl DatabaseConnection {
         hash: &BlockHash,
         height: &AbsoluteBlockHeight,
     ) -> Result<(), Error> {
-        let client = self.0.get().await.map_err(Into::<Error>::into)?;
+        let client = self.0.get().await?;
         let stmt = client
             .prepare_cached("INSERT INTO blocks (hash, height) VALUES ($1, $2);")
-            .await
-            .map_err(Into::<Error>::into)?;
+            .await?;
         let params: &[&(dyn ToSql + Sync); 2] = &[&hash.as_ref(), &(height.height as i64)];
-        client.execute(&stmt, params).await.map_or_else(
-            |err| {
-                if let Some(db_err) = err.as_db_error() {
-                    if db_err.code() == &SqlState::UNIQUE_VIOLATION {
-                        return Err(Error::ConstraintViolation(*hash, *height));
-                    }
-                };
-                Err(Error::DatabaseConnection(err))
-            },
-            |_| Ok(()),
-        )
+        if let Err(err) = client.execute(&stmt, params).await {
+            if let Some(db_err) = err.as_db_error() {
+                if db_err.code() == &SqlState::UNIQUE_VIOLATION {
+                    return Err(Error::ConstraintViolation(*hash, *height));
+                }
+            };
+            return Err(Error::DatabaseConnection(err));
+        }
+        Ok(())
     }
 }
 
-lazy_static! {
-    static ref PREFERENCE_MAP: HashMap<Preference, i32> = vec![
-        (Preference::CIS2Transaction, 1),
-        (Preference::CCDTransaction, 2),
-    ]
-    .into_iter()
-    .collect();
+/// Mapping from a preference to its bitmask in the bitmap.
+fn preference_to_bitmask(preference: Preference) -> i32 {
+    match preference {
+        Preference::CIS2Transaction => 1,
+        Preference::CCDTransaction => 1 << 1,
+    }
 }
 
-pub fn preferences_to_bitmask(preferences: IntoIter<Preference>) -> i32 {
-    let unique_preferences: HashSet<Preference> = preferences.into_iter().collect();
-    unique_preferences
+/// Collect all the preferences into a bitmap.
+fn preferences_to_bitmap(preferences: &[Preference]) -> i32 {
+    preferences
         .iter()
-        .fold(0, |acc, &pref| acc | PREFERENCE_MAP[&pref])
+        .fold(0, |acc, pref| acc | preference_to_bitmask(*pref))
 }
 
-pub fn bitmask_to_preferences(bitmask: i32) -> HashSet<Preference> {
-    PREFERENCE_MAP
-        .iter()
-        .filter_map(|(&key, &value)| {
-            if bitmask & value != 0 {
-                Some(key)
-            } else {
-                None
-            }
-        })
+/// Convert preference bitmap into a HashSet of [`Preference`].
+fn bitmap_to_preferences(bitmap: i32) -> HashSet<Preference> {
+    enum_iterator::all()
+        .filter(|preference| preference_to_bitmask(*preference) & bitmap != 0)
         .collect()
 }
 
@@ -182,42 +163,16 @@ mod tests {
     use super::*;
     use crate::models::device::Preference::{CCDTransaction, CIS2Transaction};
     use dotenv::dotenv;
-    use enum_iterator::all;
     use serial_test::serial;
     use std::{collections::HashSet, env, fs, path::Path, str::FromStr};
     use tokio_postgres::Client;
 
     #[test]
-    fn test_preference_map_coverage_and_uniqueness() {
-        let expected_variants = all::<Preference>().collect::<HashSet<_>>();
-        for variant in &expected_variants {
-            assert!(
-                PREFERENCE_MAP.contains_key(variant),
-                "PREFERENCE_MAP is missing the variant {:?}",
-                variant
-            );
-        }
-
-        let indices = PREFERENCE_MAP.values().cloned().collect::<HashSet<_>>();
-        assert_eq!(
-            indices.len(),
-            PREFERENCE_MAP.len(),
-            "Indices in PREFERENCE_MAP are not unique."
-        );
-
-        assert_eq!(
-            PREFERENCE_MAP.len(),
-            expected_variants.len(),
-            "PREFERENCE_MAP does not match the number of variants in Preference enum"
-        );
-    }
-
-    #[test]
     fn test_preferences_to_bitmask_and_back() {
         let preferences = vec![CIS2Transaction, CCDTransaction];
-        let bitmask = preferences_to_bitmask(preferences.clone().into_iter());
+        let bitmap = preferences_to_bitmap(&preferences);
 
-        let decoded_preferences = bitmask_to_preferences(bitmask);
+        let decoded_preferences = bitmap_to_preferences(bitmap);
         let expected_preferences_set = HashSet::from_iter(preferences);
         let decoded_preferences_set = decoded_preferences;
 
@@ -227,20 +182,20 @@ mod tests {
     #[test]
     fn test_single_preference_to_bitmask_and_back() {
         let preferences = vec![CIS2Transaction];
-        let bitmask = preferences_to_bitmask(preferences.clone().into_iter());
-        assert_eq!(bitmask, PREFERENCE_MAP[&CIS2Transaction]);
+        let bitmap = preferences_to_bitmap(&preferences);
+        assert_eq!(bitmap, preference_to_bitmask(CIS2Transaction));
 
-        let decoded_preferences = bitmask_to_preferences(bitmask);
+        let decoded_preferences = bitmap_to_preferences(bitmap);
         assert_eq!(
             decoded_preferences,
             HashSet::from_iter(preferences.into_iter())
         );
 
         let preferences2 = vec![CCDTransaction];
-        let bitmask2 = preferences_to_bitmask(preferences2.clone().into_iter());
-        assert_eq!(bitmask2, PREFERENCE_MAP[&CCDTransaction]);
+        let bitmap2 = preferences_to_bitmap(&preferences2);
+        assert_eq!(bitmap2, preference_to_bitmask(CCDTransaction));
 
-        let decoded_preferences2 = bitmask_to_preferences(bitmask2);
+        let decoded_preferences2 = bitmap_to_preferences(bitmap2);
         assert_eq!(
             decoded_preferences2,
             HashSet::from_iter(preferences2.into_iter())
@@ -250,13 +205,13 @@ mod tests {
     #[test]
     fn test_no_preference() {
         let preferences = vec![];
-        let bitmask = preferences_to_bitmask(preferences.into_iter());
-        assert_eq!(bitmask, 0); // No preferences set
+        let bitmap = preferences_to_bitmap(&preferences);
+        assert_eq!(bitmap, 0); // No preferences set
 
-        let decoded_preferences = bitmask_to_preferences(bitmask);
+        let decoded_preferences = bitmap_to_preferences(bitmap);
         assert!(
             decoded_preferences.is_empty(),
-            "No preferences should be decoded from a bitmask of 0."
+            "No preferences should be decoded from a bitmap of 0."
         );
     }
 
