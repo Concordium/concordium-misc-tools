@@ -12,7 +12,6 @@ use concordium_rust_sdk::{
 };
 use dotenv::dotenv;
 use gcp_auth::CustomServiceAccount;
-use log::{debug, error, info};
 use notification_server::{
     database,
     database::DatabaseConnection,
@@ -24,6 +23,7 @@ use std::{
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use tonic::transport::ClientTlsConfig;
+use tracing::{debug, error, info};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[derive(Debug, Parser)]
@@ -158,7 +158,7 @@ async fn process_block(
         debug!(
             "Sending notifications to account {} with type {:?}",
             result.address(),
-            result.transaction_type()
+            result.preference()
         );
         let operation = || async {
             match database_connection
@@ -189,14 +189,14 @@ async fn process_block(
 
         let devices: Vec<_> = devices
             .iter()
-            .filter(|device| device.preferences.contains(result.transaction_type()))
+            .filter(|device| device.preferences.contains(&result.preference()))
             .collect();
 
         if devices.is_empty() {
             debug!(
                 "No devices subscribed to account {} having preference {:?}",
                 result.address(),
-                result.transaction_type()
+                result.preference()
             );
             continue;
         }
