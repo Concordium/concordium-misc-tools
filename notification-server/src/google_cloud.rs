@@ -190,7 +190,7 @@ mod tests {
     use super::*;
     use crate::models::notification::{
         CCDTransactionNotificationInformation, CIS2EventNotificationInformation,
-        CIS2EventNotificationInformationBasic,
+        CIS2EventNotificationInformationBasic, PLTEventNotificationInformation,
     };
     use anyhow::Result;
     use async_trait::async_trait;
@@ -199,6 +199,7 @@ mod tests {
         base::{hashes::TransactionHash, smart_contracts::OwnedContractName},
         cis2::{MetadataUrl, TokenId},
         id::types::AccountAddress,
+        protocol_level_tokens,
         types::{hashes::Hash, ContractAddress},
     };
     use enum_iterator::{all, Sequence};
@@ -569,6 +570,60 @@ mod tests {
                     )
                     .unwrap(),
                 },
+            });
+        assert!(gc
+            .send_push_notification("test_token", &notification_information)
+            .await
+            .is_ok());
+        mock.assert();
+    }
+
+    #[tokio::test]
+    async fn test_send_push_notification_plt() {
+        let mut server = mockito::Server::new_async().await;
+        let mock_provider = MockTokenProvider { should_fail: false };
+
+        let expected_body = json!({
+            "message": {
+                "token": "test_token",
+                "data": {
+                    "type": "plt-tx",
+                    "token_id": "TestCoin",
+                    "recipient": "3kBx2h5Y2veb4hZgAJWPrr8RyQESKm5TjzF3ti1QQ4VSYLwK1G",
+                    "decimals": 6,
+                    "value": "123456789",
+                    "reference": "8a3a09bffa6ead269f79be4192fcb7773cc4e10a2e90c0dec3eb9ca5200c06bc",
+                }
+            }
+        });
+        let mock = server
+            .mock("POST", "/v1/projects/fake_project_id/messages:send")
+            .match_body(mockito::Matcher::Json(expected_body))
+            .with_status(200)
+            .with_body(json!({"success": true}).to_string())
+            .expect(1)
+            .create_async()
+            .await;
+
+        let client = Client::new();
+        let backoff_policy = ExponentialBackoff {
+            max_elapsed_time: Some(Duration::from_millis(50)),
+            max_interval: Duration::from_millis(1),
+            initial_interval: Duration::from_millis(1),
+            ..ExponentialBackoff::default()
+        };
+        let mut gc = GoogleCloud::new(client, backoff_policy, mock_provider, "mock_project_id");
+        gc.url = format!("{}/v1/projects/fake_project_id/messages:send", server.url());
+        let notification_information =
+            NotificationInformation::PLT(PLTEventNotificationInformation {
+                address:   "3kBx2h5Y2veb4hZgAJWPrr8RyQESKm5TjzF3ti1QQ4VSYLwK1G"
+                    .parse()
+                    .unwrap(),
+                amount:    protocol_level_tokens::TokenAmount::from_raw(123456789, 6),
+                token_id:  "TestCoin".parse().unwrap(),
+                reference: "8a3a09bffa6ead269f79be4192fcb7773cc4e10a2e90c0dec3eb9ca5200c06bc"
+                    .parse()
+                    .unwrap(),
             });
         assert!(gc
             .send_push_notification("test_token", &notification_information)
