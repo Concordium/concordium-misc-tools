@@ -590,7 +590,7 @@ mod tests {
                     "type": "plt-tx",
                     "token_id": "TestCoin",
                     "recipient": "3kBx2h5Y2veb4hZgAJWPrr8RyQESKm5TjzF3ti1QQ4VSYLwK1G",
-                    "decimals": 6,
+                    "decimals": "6",
                     "value": "123456789",
                     "reference": "8a3a09bffa6ead269f79be4192fcb7773cc4e10a2e90c0dec3eb9ca5200c06bc",
                 }
@@ -619,7 +619,7 @@ mod tests {
                 address:   "3kBx2h5Y2veb4hZgAJWPrr8RyQESKm5TjzF3ti1QQ4VSYLwK1G"
                     .parse()
                     .unwrap(),
-                amount:    protocol_level_tokens::TokenAmount::from_raw(123456789, 6),
+                amount:    protocol_level_tokens::TokenAmount::from_raw(123456789, 6).into(),
                 token_id:  "TestCoin".parse().unwrap(),
                 reference: "8a3a09bffa6ead269f79be4192fcb7773cc4e10a2e90c0dec3eb9ca5200c06bc"
                     .parse()

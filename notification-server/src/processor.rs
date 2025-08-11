@@ -1,6 +1,6 @@
 use crate::models::notification::{
     CCDTransactionNotificationInformation, CIS2EventNotificationInformationBasic,
-    NotificationInformationBasic, PLTEventNotificationInformation,
+    NotificationInformationBasic, PLTEventNotificationInformation, PltAmount,
 };
 use concordium_rust_sdk::{
     base::hashes::TransactionHash,
@@ -125,7 +125,7 @@ fn map_transaction_to_notification_information(
                         let protocol_level_tokens::TokenHolder::Account { address } = to;
                         Some(PLTEventNotificationInformation {
                             address:   *address,
-                            amount:    *amount,
+                            amount:    PltAmount::from(*amount),
                             token_id:  token_event.token_id.clone(),
                             reference: transaction_hash,
                         })

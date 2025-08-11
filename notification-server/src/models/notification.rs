@@ -173,13 +173,34 @@ pub struct PLTEventNotificationInformation {
     /// Account address receiving some PLT token.
     #[serde(rename = "recipient")]
     pub address:   AccountAddress,
-    /// String encoding of the integer token amount.
+    /// The amount tokens received.
     #[serde(flatten)]
-    pub amount:    protocol_level_tokens::TokenAmount,
-    /// The token identifier within the smart contract.
+    pub amount:    PltAmount,
+    /// The identifier for the token being received.
     pub token_id:  protocol_level_tokens::TokenId,
     /// Hash of the transaction which cause the notification.
     pub reference: TransactionHash,
+}
+
+/// PLT token amount JSON serialization.
+///
+/// Since firebase notification data only supports key-values where values must
+/// be strings, we have to change the json serialization for the token amount.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PltAmount {
+    /// The amount of tokens as an unscaled integer value.
+    value:    String,
+    /// The number of decimals in the token amount.
+    decimals: String,
+}
+
+impl From<protocol_level_tokens::TokenAmount> for PltAmount {
+    fn from(amount: protocol_level_tokens::TokenAmount) -> Self {
+        Self {
+            value:    amount.value().to_string(),
+            decimals: amount.decimals().to_string(),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -261,7 +282,7 @@ mod tests {
                     address:   "3kBx2h5Y2veb4hZgAJWPrr8RyQESKm5TjzF3ti1QQ4VSYLwK1G"
                         .parse()
                         .unwrap(),
-                    amount:    protocol_level_tokens::TokenAmount::from_raw(123456789, 6),
+                    amount:    protocol_level_tokens::TokenAmount::from_raw(123456789, 6).into(),
                     token_id:  "TestCoin".parse().unwrap(),
                     reference: "494d7848e389d44a2c2fe81eeee6dc427ce33ab1d0c92cba23be321d495be110"
                         .parse()
@@ -272,7 +293,7 @@ mod tests {
                 "type": "plt-tx",
                 "token_id": "TestCoin",
                 "recipient": "3kBx2h5Y2veb4hZgAJWPrr8RyQESKm5TjzF3ti1QQ4VSYLwK1G",
-                "decimals": 6,
+                "decimals": "6",
                 "value": "123456789",
                 "reference": "494d7848e389d44a2c2fe81eeee6dc427ce33ab1d0c92cba23be321d495be110",
             });
