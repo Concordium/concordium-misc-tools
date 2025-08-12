@@ -14,9 +14,7 @@ use backoff::ExponentialBackoff;
 use clap::Parser;
 use concordium_rust_sdk::base::contracts_common::AccountAddress;
 use dotenv::dotenv;
-use enum_iterator::all;
 use gcp_auth::CustomServiceAccount;
-use lazy_static::lazy_static;
 use notification_server::{
     database::DatabaseConnection,
     google_cloud::{GoogleCloud, NotificationError},
@@ -50,8 +48,8 @@ struct Args {
         env = "NOTIFICATION_SERVER_PROMETHEUS_ADDRESS"
     )]
     prometheus_address: Option<std::net::SocketAddr>,
-    #[arg(long = "log-level", default_value_t = log::LevelFilter::Info)]
-    log_level: log::LevelFilter,
+    #[arg(long = "log-level", default_value = "info")]
+    log_level: tracing::level_filters::LevelFilter,
     #[arg(
         long = "google-application-credentials",
         help = "Credentials used for verifying the device token.",
@@ -96,10 +94,7 @@ struct AppState {
 }
 
 const MAX_RESOURCES_LENGTH: usize = 1000;
-
-lazy_static! {
-    static ref MAX_PREFERENCES_LENGTH: usize = all::<Preference>().collect::<Vec<_>>().len();
-}
+const MAX_PREFERENCES_LENGTH: usize = enum_iterator::cardinality::<Preference>();
 
 fn setup_prometheus(
     prometheus_address: std::net::SocketAddr,
@@ -155,10 +150,10 @@ async fn process_device_subscription(
     subscription: DeviceSubscription,
     state: Arc<AppState>,
 ) -> Result<String, (StatusCode, String)> {
-    if subscription.preferences.len() > *MAX_PREFERENCES_LENGTH {
+    if subscription.preferences.len() > MAX_PREFERENCES_LENGTH {
         return Err((
             StatusCode::BAD_REQUEST,
-            format!("Preferences exceeded length of {}", *MAX_PREFERENCES_LENGTH),
+            format!("Preferences exceeded length of {}", MAX_PREFERENCES_LENGTH),
         ));
     }
     let unique_preferences: HashSet<_> = subscription.preferences.iter().collect();

@@ -8,61 +8,26 @@ use concordium_rust_sdk::{
     cis2::Event,
     types,
     types::{
-        AccountTransactionEffects, Address, Address::Account,
-        BlockItemSummaryDetails::AccountTransaction, ContractAddress, ContractTraceElement,
+        AccountTransactionEffects, Address, BlockItemSummaryDetails::AccountTransaction,
+        ContractTraceElement,
     },
 };
 use futures::{Stream, StreamExt};
 use num_bigint::BigInt;
-
-fn convert<T: Into<BigInt>>(
-    address: Address,
-    amount: T,
-    is_positive: bool,
-    token_id: cis2::TokenId,
-    contract_address: ContractAddress,
-    reference: TransactionHash,
-) -> Option<NotificationInformationBasic> {
-    let mut amount: BigInt = amount.into();
-    if !is_positive {
-        amount = -amount;
-    }
-
-    match address {
-        Account(address) => Some(NotificationInformationBasic::CIS2(
-            CIS2EventNotificationInformationBasic::new(
-                address,
-                amount.to_string(),
-                token_id,
-                contract_address,
-                reference,
-            ),
-        )),
-        _ => None,
-    }
-}
 
 fn map_transaction_to_notification_information(
     effects: &AccountTransactionEffects,
     transaction_hash: TransactionHash,
 ) -> Vec<NotificationInformationBasic> {
     match &effects {
-        AccountTransactionEffects::AccountTransfer { to, amount } => {
+        AccountTransactionEffects::AccountTransfer { to, amount }
+        | AccountTransactionEffects::AccountTransferWithMemo { to, amount, .. } => {
             vec![NotificationInformationBasic::CCD(
-                CCDTransactionNotificationInformation::new(
-                    *to,
-                    amount.micro_ccd.to_string(),
-                    transaction_hash,
-                ),
-            )]
-        }
-        AccountTransactionEffects::AccountTransferWithMemo { to, amount, .. } => {
-            vec![NotificationInformationBasic::CCD(
-                CCDTransactionNotificationInformation::new(
-                    *to,
-                    amount.micro_ccd.to_string(),
-                    transaction_hash,
-                ),
+                CCDTransactionNotificationInformation {
+                    address:   *to,
+                    amount:    amount.micro_ccd.to_string(),
+                    reference: transaction_hash,
+                },
             )]
         }
         AccountTransactionEffects::ContractUpdateIssued { effects } => effects
@@ -70,71 +35,78 @@ fn map_transaction_to_notification_information(
             .flat_map(|effect| match effect {
                 ContractTraceElement::Transferred { to, amount, .. } => {
                     vec![NotificationInformationBasic::CCD(
-                        CCDTransactionNotificationInformation::new(
-                            *to,
-                            amount.micro_ccd.to_string(),
-                            transaction_hash,
-                        ),
+                        CCDTransactionNotificationInformation {
+                            address:   *to,
+                            amount:    amount.micro_ccd.to_string(),
+                            reference: transaction_hash,
+                        },
                     )]
                 }
                 ContractTraceElement::Updated { data } => {
-                    let address = data.address;
+                    let contract_address = data.address;
                     data.events
                         .iter()
-                        .filter_map(|event| match cis2::Event::try_from(event) {
-                            Ok(Event::Transfer {
-                                token_id,
-                                to,
-                                amount,
-                                ..
-                            }) => convert(to, amount.0, true, token_id, address, transaction_hash),
-                            Ok(Event::Mint {
-                                token_id,
-                                owner,
-                                amount,
-                            }) => {
-                                convert(owner, amount.0, true, token_id, address, transaction_hash)
+                        .filter_map(|event| -> Option<CIS2EventNotificationInformationBasic> {
+                            match cis2::Event::try_from(event).ok()? {
+                                Event::Transfer {
+                                    token_id,
+                                    to,
+                                    amount,
+                                    ..
+                                }
+                                | Event::Mint {
+                                    token_id,
+                                    owner: to,
+                                    amount,
+                                } => {
+                                    if let Address::Account(address) = to {
+                                        Some(CIS2EventNotificationInformationBasic {
+                                            address,
+                                            amount: amount.0.to_string(),
+                                            token_id,
+                                            contract_address,
+                                            reference: transaction_hash,
+                                        })
+                                    } else {
+                                        None
+                                    }
+                                }
+                                Event::Burn {
+                                    token_id,
+                                    owner,
+                                    amount,
+                                } => {
+                                    use std::ops::Neg;
+                                    if let Address::Account(address) = owner {
+                                        Some(CIS2EventNotificationInformationBasic {
+                                            address,
+                                            amount: BigInt::from(amount.0).neg().to_string(),
+                                            token_id,
+                                            contract_address,
+                                            reference: transaction_hash,
+                                        })
+                                    } else {
+                                        None
+                                    }
+                                }
+                                _ => None,
                             }
-                            Ok(Event::Burn {
-                                token_id,
-                                owner,
-                                amount,
-                            }) => {
-                                convert(owner, amount.0, false, token_id, address, transaction_hash)
-                            }
-                            _ => None,
                         })
+                        .map(NotificationInformationBasic::CIS2)
                         .collect()
                 }
                 _ => vec![],
             })
             .collect(),
-        AccountTransactionEffects::TransferredWithSchedule { to, amount } => {
+        AccountTransactionEffects::TransferredWithSchedule { to, amount }
+        | AccountTransactionEffects::TransferredWithScheduleAndMemo { to, amount, .. } => {
+            let amount: u64 = amount.iter().map(|(_, part)| part.micro_ccd()).sum();
             vec![NotificationInformationBasic::CCD(
-                CCDTransactionNotificationInformation::new(
-                    *to,
-                    amount
-                        .iter()
-                        .fold(BigInt::from(0), |acc, &(_, item)| {
-                            acc + BigInt::from(item.micro_ccd)
-                        })
-                        .to_string(),
-                    transaction_hash,
-                ),
-            )]
-        }
-        AccountTransactionEffects::TransferredWithScheduleAndMemo { to, amount, .. } => {
-            vec![NotificationInformationBasic::CCD(
-                CCDTransactionNotificationInformation::new(
-                    *to,
-                    amount
-                        .iter()
-                        .fold(BigInt::from(0), |acc, &(_, item)| {
-                            acc + BigInt::from(item.micro_ccd)
-                        })
-                        .to_string(),
-                    transaction_hash,
-                ),
+                CCDTransactionNotificationInformation {
+                    address:   *to,
+                    amount:    amount.to_string(),
+                    reference: transaction_hash,
+                },
             )]
         }
         _ => vec![],
@@ -186,7 +158,6 @@ mod tests {
         },
     };
     use futures::stream;
-    use num_bigint::BigInt;
     use quickcheck::{Arbitrary, Gen};
     use quickcheck_macros::quickcheck;
     use rand::{random, thread_rng, Rng};
@@ -309,11 +280,12 @@ mod tests {
             };
 
             let notification =
-                NotificationInformationBasic::CCD(CCDTransactionNotificationInformation::new(
-                    receiver_address,
-                    BigInt::from(amount.micro_ccd).to_string(),
-                    hash,
-                ));
+                NotificationInformationBasic::CCD(CCDTransactionNotificationInformation {
+                    address:   receiver_address,
+                    amount:    amount.micro_ccd().to_string(),
+                    reference: hash,
+                });
+
             EmittingBlockItemSummaryPair(summary, notification)
         }
     }
