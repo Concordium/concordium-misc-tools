@@ -3,6 +3,7 @@ use concordium_rust_sdk::{
     base::{contracts_common::AccountAddress, smart_contracts::OwnedContractName},
     cis2::{Cis2QueryError, Cis2Type, MetadataUrl, TokenId},
     contract_client::ContractClient,
+    protocol_level_tokens,
     types::{hashes::TransactionHash, ContractAddress},
     v2::{Client, IntoBlockIdentifier},
 };
@@ -17,6 +18,7 @@ use std::ops::Deref;
 pub enum NotificationInformationBasic {
     CCD(CCDTransactionNotificationInformation),
     CIS2(CIS2EventNotificationInformationBasic),
+    PLT(PLTEventNotificationInformation),
 }
 
 /// Data transmitted in a notification.
@@ -29,6 +31,8 @@ pub enum NotificationInformation {
     CCD(CCDTransactionNotificationInformation),
     #[serde(rename = "cis2-tx")]
     CIS2(CIS2EventNotificationInformation),
+    #[serde(rename = "plt-tx")]
+    PLT(PLTEventNotificationInformation),
 }
 
 impl NotificationInformationBasic {
@@ -57,6 +61,7 @@ impl NotificationInformationBasic {
                     },
                 ))
             }
+            NotificationInformationBasic::PLT(info) => Ok(NotificationInformation::PLT(info)),
         }
     }
 }
@@ -127,6 +132,7 @@ impl NotificationInformationBasic {
         match self {
             NotificationInformationBasic::CCD(info) => &info.address,
             NotificationInformationBasic::CIS2(info) => &info.address,
+            NotificationInformationBasic::PLT(info) => &info.address,
         }
     }
 
@@ -135,6 +141,7 @@ impl NotificationInformationBasic {
         match self {
             NotificationInformationBasic::CCD(_) => Preference::CCDTransaction,
             NotificationInformationBasic::CIS2(_) => Preference::CIS2Transaction,
+            NotificationInformationBasic::PLT(_) => Preference::PLTTransaction,
         }
     }
 }
@@ -158,4 +165,142 @@ pub struct CIS2EventNotificationInformationBasic {
     pub contract_address: ContractAddress,
     /// Hash of the transaction which cause the notification.
     pub reference:        TransactionHash,
+}
+
+/// Notification information related to protocol-level tokens (PLT).
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct PLTEventNotificationInformation {
+    /// Account address receiving some PLT token.
+    #[serde(rename = "recipient")]
+    pub address:   AccountAddress,
+    /// The amount tokens received.
+    #[serde(flatten)]
+    pub amount:    PltAmount,
+    /// The identifier for the token being received.
+    pub token_id:  protocol_level_tokens::TokenId,
+    /// Hash of the transaction which cause the notification.
+    pub reference: TransactionHash,
+}
+
+/// PLT token amount JSON serialization.
+///
+/// Since firebase notification data only supports key-values where values must
+/// be strings, we have to change the json serialization for the token amount.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PltAmount {
+    /// The amount of tokens as an unscaled integer value.
+    value:    String,
+    /// The number of decimals in the token amount.
+    decimals: String,
+}
+
+impl From<protocol_level_tokens::TokenAmount> for PltAmount {
+    fn from(amount: protocol_level_tokens::TokenAmount) -> Self {
+        Self {
+            value:    amount.value().to_string(),
+            decimals: amount.decimals().to_string(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::*;
+
+    /// Test case to ensure changes to the JSON serialization are caught.
+    #[test]
+    fn test_serialize_notification_information() {
+        // CCD notification
+        {
+            let notification_information =
+                NotificationInformation::CCD(CCDTransactionNotificationInformation {
+                    address:   "4FmiTW2L2AccyR9VjzsnpWFSAcohXWf7Vf797i36y526mqiEcp"
+                        .parse()
+                        .unwrap(),
+                    amount:    "100".to_string(),
+                    reference: "3d1c2f4fb9a0eb468bfe39e75c59897c1a375082a6440f4a5da77102182ba055"
+                        .parse()
+                        .unwrap(),
+                });
+
+            let expected = json!({
+                "type": "ccd-tx",
+                "amount": "100",
+                "recipient": "4FmiTW2L2AccyR9VjzsnpWFSAcohXWf7Vf797i36y526mqiEcp",
+                "reference": "3d1c2f4fb9a0eb468bfe39e75c59897c1a375082a6440f4a5da77102182ba055"
+            });
+            assert_eq!(
+                expected,
+                serde_json::to_value(notification_information).unwrap()
+            )
+        }
+
+        // CIS-2 notification
+        {
+            let notification_information =
+                NotificationInformation::CIS2(CIS2EventNotificationInformation {
+                    contract_name:  OwnedContractName::new("init_contract".to_string()).unwrap(),
+                    token_metadata: Some(
+                        MetadataUrl::new("https://example.com".to_string(), None).unwrap(),
+                    ),
+                    info:           CIS2EventNotificationInformationBasic {
+                        address:          "3kBx2h5Y2veb4hZgAJWPrr8RyQESKm5TjzF3ti1QQ4VSYLwK1G"
+                            .parse()
+                            .unwrap(),
+                        amount:           "200".to_string(),
+                        token_id:         "ffffff".parse().unwrap(),
+                        contract_address: ContractAddress::new(112, 2),
+                        reference:
+                            "494d7848e389d44a2c2fe81eeee6dc427ce33ab1d0c92cba23be321d495be110"
+                                .parse()
+                                .unwrap(),
+                    },
+                });
+
+            let expected = json!({
+                "type": "cis2-tx",
+                "amount": "200",
+                "recipient": "3kBx2h5Y2veb4hZgAJWPrr8RyQESKm5TjzF3ti1QQ4VSYLwK1G",
+                "token_id": "ffffff",
+                "reference": "494d7848e389d44a2c2fe81eeee6dc427ce33ab1d0c92cba23be321d495be110",
+                "token_metadata": "{\"url\":\"https://example.com\",\"hash\":null}",
+                "contract_address": "{\"index\":112,\"subindex\":2}",
+                "contract_name": "contract"
+            });
+            assert_eq!(
+                expected,
+                serde_json::to_value(notification_information).unwrap()
+            )
+        }
+
+        // PLT notification
+        {
+            let notification_information =
+                NotificationInformation::PLT(PLTEventNotificationInformation {
+                    address:   "3kBx2h5Y2veb4hZgAJWPrr8RyQESKm5TjzF3ti1QQ4VSYLwK1G"
+                        .parse()
+                        .unwrap(),
+                    amount:    protocol_level_tokens::TokenAmount::from_raw(123456789, 6).into(),
+                    token_id:  "TestCoin".parse().unwrap(),
+                    reference: "494d7848e389d44a2c2fe81eeee6dc427ce33ab1d0c92cba23be321d495be110"
+                        .parse()
+                        .unwrap(),
+                });
+
+            let expected = json!({
+                "type": "plt-tx",
+                "token_id": "TestCoin",
+                "recipient": "3kBx2h5Y2veb4hZgAJWPrr8RyQESKm5TjzF3ti1QQ4VSYLwK1G",
+                "decimals": "6",
+                "value": "123456789",
+                "reference": "494d7848e389d44a2c2fe81eeee6dc427ce33ab1d0c92cba23be321d495be110",
+            });
+            assert_eq!(
+                expected,
+                serde_json::to_value(notification_information).unwrap()
+            )
+        }
+    }
 }
