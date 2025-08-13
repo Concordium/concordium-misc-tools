@@ -6,14 +6,13 @@ use concordium_rust_sdk::{
     base::hashes::TransactionHash,
     cis2::{self, Event},
     protocol_level_tokens,
-    types::{
-        self, AccountTransactionEffects, Address, BlockItemSummaryDetails::AccountTransaction,
-        ContractTraceElement,
-    },
+    types::{self, AccountTransactionEffects, Address, ContractTraceElement},
 };
 use futures::{Stream, StreamExt};
 use num_bigint::BigInt;
 
+/// Extract basic Notification Information from the effects of an account
+/// transaction.
 fn map_transaction_to_notification_information(
     effects: &AccountTransactionEffects,
     transaction_hash: TransactionHash,
@@ -108,34 +107,38 @@ fn map_transaction_to_notification_information(
                 },
             )]
         }
-        AccountTransactionEffects::TokenUpdate { events } => {
-            use concordium_rust_sdk::protocol_level_tokens::TokenEventDetails;
-            events
-                .iter()
-                .filter_map(|token_event| match &token_event.event {
-                    TokenEventDetails::Mint(protocol_level_tokens::TokenSupplyUpdateEvent {
-                        target: to,
-                        amount,
-                    })
-                    | TokenEventDetails::Transfer(protocol_level_tokens::TokenTransferEvent {
-                        to,
-                        amount,
-                        ..
-                    }) => {
-                        let protocol_level_tokens::TokenHolder::Account { address } = to;
-                        Some(PLTEventNotificationInformation {
-                            address:   *address,
-                            amount:    PltAmount::from(*amount),
-                            token_id:  token_event.token_id.clone(),
-                            reference: transaction_hash,
-                        })
-                    }
-                    TokenEventDetails::Burn(_) | TokenEventDetails::Module(_) => None,
-                })
-                .map(NotificationInformationBasic::PLT)
-                .collect()
-        }
+        AccountTransactionEffects::TokenUpdate { events } => events
+            .iter()
+            .filter_map(|token_event| map_plt_token_events(transaction_hash, token_event))
+            .map(NotificationInformationBasic::PLT)
+            .collect(),
         _ => vec![],
+    }
+}
+
+/// Extract Notification information from a single PLT event.
+fn map_plt_token_events(
+    transaction_hash: TransactionHash,
+    token_event: &protocol_level_tokens::TokenEvent,
+) -> Option<PLTEventNotificationInformation> {
+    use concordium_rust_sdk::protocol_level_tokens::TokenEventDetails;
+    match &token_event.event {
+        TokenEventDetails::Transfer(protocol_level_tokens::TokenTransferEvent {
+            to,
+            amount,
+            ..
+        }) => {
+            let protocol_level_tokens::TokenHolder::Account { address } = to;
+            Some(PLTEventNotificationInformation {
+                address:   *address,
+                amount:    PltAmount::from(*amount),
+                token_id:  token_event.token_id.clone(),
+                reference: transaction_hash,
+            })
+        }
+        TokenEventDetails::Mint(_) | TokenEventDetails::Burn(_) | TokenEventDetails::Module(_) => {
+            None
+        }
     }
 }
 
@@ -144,17 +147,25 @@ pub async fn process(
 ) -> Vec<NotificationInformationBasic> {
     transactions
         .filter_map(|result| async move { result.ok() })
-        .flat_map(|t| {
-            futures::stream::iter(match t.details {
-                AccountTransaction(ref account_transaction) => {
-                    map_transaction_to_notification_information(
-                        &account_transaction.effects,
-                        t.hash,
-                    )
-                }
-                _ => vec![],
-            })
-        })
+        .flat_map(
+            |t| -> futures::stream::Iter<std::vec::IntoIter<NotificationInformationBasic>> {
+                futures::stream::iter(match &t.details {
+                    types::BlockItemSummaryDetails::AccountTransaction(account_transaction) => {
+                        map_transaction_to_notification_information(
+                            &account_transaction.effects,
+                            t.hash,
+                        )
+                    }
+                    types::BlockItemSummaryDetails::TokenCreationDetails(details) => details
+                        .events
+                        .iter()
+                        .filter_map(|token_event| map_plt_token_events(t.hash, token_event))
+                        .map(NotificationInformationBasic::PLT)
+                        .collect(),
+                    _ => vec![],
+                })
+            },
+        )
         .collect::<Vec<NotificationInformationBasic>>()
         .await
 }
