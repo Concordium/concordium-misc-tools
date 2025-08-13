@@ -4,6 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## 0.4.0
 - Extend notifications for receiving PLT tokens, when the relevant preference is set.
 
 ## 0.3.9
