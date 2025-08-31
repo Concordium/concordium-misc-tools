@@ -17,7 +17,9 @@ enum ContractError {
 
 /// Mapping errors related to contract invocations to ContractError.
 impl<T> From<CallContractError<T>> for ContractError {
-    fn from(_cce: CallContractError<T>) -> Self { Self::InvokeError }
+    fn from(_cce: CallContractError<T>) -> Self {
+        Self::InvokeError
+    }
 }
 
 const PUBLIC_KEY: PublicKeyEd25519 = PublicKeyEd25519([
@@ -40,35 +42,35 @@ const STRING: &str = "abc";
 #[derive(Serial, DeserialWithState)]
 #[concordium(state_parameter = "S")]
 struct State<S: HasStateApi> {
-    u8_value:               u8,
-    u16_value:              u16,
-    address_array:          StateBox<Vec<Address>, S>,
-    address_value:          Address,
-    account_address_value:  AccountAddress,
+    u8_value: u8,
+    u16_value: u16,
+    address_array: StateBox<Vec<Address>, S>,
+    address_value: Address,
+    account_address_value: AccountAddress,
     contract_address_value: ContractAddress,
-    hash_value:             HashSha2256,
-    signature_value:        SignatureEd25519,
-    public_key_value:       PublicKeyEd25519,
-    timestamp_value:        Timestamp,
-    option_value:           Option<u8>,
-    string_value:           StateBox<String, S>,
+    hash_value: HashSha2256,
+    signature_value: SignatureEd25519,
+    public_key_value: PublicKeyEd25519,
+    timestamp_value: Timestamp,
+    option_value: Option<u8>,
+    string_value: StateBox<String, S>,
 }
 
 #[derive(Serial, Deserial, SchemaType)]
 struct ReturnState {
-    u8_value:               u8,
-    u16_value:              u16,
-    address_array:          Vec<Address>,
-    address_value:          Address,
-    account_address_value:  AccountAddress,
+    u8_value: u8,
+    u16_value: u16,
+    address_array: Vec<Address>,
+    address_value: Address,
+    account_address_value: AccountAddress,
     contract_address_value: ContractAddress,
-    hash_value:             HashSha2256,
-    signature_value:        SignatureEd25519,
-    public_key_value:       PublicKeyEd25519,
-    timestamp_value:        Timestamp,
-    option_value:           Option<u8>,
+    hash_value: HashSha2256,
+    signature_value: SignatureEd25519,
+    public_key_value: PublicKeyEd25519,
+    timestamp_value: Timestamp,
+    option_value: Option<u8>,
     #[concordium(size_length = 2)]
-    string_value:           String,
+    string_value: String,
 }
 
 impl<'a, S: HasStateApi> From<&'a State<S>> for ReturnState {
@@ -89,18 +91,18 @@ impl<'a, S: HasStateApi> From<&'a State<S>> for ReturnState {
         }: &'a State<S>,
     ) -> Self {
         Self {
-            u8_value:               *u8_value,
-            u16_value:              *u16_value,
-            address_array:          address_array.to_vec(),
-            address_value:          *address_value,
-            account_address_value:  *account_address_value,
+            u8_value: *u8_value,
+            u16_value: *u16_value,
+            address_array: address_array.to_vec(),
+            address_value: *address_value,
+            account_address_value: *account_address_value,
             contract_address_value: *contract_address_value,
-            hash_value:             *hash_value,
-            signature_value:        *signature_value,
-            public_key_value:       *public_key_value,
-            timestamp_value:        *timestamp_value,
-            option_value:           *option_value,
-            string_value:           String::from(string_value.as_str()),
+            hash_value: *hash_value,
+            signature_value: *signature_value,
+            public_key_value: *public_key_value,
+            timestamp_value: *timestamp_value,
+            option_value: *option_value,
+            string_value: String::from(string_value.as_str()),
         }
     }
 }
@@ -126,7 +128,7 @@ fn contract_init<S: HasStateApi>(
         address_value: Address::Account(AccountAddress([0u8; 32])),
         account_address_value: AccountAddress([0u8; 32]),
         contract_address_value: ContractAddress {
-            index:    0,
+            index: 0,
             subindex: 0,
         },
         hash_value: HASH,
