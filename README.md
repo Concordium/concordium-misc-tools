@@ -29,7 +29,7 @@ To perform the build and checks equivalent to the CI, run these commands locally
 - Check: `cargo check --all-targets --all-features`
 - Clippy (includes check): `cargo clippy --all-targets --all-features --no-deps`
 - Test: `cargo test --all-features --release`
-- Format code: `cargo +nightly-2023-04-01 fmt`
+- Format code: `cargo fmt`
 
 Notice that the nightly version is only used for formatting. Running tests for
 `notification-server` requires additional setup, see the [`README.md`](notification-server/README.md)

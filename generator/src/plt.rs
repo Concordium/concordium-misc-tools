@@ -9,7 +9,7 @@ use concordium_rust_sdk::{
         types::{AccountAddress, TransactionTime},
     },
     protocol_level_tokens::{
-        operations, CborHolderAccount, CborTokenHolder, CoinInfo, ConversionRule, MetadataUrl,
+        operations, CborHolderAccount, CoinInfo, ConversionRule, MetadataUrl,
         RawCbor, TokenAmount, TokenId, TokenInfo, TokenModuleInitializationParameters,
         TokenModuleRef,
     },
@@ -24,6 +24,7 @@ use concordium_rust_sdk::{
 use futures::{future, stream, StreamExt, TryStreamExt};
 use rand::{rngs::StdRng, seq::SliceRandom, Rng, SeedableRng};
 use rust_decimal::Decimal;
+use std::collections::HashMap;
 use std::{path::PathBuf, str::FromStr};
 
 #[derive(Debug, Args)]
@@ -177,7 +178,7 @@ impl PltOperationGenerator {
             .into_iter()
             .filter_map(|token| {
                 let state = token.token_state.decode_module_state().ok()?;
-                matches!(state.governance_account, CborTokenHolder::Account(account) if account.address == args.keys.address).then_some(token)
+                matches!(state.governance_account, Some(account) if account.address == args.keys.address).then_some(token)
 
             })
             .collect::<Vec<_>>();
@@ -480,13 +481,13 @@ impl Generate for CreatePltGenerator {
         let allow_deny: bool = self.rng.gen();
 
         let initialization_parameters = TokenModuleInitializationParameters {
-            name:               token_id.clone(),
-            metadata:           MetadataUrl {
+            name:               Some(token_id.clone()),
+            metadata:           Some(MetadataUrl {
                 url:              "http://test".to_string(),
                 checksum_sha_256: None,
                 additional:       Default::default(),
-            },
-            governance_account: CborTokenHolder::Account(CborHolderAccount {
+            }),
+            governance_account: Some(CborHolderAccount {
                 coin_info: Some(CoinInfo::CCD),
                 address:   self.governance_account,
             }),
@@ -495,6 +496,7 @@ impl Generate for CreatePltGenerator {
             initial_supply:     Some(self.initial_supply),
             mintable:           Some(mint_burn),
             burnable:           Some(mint_burn),
+            additional: HashMap::new(),
         };
 
         let create_plt = CreatePlt {
