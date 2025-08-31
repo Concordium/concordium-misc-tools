@@ -41,7 +41,7 @@ struct Args {
         env = "KPI_TRACKER_NODES",
         value_delimiter = ','
     )]
-    node_endpoints:  Vec<Endpoint>,
+    node_endpoints: Vec<Endpoint>,
     /// Database connection string.
     #[arg(
         long = "db-connection",
@@ -51,10 +51,10 @@ struct Args {
                 application.",
         env = "KPI_TRACKER_DB_CONNECTION"
     )]
-    db_connection:   tokio_postgres::config::Config,
+    db_connection: tokio_postgres::config::Config,
     /// Logging level of the application
     #[arg(long = "log-level", default_value_t = log::LevelFilter::Debug, env = "KPI_TRACKER_LOG_LEVEL")]
-    log_level:       log::LevelFilter,
+    log_level: log::LevelFilter,
     /// Number of parallel queries to run against node
     #[arg(
         long = "num-parallel",
@@ -63,7 +63,7 @@ struct Args {
                 something different than 1 when catching up.",
         env = "KPI_TRACKER_NUM_PARALLEL"
     )]
-    num_parallel:    u8,
+    num_parallel: u8,
     /// Maximum number of blocks to insert into the database at the same time.
     #[arg(
         long = "bulk-insert-max",
@@ -81,7 +81,7 @@ struct Args {
         default_value_t = 240,
         env = "KPI_TRACKER_MAX_BEHIND_SECONDS"
     )]
-    max_behind_s:    u32,
+    max_behind_s: u32,
 }
 
 /// Used to canonicalize account addresses to ensure no aliases are stored (as
@@ -99,7 +99,9 @@ impl From<AccountAddress> for CanonicalAccountAddress {
     }
 }
 impl fmt::Display for CanonicalAccountAddress {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { AccountAddress(self.0).fmt(f) }
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        AccountAddress(self.0).fmt(f)
+    }
 }
 
 /// Information about individual blocks. Useful for linking entities to a block
@@ -109,16 +111,16 @@ struct BlockDetails {
     /// Finalization time of the block. Used to show how metrics evolve over
     /// time by linking entities, such as accounts and transactions, to
     /// the block in which they are created.
-    block_time:  DateTime<Utc>,
+    block_time: DateTime<Utc>,
     /// Height of block from genesis. Used to restart the process of collecting
     /// metrics from the latest block recorded.
-    height:      AbsoluteBlockHeight,
+    height: AbsoluteBlockHeight,
     /// [`PaydayBlockData`] for the block. This is only recorded for "payday"
     /// blocks reflected by `Some`, where non payday blocks are reflected by
     /// `None`.
     payday_data: Option<PaydayBlockData>,
     /// Block hash of the genesis block
-    block_hash:  BlockHash,
+    block_hash: BlockHash,
 }
 
 /// Holds selected attributes about accounts created on chain.
@@ -133,13 +135,13 @@ struct AccountDetails {
 struct TransactionDetails {
     /// The transaction type of the account transaction. Can be none if
     /// transaction was rejected due to serialization failure.
-    transaction_type:   Option<TransactionType>,
+    transaction_type: Option<TransactionType>,
     /// The cost of the transaction.
-    cost:               Amount,
+    cost: Amount,
     /// Whether the transaction failed or not.
-    is_success:         bool,
+    is_success: bool,
     /// Accounts affected by the transactions.
-    affected_accounts:  Vec<CanonicalAccountAddress>,
+    affected_accounts: Vec<CanonicalAccountAddress>,
     /// Contracts affected by the transactions.
     affected_contracts: Vec<ContractAddress>,
 }
@@ -150,7 +152,7 @@ struct ContractInstanceDetails {
     /// Foreign key to the module used to instantiate the contract
     module_ref: ModuleReference,
     /// Version of the contract.
-    version:    WasmVersion,
+    version: WasmVersion,
 }
 
 /// List of (canonical) account address, account detail pairs
@@ -169,20 +171,20 @@ struct ChainGenesisBlockData {
     /// Block details of the genesis block
     block_details: BlockDetails,
     /// Accounts included in the genesis block
-    accounts:      Accounts,
+    accounts: Accounts,
 }
 
 /// Model for data collected for normal blocks
 #[derive(Debug)]
 struct NormalBlockData {
     /// Block details of the block
-    block_details:      BlockDetails,
+    block_details: BlockDetails,
     /// Accounts created in the block
-    accounts:           Accounts,
+    accounts: Accounts,
     /// Transactions included in the block
-    transactions:       AccountTransactions,
+    transactions: AccountTransactions,
     /// Smart contract module deployments included in the block
-    contract_modules:   ContractModules,
+    contract_modules: ContractModules,
     /// Smart contract instantiations included in the block
     contract_instances: ContractInstances,
 }
@@ -197,27 +199,27 @@ enum BlockData {
 /// The set of queries used to communicate with the postgres DB.
 struct PreparedStatements {
     /// Insert block into DB
-    insert_block:             tokio_postgres::Statement,
+    insert_block: tokio_postgres::Statement,
     /// Insert payday into DB
-    insert_payday:            tokio_postgres::Statement,
+    insert_payday: tokio_postgres::Statement,
     /// Insert account into DB
-    insert_account:           tokio_postgres::Statement,
+    insert_account: tokio_postgres::Statement,
     /// Insert contract module into DB
-    insert_contract_module:   tokio_postgres::Statement,
+    insert_contract_module: tokio_postgres::Statement,
     /// Insert contract instance into DB
     insert_contract_instance: tokio_postgres::Statement,
     /// Insert transaction into DB
-    insert_transaction:       tokio_postgres::Statement,
+    insert_transaction: tokio_postgres::Statement,
     /// Get the latest recorded block height from the DB
-    get_latest_height:        tokio_postgres::Statement,
+    get_latest_height: tokio_postgres::Statement,
     /// Select single contract module ID by module ref
-    contract_module_by_ref:   tokio_postgres::Statement,
+    contract_module_by_ref: tokio_postgres::Statement,
     /// Update `account_transactions` and `account_activeness` tables in a
     /// single statement.
-    update_account_stats:     tokio_postgres::Statement,
+    update_account_stats: tokio_postgres::Statement,
     /// Update `contract_transactions` and `contract_activeness` tables in a
     /// single statement.
-    update_contract_stats:    tokio_postgres::Statement,
+    update_contract_stats: tokio_postgres::Statement,
 }
 
 impl PreparedStatements {
@@ -496,11 +498,10 @@ impl PreparedStatements {
         block_time: i64,
     ) -> Result<(), tokio_postgres::Error> {
         db_tx
-            .query_opt(&self.update_account_stats, &[
-                &account_address.0.as_ref(),
-                &transaction_id,
-                &block_time,
-            ])
+            .query_opt(
+                &self.update_account_stats,
+                &[&account_address.0.as_ref(), &transaction_id, &block_time],
+            )
             .await?;
         Ok(())
     }
@@ -543,8 +544,8 @@ impl PreparedStatements {
 /// Holds [`tokio_postgres::Client`] to query the database and
 /// [`PreparedStatements`] which can be executed with the client.
 struct DBConn {
-    client:            tokio_postgres::Client,
-    prepared:          PreparedStatements,
+    client: tokio_postgres::Client,
+    prepared: PreparedStatements,
     connection_handle: JoinHandle<()>,
 }
 
@@ -688,7 +689,7 @@ fn to_block_events(block_item: BlockItemSummary) -> Vec<BlockEvent> {
                 AccountTransactionEffects::ContractInitialized { data } => {
                     let details = ContractInstanceDetails {
                         module_ref: data.origin_ref,
-                        version:    data.contract_version,
+                        version: data.contract_version,
                     };
                     let event = BlockEvent::ContractInstantiation(data.address, details);
                     events.push(event);
@@ -741,36 +742,36 @@ async fn process_chain_genesis_block(
 #[derive(Debug, Clone, Copy)]
 struct PaydayBlockData {
     /// Total number of microCCD staked by bakers themselves.
-    total_equity_capital:       u64,
+    total_equity_capital: u64,
     /// Total number of microCCD delegated passivly.
-    total_passively_delegated:  u64,
+    total_passively_delegated: u64,
     /// Total number of microCCD delegated to specific pools.
-    total_actively_delegated:   u64,
+    total_actively_delegated: u64,
     /// Total microCCD in existence.
-    total_ccd:                  u64,
+    total_ccd: u64,
     /// Reward in microCCD for the winning baker pool.
-    pool_reward:                u64,
+    pool_reward: u64,
     /// Reward in microCCD for the winning finalizer.
-    finalizer_reward:           u64,
+    finalizer_reward: u64,
     /// Reward in microCCD for the foundation.
-    foundation_reward:          u64,
+    foundation_reward: u64,
     /// The number of pools in this reward period.
-    pool_count:                 usize,
+    pool_count: usize,
     /// The number of pools open for new delegators at the time of the payday
     /// block.
-    open_pool_count:            usize,
+    open_pool_count: usize,
     /// The number of pools closed for new delegators at the time of the payday
     /// block.
-    closed_for_new_pool_count:  usize,
+    closed_for_new_pool_count: usize,
     /// The number of pools closed for all delegators at the time of the payday
     /// block.
-    closed_pool_count:          usize,
+    closed_pool_count: usize,
     /// The number of pools with delegated capital in this reward period.
     delegation_recipient_count: usize,
     /// The number of finalizers in this reward period.
-    finalizer_count:            usize,
+    finalizer_count: usize,
     /// The number of delegators in this reward period.
-    delegator_count:            usize,
+    delegator_count: usize,
 }
 
 /// If block specified by `block_hash` is a payday block (also implies >=
@@ -787,8 +788,8 @@ async fn process_payday_block(
     }
     let block_ident = BlockIdentifier::RelativeHeight(RelativeBlockHeight {
         genesis_index: block_info.genesis_index,
-        height:        block_info.era_block_height,
-        restrict:      true,
+        height: block_info.era_block_height,
+        restrict: true,
     });
     let start_time = tokio::time::Instant::now();
     // Handle special payday events
@@ -964,7 +965,7 @@ async fn process_payday_block(
 }
 
 struct KPIIndexer {
-    inner:          indexer::BlockEventsIndexer,
+    inner: indexer::BlockEventsIndexer,
     max_concurrent: usize,
 }
 
@@ -985,10 +986,10 @@ impl KPIIndexer {
         let (bi, summaries, special) = self.inner.on_finalized(client_clone, &(), fbi).await?;
 
         let block_details = BlockDetails {
-            block_time:  bi.block_slot_time,
-            height:      bi.block_height,
+            block_time: bi.block_slot_time,
+            height: bi.block_height,
             payday_data: process_payday_block(client, self.max_concurrent, &bi, special).await?,
-            block_hash:  bi.block_hash,
+            block_hash: bi.block_hash,
         };
 
         let mut block_data = NormalBlockData {
@@ -1352,7 +1353,7 @@ async fn main() -> anyhow::Result<()> {
         .collect::<Result<_, _>>()?;
 
     let kpi_indexer = KPIIndexer {
-        inner:          indexer::BlockEventsIndexer,
+        inner: indexer::BlockEventsIndexer,
         max_concurrent: args.num_parallel.into(),
     };
 

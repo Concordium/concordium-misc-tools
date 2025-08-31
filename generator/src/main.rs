@@ -20,15 +20,15 @@ struct App {
         help = "GRPC interface of the node.",
         default_value = "http://localhost:20000"
     )]
-    endpoint:      Endpoint,
+    endpoint: Endpoint,
     #[clap(long = "sender", help = "Path to file containing sender keys.")]
-    account:       PathBuf,
+    account: PathBuf,
     #[clap(
         long = "tps",
         help = "Transactions to send per second.",
         default_value = "1"
     )]
-    tps:           u16,
+    tps: u16,
     #[clap(
         long = "send-interval",
         help = "Time between transactions in microseconds. If specified, overrides 'tps' argument."
@@ -39,7 +39,7 @@ struct App {
         help = "Expiry of transactions in seconds.",
         default_value = "7200"
     )]
-    expiry:        u32,
+    expiry: u32,
 
     #[command(subcommand)]
     command: Command,

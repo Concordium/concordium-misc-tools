@@ -38,10 +38,7 @@ pub enum AnonymityRevokerConfig {
     #[serde(rename_all = "camelCase")]
     Existing { source: PathBuf },
     #[serde(rename_all = "camelCase")]
-    Fresh {
-        id:     ArIdentity,
-        repeat: Option<u32>,
-    },
+    Fresh { id: ArIdentity, repeat: Option<u32> },
 }
 
 /// Struct for specifying one or more genesis identity providers. Either a path
@@ -56,7 +53,7 @@ pub enum IdentityProviderConfig {
     Existing { source: PathBuf },
     #[serde(rename_all = "camelCase")]
     Fresh {
-        id:     id::types::IpIdentity,
+        id: id::types::IpIdentity,
         repeat: Option<u32>,
     },
 }
@@ -69,31 +66,31 @@ pub enum IdentityProviderConfig {
 pub enum AccountConfig {
     #[serde(rename_all = "camelCase")]
     Existing {
-        source:           PathBuf,
-        balance:          Amount,
-        stake:            Option<Amount>,
+        source: PathBuf,
+        balance: Amount,
+        stake: Option<Amount>,
         #[serde(default)]
         restake_earnings: bool,
-        baker_keys:       Option<PathBuf>,
+        baker_keys: Option<PathBuf>,
         #[serde(default)]
-        foundation:       bool,
+        foundation: bool,
     },
     #[serde(rename_all = "camelCase")]
     Fresh {
         // if repeat, the first account gets used as a foundation account
-        repeat:            Option<u32>,
-        stake:             Option<Amount>,
-        balance:           Amount,
-        template:          String,
+        repeat: Option<u32>,
+        stake: Option<Amount>,
+        balance: Amount,
+        template: String,
         identity_provider: IpIdentity,
         // default to 1
-        num_keys:          Option<u8>,
+        num_keys: Option<u8>,
         // default to 1
-        threshold:         Option<SignatureThreshold>,
+        threshold: Option<SignatureThreshold>,
         #[serde(default)]
-        restake_earnings:  bool,
+        restake_earnings: bool,
         #[serde(default)]
-        foundation:        bool,
+        foundation: bool,
     },
 }
 
@@ -104,7 +101,7 @@ pub enum AccountConfig {
 #[serde(rename_all = "camelCase")]
 pub struct Level2UpdateConfig {
     pub authorized_keys: Vec<UpdateKeysIndex>,
-    pub threshold:       UpdateKeysThreshold,
+    pub threshold: UpdateKeysThreshold,
 }
 
 impl Level2UpdateConfig {
@@ -164,7 +161,7 @@ pub struct Level2KeysConfig {
 #[serde(rename_all = "camelCase")]
 pub struct HigherLevelKeysConfig {
     pub threshold: UpdateKeysThreshold,
-    pub keys:      Vec<HigherLevelKey>,
+    pub keys: Vec<HigherLevelKey>,
 }
 
 /// Struct for specifying a key. Either a path to an existing key, or a `u32`
@@ -179,7 +176,7 @@ pub enum HigherLevelKey {
 /// Struct holding all the root, level 1 and level 2 keys.
 #[derive(SerdeDeserialize, Debug)]
 pub struct UpdateKeysConfig {
-    pub root:   HigherLevelKeysConfig,
+    pub root: HigherLevelKeysConfig,
     pub level1: HigherLevelKeysConfig,
     pub level2: Level2KeysConfig,
 }
@@ -191,16 +188,16 @@ pub struct UpdateKeysConfig {
 #[derive(SerdeDeserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct OutputConfig {
-    pub update_keys:              Option<PathBuf>,
-    pub account_keys:             PathBuf,
-    pub baker_keys:               PathBuf,
-    pub identity_providers:       PathBuf,
-    pub anonymity_revokers:       PathBuf,
-    pub genesis:                  PathBuf,
-    pub genesis_hash:             PathBuf,
+    pub update_keys: Option<PathBuf>,
+    pub account_keys: PathBuf,
+    pub baker_keys: PathBuf,
+    pub identity_providers: PathBuf,
+    pub anonymity_revokers: PathBuf,
+    pub genesis: PathBuf,
+    pub genesis_hash: PathBuf,
     pub cryptographic_parameters: Option<PathBuf>,
     #[serde(default)]
-    pub delete_existing:          bool,
+    pub delete_existing: bool,
 }
 
 /// Struct representing the configuration specified by the input TOML file for

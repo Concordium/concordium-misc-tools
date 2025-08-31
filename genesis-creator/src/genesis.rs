@@ -43,10 +43,10 @@ pub type GenesisCredentials = BTreeMap<
 #[derive(SerdeDeserialize, SerdeSerialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct GenesisAccount {
-    pub account_keys:          AccountKeys,
-    pub aci:                   AccCredentialInfo<id::constants::ArCurve>,
-    pub address:               AccountAddress,
-    pub credentials:           Versioned<GenesisCredentials>,
+    pub account_keys: AccountKeys,
+    pub aci: AccCredentialInfo<id::constants::ArCurve>,
+    pub address: AccountAddress,
+    pub credentials: Versioned<GenesisCredentials>,
     pub encryption_public_key: id::elgamal::PublicKey<id::constants::ArCurve>,
     pub encryption_secret_key: id::elgamal::SecretKey<id::constants::ArCurve>,
 }
@@ -57,14 +57,14 @@ pub struct GenesisAccount {
 #[serde(rename_all = "camelCase")]
 pub struct GenesisBakerPublic {
     /// Initial stake of the baker.
-    pub stake:                  Amount,
+    pub stake: Amount,
     /// Whether earnings should be automatically restaked or not.
-    pub restake_earnings:       bool,
+    pub restake_earnings: bool,
     /// The ID of the baker. This must correspond to the account index, which is
     /// the place in the list of genesis accounts.
-    pub baker_id:               BakerId,
-    pub election_verify_key:    BakerElectionVerifyKey,
-    pub signature_verify_key:   BakerSignatureVerifyKey,
+    pub baker_id: BakerId,
+    pub election_verify_key: BakerElectionVerifyKey,
+    pub signature_verify_key: BakerSignatureVerifyKey,
     pub aggregation_verify_key: BakerAggregationVerifyKey,
 }
 
@@ -73,13 +73,13 @@ pub struct GenesisBakerPublic {
 #[derive(Serialize, SerdeSerialize, SerdeDeserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct GenesisAccountPublic {
-    pub address:           AccountAddress,
+    pub address: AccountAddress,
     pub account_threshold: AccountThreshold,
     #[map_size_length = 8]
     #[serde(deserialize_with = "deserialize_versioned_public_account")]
-    pub credentials:       GenesisCredentials,
-    pub balance:           Amount,
-    pub baker:             Option<GenesisBakerPublic>,
+    pub credentials: GenesisCredentials,
+    pub balance: Amount,
+    pub baker: Option<GenesisBakerPublic>,
 }
 
 fn deserialize_versioned_public_account<'de, D: de::Deserializer<'de>>(
@@ -96,28 +96,28 @@ fn deserialize_versioned_public_account<'de, D: de::Deserializer<'de>>(
 #[serde(rename_all = "camelCase")]
 pub struct FinalizationParameters {
     /// Number of levels to skip between finalizations.
-    minimum_skip:        BlockHeight,
+    minimum_skip: BlockHeight,
     /// Maximum size of the finalization committee; determines the minimum stake
     ///  required to join the committee as @totalGTU /
     /// finalizationCommitteeMaxSize@.
-    committee_max_size:  u32,
+    committee_max_size: u32,
     /// Base delay time used in finalization, in milliseconds.
-    waiting_time:        u64,
+    waiting_time: u64,
     /// Factor used to shrink the finalization gap. Must be strictly between 0
     /// and 1.
-    skip_shrink_factor:  Ratio,
+    skip_shrink_factor: Ratio,
     /// Factor used to grow the finalization gap. Must be strictly greater than
     /// 1.
-    skip_grow_factor:    Ratio,
+    skip_grow_factor: Ratio,
     /// Factor for shrinking the finalization delay (i.e. number of descendent
     /// blocks required to be eligible as a finalization target).
     delay_shrink_factor: Ratio,
     /// Factor for growing the finalization delay when it takes more than one
     /// round to finalize a block.
-    delay_grow_factor:   Ratio,
+    delay_grow_factor: Ratio,
     /// Whether to allow the delay to be 0. (This allows a block to be finalized
     /// as soon as it is baked.)
-    allow_zero_delay:    bool,
+    allow_zero_delay: bool,
 }
 
 /// Genesis chain parameters version 0. Contains all version 0 chain paramters
@@ -125,13 +125,13 @@ pub struct FinalizationParameters {
 #[derive(SerdeDeserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct GenesisChainParametersV0 {
-    election_difficulty:          ElectionDifficulty,
-    euro_per_energy:              ExchangeRate,
+    election_difficulty: ElectionDifficulty,
+    euro_per_energy: ExchangeRate,
     #[serde(rename = "microCCDPerEuro")]
-    micro_ccd_per_euro:           ExchangeRate,
-    account_creation_limit:       u16,
-    baker_cooldown_epochs:        Epoch,
-    reward_parameters:            RewardParameters<ChainParameterVersion0>,
+    micro_ccd_per_euro: ExchangeRate,
+    account_creation_limit: u16,
+    baker_cooldown_epochs: Epoch,
+    reward_parameters: RewardParameters<ChainParameterVersion0>,
     minimum_threshold_for_baking: Amount,
 }
 
@@ -164,15 +164,15 @@ impl GenesisChainParametersV0 {
 #[derive(SerdeDeserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct GenesisChainParametersV1 {
-    election_difficulty:    ElectionDifficulty,
-    euro_per_energy:        ExchangeRate,
+    election_difficulty: ElectionDifficulty,
+    euro_per_energy: ExchangeRate,
     #[serde(rename = "microCCDPerEuro")]
-    micro_ccd_per_euro:     ExchangeRate,
+    micro_ccd_per_euro: ExchangeRate,
     account_creation_limit: u16,
-    reward_parameters:      RewardParameters<ChainParameterVersion1>,
-    time_parameters:        TimeParameters,
-    pool_parameters:        PoolParameters,
-    cooldown_parameters:    CooldownParameters,
+    reward_parameters: RewardParameters<ChainParameterVersion1>,
+    time_parameters: TimeParameters,
+    pool_parameters: PoolParameters,
+    cooldown_parameters: CooldownParameters,
 }
 
 impl GenesisChainParametersV1 {
@@ -206,19 +206,19 @@ impl GenesisChainParametersV1 {
 #[serde(rename_all = "camelCase")]
 pub struct GenesisChainParametersV2 {
     /// Consensus protocol version 2 timeout parameters.
-    pub timeout_parameters:                TimeoutParameters,
+    pub timeout_parameters: TimeoutParameters,
     /// Minimum time interval between blocks.
-    pub min_block_time:                    Duration,
+    pub min_block_time: Duration,
     /// Maximum energy allowed per block.
-    pub block_energy_limit:                Energy,
-    pub euro_per_energy:                   ExchangeRate,
+    pub block_energy_limit: Energy,
+    pub euro_per_energy: ExchangeRate,
     #[serde(rename = "microCCDPerEuro")]
-    pub micro_ccd_per_euro:                ExchangeRate,
-    pub account_creation_limit:            u16,
-    pub reward_parameters:                 RewardParameters<ChainParameterVersion2>,
-    pub time_parameters:                   TimeParameters,
-    pub pool_parameters:                   PoolParameters,
-    pub cooldown_parameters:               CooldownParameters,
+    pub micro_ccd_per_euro: ExchangeRate,
+    pub account_creation_limit: u16,
+    pub reward_parameters: RewardParameters<ChainParameterVersion2>,
+    pub time_parameters: TimeParameters,
+    pub pool_parameters: PoolParameters,
+    pub cooldown_parameters: CooldownParameters,
     pub finalization_committee_parameters: FinalizationCommitteeParametersConfig,
 }
 
@@ -249,21 +249,21 @@ impl GenesisChainParametersV2 {
 #[serde(rename_all = "camelCase")]
 pub struct GenesisChainParametersV3 {
     /// Consensus protocol version 2 timeout parameters.
-    pub timeout_parameters:                TimeoutParameters,
+    pub timeout_parameters: TimeoutParameters,
     /// Minimum time interval between blocks.
-    pub min_block_time:                    Duration,
+    pub min_block_time: Duration,
     /// Maximum energy allowed per block.
-    pub block_energy_limit:                Energy,
-    pub euro_per_energy:                   ExchangeRate,
+    pub block_energy_limit: Energy,
+    pub euro_per_energy: ExchangeRate,
     #[serde(rename = "microCCDPerEuro")]
-    pub micro_ccd_per_euro:                ExchangeRate,
-    pub account_creation_limit:            u16,
-    pub reward_parameters:                 RewardParameters<ChainParameterVersion2>,
-    pub time_parameters:                   TimeParameters,
-    pub pool_parameters:                   PoolParameters,
-    pub cooldown_parameters:               CooldownParameters,
+    pub micro_ccd_per_euro: ExchangeRate,
+    pub account_creation_limit: u16,
+    pub reward_parameters: RewardParameters<ChainParameterVersion2>,
+    pub time_parameters: TimeParameters,
+    pub pool_parameters: PoolParameters,
+    pub cooldown_parameters: CooldownParameters,
     pub finalization_committee_parameters: FinalizationCommitteeParametersConfig,
-    pub validator_score_parameters:        ValidatorScoreParameters,
+    pub validator_score_parameters: ValidatorScoreParameters,
 }
 
 impl GenesisChainParametersV3 {
@@ -347,18 +347,18 @@ impl GenesisChainParameters {
 pub struct GenesisParametersConfigV0 {
     /// Time at which the genesis will occur. If `None` then the tool will use
     /// "current" time as genesis time.
-    pub genesis_time:              Option<chrono::DateTime<chrono::Utc>>,
+    pub genesis_time: Option<chrono::DateTime<chrono::Utc>>,
     /// Duration of a slot in milliseconds
-    pub slot_duration:             SlotDuration,
+    pub slot_duration: SlotDuration,
     /// Leadership election nonce.
     pub leadership_election_nonce: LeadershipElectionNonce,
     /// Number of slots that go into an epoch.
-    pub epoch_length:              u64,
+    pub epoch_length: u64,
     /// Finalization parameters.
-    pub finalization:              FinalizationParameters,
+    pub finalization: FinalizationParameters,
     /// Max energy that is allowed for a block.
-    pub max_block_energy:          Energy,
-    pub chain:                     GenesisChainParameters,
+    pub max_block_energy: Energy,
+    pub chain: GenesisChainParameters,
 }
 
 impl GenesisParametersConfigV0 {
@@ -375,12 +375,12 @@ impl GenesisParametersConfigV0 {
             "Genesis time before unix epoch is not supported."
         );
         Ok(CoreGenesisParametersV0 {
-            time:                    Timestamp {
+            time: Timestamp {
                 millis: time as u64,
             },
-            slot_duration:           self.slot_duration,
-            epoch_length:            self.epoch_length,
-            max_block_energy:        self.max_block_energy,
+            slot_duration: self.slot_duration,
+            epoch_length: self.epoch_length,
+            max_block_energy: self.max_block_energy,
             finalization_parameters: self.finalization.clone(),
         })
     }
@@ -391,13 +391,13 @@ impl GenesisParametersConfigV0 {
 #[derive(Debug, Serialize)]
 pub struct CoreGenesisParametersV0 {
     /// Nominal time of the genesis block.
-    pub time:                    Timestamp,
+    pub time: Timestamp,
     /// The duration of a slot.
-    pub slot_duration:           SlotDuration,
+    pub slot_duration: SlotDuration,
     /// The epoch length in slots.
-    pub epoch_length:            u64,
+    pub epoch_length: u64,
     /// The maximum energy per block.
-    pub max_block_energy:        Energy,
+    pub max_block_energy: Energy,
     /// The finalization parameters.
     pub finalization_parameters: FinalizationParameters,
 }
@@ -436,9 +436,9 @@ pub struct GenesisParametersConfigV2 {
 #[serde(rename_all = "camelCase")]
 pub struct CoreGenesisParametersConfigV1 {
     /// Nominal time of the genesis block.
-    pub genesis_time:        Option<chrono::DateTime<chrono::Utc>>,
+    pub genesis_time: Option<chrono::DateTime<chrono::Utc>>,
     /// Duration of an epoch.
-    pub epoch_duration:      Duration,
+    pub epoch_duration: Duration,
     /// Fractional weight of signatures required for a quorum certificate or
     /// timeout certificate. This must be in the range [2/3, 1], and should
     /// generally be set to 2/3.
@@ -450,7 +450,7 @@ pub struct CoreGenesisParametersConfigV1 {
 #[derive(Debug, SerdeDeserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RatioNumDenomSerde {
-    pub numerator:   u64,
+    pub numerator: u64,
     pub denominator: u64,
 }
 
@@ -504,9 +504,9 @@ impl TryFrom<CoreGenesisParametersConfigV1> for CoreGenesisParametersV1 {
 #[derive(Debug, Serialize, SerdeDeserialize)]
 pub struct CoreGenesisParametersV1 {
     /// Nominal time of the genesis block.
-    pub genesis_time:        Timestamp,
+    pub genesis_time: Timestamp,
     /// Duration of an epoch.
-    pub epoch_duration:      Duration,
+    pub epoch_duration: Duration,
     /// Fractional weight of signatures required for a quorum certificate or
     /// timeout certificate. This must be in the range [2/3, 1], and should
     /// generally be set to 2/3.
@@ -518,13 +518,13 @@ pub struct CoreGenesisParametersV1 {
 /// for those protocol versions having chain parameters version 0.
 #[derive(Debug)]
 pub struct GenesisStateCPV0 {
-    pub cryptographic_parameters:  GlobalContext<ArCurve>,
-    pub identity_providers:        BTreeMap<IpIdentity, IpInfo<IpPairing>>,
-    pub anonymity_revokers:        BTreeMap<ArIdentity, ArInfo<ArCurve>>,
-    pub update_keys:               UpdateKeysCollection<ChainParameterVersion0>,
-    pub chain_parameters:          ChainParameters<ChainParameterVersion0>,
+    pub cryptographic_parameters: GlobalContext<ArCurve>,
+    pub identity_providers: BTreeMap<IpIdentity, IpInfo<IpPairing>>,
+    pub anonymity_revokers: BTreeMap<ArIdentity, ArInfo<ArCurve>>,
+    pub update_keys: UpdateKeysCollection<ChainParameterVersion0>,
+    pub chain_parameters: ChainParameters<ChainParameterVersion0>,
     pub leadership_election_nonce: LeadershipElectionNonce,
-    pub accounts:                  Vec<GenesisAccountPublic>,
+    pub accounts: Vec<GenesisAccountPublic>,
 }
 
 fn serialize_with_length_header(data: &impl Serial, buf: &mut Vec<u8>, out: &mut impl Buffer) {
@@ -561,13 +561,13 @@ impl Serial for GenesisStateCPV0 {
 /// only P4.
 #[derive(Debug)]
 pub struct GenesisStateCPV1 {
-    pub cryptographic_parameters:  GlobalContext<ArCurve>,
-    pub identity_providers:        BTreeMap<IpIdentity, IpInfo<IpPairing>>,
-    pub anonymity_revokers:        BTreeMap<ArIdentity, ArInfo<ArCurve>>,
-    pub update_keys:               UpdateKeysCollection<ChainParameterVersion1>,
-    pub chain_parameters:          ChainParameters<ChainParameterVersion1>,
+    pub cryptographic_parameters: GlobalContext<ArCurve>,
+    pub identity_providers: BTreeMap<IpIdentity, IpInfo<IpPairing>>,
+    pub anonymity_revokers: BTreeMap<ArIdentity, ArInfo<ArCurve>>,
+    pub update_keys: UpdateKeysCollection<ChainParameterVersion1>,
+    pub chain_parameters: ChainParameters<ChainParameterVersion1>,
     pub leadership_election_nonce: LeadershipElectionNonce,
-    pub accounts:                  Vec<GenesisAccountPublic>,
+    pub accounts: Vec<GenesisAccountPublic>,
 }
 
 impl Serial for GenesisStateCPV1 {
@@ -597,13 +597,13 @@ impl Serial for GenesisStateCPV1 {
 /// P7.
 #[derive(Debug)]
 pub struct GenesisStateCPV2 {
-    pub cryptographic_parameters:  GlobalContext<ArCurve>,
-    pub identity_providers:        BTreeMap<IpIdentity, IpInfo<IpPairing>>,
-    pub anonymity_revokers:        BTreeMap<ArIdentity, ArInfo<ArCurve>>,
-    pub update_keys:               UpdateKeysCollection<ChainParameterVersion2>,
-    pub chain_parameters:          ChainParameters<ChainParameterVersion2>,
+    pub cryptographic_parameters: GlobalContext<ArCurve>,
+    pub identity_providers: BTreeMap<IpIdentity, IpInfo<IpPairing>>,
+    pub anonymity_revokers: BTreeMap<ArIdentity, ArInfo<ArCurve>>,
+    pub update_keys: UpdateKeysCollection<ChainParameterVersion2>,
+    pub chain_parameters: ChainParameters<ChainParameterVersion2>,
     pub leadership_election_nonce: LeadershipElectionNonce,
-    pub accounts:                  Vec<GenesisAccountPublic>,
+    pub accounts: Vec<GenesisAccountPublic>,
 }
 
 impl Serial for GenesisStateCPV2 {
@@ -632,13 +632,13 @@ impl Serial for GenesisStateCPV2 {
 /// for those protocol versions having chain parameters version 3, i.e. P8.
 #[derive(Debug)]
 pub struct GenesisStateCPV3 {
-    pub cryptographic_parameters:  GlobalContext<ArCurve>,
-    pub identity_providers:        BTreeMap<IpIdentity, IpInfo<IpPairing>>,
-    pub anonymity_revokers:        BTreeMap<ArIdentity, ArInfo<ArCurve>>,
-    pub update_keys:               UpdateKeysCollection<ChainParameterVersion3>,
-    pub chain_parameters:          ChainParameters<ChainParameterVersion3>,
+    pub cryptographic_parameters: GlobalContext<ArCurve>,
+    pub identity_providers: BTreeMap<IpIdentity, IpInfo<IpPairing>>,
+    pub anonymity_revokers: BTreeMap<ArIdentity, ArInfo<ArCurve>>,
+    pub update_keys: UpdateKeysCollection<ChainParameterVersion3>,
+    pub chain_parameters: ChainParameters<ChainParameterVersion3>,
     pub leadership_election_nonce: LeadershipElectionNonce,
-    pub accounts:                  Vec<GenesisAccountPublic>,
+    pub accounts: Vec<GenesisAccountPublic>,
 }
 
 impl Serial for GenesisStateCPV3 {
@@ -666,39 +666,39 @@ impl Serial for GenesisStateCPV3 {
 /// genesis state.
 pub enum GenesisData {
     P1 {
-        core:          CoreGenesisParametersV0,
+        core: CoreGenesisParametersV0,
         initial_state: GenesisStateCPV0,
     },
     P2 {
-        core:          CoreGenesisParametersV0,
+        core: CoreGenesisParametersV0,
         initial_state: GenesisStateCPV0,
     },
     P3 {
-        core:          CoreGenesisParametersV0,
+        core: CoreGenesisParametersV0,
         initial_state: GenesisStateCPV0,
     },
     P4 {
-        core:          CoreGenesisParametersV0,
+        core: CoreGenesisParametersV0,
         initial_state: GenesisStateCPV1,
     },
     P5 {
-        core:          CoreGenesisParametersV0,
+        core: CoreGenesisParametersV0,
         initial_state: GenesisStateCPV1,
     },
     P6 {
-        core:          CoreGenesisParametersV1,
+        core: CoreGenesisParametersV1,
         initial_state: GenesisStateCPV2,
     },
     P7 {
-        core:          CoreGenesisParametersV1,
+        core: CoreGenesisParametersV1,
         initial_state: GenesisStateCPV2,
     },
     P8 {
-        core:          CoreGenesisParametersV1,
+        core: CoreGenesisParametersV1,
         initial_state: GenesisStateCPV3,
     },
     P9 {
-        core:          CoreGenesisParametersV1,
+        core: CoreGenesisParametersV1,
         initial_state: GenesisStateCPV3,
     },
 }

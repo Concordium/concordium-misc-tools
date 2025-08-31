@@ -319,10 +319,13 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(devices, vec![Device::new(
-            HashSet::from([CIS2Transaction, CCDTransaction, PLTTransaction]),
-            device.to_string()
-        )]);
+        assert_eq!(
+            devices,
+            vec![Device::new(
+                HashSet::from([CIS2Transaction, CCDTransaction, PLTTransaction]),
+                device.to_string()
+            )]
+        );
 
         db_connection
             .upsert_subscription(vec![account_address], vec![], device)
@@ -332,10 +335,10 @@ mod tests {
             .get_devices_from_account(&account_address)
             .await
             .unwrap();
-        assert_eq!(devices, vec![Device::new(
-            HashSet::new(),
-            device.to_string()
-        )]);
+        assert_eq!(
+            devices,
+            vec![Device::new(HashSet::new(), device.to_string())]
+        );
     }
 
     #[tokio::test]

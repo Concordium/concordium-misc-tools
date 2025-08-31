@@ -52,18 +52,18 @@ struct GenerateSecretsArgs {
     #[clap(long, help = "Path to the seed phrase file.")]
     concordium_wallet: std::path::PathBuf,
     #[clap(long = "ip-index", help = "Identity of the identity provider.")]
-    ip_index:          u32,
+    ip_index: u32,
     #[clap(
         long = "id-index",
         help = "Index of the identity to generate secrets for."
     )]
-    id_index:          u32,
+    id_index: u32,
     #[clap(
         long,
         help = "Network to generate secrets for.",
         default_value = "testnet"
     )]
-    network:           key_derivation::Net,
+    network: key_derivation::Net,
 }
 
 #[derive(Debug, Args)]
@@ -74,7 +74,7 @@ struct RecoverIdentityArgs {
         help = "Identity recovery URL",
         default_value = "http://wallet-proxy.testnet.concordium.com/v1/ip_info"
     )]
-    wp_url:            url::Url,
+    wp_url: url::Url,
     /// Location of the seed phrase.
     #[clap(
         long,
@@ -84,23 +84,23 @@ struct RecoverIdentityArgs {
     )]
     concordium_wallet: Option<std::path::PathBuf>,
     #[clap(long = "ip-index", help = "Identity of the identity provider.")]
-    ip_index:          u32,
+    ip_index: u32,
     #[clap(
         long,
         help = "Hex encoded id credential secret. Specify either this or --concordium-wallet.",
         required_unless_present = "concordium_wallet",
         requires_all = ["prf_key"]
     )]
-    id_cred_sec:       Option<String>,
+    id_cred_sec: Option<String>,
     #[clap(
         long,
         help = "Hex encoded PRF key. Specify either this or --concordium-wallet.",
         required_unless_present = "concordium_wallet",
         requires_all = ["id_cred_sec"]
     )]
-    prf_key:           Option<String>,
+    prf_key: Option<String>,
     #[clap(long, help = "Network to recover on.", default_value = "testnet")]
-    network:           key_derivation::Net,
+    network: key_derivation::Net,
 }
 
 #[tokio::main]
@@ -222,7 +222,10 @@ async fn recover_identity(
         .json::<Vec<WpIpInfos>>()
         .await?;
 
-    let Some(id) = ids.into_iter().find(|x| x.ip_info.ip_identity == recovery_args.ip_index.into()) else {
+    let Some(id) = ids
+        .into_iter()
+        .find(|x| x.ip_info.ip_identity == recovery_args.ip_index.into())
+    else {
         anyhow::bail!("Identity provider not found.");
     };
     println!("Using identity provider {}", id.ip_info.ip_description.name);
@@ -390,7 +393,7 @@ struct RecoveryRequestData {
 #[derive(serde::Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct WpIpInfos {
-    ip_info:  IpInfo<IpPairing>,
+    ip_info: IpInfo<IpPairing>,
     metadata: RecoveryStart,
 }
 

@@ -22,8 +22,8 @@ fn map_transaction_to_notification_information(
         | AccountTransactionEffects::AccountTransferWithMemo { to, amount, .. } => {
             vec![NotificationInformationBasic::CCD(
                 CCDTransactionNotificationInformation {
-                    address:   *to,
-                    amount:    amount.micro_ccd.to_string(),
+                    address: *to,
+                    amount: amount.micro_ccd.to_string(),
                     reference: transaction_hash,
                 },
             )]
@@ -34,8 +34,8 @@ fn map_transaction_to_notification_information(
                 ContractTraceElement::Transferred { to, amount, .. } => {
                     vec![NotificationInformationBasic::CCD(
                         CCDTransactionNotificationInformation {
-                            address:   *to,
-                            amount:    amount.micro_ccd.to_string(),
+                            address: *to,
+                            amount: amount.micro_ccd.to_string(),
                             reference: transaction_hash,
                         },
                     )]
@@ -101,8 +101,8 @@ fn map_transaction_to_notification_information(
             let amount: u64 = amount.iter().map(|(_, part)| part.micro_ccd()).sum();
             vec![NotificationInformationBasic::CCD(
                 CCDTransactionNotificationInformation {
-                    address:   *to,
-                    amount:    amount.to_string(),
+                    address: *to,
+                    amount: amount.to_string(),
                     reference: transaction_hash,
                 },
             )]
@@ -130,9 +130,9 @@ fn map_plt_token_events(
         }) => {
             let protocol_level_tokens::TokenHolder::Account { address } = to;
             Some(PLTEventNotificationInformation {
-                address:   *address,
-                amount:    PltAmount::from(*amount),
-                token_id:  token_event.token_id.clone(),
+                address: *address,
+                amount: PltAmount::from(*amount),
+                token_id: token_event.token_id.clone(),
                 reference: transaction_hash,
             })
         }
@@ -223,7 +223,9 @@ mod tests {
         }
     }
 
-    fn random_transaction_index() -> TransactionIndex { TransactionIndex { index: random() } }
+    fn random_transaction_index() -> TransactionIndex {
+        TransactionIndex { index: random() }
+    }
 
     fn random_memo() -> Memo {
         let mut rng = thread_rng();
@@ -297,13 +299,13 @@ mod tests {
                     memo: random_memo(),
                 },
                 AccountTransactionEffects::TransferredWithSchedule {
-                    to:     receiver_address,
+                    to: receiver_address,
                     amount: create_random_release_schedules_from_amount(amount.micro_ccd, 2, g),
                 },
                 AccountTransactionEffects::TransferredWithScheduleAndMemo {
-                    to:     receiver_address,
+                    to: receiver_address,
                     amount: create_random_release_schedules_from_amount(amount.micro_ccd, 2, g),
-                    memo:   random_memo(),
+                    memo: random_memo(),
                 },
             ];
 
@@ -318,8 +320,8 @@ mod tests {
 
             let notification =
                 NotificationInformationBasic::CCD(CCDTransactionNotificationInformation {
-                    address:   receiver_address,
-                    amount:    amount.micro_ccd().to_string(),
+                    address: receiver_address,
+                    amount: amount.micro_ccd().to_string(),
                     reference: hash,
                 });
 

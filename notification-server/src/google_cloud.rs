@@ -30,11 +30,12 @@ pub enum NotificationError {
 #[derive(Debug)]
 pub struct GoogleCloud<T>
 where
-    T: TokenProvider, {
-    client:          Client,
+    T: TokenProvider,
+{
+    client: Client,
     service_account: T,
-    url:             String,
-    backoff_policy:  ExponentialBackoff,
+    url: String,
+    backoff_policy: ExponentialBackoff,
 }
 
 impl<T> GoogleCloud<T>
@@ -241,17 +242,17 @@ mod tests {
 
     #[derive(Debug, Clone, Copy, PartialEq, Sequence)]
     enum RetryStatusCode {
-        TooManyRequests     = 429,
+        TooManyRequests = 429,
         InternalServerError = 500,
-        NotImplemented      = 501,
-        BadGateway          = 502,
-        ServiceUnavailable  = 503,
-        GatewayTimeout      = 504,
+        NotImplemented = 501,
+        BadGateway = 502,
+        ServiceUnavailable = 503,
+        GatewayTimeout = 504,
         HTTPVersionNotSupported = 505,
         VariantAlsoNegotiates = 506,
         InsufficientStorage = 507,
-        LoopDetected        = 508,
-        NotExtended         = 510,
+        LoopDetected = 508,
+        NotExtended = 510,
         NetworkAuthenticationRequired = 511,
     }
 
@@ -278,31 +279,31 @@ mod tests {
 
     #[derive(Debug, Clone, Copy, PartialEq, Sequence)]
     enum ZeroRetryStatusCode {
-        BadRequest           = 400,
-        Unauthorized         = 401,
-        PaymentRequired      = 402,
-        Forbidden            = 403,
-        NotFound             = 404,
-        MethodNotAllowed     = 405,
-        NotAcceptable        = 406,
+        BadRequest = 400,
+        Unauthorized = 401,
+        PaymentRequired = 402,
+        Forbidden = 403,
+        NotFound = 404,
+        MethodNotAllowed = 405,
+        NotAcceptable = 406,
         ProxyAuthenticationRequired = 407,
-        RequestTimeout       = 408,
-        Conflict             = 409,
-        Gone                 = 410,
-        LengthRequired       = 411,
-        PreconditionFailed   = 412,
-        PayloadTooLarge      = 413,
-        UriTooLong           = 414,
+        RequestTimeout = 408,
+        Conflict = 409,
+        Gone = 410,
+        LengthRequired = 411,
+        PreconditionFailed = 412,
+        PayloadTooLarge = 413,
+        UriTooLong = 414,
         UnsupportedMediaType = 415,
-        RangeNotSatisfiable  = 416,
-        ExpectationFailed    = 417,
-        ImATeapot            = 418,
-        MisdirectedRequest   = 421,
-        UnprocessableEntity  = 422,
-        Locked               = 423,
-        FailedDependency     = 424,
-        TooEarly             = 425,
-        UpgradeRequired      = 426,
+        RangeNotSatisfiable = 416,
+        ExpectationFailed = 417,
+        ImATeapot = 418,
+        MisdirectedRequest = 421,
+        UnprocessableEntity = 422,
+        Locked = 423,
+        FailedDependency = 424,
+        TooEarly = 425,
+        UpgradeRequired = 426,
         PreconditionRequired = 428,
         RequestHeaderFieldsTooLarge = 431,
         UnavailableForLegalReasons = 451,
@@ -359,11 +360,11 @@ mod tests {
         gc.url = format!("{}/v1/projects/fake_project_id/messages:send", server.url());
         let notification_information =
             NotificationInformation::CCD(CCDTransactionNotificationInformation {
-                address:   AccountAddress::from_str(
+                address: AccountAddress::from_str(
                     "4FmiTW2L2AccyR9VjzsnpWFSAcohXWf7Vf797i36y526mqiEcp",
                 )
                 .unwrap(),
-                amount:    "100".to_string(),
+                amount: "100".to_string(),
                 reference: TransactionHash::from_str(
                     "3d1c2f4fb9a0eb468bfe39e75c59897c1a375082a6440f4a5da77102182ba055",
                 )
@@ -416,16 +417,16 @@ mod tests {
         gc.url = format!("{}/v1/projects/fake_project_id/messages:send", server.url());
         let notification_information =
             NotificationInformation::CIS2(CIS2EventNotificationInformation {
-                contract_name:  OwnedContractName::new("init_contract".to_string()).unwrap(),
-                info:           CIS2EventNotificationInformationBasic {
-                    address:          AccountAddress::from_str(
+                contract_name: OwnedContractName::new("init_contract".to_string()).unwrap(),
+                info: CIS2EventNotificationInformationBasic {
+                    address: AccountAddress::from_str(
                         "3kBx2h5Y2veb4hZgAJWPrr8RyQESKm5TjzF3ti1QQ4VSYLwK1G",
                     )
                     .unwrap(),
-                    amount:           "200".to_string(),
-                    token_id:         TokenId::from_str("ffffff").unwrap(),
+                    amount: "200".to_string(),
+                    token_id: TokenId::from_str("ffffff").unwrap(),
                     contract_address: ContractAddress::new(3, 0),
-                    reference:        TransactionHash::from_str(
+                    reference: TransactionHash::from_str(
                         "6a6d250ecefb518253db4c0d7759b2f4ff2862217ed2c8343879a77e0c2c97a2",
                     )
                     .unwrap(),
@@ -479,19 +480,19 @@ mod tests {
         gc.url = format!("{}/v1/projects/fake_project_id/messages:send", server.url());
         let notification_information =
             NotificationInformation::CIS2(CIS2EventNotificationInformation {
-                contract_name:  OwnedContractName::new("init_contract".to_string()).unwrap(),
+                contract_name: OwnedContractName::new("init_contract".to_string()).unwrap(),
                 token_metadata: Some(
                     MetadataUrl::new("https://example.com".to_string(), None).unwrap(),
                 ),
-                info:           CIS2EventNotificationInformationBasic {
-                    address:          AccountAddress::from_str(
+                info: CIS2EventNotificationInformationBasic {
+                    address: AccountAddress::from_str(
                         "3kBx2h5Y2veb4hZgAJWPrr8RyQESKm5TjzF3ti1QQ4VSYLwK1G",
                     )
                     .unwrap(),
-                    amount:           "200".to_string(),
-                    token_id:         TokenId::from_str("ffffff").unwrap(),
+                    amount: "200".to_string(),
+                    token_id: TokenId::from_str("ffffff").unwrap(),
                     contract_address: ContractAddress::new(112, 2),
-                    reference:        TransactionHash::from_str(
+                    reference: TransactionHash::from_str(
                         "494d7848e389d44a2c2fe81eeee6dc427ce33ab1d0c92cba23be321d495be110",
                     )
                     .unwrap(),
@@ -544,7 +545,7 @@ mod tests {
         gc.url = format!("{}/v1/projects/fake_project_id/messages:send", server.url());
         let notification_information =
             NotificationInformation::CIS2(CIS2EventNotificationInformation {
-                contract_name:  OwnedContractName::new("init_contract".to_string()).unwrap(),
+                contract_name: OwnedContractName::new("init_contract".to_string()).unwrap(),
                 token_metadata: Some(
                     MetadataUrl::new(
                         "https://example.com".to_string(),
@@ -557,15 +558,15 @@ mod tests {
                     )
                     .unwrap(),
                 ),
-                info:           CIS2EventNotificationInformationBasic {
-                    address:          AccountAddress::from_str(
+                info: CIS2EventNotificationInformationBasic {
+                    address: AccountAddress::from_str(
                         "3kBx2h5Y2veb4hZgAJWPrr8RyQESKm5TjzF3ti1QQ4VSYLwK1G",
                     )
                     .unwrap(),
-                    amount:           "200".to_string(),
-                    token_id:         TokenId::from_str("ffffff").unwrap(),
+                    amount: "200".to_string(),
+                    token_id: TokenId::from_str("ffffff").unwrap(),
                     contract_address: ContractAddress::new(111, 1),
-                    reference:        TransactionHash::from_str(
+                    reference: TransactionHash::from_str(
                         "8a3a09bffa6ead269f79be4192fcb7773cc4e10a2e90c0dec3eb9ca5200c06bc",
                     )
                     .unwrap(),
@@ -616,11 +617,11 @@ mod tests {
         gc.url = format!("{}/v1/projects/fake_project_id/messages:send", server.url());
         let notification_information =
             NotificationInformation::PLT(PLTEventNotificationInformation {
-                address:   "3kBx2h5Y2veb4hZgAJWPrr8RyQESKm5TjzF3ti1QQ4VSYLwK1G"
+                address: "3kBx2h5Y2veb4hZgAJWPrr8RyQESKm5TjzF3ti1QQ4VSYLwK1G"
                     .parse()
                     .unwrap(),
-                amount:    protocol_level_tokens::TokenAmount::from_raw(123456789, 6).into(),
-                token_id:  "TestCoin".parse().unwrap(),
+                amount: protocol_level_tokens::TokenAmount::from_raw(123456789, 6).into(),
+                token_id: "TestCoin".parse().unwrap(),
                 reference: "8a3a09bffa6ead269f79be4192fcb7773cc4e10a2e90c0dec3eb9ca5200c06bc"
                     .parse()
                     .unwrap(),

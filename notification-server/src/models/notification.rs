@@ -71,9 +71,9 @@ impl NotificationInformationBasic {
 pub struct CCDTransactionNotificationInformation {
     /// Address of the account receiving some amount of CCD.
     #[serde(rename = "recipient")]
-    pub address:   AccountAddress,
+    pub address: AccountAddress,
     /// String encoding of microCCD.
-    pub amount:    String,
+    pub amount: String,
     /// Hash of the transaction which caused the notification.
     pub reference: TransactionHash,
 }
@@ -86,7 +86,7 @@ pub struct CCDTransactionNotificationInformation {
 pub struct CIS2EventNotificationInformation {
     /// Name of the token smart contract.
     #[serde(serialize_with = "serialize_contract_name")]
-    pub contract_name:  OwnedContractName,
+    pub contract_name: OwnedContractName,
     /// Metadata URL for the token.
     #[serde(
         serialize_with = "serialize_option_as_json_string",
@@ -95,12 +95,13 @@ pub struct CIS2EventNotificationInformation {
     pub token_metadata: Option<MetadataUrl>,
     /// The basic information extracted directly from the block item summary.
     #[serde(flatten)]
-    pub info:           CIS2EventNotificationInformationBasic,
+    pub info: CIS2EventNotificationInformationBasic,
 }
 
 fn serialize_contract_name<S>(name: &OwnedContractName, serializer: S) -> Result<S::Ok, S::Error>
 where
-    S: Serializer, {
+    S: Serializer,
+{
     let contract_name_str = name.as_contract_name();
     serializer.serialize_str(contract_name_str.contract_name())
 }
@@ -108,7 +109,8 @@ where
 fn serialize_as_json_string<S, T>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
-    T: Serialize, {
+    T: Serialize,
+{
     let json_string = serde_json::to_string(value).map_err(serde::ser::Error::custom)?;
     serializer.serialize_str(&json_string)
 }
@@ -119,7 +121,8 @@ fn serialize_option_as_json_string<S, T>(
 ) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
-    T: Serialize, {
+    T: Serialize,
+{
     match value {
         Some(v) => serialize_as_json_string(v, serializer),
         None => serializer.serialize_none(),
@@ -154,17 +157,17 @@ impl NotificationInformationBasic {
 pub struct CIS2EventNotificationInformationBasic {
     /// Account address receiving some CIS-2 token.
     #[serde(rename = "recipient")]
-    pub address:          AccountAddress,
+    pub address: AccountAddress,
     /// String encoding of the integer token amount.
     /// Will be negative when emitted due to a burn.
-    pub amount:           String,
+    pub amount: String,
     /// The token identifier within the smart contract.
-    pub token_id:         TokenId,
+    pub token_id: TokenId,
     /// The contract address of the token.
     #[serde(serialize_with = "serialize_as_json_string")]
     pub contract_address: ContractAddress,
     /// Hash of the transaction which cause the notification.
-    pub reference:        TransactionHash,
+    pub reference: TransactionHash,
 }
 
 /// Notification information related to protocol-level tokens (PLT).
@@ -172,12 +175,12 @@ pub struct CIS2EventNotificationInformationBasic {
 pub struct PLTEventNotificationInformation {
     /// Account address receiving some PLT token.
     #[serde(rename = "recipient")]
-    pub address:   AccountAddress,
+    pub address: AccountAddress,
     /// The amount tokens received.
     #[serde(flatten)]
-    pub amount:    PltAmount,
+    pub amount: PltAmount,
     /// The identifier for the token being received.
-    pub token_id:  protocol_level_tokens::TokenId,
+    pub token_id: protocol_level_tokens::TokenId,
     /// Hash of the transaction which cause the notification.
     pub reference: TransactionHash,
 }
@@ -189,7 +192,7 @@ pub struct PLTEventNotificationInformation {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PltAmount {
     /// The amount of tokens as an unscaled integer value.
-    value:    String,
+    value: String,
     /// The number of decimals in the token amount.
     decimals: String,
 }
@@ -197,7 +200,7 @@ pub struct PltAmount {
 impl From<protocol_level_tokens::TokenAmount> for PltAmount {
     fn from(amount: protocol_level_tokens::TokenAmount) -> Self {
         Self {
-            value:    amount.value().to_string(),
+            value: amount.value().to_string(),
             decimals: amount.decimals().to_string(),
         }
     }
@@ -216,10 +219,10 @@ mod tests {
         {
             let notification_information =
                 NotificationInformation::CCD(CCDTransactionNotificationInformation {
-                    address:   "4FmiTW2L2AccyR9VjzsnpWFSAcohXWf7Vf797i36y526mqiEcp"
+                    address: "4FmiTW2L2AccyR9VjzsnpWFSAcohXWf7Vf797i36y526mqiEcp"
                         .parse()
                         .unwrap(),
-                    amount:    "100".to_string(),
+                    amount: "100".to_string(),
                     reference: "3d1c2f4fb9a0eb468bfe39e75c59897c1a375082a6440f4a5da77102182ba055"
                         .parse()
                         .unwrap(),
@@ -241,16 +244,16 @@ mod tests {
         {
             let notification_information =
                 NotificationInformation::CIS2(CIS2EventNotificationInformation {
-                    contract_name:  OwnedContractName::new("init_contract".to_string()).unwrap(),
+                    contract_name: OwnedContractName::new("init_contract".to_string()).unwrap(),
                     token_metadata: Some(
                         MetadataUrl::new("https://example.com".to_string(), None).unwrap(),
                     ),
-                    info:           CIS2EventNotificationInformationBasic {
-                        address:          "3kBx2h5Y2veb4hZgAJWPrr8RyQESKm5TjzF3ti1QQ4VSYLwK1G"
+                    info: CIS2EventNotificationInformationBasic {
+                        address: "3kBx2h5Y2veb4hZgAJWPrr8RyQESKm5TjzF3ti1QQ4VSYLwK1G"
                             .parse()
                             .unwrap(),
-                        amount:           "200".to_string(),
-                        token_id:         "ffffff".parse().unwrap(),
+                        amount: "200".to_string(),
+                        token_id: "ffffff".parse().unwrap(),
                         contract_address: ContractAddress::new(112, 2),
                         reference:
                             "494d7848e389d44a2c2fe81eeee6dc427ce33ab1d0c92cba23be321d495be110"
@@ -279,11 +282,11 @@ mod tests {
         {
             let notification_information =
                 NotificationInformation::PLT(PLTEventNotificationInformation {
-                    address:   "3kBx2h5Y2veb4hZgAJWPrr8RyQESKm5TjzF3ti1QQ4VSYLwK1G"
+                    address: "3kBx2h5Y2veb4hZgAJWPrr8RyQESKm5TjzF3ti1QQ4VSYLwK1G"
                         .parse()
                         .unwrap(),
-                    amount:    protocol_level_tokens::TokenAmount::from_raw(123456789, 6).into(),
-                    token_id:  "TestCoin".parse().unwrap(),
+                    amount: protocol_level_tokens::TokenAmount::from_raw(123456789, 6).into(),
+                    token_id: "TestCoin".parse().unwrap(),
                     reference: "494d7848e389d44a2c2fe81eeee6dc427ce33ab1d0c92cba23be321d495be110"
                         .parse()
                         .unwrap(),
