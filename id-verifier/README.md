@@ -43,20 +43,10 @@ from the node during proof validation.
 This repository's CI automatically checks formatting and common problems in rust.
 Changes to any of the packages must be such that
 - ```cargo clippy --all``` produces no warnings
-- ```cargo +nightly-2022-06-09 fmt``` makes no changes.
+- ```cargo fmt``` makes no changes.
 
-Everything in this repository should build with stable rust at the moment (at least version 1.56 and up), however the fmt tool must be from a nightly release since some of the configuration options are not stable. One way to run the `fmt` tool is
-
-```shell
- cargo +nightly-2022-06-09 fmt
-```
+Everything in this repository should build with stable rust at the moment (at least version 1.56 and up).
 (the exact version used by the CI can be found in [.github/workflows/ci.yaml](https://github.com/Concordium/concordium-misc-tools/blob/main/.github/workflows/ci.yaml) file).
-You will need to have a recent enough nightly version installed, which can be done via
-
-```shell
-rustup toolchain install nightly-2022-06-09
-```
-or similar, using the [rustup](https://rustup.rs/) tool. See the documentation of the tool for more details.
 
 In order to contribute you should make a pull request and ask a person familiar with the codebase for a review.
 

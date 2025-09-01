@@ -105,7 +105,9 @@ mod tests {
     use concordium_rust_sdk::protocol_level_tokens::TokenId;
     use std::{collections::HashSet, str::FromStr};
 
-    fn make_token(value: &str) -> TokenId { TokenId::from_str(value).unwrap() }
+    fn make_token(value: &str) -> TokenId {
+        TokenId::from_str(value).unwrap()
+    }
 
     #[test]
     fn test_compare_token_identities_matching() {

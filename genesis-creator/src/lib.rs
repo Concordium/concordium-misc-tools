@@ -76,7 +76,7 @@ fn crypto_parameters(
         CryptoParamsConfig::Generate { genesis_string } => {
             let ver_global: Versioned<GlobalContext<ArCurve>> = Versioned {
                 version: VERSION_0,
-                value:   GlobalContext::generate(genesis_string),
+                value: GlobalContext::generate(genesis_string),
             };
             if let Some(out) = global_out {
                 let mut path = out;
@@ -161,7 +161,7 @@ fn identity_providers(
     }
     let ver_idps = Versioned {
         version: VERSION_0,
-        value:   out,
+        value: out,
     };
     {
         let mut path = idp_out;
@@ -237,7 +237,7 @@ fn anonymity_revokers(
     }
     let ver_ars = Versioned {
         version: VERSION_0,
-        value:   out,
+        value: out,
     };
     {
         let mut path = ars_out;
@@ -383,14 +383,14 @@ fn updates_v0(
 
     let uks = UpdateKeysCollectionSkeleton {
         root_keys: HigherLevelAccessStructure {
-            keys:      root_keys,
+            keys: root_keys,
             threshold: update_cfg.root.threshold,
-            _phantom:  Default::default(),
+            _phantom: Default::default(),
         },
         level_1_keys: HigherLevelAccessStructure {
-            keys:      level1_keys,
+            keys: level1_keys,
             threshold: update_cfg.level1.threshold,
-            _phantom:  Default::default(),
+            _phantom: Default::default(),
         },
         level_2_keys,
     };
@@ -507,14 +507,14 @@ fn updates_v1(
 
     let uks = UpdateKeysCollectionSkeleton {
         root_keys: HigherLevelAccessStructure {
-            keys:      root_keys,
+            keys: root_keys,
             threshold: update_cfg.root.threshold,
-            _phantom:  Default::default(),
+            _phantom: Default::default(),
         },
         level_1_keys: HigherLevelAccessStructure {
-            keys:      level1_keys,
+            keys: level1_keys,
             threshold: update_cfg.level1.threshold,
-            _phantom:  Default::default(),
+            _phantom: Default::default(),
         },
         level_2_keys,
     };
@@ -718,9 +718,12 @@ fn accounts(
                             .0
                             .into_iter()
                             .map(|sad| {
-                                (sad.ar.ar_identity, ChainArData {
-                                    enc_id_cred_pub_share: sad.encrypted_share,
-                                })
+                                (
+                                    sad.ar.ar_identity,
+                                    ChainArData {
+                                        enc_id_cred_pub_share: sad.encrypted_share,
+                                    },
+                                )
                             })
                             .collect();
 
@@ -738,7 +741,7 @@ fn accounts(
                         };
 
                         let acc_cred = AccountCredentialWithoutProofs::Normal {
-                            cdv:         CredentialDeploymentValues {
+                            cdv: CredentialDeploymentValues {
                                 cred_key_info,
                                 cred_id,
                                 ip_identity: identity_provider,
@@ -776,7 +779,7 @@ fn accounts(
                         };
                         let encryption_secret_key = concordium_rust_sdk::id::elgamal::SecretKey {
                             generator: *params.elgamal_generator(),
-                            scalar:    prf_exponent,
+                            scalar: prf_exponent,
                         };
 
                         let aci = AccCredentialInfo {

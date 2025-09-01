@@ -62,26 +62,26 @@ const MAINNET_GENESIS_HASH: &str =
     "9dd9ca4d19e9393877d2c44b70f89acbfc0883c2243e5eeaecc0d1cd0503f478";
 
 struct NetData {
-    ip_info:    IpInfo<AggregateSigPairing>,
-    ars:        ArInfos<ArCurve>,
+    ip_info: IpInfo<AggregateSigPairing>,
+    ars: ArInfos<ArCurve>,
     global_ctx: GlobalContext<ArCurve>,
 }
 
 struct State {
-    seedphrase:   String,
+    seedphrase: String,
     testnet_data: NetData,
     mainnet_data: NetData,
-    node:         Mutex<Option<v2::Client>>,
-    net:          Mutex<Option<Net>>,
-    id_index:     Mutex<Option<u32>>,
+    node: Mutex<Option<v2::Client>>,
+    net: Mutex<Option<Net>>,
+    id_index: Mutex<Option<u32>>,
 }
 
 /// A wallet and additional context.
 struct WalletContext<'state> {
-    wallet:     ConcordiumHdWallet,
+    wallet: ConcordiumHdWallet,
     ip_context: IpContext<'state, AggregateSigPairing, ArCurve>,
-    id_index:   Option<u32>,
-    ip_index:   u32,
+    id_index: Option<u32>,
+    ip_index: u32,
 }
 
 impl State {
@@ -97,7 +97,7 @@ impl State {
         }
         let wallet = ConcordiumHdWallet {
             seed: words_to_seed(&seedphrase).context("Failed to create seed from seedphrase")?,
-            net:  self.net.lock().await.context("No network set.")?,
+            net: self.net.lock().await.context("No network set.")?,
         };
 
         let net_data = match wallet.net {
@@ -151,7 +151,8 @@ enum Error {
 impl Serialize for Error {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-        S: serde::Serializer, {
+        S: serde::Serializer,
+    {
         let mut error = serializer.serialize_struct("Error", 2)?;
         error.serialize_field("type", <&str>::from(self))?;
         error.serialize_field("message", &self.to_string())?;
@@ -208,7 +209,9 @@ async fn set_node_and_network(
 }
 
 #[tauri::command]
-fn get_seedphrase(state: tauri::State<'_, State>) -> String { state.seedphrase.clone() }
+fn get_seedphrase(state: tauri::State<'_, State>) -> String {
+    state.seedphrase.clone()
+}
 
 #[tauri::command]
 fn check_seedphrase(state: tauri::State<'_, State>, seedphrase: String) -> bool {
@@ -271,9 +274,7 @@ async fn save_request_file(state: tauri::State<'_, State>, net: Net) -> Result<(
             file_builder = file_builder.set_directory(documents);
         }
     };
-    let Some(path) = file_builder
-        .save_file()
-    else {
+    let Some(path) = file_builder.save_file() else {
         return Ok(());
     };
 
@@ -285,14 +286,14 @@ async fn save_request_file(state: tauri::State<'_, State>, net: Net) -> Result<(
 #[derive(serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Account {
-    id_index:  u32,
+    id_index: u32,
     acc_index: u8,
-    address:   AccountAddress,
+    address: AccountAddress,
 }
 
 #[derive(serde::Serialize)]
 struct IdentityData {
-    accounts:   Vec<Account>,
+    accounts: Vec<Account>,
     attributes: Vec<(String, String)>,
 }
 
@@ -478,10 +479,10 @@ async fn get_credential_deployment_info(
     let id_index = id_index.context("Identity index not set.")?;
 
     let policy: Policy<ArCurve, AttributeKind> = Policy {
-        valid_to:   id_obj.get_attribute_list().valid_to,
+        valid_to: id_obj.get_attribute_list().valid_to,
         created_at: id_obj.get_attribute_list().created_at,
         policy_vec: BTreeMap::new(),
-        _phantom:   Default::default(),
+        _phantom: Default::default(),
     };
 
     let randomness = wallet
@@ -697,7 +698,7 @@ async fn generate_recovery_request(
     let id_cred_pub = g.mul_by_scalar(&id_cred_sec);
     let prover = dlog::Dlog {
         public: id_cred_pub,
-        coeff:  g,
+        coeff: g,
     };
     let secret = dlog::DlogSecret {
         secret: id_cred_sec,
@@ -720,7 +721,7 @@ async fn generate_recovery_request(
     };
     let json = Versioned {
         version: VERSION_0,
-        value:   request,
+        value: request,
     };
 
     let Some(path) = FileDialogBuilder::new()

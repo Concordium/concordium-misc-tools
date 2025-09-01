@@ -90,7 +90,7 @@ struct Args {
 #[derive(Debug)]
 struct AppState {
     db_connection: DatabaseConnection,
-    google_cloud:  GoogleCloud<CustomServiceAccount>,
+    google_cloud: GoogleCloud<CustomServiceAccount>,
 }
 
 const MAX_RESOURCES_LENGTH: usize = 1000;
@@ -276,7 +276,9 @@ async fn unsubscribe(
         }
     }
 }
-fn provide_message(message: String) -> serde_json::Value { json!({ "message": message }) }
+fn provide_message(message: String) -> serde_json::Value {
+    json!({ "message": message })
+}
 
 fn provide_error_message(message: String) -> serde_json::Value {
     json!({ "errorMessage": message })
@@ -334,7 +336,7 @@ async fn main() -> anyhow::Result<()> {
         .to_string();
     let app_state = Arc::new(AppState {
         db_connection: DatabaseConnection::create(args.db_connection).await?,
-        google_cloud:  GoogleCloud::new(http_client, retry_policy, service_account, &project_id),
+        google_cloud: GoogleCloud::new(http_client, retry_policy, service_account, &project_id),
     });
 
     let app = Router::new()

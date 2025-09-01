@@ -18,7 +18,7 @@ enum GenesisCreatorCommand {
     Assemble {
         #[clap(long, short)]
         /// The TOML configuration file describing the genesis.
-        config:  PathBuf,
+        config: PathBuf,
         #[clap(long, short)]
         /// Whether to output additional data during genesis generation.
         verbose: bool,
@@ -26,7 +26,7 @@ enum GenesisCreatorCommand {
     Generate {
         #[clap(long, short)]
         /// The TOML configuration file describing the genesis.
-        config:  PathBuf,
+        config: PathBuf,
         #[clap(long, short)]
         /// Whether to output additional data during genesis generation.
         verbose: bool,

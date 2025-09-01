@@ -12,25 +12,25 @@ struct App {
         default_value = "http://wallet-proxy.stagenet.concordium.com",
         env = "WP_LOAD_SIMULATOR_URL"
     )]
-    url:           reqwest::Url,
+    url: reqwest::Url,
     #[clap(
         long = "accounts",
         help = "List of accounts to query.",
         env = "WP_LOAD_SIMULATOR_ACCOUNTS"
     )]
-    accounts:      std::path::PathBuf,
+    accounts: std::path::PathBuf,
     #[clap(
         long = "delay",
         help = "Delay between requests by each parallel workers, in milliseconds.",
         env = "WP_LOAD_SIMULATOR_DELAY"
     )]
-    delay:         u64,
+    delay: u64,
     #[clap(
         long = "max-parallel",
         help = "Number of parallel queries to make at the same time.",
         env = "WP_LOAD_SIMULATOR_PARALLEL"
     )]
-    num:           usize,
+    num: usize,
     #[clap(
         long = "only-failures",
         help = "Output only responses that are not in 2xx range.",
@@ -43,7 +43,7 @@ struct App {
         default_value = "10000",
         env = "WP_LOAD_SIMULATOR_REQUEST_TIMEOUT"
     )]
-    timeout:       u64,
+    timeout: u64,
 }
 
 #[tokio::main(flavor = "multi_thread")]

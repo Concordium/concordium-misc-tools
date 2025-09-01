@@ -29,27 +29,27 @@ struct App {
         default_value = "http://localhost:20000",
         env = "CHAIN_PROMETHEUS_EXPORTER_CONCORDIUM_NODE"
     )]
-    endpoint:        v2::Endpoint,
+    endpoint: v2::Endpoint,
     #[clap(
         long = "listen-address",
         default_value = "0.0.0.0:9090",
         help = "Listen address for the server.",
         env = "CHAIN_PROMETHEUS_EXPORTER_API_LISTEN_ADDRESS"
     )]
-    listen_address:  std::net::SocketAddr,
+    listen_address: std::net::SocketAddr,
     #[clap(
         long = "log-level",
         default_value = "info",
         help = "Maximum log level.",
         env = "CHAIN_PROMETHEUS_EXPORTER_LOG_LEVEL"
     )]
-    log_level:       tracing_subscriber::filter::LevelFilter,
+    log_level: tracing_subscriber::filter::LevelFilter,
     #[clap(
         long = "log-headers",
         help = "Whether to log headers for requests and responses.",
         env = "CHAIN_PROMETHEUS_EXPORTER_LOG_HEADERS"
     )]
-    log_headers:     bool,
+    log_headers: bool,
     #[clap(
         long = "request-timeout",
         help = "Request timeout in milliseconds.",
@@ -63,7 +63,7 @@ struct App {
         env = "CHAIN_PROMETHEUS_EXPORTER_ACCOUNTS",
         value_delimiter = ','
     )]
-    accounts:        Vec<String>,
+    accounts: Vec<String>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -155,11 +155,11 @@ async fn main() -> anyhow::Result<()> {
     let server = Router::new()
         .route("/metrics", get(text_metrics))
         .with_state((client, registry, Arc::new(gauges)))
-        .layer(tower_http::trace::TraceLayer::new_for_http().
-               make_span_with(DefaultMakeSpan::new().
-                              include_headers(app.log_headers)).
-               on_response(DefaultOnResponse::new().
-                           include_headers(app.log_headers)))
+        .layer(
+            tower_http::trace::TraceLayer::new_for_http()
+                .make_span_with(DefaultMakeSpan::new().include_headers(app.log_headers))
+                .on_response(DefaultOnResponse::new().include_headers(app.log_headers)),
+        )
         .layer(tower_http::timeout::TimeoutLayer::new(
             std::time::Duration::from_millis(app.request_timeout),
         ))

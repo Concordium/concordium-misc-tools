@@ -9,9 +9,8 @@ use concordium_rust_sdk::{
         types::{AccountAddress, TransactionTime},
     },
     protocol_level_tokens::{
-        operations, CborHolderAccount, CborTokenHolder, CoinInfo, ConversionRule, MetadataUrl,
-        RawCbor, TokenAmount, TokenId, TokenInfo, TokenModuleInitializationParameters,
-        TokenModuleRef,
+        operations, CborHolderAccount, CoinInfo, ConversionRule, MetadataUrl, RawCbor, TokenAmount,
+        TokenId, TokenInfo, TokenModuleInitializationParameters, TokenModuleRef,
     },
     types::{
         transactions::{send, AccountTransaction, BlockItem, EncodedPayload},
@@ -24,6 +23,7 @@ use concordium_rust_sdk::{
 use futures::{future, stream, StreamExt, TryStreamExt};
 use rand::{rngs::StdRng, seq::SliceRandom, Rng, SeedableRng};
 use rust_decimal::Decimal;
+use std::collections::HashMap;
 use std::{path::PathBuf, str::FromStr};
 
 #[derive(Debug, Args)]
@@ -33,19 +33,19 @@ pub struct PltOperationArgs {
         help = "Path to file containing JSON array of receivers/targets. If not specified, all \
                 accounts on the chain, except the sender, will be used."
     )]
-    targets:           Option<PathBuf>,
+    targets: Option<PathBuf>,
     #[arg(
         long = "tokens",
         help = "Path to file containing JSON array of tokens ids. If not specified, all tokens on \
                 the chain governed by the sender will be used."
     )]
-    tokens:            Option<PathBuf>,
+    tokens: Option<PathBuf>,
     #[clap(
         long = "amount",
         help = "token amount to use in each PLT operation (transfer/mint/burn)",
         default_value = "0.00001"
     )]
-    amount:            Decimal,
+    amount: Decimal,
     #[clap(flatten)]
     operation_weights: OperationWeights,
 }
@@ -58,13 +58,13 @@ pub struct OperationWeights {
         help = "weight of transfers when picking operations at random",
         default_value = "10.0"
     )]
-    transfer_weight:         f64,
+    transfer_weight: f64,
     #[clap(
         long = "mint-burn-weight",
         help = "weight of mint+burn when picking operations at random",
         default_value = "1.0"
     )]
-    mint_burn_weight:        f64,
+    mint_burn_weight: f64,
     #[clap(
         long = "remove-add-allow-weight",
         help = "weight of remove+add from allow list when picking operations at random",
@@ -76,7 +76,7 @@ pub struct OperationWeights {
         help = "weight of add+remove from deny list when picking operations at random",
         default_value = "1.0"
     )]
-    add_remove_deny_weight:  f64,
+    add_remove_deny_weight: f64,
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
@@ -89,14 +89,14 @@ enum PltOperation {
 
 /// A generator that creates PLT operations
 pub struct PltOperationGenerator {
-    args:              CommonArgs,
-    amount:            Decimal,
+    args: CommonArgs,
+    amount: Decimal,
     /// Accounts to use as receivers/targets
-    accounts:          Vec<AccountAddress>,
-    rng:               StdRng,
-    nonce:             Nonce,
+    accounts: Vec<AccountAddress>,
+    rng: StdRng,
+    nonce: Nonce,
     /// Tokens to use
-    tokens:            Vec<TokenInfo>,
+    tokens: Vec<TokenInfo>,
     operation_weights: OperationWeights,
 }
 
@@ -177,7 +177,7 @@ impl PltOperationGenerator {
             .into_iter()
             .filter_map(|token| {
                 let state = token.token_state.decode_module_state().ok()?;
-                matches!(state.governance_account, CborTokenHolder::Account(account) if account.address == args.keys.address).then_some(token)
+                matches!(state.governance_account, Some(account) if account.address == args.keys.address).then_some(token)
 
             })
             .collect::<Vec<_>>();
@@ -378,25 +378,25 @@ pub struct CreatePltArgs {
         help = "token amount to initialize token with",
         default_value = "1000000000000"
     )]
-    amount:      Decimal,
+    amount: Decimal,
     #[clap(long = "update-key", help = "path to file containing update key")]
     update_keys: Vec<PathBuf>,
     #[clap(long = "count", help = "number of PLTs to create")]
-    count:       Option<usize>,
+    count: Option<usize>,
 }
 
 /// A generator that creates PLTs
 pub struct CreatePltGenerator {
-    args:               CommonArgs,
-    initial_supply:     TokenAmount,
-    rng:                StdRng,
+    args: CommonArgs,
+    initial_supply: TokenAmount,
+    rng: StdRng,
     /// Number of PLTs created so far
-    created:            usize,
+    created: usize,
     /// Number of PLTs to create
-    count:              Option<usize>,
-    update_sequence:    UpdateSequenceNumber,
+    count: Option<usize>,
+    update_sequence: UpdateSequenceNumber,
     governance_account: AccountAddress,
-    update_keys:        Vec<(UpdateKeysIndex, UpdateKeyPair)>,
+    update_keys: Vec<(UpdateKeysIndex, UpdateKeyPair)>,
 }
 
 impl CreatePltGenerator {
@@ -461,7 +461,9 @@ impl CreatePltGenerator {
 }
 
 impl Generate for CreatePltGenerator {
-    fn generate(&mut self) -> anyhow::Result<AccountTransaction<EncodedPayload>> { unreachable!() }
+    fn generate(&mut self) -> anyhow::Result<AccountTransaction<EncodedPayload>> {
+        unreachable!()
+    }
 
     fn generate_block_item(&mut self) -> anyhow::Result<BlockItem<EncodedPayload>> {
         if let Some(count) = self.count {
@@ -480,29 +482,30 @@ impl Generate for CreatePltGenerator {
         let allow_deny: bool = self.rng.gen();
 
         let initialization_parameters = TokenModuleInitializationParameters {
-            name:               token_id.clone(),
-            metadata:           MetadataUrl {
-                url:              "http://test".to_string(),
+            name: Some(token_id.clone()),
+            metadata: Some(MetadataUrl {
+                url: "http://test".to_string(),
                 checksum_sha_256: None,
-                additional:       Default::default(),
-            },
-            governance_account: CborTokenHolder::Account(CborHolderAccount {
-                coin_info: Some(CoinInfo::CCD),
-                address:   self.governance_account,
+                additional: Default::default(),
             }),
-            allow_list:         Some(allow_deny),
-            deny_list:          Some(allow_deny),
-            initial_supply:     Some(self.initial_supply),
-            mintable:           Some(mint_burn),
-            burnable:           Some(mint_burn),
+            governance_account: Some(CborHolderAccount {
+                coin_info: Some(CoinInfo::CCD),
+                address: self.governance_account,
+            }),
+            allow_list: Some(allow_deny),
+            deny_list: Some(allow_deny),
+            initial_supply: Some(self.initial_supply),
+            mintable: Some(mint_burn),
+            burnable: Some(mint_burn),
+            additional: HashMap::new(),
         };
 
         let create_plt = CreatePlt {
-            token_id:                  TokenId::from_str(&token_id).context("create token id")?,
-            token_module:              TokenModuleRef::from_str(
+            token_id: TokenId::from_str(&token_id).context("create token id")?,
+            token_module: TokenModuleRef::from_str(
                 "5c5c2645db84a7026d78f2501740f60a8ccb8fae5c166dc2428077fd9a699a4a",
             )?,
-            decimals:                  Self::DECIMALS,
+            decimals: Self::DECIMALS,
             initialization_parameters: RawCbor::from(cbor::cbor_encode(
                 &initialization_parameters,
             )?),

@@ -13,25 +13,25 @@ use crate::config::ProtocolConfig;
 pub struct AssembleGenesisConfig {
     /// Protocol specific configurations.
     #[serde(flatten)]
-    pub protocol:           ProtocolConfig,
+    pub protocol: ProtocolConfig,
     /// Address of the account to set as the initial foundation account.
     pub foundation_account: AccountAddress,
     /// A file with a list of accounts that should be assembled into
     /// genesis.
-    pub accounts:           PathBuf,
+    pub accounts: PathBuf,
     /// A file with a list of anonymity revokers that should be assembled
     /// into genesis.
-    pub ars:                PathBuf,
+    pub ars: PathBuf,
     /// A file with a list of identity providers that should be assembled
     /// into genesis.
-    pub idps:               PathBuf,
+    pub idps: PathBuf,
     /// A file pointing to the cryptographic parameters to be put into
     /// genesis.
-    pub global:             PathBuf,
+    pub global: PathBuf,
     /// A file pointing to the governance (root, level 1, and level 2) keys.
-    pub governance_keys:    PathBuf,
+    pub governance_keys: PathBuf,
     /// Location where to output the genesis block.
-    pub genesis_out:        PathBuf,
+    pub genesis_out: PathBuf,
     /// Location where to output the genesis block hash.
-    pub genesis_hash_out:   PathBuf,
+    pub genesis_hash_out: PathBuf,
 }

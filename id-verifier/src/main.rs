@@ -36,20 +36,20 @@ struct IdVerifierConfig {
         env = "ENDPOINT",
         default_value = "http://localhost:20000"
     )]
-    endpoint:  concordium_rust_sdk::v2::Endpoint,
+    endpoint: concordium_rust_sdk::v2::Endpoint,
     #[clap(
         long = "port",
         default_value = "8100",
         env = "PORT",
         help = "Port on which the server will listen on."
     )]
-    port:      u16,
+    port: u16,
     #[clap(
         long = "dir",
         env = "STATIC_DIR",
         help = "Serve static files from the given directory."
     )]
-    dir:       Option<PathBuf>,
+    dir: Option<PathBuf>,
     #[structopt(
         long = "log-level",
         default_value = "debug",
@@ -63,7 +63,7 @@ struct IdVerifierConfig {
         env = "NETWORK",
         help = "The supported network to which the node belongs."
     )]
-    network:   web3id::did::Network,
+    network: web3id::did::Network,
 }
 
 #[derive(
@@ -73,9 +73,9 @@ struct Challenge([u8; 32]);
 
 #[derive(Clone)]
 struct Server {
-    statement_map:  Arc<Mutex<HashMap<Challenge, Statement<ArCurve, AttributeKind>>>>,
+    statement_map: Arc<Mutex<HashMap<Challenge, Statement<ArCurve, AttributeKind>>>>,
     global_context: Arc<GlobalContext<ArCurve>>,
-    network:        web3id::did::Network,
+    network: web3id::did::Network,
 }
 
 #[tokio::main]
@@ -104,9 +104,9 @@ async fn main() -> anyhow::Result<()> {
     log::debug!("Acquired data from the node.");
 
     let state = Server {
-        statement_map:  Arc::new(Mutex::new(HashMap::new())),
+        statement_map: Arc::new(Mutex::new(HashMap::new())),
         global_context: Arc::new(global_context),
-        network:        app.network,
+        network: app.network,
     };
     let add_state = state.clone();
     let prove_state = state.clone();
@@ -270,7 +270,9 @@ enum InjectStatementError {
 }
 
 impl From<RPCError> for InjectStatementError {
-    fn from(err: RPCError) -> Self { Self::NodeAccess(err.into()) }
+    fn from(err: RPCError) -> Self {
+        Self::NodeAccess(err.into())
+    }
 }
 
 impl warp::reject::Reject for InjectStatementError {}
@@ -279,7 +281,7 @@ impl warp::reject::Reject for InjectStatementError {}
 /// Response in case of an error. This is going to be encoded as a JSON body
 /// with fields 'code' and 'message'.
 struct ErrorResponse {
-    code:    u16,
+    code: u16,
     message: String,
 }
 
@@ -368,13 +370,13 @@ async fn inject_statement_worker(
 #[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
 struct ChallengedProof {
     pub challenge: Challenge,
-    pub proof:     ProofWithContext,
+    pub proof: ProofWithContext,
 }
 
 #[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
 pub struct ProofWithContext {
     pub credential: CredentialRegistrationID,
-    pub proof:      Versioned<Proof<ArCurve, AttributeKind>>,
+    pub proof: Versioned<Proof<ArCurve, AttributeKind>>,
 }
 
 /// A common function that validates the cryptographic proofs in the request.

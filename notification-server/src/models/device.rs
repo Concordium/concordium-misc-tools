@@ -4,8 +4,8 @@ use std::collections::HashSet;
 
 #[derive(Debug, Deserialize)]
 pub struct DeviceSubscription {
-    pub preferences:  Vec<Preference>,
-    pub accounts:     Vec<String>,
+    pub preferences: Vec<Preference>,
+    pub accounts: Vec<String>,
     pub device_token: String,
 }
 
@@ -31,7 +31,7 @@ pub enum Preference {
 
 #[derive(Debug, Deserialize, PartialEq)]
 pub struct Device {
-    pub preferences:  HashSet<Preference>,
+    pub preferences: HashSet<Preference>,
     pub device_token: String,
 }
 
