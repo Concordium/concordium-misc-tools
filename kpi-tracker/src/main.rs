@@ -18,6 +18,7 @@ use concordium_rust_sdk::{
     v2::{self, AccountIdentifier, BlockIdentifier, Client, Endpoint, RelativeBlockHeight},
 };
 use core::fmt;
+
 use futures::{self, stream::FuturesUnordered, StreamExt, TryStreamExt};
 use std::sync::{
     atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
