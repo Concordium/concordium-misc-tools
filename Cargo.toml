@@ -14,7 +14,8 @@ members = [
    "recover-id-object",
    "state-compare",
    "wallet-proxy-load-simulator",
-   "company-id-gui/src-tauri"
+   # Does currently not compile in CI, it can be added once it works
+   #"company-id-gui/src-tauri"
 ]
 
 # Exclude crates in submodules
