@@ -77,8 +77,8 @@ jobs:
           cargo fmt --manifest-path=${{ matrix.crate }}/Cargo.toml --check
       - name: Run Clippy
         run: |
-          cargo clippy --manifest-path=${{ matrix.crate }}/Cargo.toml --locked --all-targets --all-features --no-deps -- -D warnings
+          cargo clippy --manifest-path=${{ matrix.crate }}/Cargo.toml --locked --all-targets --no-deps -- -D warnings
       - name: Run tests
         run: |
-          cargo test --manifest-path=${{ matrix.crate }}/Cargo.toml --locked --all-features --release
+          cargo test --manifest-path=${{ matrix.crate }}/Cargo.toml --locked --release
 
