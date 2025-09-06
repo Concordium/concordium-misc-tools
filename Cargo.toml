@@ -34,3 +34,10 @@ default-members = [
    # The package in company-id-gui/src-tauri is currently not among the default members, since it requires additional tools to build, but there should be nothing wrong with adding it, if the build works
 #   "company-id-gui/src-tauri"
 ]
+
+[workspace.dependencies]
+#concordium-rust-sdk = { git = }
+concordium-rust-sdk = { path = "deps/concordium-rust-sdk" }
+concordium_base = { path = "deps/concordium-rust-sdk/concordium-base/rust-src/concordium_base" }
+key_derivation = { path = "deps/concordium-rust-sdk/concordium-base/rust-src/key_derivation/" }
+misc_tools = { path = "deps/concordium-rust-sdk/concordium-base/rust-bins" }
