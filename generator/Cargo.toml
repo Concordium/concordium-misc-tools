@@ -5,7 +5,7 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]
-concordium-rust-sdk = { path = "../deps/concordium-rust-sdk" }
+concordium-rust-sdk.workspace = true
 clap = {version = "4", features = ["derive", "color"] }
 anyhow = "1"
 chrono = {version = "0.4", features = ["serde"] }

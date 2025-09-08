@@ -2,7 +2,7 @@
 resolver = "2"
 
 # Smart contracts currently has to be standalone crates and not part of the repo workspace
-# due to how cargo-concordium verifiable build works. Hence, smart contract crates in teh repo
+# due to how cargo-concordium verifiable build works. Hence, smart contract crates in the repo
 # are not members of the workspace.
 members = [
    "chain-prometheus-exporter",
@@ -14,23 +14,16 @@ members = [
    "recover-id-object",
    "state-compare",
    "wallet-proxy-load-simulator",
-   "company-id-gui/src-tauri"
+   # Does currently not compile in CI, it can be added once it works
+   #"company-id-gui/src-tauri"
 ]
 
-# The crates in the concordium-rust-sdk submodule are implicitly members
-# of the workspace since they are local path dependencies of the explicit members.
-# Hence, we list the explicit members here as default members such that cargo commands
-# only run these by default.
-default-members = [
-   "chain-prometheus-exporter",
-   "generator",
-   "genesis-creator",
-   "id-verifier",
-   "kpi-tracker",
-   "notification-server",
-   "recover-id-object",
-   "state-compare",
-   "wallet-proxy-load-simulator",
-   # The package in company-id-gui/src-tauri is currently not among the default members, since it requires additional tools to build, but there should be nothing wrong with adding it, if the build works
-#   "company-id-gui/src-tauri"
-]
+# Exclude crates in submodules
+exclude = ["deps"]
+
+[workspace.dependencies]
+concordium-rust-sdk = { path = "deps/concordium-rust-sdk" }
+concordium_base = { path = "deps/concordium-rust-sdk/concordium-base/rust-src/concordium_base" }
+key_derivation = { path = "deps/concordium-rust-sdk/concordium-base/rust-src/key_derivation/" }
+misc_tools = { path = "deps/concordium-rust-sdk/concordium-base/rust-bins" }
+

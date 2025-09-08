@@ -167,11 +167,7 @@ async fn set_node_and_network(
     net: Net,
 ) -> Result<(), Error> {
     let endpoint = v2::Endpoint::from_str(&endpoint)?;
-    let endpoint = if endpoint
-        .uri()
-        .scheme()
-        .map_or(false, |x| x == &Scheme::HTTPS)
-    {
+    let endpoint = if endpoint.uri().scheme() == Some(&Scheme::HTTPS) {
         endpoint.tls_config(ClientTlsConfig::new())?
     } else {
         endpoint
