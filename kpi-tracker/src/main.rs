@@ -3,19 +3,19 @@ use chrono::{DateTime, Utc};
 use clap::Parser;
 use concordium_rust_sdk::{
     id::types::AccountCredentialWithoutProofs,
-    indexer,
+    indexer::{self, OnFinalizationError, OnFinalizationResult},
     smart_contracts::common::{AccountAddress, Amount, ACCOUNT_ADDRESS_SIZE},
     types::{
         hashes::{BlockHash, TransactionHash},
-        queries::BlockInfo,
+        queries::{BlockInfo, ProtocolVersionInt},
         smart_contracts::{ModuleReference, WasmVersion},
         AbsoluteBlockHeight, AccountCreationDetails, AccountTransactionDetails,
         AccountTransactionEffects, BlockItemSummary,
         BlockItemSummaryDetails::{AccountCreation, AccountTransaction},
-        ContractAddress, CredentialType, OpenStatus, ProtocolVersion, RewardsOverview,
-        SpecialTransactionOutcome, TransactionType,
+        ContractAddress, CredentialType, OpenStatus, RewardsOverview, SpecialTransactionOutcome,
+        TransactionType,
     },
-    v2::{self, AccountIdentifier, BlockIdentifier, Client, Endpoint, RelativeBlockHeight},
+    v2::{self, AccountIdentifier, BlockIdentifier, Client, Endpoint, RelativeBlockHeight, Upward},
 };
 use core::fmt;
 use futures::{self, stream::FuturesUnordered, StreamExt, TryStreamExt};
@@ -610,7 +610,7 @@ fn account_details(account_creation_details: &AccountCreationDetails) -> Account
 async fn accounts_in_block(
     node: &mut Client,
     block_hash: BlockHash,
-) -> v2::QueryResult<Vec<(CanonicalAccountAddress, AccountDetails)>> {
+) -> OnFinalizationResult<Vec<(CanonicalAccountAddress, AccountDetails)>> {
     let accounts = node.get_account_list(block_hash).await?.response;
 
     let accounts_details_map = accounts
@@ -623,22 +623,28 @@ async fn accounts_in_block(
                     .get_account_info(&AccountIdentifier::Address(account), block_hash)
                     .await?
                     .response;
-                Ok::<_, v2::QueryError>((account, account_info))
+                Ok::<_, OnFinalizationError>((account, account_info))
             }
         })
-        .map_ok(|(account, info)| {
-            let is_initial =
-                info.account_credentials
-                    .get(&0.into())
-                    .is_some_and(|cdi| match cdi.value {
-                        AccountCredentialWithoutProofs::Initial { .. } => true,
-                        AccountCredentialWithoutProofs::Normal { .. } => false,
-                    });
+        .and_then(|(account, info)| async move {
+            // Process each account and return Result
+            let is_initial = info
+                .account_credentials
+                .get(&0.into())
+                .map_or(Ok(false), |cdi| match &cdi.value {
+                    Upward::Unknown(_) => Err(OnFinalizationError::Unknown(
+                        "AccountCredentialWithoutProofs".to_string(),
+                    )),
+                    Upward::Known(account_credential) => match account_credential {
+                        AccountCredentialWithoutProofs::Initial { .. } => Ok(true),
+                        AccountCredentialWithoutProofs::Normal { .. } => Ok(false),
+                    },
+                })?;
 
             let canonical_account = CanonicalAccountAddress::from(account);
             let details = AccountDetails { is_initial };
 
-            (canonical_account, details)
+            Ok((canonical_account, details))
         })
         .try_collect()
         .await?;
@@ -651,37 +657,68 @@ async fn accounts_in_block(
 fn get_account_transaction_details(
     details: &AccountTransactionDetails,
     block_item: &BlockItemSummary,
-) -> TransactionDetails {
-    let transaction_type = details.transaction_type();
-    let is_success = details.effects.is_rejected().is_none();
+) -> OnFinalizationResult<TransactionDetails> {
+    let transaction_type = details
+        .transaction_type()
+        .map(|transaction_type| {
+            transaction_type
+                .known_or_else(|| OnFinalizationError::Unknown("TransactionType".to_string()))
+        })
+        .transpose()?;
+
+    let effects = details
+        .effects
+        .as_ref()
+        .known_or_else(|| OnFinalizationError::Unknown("AccountTransactionEffects".to_string()))?;
+
+    let is_success = effects.is_rejected().is_none();
+
     let affected_accounts: Vec<CanonicalAccountAddress> = block_item
         .affected_addresses()
+        .known_or_else(|| OnFinalizationError::Unknown("AffectedAddresses".to_string()))?
         .into_iter()
         .map(CanonicalAccountAddress::from)
         .collect();
-    let affected_contracts = block_item.affected_contracts();
+    let affected_contracts = block_item
+        .affected_contracts()
+        .known_or_else(|| OnFinalizationError::Unknown("AffectedContracts".to_string()))?
+        .into_iter()
+        .map(|contract_address| {
+            contract_address
+                .known_or_else(|| OnFinalizationError::Unknown("ContractAddress".to_string()))
+        })
+        .collect::<Result<_, _>>()?;
 
-    TransactionDetails {
+    Ok(TransactionDetails {
         transaction_type,
         is_success,
         cost: details.cost,
         affected_accounts,
         affected_contracts,
-    }
+    })
 }
 
 /// Maps `BlockItemSummary` to `Vec<BlockEvent>`, which represent entities
 /// stored in the database.
-fn to_block_events(block_item: BlockItemSummary) -> Vec<BlockEvent> {
+fn to_block_events(block_item: BlockItemSummary) -> Result<Vec<BlockEvent>, OnFinalizationError> {
     let mut events: Vec<BlockEvent> = Vec::new();
 
-    match &block_item.details {
+    let details = block_item
+        .details
+        .as_ref()
+        .known_or_else(|| OnFinalizationError::Unknown("BlockItemSummaryDetails".to_string()))?;
+
+    match details {
         AccountTransaction(atd) => {
-            let details = get_account_transaction_details(atd, &block_item);
+            let details = get_account_transaction_details(atd, &block_item)?;
             let event = BlockEvent::AccountTransaction(block_item.hash, details);
             events.push(event);
 
-            match &atd.effects {
+            let effects = atd.effects.as_ref().known_or_else(|| {
+                OnFinalizationError::Unknown("AccountTransactionDetailsEffects".to_string())
+            })?;
+
+            match effects {
                 AccountTransactionEffects::ModuleDeployed { module_ref } => {
                     let event = BlockEvent::ContractModuleDeployment(*module_ref);
                     events.push(event);
@@ -689,13 +726,15 @@ fn to_block_events(block_item: BlockItemSummary) -> Vec<BlockEvent> {
                 AccountTransactionEffects::ContractInitialized { data } => {
                     let details = ContractInstanceDetails {
                         module_ref: data.origin_ref,
-                        version: data.contract_version,
+                        version: data.contract_version.try_into().map_err(|_| {
+                            OnFinalizationError::Unknown("ContractVersion".to_string())
+                        })?,
                     };
                     let event = BlockEvent::ContractInstantiation(data.address, details);
                     events.push(event);
                 }
                 _ => {}
-            };
+            }
         }
         AccountCreation(acd) => {
             let details = account_details(acd);
@@ -706,7 +745,7 @@ fn to_block_events(block_item: BlockItemSummary) -> Vec<BlockEvent> {
         _ => {}
     };
 
-    events
+    Ok(events)
 }
 
 /// Processes a block, represented by `block_hash` by querying the node for
@@ -715,7 +754,7 @@ fn to_block_events(block_item: BlockItemSummary) -> Vec<BlockEvent> {
 async fn process_chain_genesis_block(
     node: &mut Client,
     block_hash: BlockHash,
-) -> v2::QueryResult<ChainGenesisBlockData> {
+) -> OnFinalizationResult<ChainGenesisBlockData> {
     let block_info = node
         .get_block_info(AbsoluteBlockHeight::from(0))
         .await?
@@ -782,8 +821,8 @@ async fn process_payday_block(
     max_concurrent: usize,
     block_info: &BlockInfo,
     special_events: Vec<SpecialTransactionOutcome>,
-) -> v2::QueryResult<Option<PaydayBlockData>> {
-    if block_info.protocol_version <= ProtocolVersion::P3 {
+) -> OnFinalizationResult<Option<PaydayBlockData>> {
+    if block_info.protocol_version <= ProtocolVersionInt(3) {
         return Ok(None);
     }
     let block_ident = BlockIdentifier::RelativeHeight(RelativeBlockHeight {
@@ -905,13 +944,22 @@ async fn process_payday_block(
                     .expect("pool info missing")
                     .pool_info;
                 match pool_info.open_status {
-                    OpenStatus::OpenForAll => open_pool_count.fetch_add(1, Ordering::AcqRel),
-                    OpenStatus::ClosedForNew => {
-                        closed_for_new_pool_count.fetch_add(1, Ordering::AcqRel)
-                    }
-                    OpenStatus::ClosedForAll => closed_pool_count.fetch_add(1, Ordering::AcqRel),
-                };
-                Ok::<_, v2::QueryError>(())
+                    Upward::Unknown(_) => Err(OnFinalizationError::Unknown(
+                        "PoolInfoOpenStatus".to_string(),
+                    )),
+                    Upward::Known(status) => match status {
+                        OpenStatus::OpenForAll => {
+                            Ok(open_pool_count.fetch_add(1, Ordering::AcqRel))
+                        }
+                        OpenStatus::ClosedForNew => {
+                            Ok(closed_for_new_pool_count.fetch_add(1, Ordering::AcqRel))
+                        }
+                        OpenStatus::ClosedForAll => {
+                            Ok(closed_pool_count.fetch_add(1, Ordering::AcqRel))
+                        }
+                    },
+                }?;
+                Ok::<_, OnFinalizationError>(())
             }
         })
         .await?;
@@ -974,7 +1022,7 @@ impl KPIIndexer {
         &self,
         mut client: concordium_rust_sdk::v2::Client,
         fbi: concordium_rust_sdk::v2::FinalizedBlockInfo,
-    ) -> concordium_rust_sdk::v2::QueryResult<BlockData> {
+    ) -> Result<BlockData, OnFinalizationError> {
         use indexer::Indexer;
         // Genesis blocks are special
         if fbi.height == AbsoluteBlockHeight::from(0u64) {
@@ -985,10 +1033,20 @@ impl KPIIndexer {
         let client_clone = client.clone();
         let (bi, summaries, special) = self.inner.on_finalized(client_clone, &(), fbi).await?;
 
+        let special_items: Vec<_> = special
+            .into_iter()
+            .map(|special_transaction_outcome| {
+                special_transaction_outcome.known_or_else(|| {
+                    OnFinalizationError::Unknown("SpecialTransactionOutcome".to_string())
+                })
+            })
+            .collect::<Result<_, _>>()?;
+
         let block_details = BlockDetails {
             block_time: bi.block_slot_time,
             height: bi.block_height,
-            payday_data: process_payday_block(client, self.max_concurrent, &bi, special).await?,
+            payday_data: process_payday_block(client, self.max_concurrent, &bi, special_items)
+                .await?,
             block_hash: bi.block_hash,
         };
 
@@ -1001,7 +1059,7 @@ impl KPIIndexer {
         };
 
         for bi_summary in summaries {
-            for be in to_block_events(bi_summary) {
+            for be in to_block_events(bi_summary)? {
                 match be {
                     BlockEvent::AccountCreation(address, details) => {
                         block_data.accounts.push((address, details));
@@ -1040,7 +1098,7 @@ impl indexer::Indexer for KPIIndexer {
         client: concordium_rust_sdk::v2::Client,
         _ctx: &'a Self::Context,
         fbi: concordium_rust_sdk::v2::FinalizedBlockInfo,
-    ) -> concordium_rust_sdk::v2::QueryResult<Self::Data> {
+    ) -> concordium_rust_sdk::indexer::OnFinalizationResult<Self::Data> {
         self.get_block_data(client, fbi).await
     }
 

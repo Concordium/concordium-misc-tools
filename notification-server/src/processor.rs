@@ -7,6 +7,7 @@ use concordium_rust_sdk::{
     cis2::{self, Event},
     protocol_level_tokens,
     types::{self, AccountTransactionEffects, Address, ContractTraceElement},
+    v2::Upward,
 };
 use futures::{Stream, StreamExt};
 use num_bigint::BigInt;
@@ -16,103 +17,115 @@ use num_bigint::BigInt;
 fn map_transaction_to_notification_information(
     effects: &AccountTransactionEffects,
     transaction_hash: TransactionHash,
-) -> Vec<NotificationInformationBasic> {
+) -> anyhow::Result<Vec<NotificationInformationBasic>> {
     match &effects {
         AccountTransactionEffects::AccountTransfer { to, amount }
         | AccountTransactionEffects::AccountTransferWithMemo { to, amount, .. } => {
-            vec![NotificationInformationBasic::CCD(
+            Ok(vec![NotificationInformationBasic::CCD(
                 CCDTransactionNotificationInformation {
                     address: *to,
                     amount: amount.micro_ccd.to_string(),
                     reference: transaction_hash,
                 },
-            )]
+            )])
         }
-        AccountTransactionEffects::ContractUpdateIssued { effects } => effects
-            .iter()
-            .flat_map(|effect| match effect {
-                ContractTraceElement::Transferred { to, amount, .. } => {
-                    vec![NotificationInformationBasic::CCD(
-                        CCDTransactionNotificationInformation {
-                            address: *to,
-                            amount: amount.micro_ccd.to_string(),
-                            reference: transaction_hash,
-                        },
-                    )]
-                }
-                ContractTraceElement::Updated { data } => {
-                    let contract_address = data.address;
-                    data.events
-                        .iter()
-                        .filter_map(|event| -> Option<CIS2EventNotificationInformationBasic> {
-                            match cis2::Event::try_from(event).ok()? {
-                                Event::Transfer {
-                                    token_id,
-                                    to,
-                                    amount,
-                                    ..
-                                }
-                                | Event::Mint {
-                                    token_id,
-                                    owner: to,
-                                    amount,
-                                } => {
-                                    if let Address::Account(address) = to {
-                                        Some(CIS2EventNotificationInformationBasic {
-                                            address,
-                                            amount: amount.0.to_string(),
-                                            token_id,
-                                            contract_address,
-                                            reference: transaction_hash,
-                                        })
-                                    } else {
-                                        None
+        AccountTransactionEffects::ContractUpdateIssued { effects } => {
+            let mut notifications = Vec::new();
+
+            for effect in effects {
+                let vec = match effect {
+                    Upward::Known(ContractTraceElement::Transferred { to, amount, .. }) => {
+                        vec![NotificationInformationBasic::CCD(
+                            CCDTransactionNotificationInformation {
+                                address: *to,
+                                amount: amount.micro_ccd.to_string(),
+                                reference: transaction_hash,
+                            },
+                        )]
+                    }
+                    Upward::Known(ContractTraceElement::Updated { data }) => {
+                        let contract_address = data.address;
+                        data.events
+                            .iter()
+                            .filter_map(|event| -> Option<CIS2EventNotificationInformationBasic> {
+                                match cis2::Event::try_from(event).ok()? {
+                                    Event::Transfer {
+                                        token_id,
+                                        to,
+                                        amount,
+                                        ..
                                     }
-                                }
-                                Event::Burn {
-                                    token_id,
-                                    owner,
-                                    amount,
-                                } => {
-                                    use std::ops::Neg;
-                                    if let Address::Account(address) = owner {
-                                        Some(CIS2EventNotificationInformationBasic {
-                                            address,
-                                            amount: BigInt::from(amount.0).neg().to_string(),
-                                            token_id,
-                                            contract_address,
-                                            reference: transaction_hash,
-                                        })
-                                    } else {
-                                        None
+                                    | Event::Mint {
+                                        token_id,
+                                        owner: to,
+                                        amount,
+                                    } => {
+                                        if let Address::Account(address) = to {
+                                            Some(CIS2EventNotificationInformationBasic {
+                                                address,
+                                                amount: amount.0.to_string(),
+                                                token_id,
+                                                contract_address,
+                                                reference: transaction_hash,
+                                            })
+                                        } else {
+                                            None
+                                        }
                                     }
+                                    Event::Burn {
+                                        token_id,
+                                        owner,
+                                        amount,
+                                    } => {
+                                        use std::ops::Neg;
+                                        if let Address::Account(address) = owner {
+                                            Some(CIS2EventNotificationInformationBasic {
+                                                address,
+                                                amount: BigInt::from(amount.0).neg().to_string(),
+                                                token_id,
+                                                contract_address,
+                                                reference: transaction_hash,
+                                            })
+                                        } else {
+                                            None
+                                        }
+                                    }
+                                    _ => None,
                                 }
-                                _ => None,
-                            }
-                        })
-                        .map(NotificationInformationBasic::CIS2)
-                        .collect()
-                }
-                _ => vec![],
-            })
-            .collect(),
+                            })
+                            .map(NotificationInformationBasic::CIS2)
+                            .collect()
+                    }
+                    Upward::Unknown(_) => {
+                        return Err(anyhow::anyhow!(
+                                 "The type `ContractTraceElement` is unkown to this SDK. This can happen if the SDK is not fully compatible with the Concordium node. You might want to update the SDK to a newer version."
+                        ))
+                    }
+                    _ => vec![],
+                };
+                notifications.extend(vec);
+            }
+
+            Ok(notifications)
+        }
+
         AccountTransactionEffects::TransferredWithSchedule { to, amount }
         | AccountTransactionEffects::TransferredWithScheduleAndMemo { to, amount, .. } => {
             let amount: u64 = amount.iter().map(|(_, part)| part.micro_ccd()).sum();
-            vec![NotificationInformationBasic::CCD(
+            Ok(vec![NotificationInformationBasic::CCD(
                 CCDTransactionNotificationInformation {
                     address: *to,
                     amount: amount.to_string(),
                     reference: transaction_hash,
                 },
-            )]
+            )])
         }
-        AccountTransactionEffects::TokenUpdate { events } => events
+        AccountTransactionEffects::TokenUpdate { events } => Ok(events
             .iter()
             .filter_map(|token_event| map_plt_token_events(transaction_hash, token_event))
             .map(NotificationInformationBasic::PLT)
-            .collect(),
-        _ => vec![],
+            .collect()),
+        _ => Ok(vec![]),
     }
 }
 
@@ -143,31 +156,46 @@ fn map_plt_token_events(
 }
 
 pub async fn process(
-    transactions: impl Stream<Item = Result<types::BlockItemSummary, tonic::Status>>,
-) -> Vec<NotificationInformationBasic> {
-    transactions
-        .filter_map(|result| async move { result.ok() })
-        .flat_map(
-            |t| -> futures::stream::Iter<std::vec::IntoIter<NotificationInformationBasic>> {
-                futures::stream::iter(match &t.details {
-                    types::BlockItemSummaryDetails::AccountTransaction(account_transaction) => {
-                        map_transaction_to_notification_information(
-                            &account_transaction.effects,
-                            t.hash,
+    mut transactions: impl Stream<Item = Result<types::BlockItemSummary, tonic::Status>> + Unpin,
+) -> anyhow::Result<Vec<NotificationInformationBasic>> {
+    let mut notifications = Vec::new();
+
+    while let Some(transaction) = transactions.next().await.transpose()? {
+        let vec = match &transaction.details {
+            Upward::Known(types::BlockItemSummaryDetails::AccountTransaction(
+                account_transaction_details,
+            )) => {
+                let effects = account_transaction_details
+                    .effects
+                    .as_ref()
+                    .known_or_else(|| {
+                        anyhow::anyhow!(
+                            "The type `AccountTransactionEffects` is unkown to this SDK. This can happen if the SDK is not fully compatible with the Concordium node. You might want to update the SDK to a newer version."
                         )
-                    }
-                    types::BlockItemSummaryDetails::TokenCreationDetails(details) => details
-                        .events
-                        .iter()
-                        .filter_map(|token_event| map_plt_token_events(t.hash, token_event))
-                        .map(NotificationInformationBasic::PLT)
-                        .collect(),
-                    _ => vec![],
-                })
-            },
-        )
-        .collect::<Vec<NotificationInformationBasic>>()
-        .await
+                    })?;
+                map_transaction_to_notification_information(effects, transaction.hash)?
+            }
+
+            Upward::Known(types::BlockItemSummaryDetails::TokenCreationDetails(details)) => details
+                .events
+                .iter()
+                .filter_map(|token_event| map_plt_token_events(transaction.hash, token_event))
+                .map(NotificationInformationBasic::PLT)
+                .collect(),
+
+            Upward::Unknown(_) => {
+                return Err(anyhow::anyhow!(
+                    "The type `BlockItemSummaryDetails` is unkown to this SDK. This can happen if the SDK is not fully compatible with the Concordium node. You might want to update the SDK to a newer version."
+                ));
+            }
+
+            _ => vec![],
+        };
+
+        notifications.extend(vec);
+    }
+
+    Ok(notifications)
 }
 
 #[cfg(test)]
@@ -193,6 +221,7 @@ mod tests {
             EncryptedSelfAmountAddedEvent, Energy, ExchangeRate, Memo, RejectReason,
             TransactionIndex, TransactionType, UpdateDetails, UpdatePayload,
         },
+        v2::Upward,
     };
     use futures::stream;
     use quickcheck::{Arbitrary, Gen};
@@ -315,7 +344,9 @@ mod tests {
                 index: random_transaction_index(),
                 energy_cost: ArbitraryEnergy::arbitrary(g).0,
                 hash,
-                details: BlockItemSummaryDetails::AccountTransaction(details(effect.clone())),
+                details: Upward::Known(BlockItemSummaryDetails::AccountTransaction(details(
+                    Upward::Known(effect.clone()),
+                ))),
             };
 
             let notification =
@@ -358,37 +389,37 @@ mod tests {
                     index: random_transaction_index(),
                     energy_cost: ArbitraryEnergy::arbitrary(g).0,
                     hash: fixed_hash(),
-                    details: BlockItemSummaryDetails::AccountCreation(AccountCreationDetails {
+                    details:Upward::Known( BlockItemSummaryDetails::AccountCreation(AccountCreationDetails {
                         credential_type: ArbitraryCredentialType::arbitrary(g).0,
                         address: receiver_address,
                         reg_id: CredentialRegistrationID::from_str("8a3a87f3f38a7a507d1e85dc02a92b8bcaa859f5cf56accb3c1bc7c40e1789b4933875a38dd4c0646ca3e940a02c42d8").unwrap(),
-                    }),
-                },
-                BlockItemSummary {
-                    index: random_transaction_index(),
-                    energy_cost: ArbitraryEnergy::arbitrary(g).0,
-                    hash: fixed_hash(),
-                    details: BlockItemSummaryDetails::Update(UpdateDetails {
-                        effective_time: TransactionTime {
-                            seconds: u64::arbitrary(g),
-                        },
-                        payload: UpdatePayload::EuroPerEnergy(ExchangeRate::new(7, 9).unwrap())
-                    }),
-                },
-                BlockItemSummary {
-                    index: random_transaction_index(),
-                    energy_cost: ArbitraryEnergy::arbitrary(g).0,
-                    hash: fixed_hash(),
-                    details: BlockItemSummaryDetails::AccountTransaction(account_transaction_details(AccountTransactionEffects::None {
-                        reject_reason: RejectReason::OutOfEnergy,
-                        transaction_type: Some(TransactionType::Update),
                     })),
                 },
                 BlockItemSummary {
                     index: random_transaction_index(),
                     energy_cost: ArbitraryEnergy::arbitrary(g).0,
                     hash: fixed_hash(),
-                    details: BlockItemSummaryDetails::AccountTransaction(account_transaction_details(AccountTransactionEffects::TransferredToEncrypted {
+                    details:Upward::Known( BlockItemSummaryDetails::Update(UpdateDetails {
+                        effective_time: TransactionTime {
+                            seconds: u64::arbitrary(g),
+                        },
+                        payload: Upward::Known(UpdatePayload::EuroPerEnergy(ExchangeRate::new(7, 9).unwrap()))
+                    })),
+                },
+                BlockItemSummary {
+                    index: random_transaction_index(),
+                    energy_cost: ArbitraryEnergy::arbitrary(g).0,
+                    hash: fixed_hash(),
+                    details:Upward::Known( BlockItemSummaryDetails::AccountTransaction(account_transaction_details(Upward::Known(AccountTransactionEffects::None {
+                        reject_reason: Upward::Known(RejectReason::OutOfEnergy),
+                        transaction_type: Some(TransactionType::Update),
+                    })))),
+                },
+                BlockItemSummary {
+                    index: random_transaction_index(),
+                    energy_cost: ArbitraryEnergy::arbitrary(g).0,
+                    hash: fixed_hash(),
+                    details: Upward::Known(BlockItemSummaryDetails::AccountTransaction(account_transaction_details(Upward::Known(AccountTransactionEffects::TransferredToEncrypted {
                         data: Box::new(EncryptedSelfAmountAddedEvent {
                             amount,
                             account: receiver_address,
@@ -396,7 +427,7 @@ mod tests {
                                 encryptions: [get_random_cipher(), get_random_cipher()],
                             },
                         }),
-                    })),
+                    })))),
                 }
             ];
 
@@ -451,6 +482,13 @@ mod tests {
         );
         let runtime = tokio::runtime::Runtime::new().unwrap();
         let result = runtime.block_on(process(summary_stream));
+        let result = match result {
+            Ok(val) => val,
+            Err(_) => {
+                // Return/Fail test early if some `NotificationInformationBasic` types are unkown.
+                return false;
+            }
+        };
         let expected: Vec<NotificationInformationBasic> = summaries
             .into_iter()
             .filter_map(|summary| summary.get_expected_notification())

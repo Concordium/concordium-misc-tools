@@ -171,7 +171,15 @@ async fn get_protocol_versions(
         concordium_rust_sdk::types::RewardsOverview::V0 { data } => data.protocol_version,
         concordium_rust_sdk::types::RewardsOverview::V1 { common, .. } => common.protocol_version,
     };
-    Ok((p1, p2))
+
+    Ok((
+        p1.try_into()
+            .map_err(|_| anyhow::anyhow!("Protocol version of block 1 is unkown. This can happen if the SDK is not fully compatible with the Concordium node. You might want to update the SDK to a newer version."))?,
+        p2.try_into()
+            .map_err(|_| anyhow::anyhow!(
+                   "Protocol version of block 2 is unkown to this SDK. This can happen if the SDK is not fully compatible with the Concordium node. You might want to update the SDK to a newer version."
+               ))?,
+    ))
 }
 
 async fn compare_update_queues(

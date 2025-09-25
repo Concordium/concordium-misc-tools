@@ -11,7 +11,7 @@ use concordium_rust_sdk::{
         types::{AccountCredentialWithoutProofs, GlobalContext},
     },
     types::CredentialRegistrationID,
-    v2::{BlockIdentifier, Scheme},
+    v2::{BlockIdentifier, Scheme, Upward},
     web3id,
 };
 use log::{error, info, warn};
@@ -267,6 +267,8 @@ enum InjectStatementError {
     LockingError,
     #[error("Proof provided for an unknown session.")]
     UnknownSession,
+    #[error("The type `${0}` is unkown to this SDK. This can happen if the SDK is not fully compatible with the Concordium node. You might want to update the SDK to a newer version.")]
+    Unknown(String),
 }
 
 impl From<RPCError> for InjectStatementError {
@@ -402,10 +404,17 @@ async fn check_proof_worker(
         .get(&0.into())
         .ok_or(InjectStatementError::InvalidProofs)?;
     let commitments = match &credential.value {
-        AccountCredentialWithoutProofs::Initial { icdv: _, .. } => {
-            return Err(InjectStatementError::NotAllowed);
+        Upward::Unknown(_) => {
+            return Err(InjectStatementError::Unknown(
+                "account_credential_without_proof".to_string(),
+            ))
         }
-        AccountCredentialWithoutProofs::Normal { commitments, .. } => commitments,
+        Upward::Known(account_credential_without_proof) => match account_credential_without_proof {
+            AccountCredentialWithoutProofs::Initial { icdv: _, .. } => {
+                return Err(InjectStatementError::NotAllowed);
+            }
+            AccountCredentialWithoutProofs::Normal { commitments, .. } => commitments,
+        },
     };
 
     if statement.verify(

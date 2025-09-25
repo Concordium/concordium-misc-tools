@@ -154,7 +154,7 @@ async fn process_block(
         }
     };
 
-    for result in process(transactions).await.into_iter() {
+    for result in process(transactions).await?.into_iter() {
         debug!(
             "Sending notifications to account {} with type {:?}",
             result.address(),
