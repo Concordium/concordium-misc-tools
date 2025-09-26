@@ -2,7 +2,7 @@
 
 ## Unreleased changes
 
-- Update `rust-sdk` so that project is forward-compatible.
+- Update `rust-sdk` dependency and adjust project to be forward-compatible.
 
 ## 3.0.0
 

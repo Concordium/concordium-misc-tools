@@ -1,6 +1,6 @@
 ## Unreleased changes
 
-- Update `rust-sdk` so that project is forward-compatible.
+- Update `rust-sdk` dependency and adjust project to be forward-compatible.
 - Updated generator with `plt` and `create-plt` arguments
 
 ## 1.2.0

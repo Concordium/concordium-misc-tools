@@ -1,4 +1,9 @@
+## Unreleased changes
+
+- Update `rust-sdk` dependency so that project is forward compatible.
+
 ## 2.1.0
+
 - Updated the Concordium Rust SDK to support the changes introduced in protocol 7.
 
 ## 2.0.1
