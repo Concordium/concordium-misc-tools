@@ -1,5 +1,9 @@
 # Changelog for the kpi-tracker service
 
+## Unreleased changes
+
+- Update `rust-sdk` so that project is forward-compatible.
+
 ## 2.1.5
 
 - Updated the Concordium Rust SDK to support the changes introduced in protocol 9.

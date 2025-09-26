@@ -406,7 +406,7 @@ async fn check_proof_worker(
     let commitments = match &credential.value {
         Upward::Unknown(_) => {
             return Err(InjectStatementError::Unknown(
-                "account_credential_without_proof".to_string(),
+                "AccountCredentialWithoutProof".to_string(),
             ))
         }
         Upward::Known(account_credential_without_proof) => match account_credential_without_proof {

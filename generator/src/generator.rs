@@ -279,10 +279,10 @@ impl CcdGenerator {
             Some(Mode::Every(n)) if n > 0 => {
                 let ni = client.get_node_info().await?;
 
-                let node_details =ni.details .known_or_else(|| { anyhow::anyhow!("The type `NodeDetails` is unkown to this SDK. This can happen if the SDK is not fully compatible with the Concordium node. You might want to update the SDK to a newer version.")})?;
+                let node_details = ni.details.known_or_else(|| { anyhow::anyhow!("The type `NodeDetails` is unkown to this SDK. This can happen if the SDK is not fully compatible with the Concordium node. You might want to update the SDK to a newer version.")})?;
 
                 if let NodeDetails::Node(nd) = node_details {
-                    let node_consensus_status =nd .known_or_else(|| { anyhow::anyhow!( "The type `NodeConsensusStatus` is unkown to this SDK. This can happen if the SDK is not fully compatible with the Concordium node. You might want to update the SDK to a newer version.")})?;
+                    let node_consensus_status = nd.known_or_else(|| { anyhow::anyhow!( "The type `NodeConsensusStatus` is unkown to this SDK. This can happen if the SDK is not fully compatible with the Concordium node. You might want to update the SDK to a newer version.")})?;
 
                     let baker = node_consensus_status
                         .baker()

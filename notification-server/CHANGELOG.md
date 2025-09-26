@@ -3,6 +3,7 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+- Update `rust-sdk` so that project is forward-compatible.
 
 ## 0.4.0
 - Extend notifications for receiving PLT tokens, when the relevant preference is set.

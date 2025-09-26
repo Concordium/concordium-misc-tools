@@ -1,5 +1,9 @@
 # Changelog for the the state compare tool
 
+## Unreleased changes
+
+- Update `rust-sdk` so that project is forward-compatible.
+
 ## 3.0.0
 
 - Updated the Concordium Rust SDK to support the changes introduced in protocol 9. Changes in Protocol 9 include the ability to transfer, mint/burn, add/remove from allow and deny lists and pause and unpause a PLT. This change compares PLT state which is not compatible with a node version <= Protocol 8.

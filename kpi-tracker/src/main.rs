@@ -1033,7 +1033,7 @@ impl KPIIndexer {
         let client_clone = client.clone();
         let (bi, summaries, special) = self.inner.on_finalized(client_clone, &(), fbi).await?;
 
-        let special_items: Vec<_> = special
+        let special_items = special
             .into_iter()
             .map(|special_transaction_outcome| {
                 special_transaction_outcome.known_or_else(|| {
