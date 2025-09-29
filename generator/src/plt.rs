@@ -230,7 +230,7 @@ impl PltOperationGenerator {
                     .await
                     .context("wait for add allow list txn finalized")?;
 
-        let is_success = summary.is_success().known_or_else(|| { anyhow::anyhow!("The type `BlockItemSummaryDetails` is unkown to this SDK. This can happen if the SDK is not fully compatible with the Concordium node. You might want to update the SDK to a newer version.")})?;
+                let is_success = summary.is_success().known_or_err()?;
                 anyhow::ensure!(is_success, "add allow list txn success");
 
                 Ok(())

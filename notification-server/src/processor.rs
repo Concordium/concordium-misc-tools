@@ -7,7 +7,6 @@ use concordium_rust_sdk::{
     cis2::{self, Event},
     protocol_level_tokens,
     types::{self, AccountTransactionEffects, Address, ContractTraceElement},
-    v2::Upward,
 };
 use futures::{Stream, StreamExt};
 use num_bigint::BigInt;
@@ -33,8 +32,10 @@ fn map_transaction_to_notification_information(
             let mut notifications = Vec::new();
 
             for effect in effects {
+                let effect = effect.as_ref().known_or_err()?;
+
                 let vec = match effect {
-                    Upward::Known(ContractTraceElement::Transferred { to, amount, .. }) => {
+                    ContractTraceElement::Transferred { to, amount, .. } => {
                         vec![NotificationInformationBasic::CCD(
                             CCDTransactionNotificationInformation {
                                 address: *to,
@@ -43,7 +44,7 @@ fn map_transaction_to_notification_information(
                             },
                         )]
                     }
-                    Upward::Known(ContractTraceElement::Updated { data }) => {
+                    ContractTraceElement::Updated { data } => {
                         let contract_address = data.address;
                         data.events
                             .iter()
@@ -95,11 +96,6 @@ fn map_transaction_to_notification_information(
                             })
                             .map(NotificationInformationBasic::CIS2)
                             .collect()
-                    }
-                    Upward::Unknown(_) => {
-                        return Err(anyhow::anyhow!(
-                                 "The type `ContractTraceElement` is unkown to this SDK. This can happen if the SDK is not fully compatible with the Concordium node. You might want to update the SDK to a newer version."
-                        ))
                     }
                     _ => vec![],
                 };
@@ -161,34 +157,20 @@ pub async fn process(
     let mut notifications = Vec::new();
 
     while let Some(transaction) = transactions.next().await.transpose()? {
-        let vec = match &transaction.details {
-            Upward::Known(types::BlockItemSummaryDetails::AccountTransaction(
-                account_transaction_details,
-            )) => {
-                let effects = account_transaction_details
-                    .effects
-                    .as_ref()
-                    .known_or_else(|| {
-                        anyhow::anyhow!(
-                            "The type `AccountTransactionEffects` is unkown to this SDK. This can happen if the SDK is not fully compatible with the Concordium node. You might want to update the SDK to a newer version."
-                        )
-                    })?;
+        let details = &transaction.details.known_or_err()?;
+
+        let vec = match details {
+            types::BlockItemSummaryDetails::AccountTransaction(account_transaction) => {
+                let effects = account_transaction.effects.as_ref().known_or_err()?;
+
                 map_transaction_to_notification_information(effects, transaction.hash)?
             }
-
-            Upward::Known(types::BlockItemSummaryDetails::TokenCreationDetails(details)) => details
+            types::BlockItemSummaryDetails::TokenCreationDetails(details) => details
                 .events
                 .iter()
                 .filter_map(|token_event| map_plt_token_events(transaction.hash, token_event))
                 .map(NotificationInformationBasic::PLT)
                 .collect(),
-
-            Upward::Unknown(_) => {
-                return Err(anyhow::anyhow!(
-                    "The type `BlockItemSummaryDetails` is unkown to this SDK. This can happen if the SDK is not fully compatible with the Concordium node. You might want to update the SDK to a newer version."
-                ));
-            }
-
             _ => vec![],
         };
 

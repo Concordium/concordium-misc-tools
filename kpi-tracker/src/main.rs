@@ -15,7 +15,10 @@ use concordium_rust_sdk::{
         ContractAddress, CredentialType, OpenStatus, RewardsOverview, SpecialTransactionOutcome,
         TransactionType,
     },
-    v2::{self, AccountIdentifier, BlockIdentifier, Client, Endpoint, RelativeBlockHeight, Upward},
+    v2::{
+        self, upward::UnknownDataError, AccountIdentifier, BlockIdentifier, Client, Endpoint,
+        RelativeBlockHeight, Upward,
+    },
 };
 use core::fmt;
 use futures::{self, stream::FuturesUnordered, StreamExt, TryStreamExt};
@@ -610,7 +613,7 @@ fn account_details(account_creation_details: &AccountCreationDetails) -> Account
 async fn accounts_in_block(
     node: &mut Client,
     block_hash: BlockHash,
-) -> OnFinalizationResult<Vec<(CanonicalAccountAddress, AccountDetails)>> {
+) -> v2::QueryResult<Vec<(CanonicalAccountAddress, AccountDetails)>> {
     let accounts = node.get_account_list(block_hash).await?.response;
 
     let accounts_details_map = accounts
@@ -623,28 +626,24 @@ async fn accounts_in_block(
                     .get_account_info(&AccountIdentifier::Address(account), block_hash)
                     .await?
                     .response;
-                Ok::<_, OnFinalizationError>((account, account_info))
+                Ok::<_, v2::QueryError>((account, account_info))
             }
         })
-        .and_then(|(account, info)| async move {
-            // Process each account and return Result
-            let is_initial = info
-                .account_credentials
-                .get(&0.into())
-                .map_or(Ok(false), |cdi| match &cdi.value {
-                    Upward::Unknown(_) => Err(OnFinalizationError::Unknown(
-                        "AccountCredentialWithoutProofs".to_string(),
-                    )),
-                    Upward::Known(account_credential) => match account_credential {
-                        AccountCredentialWithoutProofs::Initial { .. } => Ok(true),
-                        AccountCredentialWithoutProofs::Normal { .. } => Ok(false),
-                    },
-                })?;
+        .map_ok(|(account, info)| {
+            let is_initial = info.account_credentials.get(&0.into()).is_some_and(|cdi| {
+                let Upward::Known(ref cred) = cdi.value else {
+                    return false;
+                };
+                match cred {
+                    AccountCredentialWithoutProofs::Initial { .. } => true,
+                    AccountCredentialWithoutProofs::Normal { .. } => false,
+                }
+            });
 
             let canonical_account = CanonicalAccountAddress::from(account);
             let details = AccountDetails { is_initial };
 
-            Ok((canonical_account, details))
+            (canonical_account, details)
         })
         .try_collect()
         .await?;
@@ -658,35 +657,27 @@ fn get_account_transaction_details(
     details: &AccountTransactionDetails,
     block_item: &BlockItemSummary,
 ) -> OnFinalizationResult<TransactionDetails> {
-    let transaction_type = details
+    let transaction_type: Option<TransactionType> = details
         .transaction_type()
-        .map(|transaction_type| {
-            transaction_type
-                .known_or_else(|| OnFinalizationError::Unknown("TransactionType".to_string()))
-        })
+        .map(|ut| ut.known_or_err())
         .transpose()?;
 
-    let effects = details
-        .effects
-        .as_ref()
-        .known_or_else(|| OnFinalizationError::Unknown("AccountTransactionEffects".to_string()))?;
+    let effects = details.effects.as_ref().known_or_err()?;
 
     let is_success = effects.is_rejected().is_none();
 
     let affected_accounts: Vec<CanonicalAccountAddress> = block_item
         .affected_addresses()
-        .known_or_else(|| OnFinalizationError::Unknown("AffectedAddresses".to_string()))?
+        .known_or_err()?
         .into_iter()
         .map(CanonicalAccountAddress::from)
         .collect();
+
     let affected_contracts = block_item
         .affected_contracts()
-        .known_or_else(|| OnFinalizationError::Unknown("AffectedContracts".to_string()))?
+        .known_or_err()?
         .into_iter()
-        .map(|contract_address| {
-            contract_address
-                .known_or_else(|| OnFinalizationError::Unknown("ContractAddress".to_string()))
-        })
+        .map(|uc| uc.known_or_err())
         .collect::<Result<_, _>>()?;
 
     Ok(TransactionDetails {
@@ -703,10 +694,7 @@ fn get_account_transaction_details(
 fn to_block_events(block_item: BlockItemSummary) -> Result<Vec<BlockEvent>, OnFinalizationError> {
     let mut events: Vec<BlockEvent> = Vec::new();
 
-    let details = block_item
-        .details
-        .as_ref()
-        .known_or_else(|| OnFinalizationError::Unknown("BlockItemSummaryDetails".to_string()))?;
+    let details = block_item.details.as_ref().known_or_err()?;
 
     match details {
         AccountTransaction(atd) => {
@@ -714,9 +702,7 @@ fn to_block_events(block_item: BlockItemSummary) -> Result<Vec<BlockEvent>, OnFi
             let event = BlockEvent::AccountTransaction(block_item.hash, details);
             events.push(event);
 
-            let effects = atd.effects.as_ref().known_or_else(|| {
-                OnFinalizationError::Unknown("AccountTransactionDetailsEffects".to_string())
-            })?;
+            let effects = atd.effects.as_ref().known_or_err()?;
 
             match effects {
                 AccountTransactionEffects::ModuleDeployed { module_ref } => {
@@ -726,8 +712,11 @@ fn to_block_events(block_item: BlockItemSummary) -> Result<Vec<BlockEvent>, OnFi
                 AccountTransactionEffects::ContractInitialized { data } => {
                     let details = ContractInstanceDetails {
                         module_ref: data.origin_ref,
-                        version: data.contract_version.try_into().map_err(|_| {
-                            OnFinalizationError::Unknown("ContractVersion".to_string())
+                        version: data.contract_version.try_into().map_err(|e| {
+                            OnFinalizationError::UnkownDataError(UnknownDataError(format!(
+                                "contract version can not be converted and is deemed unkown to the SDK: caused by {}",
+                                e
+                            )))
                         })?,
                     };
                     let event = BlockEvent::ContractInstantiation(data.address, details);
@@ -943,22 +932,13 @@ async fn process_payday_block(
                     .active_baker_pool_status
                     .expect("pool info missing")
                     .pool_info;
-                match pool_info.open_status {
-                    Upward::Unknown(_) => Err(OnFinalizationError::Unknown(
-                        "PoolInfoOpenStatus".to_string(),
-                    )),
-                    Upward::Known(status) => match status {
-                        OpenStatus::OpenForAll => {
-                            Ok(open_pool_count.fetch_add(1, Ordering::AcqRel))
-                        }
-                        OpenStatus::ClosedForNew => {
-                            Ok(closed_for_new_pool_count.fetch_add(1, Ordering::AcqRel))
-                        }
-                        OpenStatus::ClosedForAll => {
-                            Ok(closed_pool_count.fetch_add(1, Ordering::AcqRel))
-                        }
-                    },
-                }?;
+                match pool_info.open_status.known_or_err()? {
+                    OpenStatus::OpenForAll => open_pool_count.fetch_add(1, Ordering::AcqRel),
+                    OpenStatus::ClosedForNew => {
+                        closed_for_new_pool_count.fetch_add(1, Ordering::AcqRel)
+                    }
+                    OpenStatus::ClosedForAll => closed_pool_count.fetch_add(1, Ordering::AcqRel),
+                };
                 Ok::<_, OnFinalizationError>(())
             }
         })
@@ -1035,11 +1015,7 @@ impl KPIIndexer {
 
         let special_items = special
             .into_iter()
-            .map(|special_transaction_outcome| {
-                special_transaction_outcome.known_or_else(|| {
-                    OnFinalizationError::Unknown("SpecialTransactionOutcome".to_string())
-                })
-            })
+            .map(|special_transaction_outcome| special_transaction_outcome.known_or_err())
             .collect::<Result<_, _>>()?;
 
         let block_details = BlockDetails {
