@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-- Update `concordium-rust-sdk` dependency and adjust project to be forward-compatible. Unkown account transaction effects, transaction details or smart contract versions will produce an error as well.
+- Update `concordium-rust-sdk` dependency and adjust project to be forward-compatible. Unknown account transaction effects, transaction details or smart contract versions will produce an error as well.
 
 ## 0.4.0
 

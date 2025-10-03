@@ -2,7 +2,7 @@
 
 ## Unreleased changes
 
-- Update `concordium-rust-sdk` dependency and adjust project to be forward-compatible. Unkown transaction types, transaction effects, transaction outcomes, block item details, unkown open status values of validator pools or smart contract versions will produce an error as well as when the functions `affected_contracts`/`affected_accounts` return unkown element.
+- Update `concordium-rust-sdk` dependency and adjust project to be forward-compatible. Unknown transaction types, transaction effects, transaction outcomes, block item details, unknown open status values of validator pools or smart contract versions will produce an error as well as when the functions `affected_contracts`/`affected_accounts` return unknown element.
 
 ## 2.1.5
 

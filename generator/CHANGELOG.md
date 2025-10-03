@@ -1,6 +1,6 @@
 ## Unreleased changes
 
-- Update `concordium-rust-sdk` dependency and adjust project to be forward-compatible. Unkown transaction summaries, node details, and unkown node consensus status will produce an error.
+- Update `concordium-rust-sdk` dependency and adjust project to be forward-compatible. Unknown transaction summaries, node details, and unknown node consensus status will produce an error.
 - Updated generator with `plt` and `create-plt` arguments
 
 ## 1.2.0

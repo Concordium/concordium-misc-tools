@@ -1,6 +1,6 @@
 ## Unreleased changes
 
-- Update `concordium-rust-sdk` dependency and adjust project to be forward-compatible. Unkown credentials will produce an error.
+- Update `concordium-rust-sdk` dependency and adjust project to be forward-compatible. Unknown credentials will produce an error.
 
 ## 0.4.0
 

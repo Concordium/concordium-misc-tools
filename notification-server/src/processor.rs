@@ -345,7 +345,7 @@ mod tests {
     #[derive(Clone, Debug)]
     struct SilentBlockItemSummary(pub BlockItemSummary);
     #[derive(Clone, Debug)]
-    struct BlockItemSummaryWithUnkownVariant(pub BlockItemSummary);
+    struct BlockItemSummaryWithUnknownVariant(pub BlockItemSummary);
 
     fn get_random_cipher() -> Cipher<EncryptedAmountsCurve> {
         let mut csprng = thread_rng();
@@ -418,7 +418,7 @@ mod tests {
             SilentBlockItemSummary(g.choose(&silent_block_summaries).unwrap().clone())
         }
     }
-    impl Arbitrary for BlockItemSummaryWithUnkownVariant {
+    impl Arbitrary for BlockItemSummaryWithUnknownVariant {
         fn arbitrary(g: &mut Gen) -> Self {
             let amount = Amount {
                 micro_ccd: u64::arbitrary(g),
@@ -472,7 +472,7 @@ mod tests {
                 },
             ];
 
-            BlockItemSummaryWithUnkownVariant(g.choose(&block_summaries).unwrap().clone())
+            BlockItemSummaryWithUnknownVariant(g.choose(&block_summaries).unwrap().clone())
         }
     }
     #[derive(Clone, Debug)]
@@ -538,8 +538,8 @@ mod tests {
     }
 
     #[quickcheck]
-    fn test_random_block_item_summary_with_unkown_variant(
-        summaries: Vec<BlockItemSummaryWithUnkownVariant>,
+    fn test_random_block_item_summary_with_unknown_variant(
+        summaries: Vec<BlockItemSummaryWithUnknownVariant>,
     ) {
         let summary_stream = stream::iter(
             summaries
