@@ -453,12 +453,6 @@ mod tests {
                     index: random_transaction_index(),
                     energy_cost: ArbitraryEnergy::arbitrary(g).0,
                     hash: fixed_hash(),
-                    details: Upward::Unknown(()),
-                },
-                BlockItemSummary {
-                    index: random_transaction_index(),
-                    energy_cost: ArbitraryEnergy::arbitrary(g).0,
-                    hash: fixed_hash(),
                     details: Upward::Known(BlockItemSummaryDetails::AccountTransaction(
                         account_transaction_details(Upward::Known(
                             AccountTransactionEffects::None {
@@ -475,26 +469,6 @@ mod tests {
                     details: Upward::Known(BlockItemSummaryDetails::AccountTransaction(
                         account_transaction_details(Upward::Unknown(())),
                     )),
-                },
-                BlockItemSummary {
-                    index: random_transaction_index(),
-                    energy_cost: ArbitraryEnergy::arbitrary(g).0,
-                    hash: fixed_hash(),
-                    details: Upward::Unknown(()),
-                },
-                BlockItemSummary {
-                    index: random_transaction_index(),
-                    energy_cost: ArbitraryEnergy::arbitrary(g).0,
-                    hash: fixed_hash(),
-                    details: Upward::Known(BlockItemSummaryDetails::AccountTransaction(
-                        account_transaction_details(Upward::Unknown(())),
-                    )),
-                },
-                BlockItemSummary {
-                    index: random_transaction_index(),
-                    energy_cost: ArbitraryEnergy::arbitrary(g).0,
-                    hash: fixed_hash(),
-                    details: Upward::Unknown(()),
                 },
             ];
 
