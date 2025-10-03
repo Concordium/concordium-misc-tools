@@ -2,6 +2,7 @@ use anyhow::{anyhow, Context};
 use chrono::{DateTime, Utc};
 use clap::Parser;
 use concordium_rust_sdk::{
+    base::contracts_common::U8WasmVersionConvertError,
     id::types::AccountCredentialWithoutProofs,
     indexer::{self, OnFinalizationError, OnFinalizationResult},
     smart_contracts::common::{AccountAddress, Amount, ACCOUNT_ADDRESS_SIZE},
@@ -15,10 +16,7 @@ use concordium_rust_sdk::{
         ContractAddress, CredentialType, OpenStatus, RewardsOverview, SpecialTransactionOutcome,
         TransactionType,
     },
-    v2::{
-        self, upward::UnknownDataError, AccountIdentifier, BlockIdentifier, Client, Endpoint,
-        RelativeBlockHeight, Upward,
-    },
+    v2::{self, AccountIdentifier, BlockIdentifier, Client, Endpoint, RelativeBlockHeight, Upward},
 };
 use core::fmt;
 use futures::{self, stream::FuturesUnordered, StreamExt, TryStreamExt};
@@ -712,13 +710,16 @@ fn to_block_events(block_item: BlockItemSummary) -> Result<Vec<BlockEvent>, OnFi
                 AccountTransactionEffects::ContractInitialized { data } => {
                     let details = ContractInstanceDetails {
                         module_ref: data.origin_ref,
-                        version: data.contract_version.try_into().map_err(|e| {
-                            OnFinalizationError::UnkownDataError(UnknownDataError(format!(
-                                "contract version can not be converted and is deemed unkown to the SDK: caused by {}",
-                                e
-                            )))
-                        })?,
+                        version: data.contract_version.try_into().map_err(
+                            |e: U8WasmVersionConvertError| {
+                                OnFinalizationError::OtherError(anyhow::anyhow!(
+                                    "Smart contract version is unknown. Update SDK. {}",
+                                    e
+                                ))
+                            },
+                        )?,
                     };
+
                     let event = BlockEvent::ContractInstantiation(data.address, details);
                     events.push(event);
                 }

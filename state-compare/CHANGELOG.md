@@ -2,7 +2,7 @@
 
 ## Unreleased changes
 
-- Update `rust-sdk` dependency and adjust project to be forward-compatible.
+- Update `concordium-rust-sdk` dependency and adjust project to be forward-compatible. Unkown protocol versions will produce an error.
 
 ## 3.0.0
 

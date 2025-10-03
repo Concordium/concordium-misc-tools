@@ -1,6 +1,6 @@
 ## Unreleased changes
 
-- Update `rust-sdk` dependency so that project is forward compatible.
+- Update `concordium-rust-sdk` dependency so that project is forward compatible.
 
 ## 2.1.0
 

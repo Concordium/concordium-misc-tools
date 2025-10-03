@@ -268,7 +268,7 @@ enum InjectStatementError {
     #[error("Proof provided for an unknown session.")]
     UnknownSession,
     #[error("UnknownDataError occured: {0}")]
-    UnkownDataError(#[from] UnknownDataError),
+    UnknownDataError(#[from] UnknownDataError),
 }
 
 impl From<RPCError> for InjectStatementError {

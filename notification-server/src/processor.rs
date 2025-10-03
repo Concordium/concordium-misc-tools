@@ -344,6 +344,8 @@ mod tests {
 
     #[derive(Clone, Debug)]
     struct SilentBlockItemSummary(pub BlockItemSummary);
+    #[derive(Clone, Debug)]
+    struct BlockItemSummaryWithUnkownVariant(pub BlockItemSummary);
 
     fn get_random_cipher() -> Cipher<EncryptedAmountsCurve> {
         let mut csprng = thread_rng();
@@ -416,6 +418,89 @@ mod tests {
             SilentBlockItemSummary(g.choose(&silent_block_summaries).unwrap().clone())
         }
     }
+    impl Arbitrary for BlockItemSummaryWithUnkownVariant {
+        fn arbitrary(g: &mut Gen) -> Self {
+            let amount = Amount {
+                micro_ccd: u64::arbitrary(g),
+            };
+            let receiver_address = AccountAddress(random_account_address());
+
+            let account_transaction_details = |effects| AccountTransactionDetails {
+                cost: amount,
+                effects,
+                sender: receiver_address,
+            };
+
+            let block_summaries = vec![
+                BlockItemSummary {
+                    index: random_transaction_index(),
+                    energy_cost: ArbitraryEnergy::arbitrary(g).0,
+                    hash: fixed_hash(),
+                    details: Upward::Unknown(()),
+                },
+                BlockItemSummary {
+                    index: random_transaction_index(),
+                    energy_cost: ArbitraryEnergy::arbitrary(g).0,
+                    hash: fixed_hash(),
+                    details: Upward::Known(BlockItemSummaryDetails::Update(UpdateDetails {
+                        effective_time: TransactionTime {
+                            seconds: u64::arbitrary(g),
+                        },
+                        payload: Upward::Unknown(()),
+                    })),
+                },
+                BlockItemSummary {
+                    index: random_transaction_index(),
+                    energy_cost: ArbitraryEnergy::arbitrary(g).0,
+                    hash: fixed_hash(),
+                    details: Upward::Unknown(()),
+                },
+                BlockItemSummary {
+                    index: random_transaction_index(),
+                    energy_cost: ArbitraryEnergy::arbitrary(g).0,
+                    hash: fixed_hash(),
+                    details: Upward::Known(BlockItemSummaryDetails::AccountTransaction(
+                        account_transaction_details(Upward::Known(
+                            AccountTransactionEffects::None {
+                                reject_reason: Upward::Unknown(()),
+                                transaction_type: Some(TransactionType::Update),
+                            },
+                        )),
+                    )),
+                },
+                BlockItemSummary {
+                    index: random_transaction_index(),
+                    energy_cost: ArbitraryEnergy::arbitrary(g).0,
+                    hash: fixed_hash(),
+                    details: Upward::Known(BlockItemSummaryDetails::AccountTransaction(
+                        account_transaction_details(Upward::Unknown(())),
+                    )),
+                },
+                BlockItemSummary {
+                    index: random_transaction_index(),
+                    energy_cost: ArbitraryEnergy::arbitrary(g).0,
+                    hash: fixed_hash(),
+                    details: Upward::Unknown(()),
+                },
+                BlockItemSummary {
+                    index: random_transaction_index(),
+                    energy_cost: ArbitraryEnergy::arbitrary(g).0,
+                    hash: fixed_hash(),
+                    details: Upward::Known(BlockItemSummaryDetails::AccountTransaction(
+                        account_transaction_details(Upward::Unknown(())),
+                    )),
+                },
+                BlockItemSummary {
+                    index: random_transaction_index(),
+                    energy_cost: ArbitraryEnergy::arbitrary(g).0,
+                    hash: fixed_hash(),
+                    details: Upward::Unknown(()),
+                },
+            ];
+
+            BlockItemSummaryWithUnkownVariant(g.choose(&block_summaries).unwrap().clone())
+        }
+    }
     #[derive(Clone, Debug)]
     enum BlockItemSummaryWrapper {
         Emitting(EmittingBlockItemSummaryPair),
@@ -467,7 +552,7 @@ mod tests {
         let result = match result {
             Ok(val) => val,
             Err(_) => {
-                // Return/Fail test early if some `NotificationInformationBasic` types are unkown.
+                // Return/Fail test if an error occurs.
                 return false;
             }
         };
@@ -476,5 +561,32 @@ mod tests {
             .filter_map(|summary| summary.get_expected_notification())
             .collect();
         result == expected
+    }
+
+    #[quickcheck]
+    fn test_random_block_item_summary_with_unkown_variant(
+        summaries: Vec<BlockItemSummaryWithUnkownVariant>,
+    ) {
+        let summary_stream = stream::iter(
+            summaries
+                .clone()
+                .into_iter()
+                .map(|summary| Ok(summary.0.clone()))
+                .collect::<Vec<_>>(),
+        );
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let result = runtime.block_on(process(summary_stream));
+
+        match result {
+            Ok(_) => {}
+            Err(e) => {
+                let err_str = e.to_string();
+                assert!(
+                    err_str.contains("Encountered unknown data from the Node API on type"),
+                    "Expected error message to contain 'unknown', but got: {}",
+                    err_str
+                );
+            }
+        }
     }
 }
