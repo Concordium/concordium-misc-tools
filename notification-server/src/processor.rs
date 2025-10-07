@@ -32,7 +32,15 @@ fn map_transaction_to_notification_information(
             let mut notifications = Vec::new();
 
             for effect in effects {
-                let effect = effect.as_ref().known_or_err()?;
+                let effect = match effect.as_ref().known_or_err() {
+                    Ok(effect) => effect,
+                    Err(e) => {
+                        // The `notification-server` stays operational by skipping unknown contract trace elements.
+                        // However, we still log a warning to alert the team (SRE monitors WARNINGS) so we can update the `concordium-rust-sdk` version.
+                        tracing::warn!("Skipping indexing unknown contract trace element: {e}. Update the `concordium-rust-sdk` version to remove the warning.");
+                        continue;
+                    }
+                };
 
                 let vec = match effect {
                     ContractTraceElement::Transferred { to, amount, .. } => {
@@ -157,7 +165,15 @@ pub async fn process(
     let mut notifications = Vec::new();
 
     while let Some(transaction) = transactions.next().await.transpose()? {
-        let details = &transaction.details.known_or_err()?;
+        let details = match transaction.details.known_or_err() {
+            Ok(details) => details,
+            Err(e) => {
+                // The `notification-server` stays operational by skipping block items with unknown details.
+                // However, we still log a warning to alert the team (SRE monitors WARNINGS) so we can update the `concordium-rust-sdk` version.
+                tracing::warn!("Skipping indexing block items with unknown details: {e}. Update the `concordium-rust-sdk` version to remove the warning.");
+                continue;
+            }
+        };
 
         let vec = match details {
             types::BlockItemSummaryDetails::AccountTransaction(account_transaction) => {
