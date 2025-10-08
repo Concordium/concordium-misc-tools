@@ -256,9 +256,9 @@ mod tests {
     async fn setup_database() -> anyhow::Result<DatabaseConnection> {
         dotenv().ok();
         let config = env::var("NOTIFICATION_SERVER_DB_CONNECTION")
-            .unwrap()
+            .expect("NOTIFICATION_SERVER_DB_CONNECTION env is not set")
             .parse()
-            .unwrap();
+            .expect("parsing of NOTIFICATION_SERVER_DB_CONNECTION env failed");
         let db_connection = DatabaseConnection::create(config).await?;
 
         let client = db_connection.0.get().await?;

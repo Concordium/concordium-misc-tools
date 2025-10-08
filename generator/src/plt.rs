@@ -17,8 +17,7 @@ use concordium_rust_sdk::{
         update, CreatePlt, Nonce, UpdateKeyPair, UpdateKeysIndex, UpdatePayload,
         UpdateSequenceNumber,
     },
-    v2,
-    v2::BlockIdentifier,
+    v2::{self, BlockIdentifier},
 };
 use futures::{future, stream, StreamExt, TryStreamExt};
 use rand::{rngs::StdRng, seq::SliceRandom, Rng, SeedableRng};
@@ -230,7 +229,9 @@ impl PltOperationGenerator {
                     .wait_until_finalized(&hash)
                     .await
                     .context("wait for add allow list txn finalized")?;
-                anyhow::ensure!(summary.is_success(), "add allow list txn success");
+
+                let is_success = summary.is_success().known_or_err()?;
+                anyhow::ensure!(is_success, "add allow list txn success");
 
                 Ok(())
             }

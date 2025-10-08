@@ -13,7 +13,7 @@ use concordium_rust_sdk::{
     },
     contract_client::{ContractTransactionMetadata, MetadataUrl, SchemaRef},
     id::types::AccountAddress,
-    smart_contracts::{common as concordium_std, common::Timestamp},
+    smart_contracts::common::{self as concordium_std, Timestamp},
     types::{
         smart_contracts::{OwnedContractName, OwnedParameter, WasmModule},
         transactions::{
@@ -145,8 +145,11 @@ impl ContractDeploymentInfo {
         let transaction_hash = client.send_block_item(&item).await?;
         // Wait until contract is initialized.
         let (_, summary) = client.wait_until_finalized(&transaction_hash).await?;
+
+        let is_success = summary.is_success().known_or_err()?;
+
         anyhow::ensure!(
-            summary.is_success(),
+            is_success,
             "Contract init transaction failed (hash = {transaction_hash})."
         );
         println!(
@@ -275,8 +278,13 @@ impl CcdGenerator {
             Some(Mode::Random) => (true, accounts),
             Some(Mode::Every(n)) if n > 0 => {
                 let ni = client.get_node_info().await?;
-                if let NodeDetails::Node(nd) = ni.details {
-                    let baker = nd
+
+                let node_details = ni.details.known_or_err()?;
+
+                if let NodeDetails::Node(nd) = node_details {
+                    let node_consensus_status = nd.known_or_err()?;
+
+                    let baker = node_consensus_status
                         .baker()
                         .context("Node is not a baker but integer mode is required.")?;
                     let step = accounts.len() / n;
@@ -521,8 +529,11 @@ impl TransferCis2Generator {
             .client
             .wait_until_finalized(&transaction_hash)
             .await?;
+
+        let is_success = summary.is_success().known_or_err()?;
+
         anyhow::ensure!(
-            summary.is_success(),
+            is_success,
             "Mint transaction failed (hash = {transaction_hash})."
         );
         println!(

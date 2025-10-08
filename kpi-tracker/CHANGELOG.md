@@ -1,5 +1,9 @@
 # Changelog for the kpi-tracker service
 
+## Unreleased changes
+
+- Update `concordium-rust-sdk` dependency and adjust project to be forward-compatible. Unknown transaction types, transaction effects, transaction outcomes, block item details, unknown open status values of validator pools or smart contract versions will produce an error as well as when the functions `affected_contracts`/`affected_accounts` return unknown element.
+
 ## 2.1.5
 
 - Updated the Concordium Rust SDK to support the changes introduced in protocol 9.

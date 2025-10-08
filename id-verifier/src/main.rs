@@ -11,7 +11,7 @@ use concordium_rust_sdk::{
         types::{AccountCredentialWithoutProofs, GlobalContext},
     },
     types::CredentialRegistrationID,
-    v2::{BlockIdentifier, Scheme},
+    v2::{upward::UnknownDataError, BlockIdentifier, Scheme},
     web3id,
 };
 use log::{error, info, warn};
@@ -267,6 +267,8 @@ enum InjectStatementError {
     LockingError,
     #[error("Proof provided for an unknown session.")]
     UnknownSession,
+    #[error("UnknownDataError occured: {0}")]
+    UnknownDataError(#[from] UnknownDataError),
 }
 
 impl From<RPCError> for InjectStatementError {
@@ -401,7 +403,7 @@ async fn check_proof_worker(
         .account_credentials
         .get(&0.into())
         .ok_or(InjectStatementError::InvalidProofs)?;
-    let commitments = match &credential.value {
+    let commitments = match credential.value.as_ref().known_or_err()? {
         AccountCredentialWithoutProofs::Initial { icdv: _, .. } => {
             return Err(InjectStatementError::NotAllowed);
         }
