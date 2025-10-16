@@ -3,7 +3,8 @@ use concordium_rust_sdk::{
     base as concordium_base,
     common::{
         types::{Amount, CredentialIndex, Ratio, Timestamp},
-        Buffer, SerdeDeserialize, SerdeSerialize, Serial, Deserial, Serialize, Versioned, ReadBytesExt, ParseResult, Get
+        Buffer, Deserial, Get, ParseResult, ReadBytesExt, SerdeDeserialize, SerdeSerialize, Serial,
+        Serialize, Versioned,
     },
     id::{
         self,
@@ -16,14 +17,14 @@ use concordium_rust_sdk::{
     smart_contracts::common::Duration,
     types::{
         hashes::{BlockHash, LeadershipElectionNonce},
-        AccountIndex, AccountThreshold, BakerAggregationVerifyKey, BakerElectionVerifyKey, BakerId,
-        BakerSignatureVerifyKey, BlockHeight, CooldownParameters,
-        ElectionDifficulty, Energy, Epoch, ExchangeRate, PartsPerHundredThousands, PoolParameters,
-        ProtocolVersion, Slot, SlotDuration, TimeParameters, TimeoutParameters,
+        AccountIndex, AccountThreshold, AuthorizationsV0, AuthorizationsV1,
+        BakerAggregationVerifyKey, BakerElectionVerifyKey, BakerId, BakerSignatureVerifyKey,
+        BlockHeight, CooldownParameters, CredentialsPerBlockLimit, ElectionDifficulty, Energy,
+        Epoch, ExchangeRate, FinalizationCommitteeParameters, GASRewards, GASRewardsV1,
+        HigherLevelAccessStructure, Level1KeysKind, MintDistributionV0, MintDistributionV1,
+        PartsPerHundredThousands, PoolParameters, ProtocolVersion, RootKeysKind, Slot,
+        SlotDuration, TimeParameters, TimeoutParameters, TransactionFeeDistribution,
         ValidatorScoreParameters,
-        MintDistributionV0, MintDistributionV1, TransactionFeeDistribution,
-        GASRewards, GASRewardsV1, CredentialsPerBlockLimit, FinalizationCommitteeParameters,
-        AuthorizationsV0, AuthorizationsV1, HigherLevelAccessStructure, RootKeysKind, Level1KeysKind,
     },
 };
 use serde::de;
@@ -52,9 +53,7 @@ impl<MD: Serial, GR: Serial> Serial for RewardParametersSkeleton<MD, GR> {
     }
 }
 
-impl<MD: Deserial, GR: Deserial> Deserial
-    for RewardParametersSkeleton<MD, GR>
-{
+impl<MD: Deserial, GR: Deserial> Deserial for RewardParametersSkeleton<MD, GR> {
     fn deserial<R: ReadBytesExt>(source: &mut R) -> ParseResult<Self> {
         let mint_distribution = source.get()?;
         let transaction_fee_distribution = source.get()?;
@@ -212,7 +211,6 @@ impl<Auths: Deserial> Deserial for UpdateKeysCollectionSkeleton<Auths> {
 
 pub type UpdateKeysCollectionCPV0 = UpdateKeysCollectionSkeleton<AuthorizationsV0>;
 pub type UpdateKeysCollectionCPV1 = UpdateKeysCollectionSkeleton<AuthorizationsV1>;
-
 
 /// A type alias for credentials in a format suitable for genesis. Genesis
 /// credentials do not have any associated proofs.
