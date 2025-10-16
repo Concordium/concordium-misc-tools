@@ -33,7 +33,7 @@ use concordium_rust_sdk::{
     },
     types::{
         AccountIndex, AuthorizationsV0, AuthorizationsV1, BakerCredentials, BakerId, BakerKeyPairs,
-        HigherLevelAccessStructure, ProtocolVersion, UpdateKeyPair, UpdateKeysCollectionSkeleton,
+        HigherLevelAccessStructure, ProtocolVersion, UpdateKeyPair,
         UpdatePublicKey,
     },
 };
