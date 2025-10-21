@@ -39,7 +39,7 @@ jobs:
              echo "::error ${FULL_IMAGE_TAG} already exists"
              exit 1
           elif [ ! "${{ github.ref_name }}" = "${{ env.SERVICE_NAME }}/${VERSION}" ]; then
-             echo "::error Expected tag ${EXPECTED_TAG} does not match the version ${VERSION}."
+             echo "::error Expected tag ${{ github.ref_name }} does not match the version ${VERSION}."
              exit 1
           else
              # Store the full image tag into a tag variable for the following step.

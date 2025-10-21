@@ -1,0 +1,68 @@
+name: 'Publish genesis-creator binaries'
+on:
+  # This release action always requires a tag to publish a release.
+  # This job will run when a genesis-creator/$VERSION
+  # tag is created.
+  push:
+    tags:
+      - genesis-creator/*.*.*
+
+jobs:
+  build:
+    name: build ${{ matrix.platform }}
+    strategy:
+      fail-fast: true
+      matrix:
+        platform: [macos-latest, ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.platform }}
+    environment: release-unprivileged
+    steps:
+      - name: Support longpaths on Windows
+        if: matrix.platform == 'windows-latest'
+        run: git config --system core.longpaths true
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Build
+        run: cargo build --locked --release --package genesis-creator
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-${{ matrix.platform }}
+          path: |
+            /target/release/genesis-creator
+            /target/release/genesis-creator.exe
+
+  # Attach binaries to the release identified by the tag.
+  release:
+    permissions:
+      contents: write
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/download-artifact@v4
+      - run: |
+          mkdir uploads
+          mv binary-macos-latest/genesis-creator uploads/genesis-creator-darwin-amd64
+          mv binary-windows-latest/genesis-creator.exe uploads/genesis-creator-windows-amd64.exe
+          mv binary-ubuntu-latest/genesis-creator uploads/genesis-creator-linux-amd64
+      - name: Extract version tag from Cargo.toml manifest.
+        id: meta
+        run: |
+          export VERSION=$(yq .package.version genesis-creator/Cargo.toml)
+          # Make sure the tag matches the version in Cargo.toml manifest.
+          if [ ! "${{ github.ref_name }}" = "genesis-creator/${VERSION}" ]; then
+             echo "::error Expected tag ${{ github.ref_name }} does not match the version ${VERSION}."
+             exit 1
+          else
+             # Store the version into a version variable for the following step.
+             echo "version=${VERSION}" > "$GITHUB_OUTPUT"
+          fi
+      - name: Create release and attach binaries to release.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create ${{ github.ref_name }} --title "Genesis Creator ${{ steps.meta.outputs.version }}" uploads/*
