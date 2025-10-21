@@ -10,6 +10,15 @@ import {
   Energy,
   ContractName,
   ContractAddress,
+  createTokenUpdatePayload,
+  Token,
+  TokenId,
+  TokenOperation,
+  TokenAmount,
+  ConcordiumGRPCClient,
+  TokenTransferOperation,
+  TokenHolder,
+  CborMemo
 } from "@concordium/web-sdk";
 import { WalletConnection } from "@concordium/react-components";
 import {
@@ -632,6 +641,43 @@ export async function simpleCCDTransferToNonExistingAccountAddress(
   return connection.signAndSendTransaction(
     account,
     AccountTransactionType.Transfer,
+    payload
+  );
+}
+
+export async function simplePltTransfer(
+  connection: WalletConnection,
+  client: ConcordiumGRPCClient,
+  account: string,
+  toAccount: string,
+  pltId: string,
+  pltAmount: string,
+) {
+  const tokenId = TokenId.fromString(pltId);
+  const token = await Token.fromId(client, tokenId);
+  const payload = createTokenUpdatePayload(
+    tokenId,
+    {
+      transfer: {
+        amount: TokenAmount.fromDecimal(pltAmount, token.info.state.decimals),
+        recipient: TokenHolder.fromAccountAddress(
+          AccountAddress.fromBase58(toAccount)
+        ),
+        memo: CborMemo.fromString("Hey there")
+      }
+    } as TokenTransferOperation
+  )
+
+  console.debug("Sending single PLT transfer transaction:");
+  console.debug("Payload:");
+  console.debug(payload);
+  console.debug("Account:");
+  console.debug(account);
+  console.debug("");
+
+  return connection.signAndSendTransaction(
+    account,
+    AccountTransactionType.TokenUpdate,
     payload
   );
 }
