@@ -30,8 +30,8 @@ jobs:
         with:
           name: binary-${{ matrix.platform }}
           path: |
-            /target/release/genesis-creator
-            /target/release/genesis-creator.exe
+            target/release/genesis-creator
+            target/release/genesis-creator.exe
 
   # Attach binaries to the release identified by the tag.
   release:
