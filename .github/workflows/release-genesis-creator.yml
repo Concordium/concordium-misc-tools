@@ -66,11 +66,11 @@ jobs:
           # APPLEID: ${ secrets.APPLEID }
           # TEAMID
           CODESIGN_IDENTITY: "K762RM4LQ3"
-          KEYCHAIN_PATH: ${{ steps.import_certs.outputs.KEYCHAIN_PATH }}
           BINARY_PATH: target/release/genesis-creator
           # Random string to use as the keychain password.
           KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
         run: |
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
           echo "Signing $BINARY_PATH using keychain $KEYCHAIN_PATH"
     
           # Ensure the keychain is unlocked
@@ -138,8 +138,8 @@ jobs:
           SM_CLIENT_CERT_FILE: ${{ steps.windows_certificate.outputs.CERTIFICATE_PATH }}
           SM_CLIENT_CERT_PASSWORD: ${{ secrets.WINDOWS_SM_CLIENT_CERT_PASSWORD }}
         run: |
-           smctl sign --keypair-alias ${{ env.WINDOWS_SM_KEYPAIR_ALIAS }} --file target\release\genesis-creator.exe --config-file ${{ env.WINDOWS_PKCS11_CONFIG }} --verbose --exit-non-zero-on-fail --failfast
-           smctl verify --files target\release\genesis-creator.exe
+           smctl sign --keypair-alias ${{ env.WINDOWS_SM_KEYPAIR_ALIAS }} --input target\release\genesis-creator.exe --config-file ${{ env.WINDOWS_PKCS11_CONFIG }} --verbose --exit-non-zero-on-fail --failfast
+           smctl verify target\release\genesis-creator.exe
 
   # TODO: comment out temporarily
   #     - name: Upload artifact
