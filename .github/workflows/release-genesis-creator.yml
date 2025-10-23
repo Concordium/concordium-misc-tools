@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-macos:
     name: Build and Sign Macos
     strategy:
       fail-fast: true
@@ -24,7 +24,8 @@ jobs:
       - name: Build
         run: cargo build --locked --release --package genesis-creator
 
-    - name: Import Apple signing certificates into a keychain)
+      - name: Import Apple signing certificates into a keychain
+        id: import_certs
         env:
           # Base64 encoding of the p12 certificate for Apple code signing.
           BUILD_CERTIFICATE_BASE64: ${{ secrets.APPLE_BUILD_CERTIFICATE_BASE64 }}
@@ -57,13 +58,15 @@ jobs:
 
       - name: Sign macOS executable
         env:
-          # Apple code signing variables:
-          APPLEIDPASS: ${ secrets.APPLEIDPASS }
-          APPLEID: ${ secrets.APPLEID }
-          # ?
-          CODESIGN_IDENTITY: ${secrets.APPLEID}
-          KEYCHAIN_PATH: ${KEYCHAIN_PATH}
+          # Apple code signing variables (where to use them?):
+          # APPLEIDPASS: ${ secrets.APPLEIDPASS }
+          # APPLEID: ${ secrets.APPLEID }
+          # TEAMID
+          CODESIGN_IDENTITY: "K762RM4LQ3"
+          KEYCHAIN_PATH: ${{ steps.import_certs.outputs.KEYCHAIN_PATH }}
           BINARY_PATH: target/release/genesis-creator
+          # Random string to use as the keychain password.
+          KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
         run: |
           echo "Signing $BINARY_PATH using keychain $KEYCHAIN_PATH"
     
@@ -71,7 +74,7 @@ jobs:
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
     
           # Sign the binary
-          codesign --deep --force\
+          codesign --deep --force --verbose \
             --sign "$CODESIGN_IDENTITY" \
             --keychain "$KEYCHAIN_PATH" \
           "$BINARY_PATH"
@@ -88,7 +91,7 @@ jobs:
   #           target/release/genesis-creator
 
 
-  build:
+  build-windows:
     name: Build and Sign Windows
     strategy:
       fail-fast: true
@@ -123,7 +126,6 @@ jobs:
           echo "CERTIFICATE_PATH=$CERTIFICATE_PATH" >> $env:GITHUB_OUTPUT
 
       - name: Sign
-        working-directory: ${{steps.build.outputs.bin_dir}}
         env:
           # windows signing
           WINDOWS_PKCS11_CONFIG: ${{ steps.digicert_client.outputs.PKCS11_CONFIG }}
@@ -176,7 +178,7 @@ jobs:
   # release:
   #   permissions:
   #     contents: write
-  #   needs:  [Build and Sign Windows, Build and Sign Macos, Build Ubuntu]
+  #   needs:  [build-windows, build-macos, build-ubuntu]
   #   runs-on: ubuntu-latest
   #   steps:
   #     - uses: actions/checkout@v4
