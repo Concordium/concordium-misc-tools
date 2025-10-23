@@ -1,11 +1,14 @@
-name: 'Publish genesis-creator binaries'
+name: Publish genesis-creator binaries
+
 on:
+  # TODO: comment out temporarily
   # This release action always requires a tag to publish a release.
   # This job will run when a genesis-creator/$VERSION
   # tag is created.
+
   push:
-    tags:
-      - genesis-creator/*.*.*
+    branches:
+      - 'signing-of-genesis-creator-tool'
 
   workflow_dispatch:
 
