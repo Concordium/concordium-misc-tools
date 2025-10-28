@@ -13,7 +13,6 @@ members = [
    "notification-server",
    "recover-id-object",
    "state-compare",
-   "wallet-connect-test-bench/smart-contract",
    "wallet-proxy-load-simulator",
    # Does currently not compile in CI, it can be added once it works
    #"company-id-gui/src-tauri"
@@ -58,7 +57,6 @@ num-bigint = "0.4"
 reqwest = { version = "0.12" }
 url = { version = "2.3" }
 http = "0.2"
-concordium-std = { version = "10" }
 colored = "2"
 
 concordium-rust-sdk = { path = "deps/concordium-rust-sdk" }
