@@ -13,6 +13,7 @@ members = [
    "notification-server",
    "recover-id-object",
    "state-compare",
+   "wallet-connect-test-bench/smart-contract",
    "wallet-proxy-load-simulator",
    # Does currently not compile in CI, it can be added once it works
    #"company-id-gui/src-tauri"
