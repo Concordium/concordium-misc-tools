@@ -6,17 +6,16 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-clap = { version = "4", features = ["env", "derive"] }
-anyhow = "1"
-tokio = {version = "1.20", features = ["rt-multi-thread", "macros"]}
-tonic = {version = "0.12", features = ["tls", "tls-roots", "tls-webpki-roots"]}
-thiserror = "1"
-
+clap = { workspace = true, features = ["env", "derive"] }
+anyhow.workspace = true
+tokio = {workspace = true, features = ["rt-multi-thread", "macros"]}
+tonic = {workspace = true, features = ["tls", "tls-roots", "tls-webpki-roots"]}
+thiserror.workspace = true
 concordium-rust-sdk.workspace = true
 key_derivation.workspace = true
-serde_json = "1.0"
-serde = "1.0"
-reqwest = { version = "0.11", features = ["json"] }
-url = { version = "2.3", features = ["serde"] }
-http = "0.2"
-chrono = "0.4.24"
+serde_json.workspace = true
+serde.workspace = true
+reqwest = { workspace = true, features = ["json"] }
+url = { workspace = true, features = ["serde"] }
+http.workspace = true
+chrono.workspace = true

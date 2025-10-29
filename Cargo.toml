@@ -22,6 +22,43 @@ members = [
 exclude = ["deps"]
 
 [workspace.dependencies]
+anyhow = "1.0"
+axum = "0.6"
+axum-prometheus = { version = "0.8" }
+backoff = { version = "0.4" }
+chrono = "0.4.24"
+clap = { version = "4.5" }
+colored = "2"
+deadpool-postgres = "0.14"
+dotenv = "0.15"
+ed25519-dalek = "2"
+enum-iterator = "2.1"
+env_logger = "0.10"
+futures = "0.3"
+gcd = "2"
+gcp_auth = "0.12"
+http = "0.2"
+log = "0.4.11"
+num-bigint = "0.4"
+prometheus = "0.13"
+thiserror = "2.0"
+tokio = { version = "1.27" }
+tonic = { version = "0.12" }
+rand = "0.8"
+rayon = "1.5"
+reqwest = { version = "0.12" }
+rust_decimal = "1.37.2"
+sha2 = "0.10"
+serde = { version = "1.0" }
+serde_json = "1.0"
+tokio-postgres = "0.7"
+toml = "0.5"
+tower-http = {version = "0.4", features = ["trace", "timeout", "limit", "cors"]}
+tracing = { version = "0.1" }
+tracing-subscriber = { version = "0.3" }
+url = { version = "2.3" }
+warp = "0.3"
+
 concordium-rust-sdk = { path = "deps/concordium-rust-sdk" }
 concordium_base = { path = "deps/concordium-rust-sdk/concordium-base/rust-src/concordium_base" }
 key_derivation = { path = "deps/concordium-rust-sdk/concordium-base/rust-src/key_derivation/" }

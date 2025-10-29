@@ -6,16 +6,16 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1"
-tokio = {version = "1.20", features = ["rt-multi-thread", "macros"]}
-clap = { version = "4", features = ["derive", "env"] }
-futures = "0.3"
-axum = "0.6"
-tonic = {version = "0.12", features = ["tls", "tls-roots", "tls-webpki-roots"]}
-tracing-subscriber = { version = "0.3" }
-tracing = { version = "0.1" }
-tower-http = {version = "0.4", features = ["trace", "timeout", "limit", "cors"]}
-thiserror = "1"
+anyhow.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+clap = { workspace = true, features = ["derive", "env"] }
+futures.workspace = true
+axum.workspace = true
+tonic = {workspace = true, features = ["tls", "tls-roots", "tls-webpki-roots"]}
+tracing-subscriber.workspace = true
+tracing.workspace = true
+tower-http = {workspace = true, features = ["trace", "timeout", "limit", "cors"]}
+thiserror.workspace = true
 
 concordium-rust-sdk.workspace = true
-prometheus = "0.13"
+prometheus.workspace = true

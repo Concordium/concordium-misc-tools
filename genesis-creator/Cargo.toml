@@ -8,15 +8,17 @@ edition = "2021"
 [dependencies]
 concordium-rust-sdk.workspace = true
 concordium_base.workspace = true
-clap = {version = "3.2", features = ["derive"] }
-toml = "0.5"
-serde_json = "1"
-rust_decimal = { version = "1.25", features = ["serde-float", "serde-arbitrary-precision"]}
-anyhow = "1"
-chrono = {version = "0.4", features = ["serde"] }
-serde = { version = "1.0", features = ["derive"] }
-rand = "0.8"
-ed25519-dalek = "2"
-gcd = "2"
-rayon = "1.5"
-sha2 = "0.10"
+clap = {workspace = true, features = ["derive"] }
+toml.workspace = true
+serde_json.workspace = true
+
+rust_decimal = { workspace = true, features = ["serde-float", "serde-arbitrary-precision"]}
+anyhow.workspace = true
+chrono = {workspace = true, features = ["serde"] }
+serde = { workspace = true, features = ["derive"] }
+rand.workspace = true
+ed25519-dalek.workspace = true
+gcd.workspace = true
+rayon.workspace = true
+sha2.workspace = true
+
