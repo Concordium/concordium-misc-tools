@@ -33,8 +33,7 @@ use concordium_rust_sdk::{
     },
     types::{
         AccountIndex, AuthorizationsV0, AuthorizationsV1, BakerCredentials, BakerId, BakerKeyPairs,
-        HigherLevelAccessStructure, ProtocolVersion, UpdateKeyPair, UpdateKeysCollectionSkeleton,
-        UpdatePublicKey,
+        HigherLevelAccessStructure, ProtocolVersion, UpdateKeyPair, UpdatePublicKey,
     },
 };
 use rayon::prelude::*;
