@@ -8,6 +8,6 @@ mod health;
 
 pub fn init_routes(service: Service) -> Router {
     Router::new()
-    .route("/health", get(health::health))
-    .with_state(Arc::new(service))
+        .route("/health", get(health::health))
+        .with_state(Arc::new(service))
 }

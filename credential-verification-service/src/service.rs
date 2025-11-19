@@ -1,4 +1,7 @@
-use concordium_rust_sdk::{types::WalletAccount, v2::{self, Client}};
+use concordium_rust_sdk::{
+    types::WalletAccount,
+    v2::{self, Client},
+};
 use tokio::net::TcpListener;
 
 use crate::{api, configs::ServiceConfigs};
