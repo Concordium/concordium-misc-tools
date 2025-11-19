@@ -1,0 +1,18 @@
+[package]
+name = "credential-verification-service"
+version = "0.1.0"
+description = "Credential verification service"
+edition = "2024"
+
+[dependencies]
+anyhow.workspace = true
+axum = { version = "0.8", features = ["http2"]}
+chrono.workspace = true
+clap = { workspace = true, features = ["derive", "env", "cargo"]}
+concordium-rust-sdk.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"]}
+tokio-util = { version = "0.7.16", features = ["rt"] }
+tracing.workspace = true
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
