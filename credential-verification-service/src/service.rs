@@ -3,6 +3,7 @@ use concordium_rust_sdk::{
     v2::{self, Client},
 };
 use tokio::net::TcpListener;
+use tokio_util::sync::CancellationToken;
 
 use crate::{api, configs::ServiceConfigs};
 
@@ -16,7 +17,10 @@ pub async fn run(configs: ServiceConfigs) -> anyhow::Result<()> {
     };
 
     let listener = TcpListener::bind(configs.address).await?;
-    axum::serve(listener, api::init_routes(service)).await?;
+    let cancel_token = CancellationToken::new();
+    axum::serve(listener, api::init_routes(service))
+        .with_graceful_shutdown(cancel_token.cancelled_owned())
+        .await?;
     Ok(())
 }
 
