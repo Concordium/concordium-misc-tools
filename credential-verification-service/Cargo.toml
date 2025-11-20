@@ -17,6 +17,7 @@ tokio.workspace = true
 tokio-util.workspace = true
 prometheus-client.workspace = true
 tracing.workspace = true
+tracing-subscriber.workspace = true
 
 [[bin]]
 name = "credential-verification-service"
