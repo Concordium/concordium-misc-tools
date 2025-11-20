@@ -1,12 +1,11 @@
-ARG build_image=rust:1.76-bookworm
-ARG base_image=debian:bookworm
-FROM ${build_image} AS build
-
+## Build Phase
+FROM rust:1.91-slim as build
 WORKDIR /build
 COPY . .
 RUN ls
 RUN cargo build --locked -p credential-verification-service --release
 
-FROM ${base_image}
+## Run phase
+FROM chainguard/glibc-dynamic:latest
 COPY --from=build /build/target/release/credential-verification-service /usr/local/bin/
 ENTRYPOINT [ "credential-verification-service" ]
