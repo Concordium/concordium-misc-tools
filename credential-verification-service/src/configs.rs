@@ -14,7 +14,7 @@ pub struct ServiceConfigs {
         default_value = "127.0.0.1:8000"
     )]
     pub address: SocketAddr,
-    #[arg(long, help = "Path to the wallet keys.")]
+    #[arg(long, env, help = "Path to the wallet keys.")]
     pub account: PathBuf,
     #[arg(long, default_value = "info", env = "LOG_LEVEL")]
     pub log_level: tracing_subscriber::filter::LevelFilter,
