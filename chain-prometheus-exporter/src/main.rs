@@ -166,9 +166,8 @@ async fn main() -> anyhow::Result<()> {
         .layer(tower_http::limit::RequestBodyLimitLayer::new(0)) // no bodies, we only have GET requests.
         .layer(tower_http::cors::CorsLayer::permissive().allow_methods([http::Method::GET]));
 
-    axum::Server::bind(&app.listen_address)
-        .serve(server.into_make_service())
-        .await?;
+    let listener = tokio::net::TcpListener::bind(app.listen_address).await?;
+    axum::serve(listener, server).await?;
     Ok(())
 }
 
