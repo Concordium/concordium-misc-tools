@@ -6,6 +6,7 @@ resolver = "2"
 # are not members of the workspace.
 members = [
    "chain-prometheus-exporter",
+   "credential-verification-service",
    "generator",
    "genesis-creator",
    "id-verifier",
