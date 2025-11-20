@@ -15,7 +15,10 @@ async fn main() -> anyhow::Result<()> {
         format!("info,{pkg_name}={0},{crate_name}={0}", configs.log_level).parse()?
     };
 
-    tracing_subscriber::registry().with(filter).init();
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer())
+        .with(filter)
+        .init();
     service::run(configs).await?;
     Ok(())
 }
