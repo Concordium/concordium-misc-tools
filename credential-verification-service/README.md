@@ -10,7 +10,7 @@ This service is used for carrying out operations related to requesting verificat
 
 The following is the template command you need to use to run the service locally with docker. 
 
-Note: The `Account` environment variable below does not need to be modified, this is the path that the key is expected to exist inside the container. 
+Note: The `CREDENTIAL_VERIFICATION_SERVICE_ACCOUNT` environment variable below does not need to be modified, this is the path that the key is expected to exist inside the container. 
 
 ```
 docker run --rm \
