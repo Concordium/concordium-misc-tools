@@ -1,5 +1,7 @@
 ## Unreleased changes
 
+- Support genesis data format of protocol version 10.
+
 ## 0.6.0
 
 - Update `concordium-rust-sdk` dependency so that project is forward compatible.
