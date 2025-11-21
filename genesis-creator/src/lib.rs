@@ -711,6 +711,7 @@ fn accounts(
                             ars,
                             ar_threshold.try_into().unwrap(),
                             &params.on_chain_commitment_key,
+                            &mut csprng,
                         );
 
                         let ar_data = sharing_data

@@ -3,7 +3,7 @@ use clap::Parser;
 use concordium_rust_sdk::{
     base as concordium_base,
     cis4::CredentialStatus,
-    common::{SerdeBase16Serialize, Serial, Serialize, Versioned},
+    common::{SerdeBase16Serialize, Serialize, Versioned},
     endpoints::{QueryError, RPCError},
     id::{
         constants::{ArCurve, AttributeKind},
