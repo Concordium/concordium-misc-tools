@@ -13,8 +13,6 @@ The following is the template command you need to use to run the service locally
 Note: The `Account` environment variable below does not need to be modified, this is the path that the key is expected to exist inside the container. 
 
 ```
-EXAMPLE:
-
 docker run --rm \
   -e CREDENTIAL_VERIFICATION_SERVICE_NODE_GRPC_ENDPOINT="http://grpc.testnet.concordium.com:20000" \
   -e CREDENTIAL_VERIFICATION_SERVICE_API_ADDRESS="0.0.0.0:8000" \
