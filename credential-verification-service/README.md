@@ -16,7 +16,7 @@ Note: The `CREDENTIAL_VERIFICATION_SERVICE_ACCOUNT` environment variable below d
 docker run --rm \
   -e CREDENTIAL_VERIFICATION_SERVICE_NODE_GRPC_ENDPOINT="http://grpc.testnet.concordium.com:20000" \
   -e CREDENTIAL_VERIFICATION_SERVICE_API_ADDRESS="0.0.0.0:8000" \
-  -e CREDENTIAL_VERIFICATION_SERVICE_MONTITORING_ADDRESS="0.0.0.0:8001" \
+  -e CREDENTIAL_VERIFICATION_SERVICE_MONITORING_ADDRESS="0.0.0.0:8001" \
   -e LOG_LEVEL="info" \
   -v /path/to/wallet_key.export:/keys/test_key.export:ro \
   -e CREDENTIAL_VERIFICATION_SERVICE_ACCOUNT="/keys/test_key.export" \
