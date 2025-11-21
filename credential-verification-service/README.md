@@ -16,16 +16,17 @@ Note: The `Account` environment variable below does not need to be modified, thi
 EXAMPLE:
 
 docker run --rm \
-  -e NODE_GRPC_ENDPOINT="http://grpc.testnet.concordium.com:20000" \
-  -e API_ADDRESS="0.0.0.0:8000" \
-  -e MONTITORING_ADDRESS="0.0.0.0:8001" \
+  -e CREDENTIAL_VERIFICATION_SERVICE_NODE_GRPC_ENDPOINT="http://grpc.testnet.concordium.com:20000" \
+  -e CREDENTIAL_VERIFICATION_SERVICE_API_ADDRESS="0.0.0.0:8000" \
+  -e CREDENTIAL_VERIFICATION_SERVICE_MONTITORING_ADDRESS="0.0.0.0:8001" \
   -e LOG_LEVEL="info" \
-  -e ACCOUNT="/keys/test_key.export" \
   -v /path/to/wallet_key.export:/keys/test_key.export:ro \
+  -e CREDENTIAL_VERIFICATION_SERVICE_ACCOUNT="/keys/test_key.export" \
   -p 8000:8000 \
   -p 8001:8001 \
   credential-verification-service
 ```
+
 
 you should then be able to curl the health endpoint from outside the container, for example:
 

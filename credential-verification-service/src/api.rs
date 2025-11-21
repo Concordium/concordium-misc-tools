@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use crate::service::Service;
 
-mod monitroing;
+mod monitoring;
 mod verifier;
 
 /// Router exposing the service's endpoints
@@ -17,10 +17,10 @@ pub fn router(service: Arc<Service>) -> Router {
 /// Router exposing the Prometheus metrics and health endpoint.
 pub fn monitoring_router(metrics_registry: Registry, service: Arc<Service>) -> Router {
     let metric_routes = Router::new()
-        .route("/", get(monitroing::metrics))
+        .route("/", get(monitoring::metrics))
         .with_state(Arc::new(metrics_registry));
     let health_routes = Router::new()
-        .route("/", get(monitroing::health))
+        .route("/", get(monitoring::health))
         .with_state(service);
 
     Router::new()
