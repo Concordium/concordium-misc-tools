@@ -16,7 +16,7 @@ pub struct ServiceConfigs {
     pub api_address: SocketAddr,
     #[arg(
         long,
-        env = "CREDENTIAL_VERIFICATION_SERVICE_MONTITORING_ADDRESS",
+        env = "CREDENTIAL_VERIFICATION_SERVICE_MONITORING_ADDRESS",
         default_value = "127.0.0.1:8001"
     )]
     pub monitoring_address: SocketAddr,
