@@ -21,7 +21,7 @@ docker run --rm \
   -e MONTITORING_ADDRESS="0.0.0.0:8001" \
   -e LOG_LEVEL="info" \
   -e ACCOUNT="/keys/test_key.export" \
-  -v /Users/robertsquire/projects/concordium/test_key.export:/keys/test_key.export:ro \
+  -v /path/to/wallet_key.export:/keys/test_key.export:ro \
   -p 8000:8000 \
   -p 8001:8001 \
   credential-verification-service
