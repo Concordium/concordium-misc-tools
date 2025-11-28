@@ -45,5 +45,5 @@ POST:
 
 
 ## Architecture
-- 🗺️ [High-Level Architecture Overview](docs/architecture/high_level_overview.md)
+- 🗺️ [High-Level Architecture Overview](docs/architecture.md)
 
