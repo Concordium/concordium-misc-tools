@@ -29,3 +29,21 @@ docker run --rm \
 you should then be able to curl the health endpoint from outside the container, for example:
 
 `curl http://localhost:8001/health`
+
+
+
+## API Documentation
+
+### 1. Create Verification Request API
+
+POST: 
+- [Sequence Diagram](docs/api/create_verification_request/sequence.md)
+- [Data Model (Request + Response)](docs/api/create_verification_request/data_model.md)
+- [Example Payloads](docs/api/create_verification_request/examples.md)
+
+### 2. <Second API Name>
+
+
+## Architecture
+- 🗺️ [High-Level Architecture Overview](docs/architecture/high_level_overview.md)
+
