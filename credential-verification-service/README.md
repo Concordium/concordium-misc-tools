@@ -34,14 +34,35 @@ you should then be able to curl the health endpoint from outside the container, 
 
 ## API Documentation
 
-### 1. Create Verification Request API
+### Create Verification Request
 
-POST: 
+Endpoint: HTTP POST /verifiable-presentations/create-verification-request {CreateVerificationRequest}
+
+Purpose: Creates a Verification Request in order to prove some statements about the credentials.
+
+Process Overview:
+- Submits a register data transaction to the concordium network, in the form of a VRA (Verifiable Request Anchor)
+- Returns the `VerificationRequest` which contains the anchor transaction hash
+
+Diagrams and Sample Payloads: 
 - [Sequence Diagram](docs/api/create_verification_request/sequence.md)
 - [Data Model (Request + Response)](docs/api/create_verification_request/data_model.md)
 - [Example Payloads](docs/api/create_verification_request/examples.md)
 
-### 2. <Second API Name>
+### Verify Presentation
+
+Endpoint: HTTP POST /verifiable-presentations/verify {VerifiablePresentationRequest}
+
+Purpose: To verify a Presentation
+
+Process Overview:
+- Submits a register data transaction to the concordium network, in the form of a VAA (Verifiable Audit Anchor)
+- Returns the `AnchoredVerificationAuditRecordResponse` which contains the Audit record and the VAA transaction hash
+
+Diagrams and Sample Payloads: 
+- [Sequence Diagram](docs/api/create_verification_request/sequence.md)
+- [Data Model (Request + Response)](docs/api/create_verification_request/data_model.md)
+- [Example Payloads](docs/api/create_verification_request/examples.md)
 
 
 ## Architecture

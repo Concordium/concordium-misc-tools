@@ -1,6 +1,6 @@
 # Create Verification Request – Data Model
 
-This document defines the data model for the `Verify Presentation` API.
+This document defines the data model for the `Create Verification Request` API.
 
 CreateVerificationRequest is the request sent by the merchant
 the response that the merchant receives is the VerificationRequest that can 
@@ -18,46 +18,56 @@ The request sent by the Merchant when initiating a verification flow.
 ```mermaid
 classDiagram 
 
-    %% Request to the API to create a verification request
-    class CreateVerificationRequest {
-        string connectionId
-        string description
-        ClaimType claimType
-        int[] trustedIDPs
-        VerificationCheck[] verificationChecks
+    %% Request to the API to verify a presentation
+    class VerifyPresentationRequest {
+        presentation: PresentationV1,
+        verificationRequest: VerificationRequest
     }
 
-    class ClaimType {
+    
+    class PresentationV1 {
+        presentation_context: ContextInformation
+        verifiable_credentials: CredentialV1[]
+        pub linking_proof: LinkingProofV1,
+    }
+
+    class ContextInformation {
+        given: ContextProperty[]
+        requested: ContextProperty[]
+    }
+
+    class CredentialV1 {
         <<enum>>
+        Account
         Identity
     }
 
-    class VerificationCheck {
-        <<enum>>
-        AtLeastAge(int) // age in years
-        NationalityInRegion(Region)
+    class AccountBasedCredentialV1 {
+        issuer: IpIdentity
+        subject: AccountCredentialSubject
+        proof: ConcordiumZkProof
     }
 
-    class Region {
-        <<enum>>
-        EU
-        AFRICA
-        AMERICAS
-        APAC
+    class IdentityBasedCredentialV1{
+        issuer: IpIdentity
+        validity: CredentialValidity
+        subject: IdentityCredentialSubject
+        proof: ConcordiumZkProof
     }
 
-    CreateVerificationRequest --> ClaimType: claimType
-    CreateVerificationRequest --> VerificationCheck: verification_checks
-    VerificationCheck --> Region
-
-    %% middle layer conversion into the Verification Request Data from the Merchants request above
-    class VerificationRequestData {
-        context: UnfilledContextInformation
-        subject_claims: RequestedSubjectClaims[]
+    class ContextProperty {
+        label: String,
+        context: String
     }
 
-    VerificationRequestData --> UnfilledContextInformation: context
-    VerificationRequestData --> RequestedSubjectClaims: subject_claims
+    VerifyPresentationRequest --> PresentationV1: presentation
+    VerifyPresentationRequest --> VerificationRequest: verificationRequest
+    PresentationV1 --> ContextInformation
+    PresentationV1 --> CredentialV1
+    CredentialV1 --> AccountBasedCredentialV1
+    CredentialV1 --> IdentityBasedCredentialV1
+    ContextInformation --> ContextProperty
+
 
     %%Response to the API to create request for Verification of credentials
     class VerificationRequest {
