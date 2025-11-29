@@ -1,9 +1,8 @@
-```markdown
 # Example Payloads
 
 ## Request Example
 
-```json
+```
 {
   "connectionId": "conn_8291yuw",
   "description": "Age verification check for Alcohol Purchase",
@@ -14,3 +13,4 @@
     { "type": "NATIONALITY_IN_REGION", "target": "EU" }
   ]
 }
+```
