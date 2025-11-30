@@ -3,6 +3,8 @@
 
 ## Request Payload
 
+<TODO - remaining sequence below to be filled in>
+
 ```mermaid
 sequenceDiagram
     participant Merchant
@@ -12,4 +14,3 @@ sequenceDiagram
     participant GRPCNode
 
     Merchant->>CredentialVerificationService: POST /verifiable-presentations/verify {VerifyPresentationRequest}
-    <TODO>
