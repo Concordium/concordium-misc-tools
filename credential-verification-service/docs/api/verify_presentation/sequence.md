@@ -1,5 +1,5 @@
 
-# Create Verification Request – POST /verifiable-presentations/create-verification-request
+# Create Verification Request – POST /verifiable-presentations/verify
 
 ## Request Payload
 
