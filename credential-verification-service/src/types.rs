@@ -55,7 +55,7 @@ pub struct VerificationRequestParams {
 pub enum ServerError {
     #[error("Unable to submit anchor transaction on chain successfully: {0}.")]
     SubmitAnchorTransaction(#[from] CreateAnchorError),
-    #[error("Unable to submit transaction on chain successfully: {0}.")]
+    #[error("Unable to submit transaction on chain successfully due to nonce mismatch: {0}.")]
     NonceMismatch(CreateAnchorError),
 }
 

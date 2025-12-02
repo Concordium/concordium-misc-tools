@@ -1,3 +1,4 @@
+use crate::{api, configs::ServiceConfigs, types::Service};
 use anyhow::Context;
 use concordium_rust_sdk::{
     constants::TESTNET_GENESIS_BLOCK_HASH,
@@ -6,16 +7,12 @@ use concordium_rust_sdk::{
     web3id::did::Network,
 };
 use futures_util::TryFutureExt;
-use prometheus_client::metrics;
-use prometheus_client::registry::Registry;
+use prometheus_client::{metrics, registry::Registry};
 use std::sync::Arc;
-use tokio::net::TcpListener;
-use tokio::sync::Mutex;
+use tokio::{net::TcpListener, sync::Mutex};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use tonic::transport::ClientTlsConfig;
 use tracing::{error, info};
-
-use crate::{api, configs::ServiceConfigs, types::Service};
 
 pub async fn run(configs: ServiceConfigs) -> anyhow::Result<()> {
     let service_info = metrics::info::Info::new([("version", clap::crate_version!().to_string())]);
@@ -27,24 +24,24 @@ pub async fn run(configs: ServiceConfigs) -> anyhow::Result<()> {
         metrics::gauge::ConstGauge::new(chrono::Utc::now().timestamp_millis()),
     );
 
-    anyhow::ensure!(
-        configs.request_timeout >= 1000,
-        "Request timeout should be at least 1s."
-    );
-
     let endpoint =
         if configs.node_endpoint.uri().scheme() == Some(&concordium_rust_sdk::v2::Scheme::HTTPS) {
             configs
                 .node_endpoint
                 .tls_config(ClientTlsConfig::new())
-                .context("Unable to construct TLS configuration for Concordium API.")?
+                .context("Unable to construct TLS configuration for Concordium node.")?
         } else {
             configs.node_endpoint
         };
 
+    anyhow::ensure!(
+        configs.request_timeout >= 1000,
+        "Request timeout should be at least 1s."
+    );
+
     // Make it 500ms less than request timeout to make sure we can fail properly
     // with a connection timeout in case of node connectivity problems.
-    let node_timeout = std::time::Duration::from_millis(configs.request_timeout - 500);
+    let node_timeout = std::time::Duration::from_millis(configs.request_timeout);
 
     let endpoint = endpoint
         .connect_timeout(node_timeout)
@@ -115,7 +112,7 @@ pub async fn run(configs: ServiceConfigs) -> anyhow::Result<()> {
             configs.api_address, service.account_keys.address, nonce_response.nonce
         );
 
-        axum::serve(listener, api::router(service))
+        axum::serve(listener, api::router(service, configs.request_timeout))
             .with_graceful_shutdown(stop_signal.cancelled_owned())
             .into_future()
     };

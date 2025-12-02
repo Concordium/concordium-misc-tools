@@ -46,6 +46,8 @@ pub async fn create_verification_request(
     // Transaction should expiry after some seconds.
     let expiry = TransactionTime::seconds_after(state.transaction_expiry_secs);
 
+    let mut node_client = state.node_client.clone();
+
     // Get the current nonce for the backend wallet and lock it. This is necessary
     // since it is possible that API requests come in parallel. The nonce is
     // increased by 1 and its lock is released after the transaction is submitted to
@@ -59,18 +61,18 @@ pub async fn create_verification_request(
         expiry,
     };
 
-    let mut node_client = state.node_client.clone();
-
     let verification_request = create_verification_request_and_submit_request_anchor(
         &mut node_client,
         anchor_transaction_metadata,
         verification_request_data,
-        Some(params.public_info.clone()),
+        Some(params.public_info),
     )
     .await;
 
     match verification_request {
         Ok(verification_request) => {
+            // If the submission of the anchor transaction was successful,
+            // increase the account_sequence_number tracked in this service.
             *account_sequence_number = account_sequence_number.next();
 
             Ok(Json(verification_request))

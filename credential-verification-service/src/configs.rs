@@ -1,6 +1,5 @@
 use clap::Parser;
 use concordium_rust_sdk::v2;
-
 use std::{net::SocketAddr, path::PathBuf};
 
 #[derive(Parser, Debug)]
