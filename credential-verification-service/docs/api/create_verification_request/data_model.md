@@ -24,6 +24,7 @@ classDiagram
         string connectionId
         string resourceId
         string contextString
+        HashMap publicInfo
         int[] trustedIDPs
         IdentityCredentialType identityCredentialType
         IdentityProviderDid[] issuers
