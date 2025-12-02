@@ -57,7 +57,7 @@ Purpose: To verify a Presentation
 
 Process Overview:
 - Submits a register data transaction to the concordium network, in the form of a VAA (Verifiable Audit Anchor)
-- Returns the `AnchoredVerificationAuditRecordResponse` which contains the Audit record and the VAA transaction hash
+- Returns the `PresentationVerificationData` response which contains the verification result, the audit anchor record and the audit anchor transaction hash.
 
 Diagrams and Sample Payloads: 
 - [Sequence Diagram](docs/api/verify_presentation/sequence.md)
