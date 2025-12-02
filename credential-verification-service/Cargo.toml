@@ -19,6 +19,7 @@ prometheus-client.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 tonic = {workspace = true, features = ["tls", "tls-roots"]}
+thiserror.workspace = true
 
 [[bin]]
 name = "credential-verification-service"

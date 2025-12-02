@@ -7,7 +7,6 @@ use std::sync::Arc;
 
 use crate::service::Service;
 
-mod common;
 mod monitoring;
 mod verification_request;
 mod verifier;

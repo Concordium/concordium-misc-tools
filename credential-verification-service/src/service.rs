@@ -79,7 +79,8 @@ pub async fn run(configs: ServiceConfigs) -> anyhow::Result<()> {
     let nonce_response = node_client
         .get_next_account_sequence_number(&account_keys.address)
         .await
-        .context("NonceQueryError.")?;
+        .context("Unable to query the next account sequence number.")?;
+
     let nonce = Arc::new(Mutex::new(nonce_response.nonce));
 
     let consensus_info = node_client
