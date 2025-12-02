@@ -13,10 +13,10 @@ later be used in the prove and verify flow
 
 The request sent by the Merchant when initiating a verification flow.
 
-<b>
-Note: Verification Request Model is absent below to simplify the diagram, as its already present in:
-- [Verification request model](../create_verification_request/data_model.md)
-</b>
+<b>NOTE: Verification Request Model is structure below for simplification of the diagram. 
+
+Verification Request Data model can be found here: 
+- [Verfication Request Model](../create_verification_request/data_model.md)
 
 ## Structure (Mermaid)
 
