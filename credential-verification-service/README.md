@@ -50,9 +50,10 @@ cargo run -- --node-endpoint https://grpc.testnet.concordium.com:20000 --account
 The following options are supported:
 
 - `--node_endpoint [env: CREDENTIAL_VERIFICATION_SERVICE_NODE_GRPC_ENDPOINT]`: the URL of the node's GRPC V2 interface, e.g., http://node.testnet.concordium.com:20000
-- `--request_timeout [env: REQUEST_TIMEOUT]`:` The request timeout (both of request to the node and server requests) in milliseconds.
-- `--log-level [env: LOG_LEVEL]`: The maximum log level` (defaults to info if not given).
+- `--request_timeout [env: CREDENTIAL_VERIFICATION_SERVICE_REQUEST_TIMEOUT]`:` The request timeout (both of request to the node and server requests) in milliseconds.
+- `--log-level [env: CREDENTIAL_VERIFICATION_SERVICE_LOG_LEVEL]`: The maximum log level` (defaults to info if not given).
 - `--account [env: CREDENTIAL_VERIFICATION_SERVICE_ACCOUNT]`: The path to the account key 
 - `--api_address [env: CREDENTIAL_VERIFICATION_SERVICE_API_ADDRESS]`: The socket address where the service exposes its API.
 - `--monitoring_address [env: CREDENTIAL_VERIFICATION_SERVICE_MONITORING_ADDRESS]`: The socket address used for health and metrics monitoring.
+- `--transaction-expiry [env: CREDENTIAL_VERIFICATION_SERVICE_TRANSACTION_EXPIRY]`: The number of seconds in the future when the anchor transactions should expiry (defaults to 1000000 if not given).
 

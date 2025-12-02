@@ -1,7 +1,9 @@
 use anyhow::Context;
 use concordium_rust_sdk::{
+    constants::TESTNET_GENESIS_BLOCK_HASH,
     types::{Nonce, WalletAccount},
     v2::{self},
+    web3id::did::Network,
 };
 use futures_util::TryFutureExt;
 use prometheus_client::metrics;
@@ -24,6 +26,10 @@ pub struct Service {
     pub account_keys: Arc<WalletAccount>,
     /// Nonce of the account submitting the anchor transactions on-chain.
     pub nonce: Arc<Mutex<Nonce>>,
+    /// The number of seconds in the future when the anchor transactions should expiry.  
+    pub transaction_expiry_secs: u32,
+    /// The network of the connected node.  
+    pub network: Network,
 }
 
 pub async fn run(configs: ServiceConfigs) -> anyhow::Result<()> {
@@ -75,10 +81,24 @@ pub async fn run(configs: ServiceConfigs) -> anyhow::Result<()> {
         .await
         .context("NonceQueryError.")?;
     let nonce = Arc::new(Mutex::new(nonce_response.nonce));
+
+    let consensus_info = node_client
+        .get_consensus_info()
+        .await
+        .context("Unable to query the consesnsus info from the chain")?;
+    let genesis_hash = consensus_info.genesis_block.bytes;
+    let network = if genesis_hash == TESTNET_GENESIS_BLOCK_HASH {
+        Network::Testnet
+    } else {
+        Network::Mainnet
+    };
+
     let service = Arc::new(Service {
         node_client,
         account_keys,
         nonce,
+        transaction_expiry_secs: configs.transaction_expiry_secs,
+        network,
     });
 
     let cancel_token = CancellationToken::new();

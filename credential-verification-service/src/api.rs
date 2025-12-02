@@ -1,9 +1,13 @@
-use axum::{Router, routing::get};
+use axum::{
+    Router,
+    routing::{get, post},
+};
 use prometheus_client::registry::Registry;
 use std::sync::Arc;
 
 use crate::service::Service;
 
+mod common;
 mod monitoring;
 mod verification_request;
 mod verifier;
@@ -11,10 +15,10 @@ mod verifier;
 /// Router exposing the service's endpoints
 pub fn router(service: Arc<Service>) -> Router {
     Router::new()
-        .route("/verifiable-presentations/verify", get(verifier::verify))
+        .route("/verifiable-presentations/verify", post(verifier::verify))
         .route(
             "/verifiable-presentations/create-verification-request",
-            get(verification_request::create_verification_request),
+            post(verification_request::create_verification_request),
         )
         .with_state(service)
 }
