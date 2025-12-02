@@ -20,6 +20,7 @@ classDiagram
 
     %% Request to the API to create a verification request
     class CreateVerificationRequest {
+        <<Request>>
         string connectionId
         string description
         ClaimType claimType
@@ -61,6 +62,7 @@ classDiagram
 
     %%Response to the API to create request for Verification of credentials
     class VerificationRequest {
+        <<Response>>
         UnfilledContextInformation context
         RequestedSubjectClaims[] subject_claims
         TransactionHash anchor_transaction_hash
