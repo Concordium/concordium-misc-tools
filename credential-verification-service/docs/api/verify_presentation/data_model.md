@@ -102,7 +102,7 @@ classDiagram
 
     class AtomicStatement {
         <<enum>>
-        RevealAttribute
+        AttributeValue
         AttributeInRange
         AttributeInSet
         AttributeNotInSet
