@@ -13,7 +13,7 @@ sequenceDiagram
 
     Merchant->>CredentialVerificationService: POST /verifiable-presentations/create-verification-request {CreateVerificationRequest}
     CredentialVerificationService->>CredentialVerificationService: build VerificationRequestData
-    CredentialVerificationService->>RustSDK: anchor::submit_verification_request_anchor
+    CredentialVerificationService->>RustSDK: anchor::create_verification_request_and_submit_request_anchor
     
     RustSDK->>ConcordiumBase: Create TX for VRA (send::register_data)
     ConcordiumBase-->>RustSDK: AccountTransaction<EncodedPayload>
