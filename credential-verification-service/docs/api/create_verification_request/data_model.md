@@ -24,7 +24,7 @@ classDiagram
         string connectionId
         string description
         string resourceId
-        string context
+        string contextString
         ClaimType claimType
         int[] trustedIDPs
         VerificationCheck[] verificationChecks
@@ -95,7 +95,7 @@ classDiagram
     class RequestedIdentitySubjectClaims {
         Statement statements
         IdentityProviderMethod[] issuers
-        CredentialType[] source
+        IdentityCredentialType[] source
     }
 
     %% Statements
@@ -111,6 +111,12 @@ classDiagram
         AttributeNotInSet
     }
 
+    class IdentityCredentialType{
+        <<enum>>
+        IdentityCredential
+        AccountCredential
+    }
+
     %% Relationships
     VerificationRequest --> UnfilledContextInformation: context
     VerificationRequest --> RequestedSubjectClaims: subject_claims
@@ -119,4 +125,5 @@ classDiagram
     RequestedSubjectClaims --> RequestedIdentitySubjectClaims: identity
     RequestedIdentitySubjectClaims --> Statement: statements
     RequestedIdentitySubjectClaims --> IdentityProviderMethod: issuers
+    RequestedIdentitySubjectClaims --> IdentityCredentialType
     Statement --> AtomicStatement

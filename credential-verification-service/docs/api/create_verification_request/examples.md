@@ -6,6 +6,8 @@
 {
   "connectionId": "conn_8291yuw",
   "description": "Age verification check for Alcohol Purchase",
+  "resourceId": "some string for resource",
+  "contextString": "context string here",
   "claimType": "Identity",
   "trustedIDPs": [0, 1, 2, 3, 4],
   "verificationChecks": [
