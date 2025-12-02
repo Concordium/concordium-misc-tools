@@ -60,9 +60,9 @@ Process Overview:
 - Returns the `AnchoredVerificationAuditRecordResponse` which contains the Audit record and the VAA transaction hash
 
 Diagrams and Sample Payloads: 
-- [Sequence Diagram](docs/api/create_verification_request/sequence.md)
-- [Data Model (Request + Response)](docs/api/create_verification_request/data_model.md)
-- [Example Payloads](docs/api/create_verification_request/examples.md)
+- [Sequence Diagram](docs/api/verify_presentation/sequence.md)
+- [Data Model (Request + Response)](docs/api/verify_presentation§/data_model.md)
+- [Example Payloads](docs/api/verify_presentation//examples.md)
 
 
 ## Architecture
