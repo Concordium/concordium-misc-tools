@@ -94,7 +94,7 @@ classDiagram
 
     class RequestedIdentitySubjectClaims {
         Statement statements
-        IdentityProviderMethod[] issuers
+        IdentityProviderDid[] issuers
         IdentityCredentialType[] source
     }
 
@@ -117,6 +117,21 @@ classDiagram
         AccountCredential
     }
 
+    class IdentityProviderDid{
+        network: Network,
+        identity_provider: IpIdentity,
+    }
+
+    class Network{
+        <<enum>>
+        Testnet
+        Mainnet
+    }
+
+    class IpIdentity {
+        <<u32>>
+    }
+
     %% Relationships
     VerificationRequest --> UnfilledContextInformation: context
     VerificationRequest --> RequestedSubjectClaims: subject_claims
@@ -124,6 +139,8 @@ classDiagram
     UnfilledContextInformation --> ContextLabel: requested
     RequestedSubjectClaims --> RequestedIdentitySubjectClaims: identity
     RequestedIdentitySubjectClaims --> Statement: statements
-    RequestedIdentitySubjectClaims --> IdentityProviderMethod: issuers
-    RequestedIdentitySubjectClaims --> IdentityCredentialType
+    RequestedIdentitySubjectClaims --> IdentityProviderDid: issuers
+    RequestedIdentitySubjectClaims --> IdentityCredentialType: source
     Statement --> AtomicStatement
+    IdentityProviderDid --> Network: network
+    IdentityProviderDid --> IpIdentity: identity_provider
