@@ -22,10 +22,9 @@ classDiagram
     class VerifyPresentationRequest {
         <<API Request>>
         presentation: PresentationV1,
-        verificationRequest: VerificationRequest
+        verificationRequest: VerificationRequest [Verification request model](../create_verification_request/data_model.md)
     }
 
-    
     class PresentationV1 {
         presentation_context: ContextInformation
         verifiable_credentials: CredentialV1[]
@@ -61,81 +60,6 @@ classDiagram
         context: String
     }
 
-    VerifyPresentationRequest --> PresentationV1: presentation
-    VerifyPresentationRequest --> VerificationRequest: verificationRequest
-    PresentationV1 --> ContextInformation
-    PresentationV1 --> CredentialV1
-    CredentialV1 --> AccountBasedCredentialV1
-    CredentialV1 --> IdentityBasedCredentialV1
-    ContextInformation --> ContextProperty
-
-
-    %%Response to the API to create request for Verification of credentials
-    class VerificationRequest {
-        UnfilledContextInformation context
-        RequestedSubjectClaims[] subject_claims
-        TransactionHash anchor_transaction_hash
-    }
-
-    class UnfilledContextInformation {
-        GivenContext[] given
-        ContextLabel[] requested
-    }
-
-    class GivenContext {
-        <<enum>>
-        Nonce
-        PaymentHash
-        BlockHash
-        ConnectionId
-        ResourceId
-        ContextString
-    }
-
-    class ContextLabel {
-        <<enum>>
-        Nonce
-        PaymentHash
-        BlockHash
-        ConnectionId
-        ResourceId
-        ContextString
-    }
-
-        %% Claims
-    class RequestedSubjectClaims {
-        <<enum>>
-        Identity
-    }
-
-    class RequestedIdentitySubjectClaims {
-        Statement statements
-        IdentityProviderMethod[] issuers
-        CredentialType[] source
-    }
-
-    %% Statements
-    class Statement {
-        AtomicStatement[] statements
-    }
-
-    class AtomicStatement {
-        <<enum>>
-        RevealAttribute
-        AttributeInRange
-        AttributeInSet
-        AttributeNotInSet
-    }
-
-    %% Relationships
-    VerificationRequest --> UnfilledContextInformation: context
-    VerificationRequest --> RequestedSubjectClaims: subject_claims
-    UnfilledContextInformation --> GivenContext: given
-    UnfilledContextInformation --> ContextLabel: requested
-    RequestedSubjectClaims --> RequestedIdentitySubjectClaims: identity
-    RequestedIdentitySubjectClaims --> Statement: statements
-    RequestedIdentitySubjectClaims --> IdentityProviderMethod: issuers
-    Statement --> AtomicStatement
 
 
     %%%% Response Structure
@@ -159,8 +83,50 @@ classDiagram
         presentation: VerifiablePresentationV1,
     }
 
+    class AccountCredentialSubject{
+        network: Network
+        cred_id: CredentialRegistrationId
+        statements: AtomicStatementV1[]
+    }
+
+    class Network {
+        <<enum>>
+        Testnet
+        Mainnet
+    }
+
+    class AtomicStatement {
+        <<enum>>
+        RevealAttribute
+        AttributeInRange
+        AttributeInSet
+        AttributeNotInSet
+    }
+
+    class IdentityCredentialSubject {
+        network: Network
+        cred_id: IdentityCredentialEphemeralId(vec u8)
+        statements: AtomicStatementV1[]
+    }
+
+    VerifyPresentationRequest --> PresentationV1: presentation
+    VerifyPresentationRequest --> VerificationRequest: verificationRequest
+    PresentationV1 --> ContextInformation
+    PresentationV1 --> CredentialV1
+    CredentialV1 --> AccountBasedCredentialV1
+    CredentialV1 --> IdentityBasedCredentialV1
+    ContextInformation --> ContextProperty
+
+    AccountBasedCredentialV1 --> AccountCredentialSubject
+    AccountCredentialSubject --> Network
+    AccountCredentialSubject --> AtomicStatement
+
+    IdentityBasedCredentialV1 --> IdentityCredentialSubject
+    IdentityCredentialSubject --> Network
+    IdentityBasedCredentialV1 --> AtomicStatement
+
+
     PresentationVerificationData --> PresentationVerificationResult: verification_result
     PresentationVerificationData --> VerificationAuditRecord: audit_record
-    VerificationAuditRecord --> VerifiablePresentationV1
-    VerifiablePresentationV1 --> PresentationV1
+    VerificationAuditRecord --> PresentationV1
     VerificationAuditRecord --> VerificationRequest
