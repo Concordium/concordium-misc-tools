@@ -9,7 +9,7 @@ later be used in the prove and verify flow
 
 ---
 
-# Request Payload
+# Request and Response
 
 The request sent by the Merchant when initiating a verification flow.
 
@@ -20,6 +20,7 @@ classDiagram
 
     %% Request to the API to verify a presentation
     class VerifyPresentationRequest {
+        <<API Request>>
         presentation: PresentationV1,
         verificationRequest: VerificationRequest
     }
@@ -135,3 +136,31 @@ classDiagram
     RequestedIdentitySubjectClaims --> Statement: statements
     RequestedIdentitySubjectClaims --> IdentityProviderMethod: issuers
     Statement --> AtomicStatement
+
+
+    %%%% Response Structure
+    class PresentationVerificationData{
+        <<API Response>>
+        verification_result: PresentationVerificationResult
+        audit_record: VerificationAuditRecord
+        anchor_transaction_hash: TransactionHash
+    }
+
+    class PresentationVerificationResult{
+        <<enum>>
+        Verified
+        Failed(CredentialInvalidReason)
+    }
+
+    class VerificationAuditRecord{
+        version: u16,
+        id: String,
+        request: VerificationRequest,
+        presentation: VerifiablePresentationV1,
+    }
+
+    PresentationVerificationData --> PresentationVerificationResult: verification_result
+    PresentationVerificationData --> VerificationAuditRecord: audit_record
+    VerificationAuditRecord --> VerifiablePresentationV1
+    VerifiablePresentationV1 --> PresentationV1
+    VerificationAuditRecord --> VerificationRequest
