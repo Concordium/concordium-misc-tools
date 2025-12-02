@@ -5,14 +5,42 @@
 ```
 {
   "connectionId": "conn_8291yuw",
-  "description": "Age verification check for Alcohol Purchase",
   "resourceId": "some string for resource",
   "contextString": "context string here",
-  "claimType": "Identity",
+  "publicInfo": {
+    "key": "value",
+    "key2": "value"
+  },
   "trustedIDPs": [0, 1, 2, 3, 4],
-  "verificationChecks": [
-    { "type": "AT_LEAST_AGE_X", "target": 18 },
-    { "type": "NATIONALITY_IN_COUNTRY_SET", "target": "IE,UK,DN,IN.." }
+  "identityCredentialType": "IdentityCredential",
+  "issuers": [0,2,4,5],
+  "statements": [
+    {
+      "type": "ATTRIBUTE_IN_RANGE",
+      "tag": "age",
+      "lowerBound": 18,
+      "upperBound": 100
+    },
+    {
+      "type": "ATTRIBUTE_IN_SET",
+      "tag": "nationality",
+      "set": [
+        IE,
+        IN,
+        US,
+        UK
+      ],
+    },
+    {
+      "type": "ATTRIBUTE_IN_SET",
+      "tag": "residence",
+      "set": [
+        IE,
+        IN,
+        US,
+        UK
+      ],
+    }
   ]
 }
 ```

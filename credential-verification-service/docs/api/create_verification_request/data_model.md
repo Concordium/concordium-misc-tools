@@ -27,11 +27,19 @@ classDiagram
         HashMap publicInfo
         int[] trustedIDPs
         IdentityCredentialType identityCredentialType
-        IdentityProviderDid[] issuers
+        int[] issuers
         ProvingStatement[] statements
     }
 
-    class ProvingStatement {
+    class ProvingStatement{
+        ProvingStatementType type,
+        string tag,
+        int lower_bound,
+        int upper_bound,
+        Set set
+    }
+
+    class ProvingStatementType {
         <<enum>>
         AttributeInRange
         AttributeInSet
@@ -43,7 +51,6 @@ classDiagram
         string tag
         int lower_bound
         int upper_bound
-        // do we need to reflect phantom here?
     }
 
     class AttributeInSet{
@@ -51,10 +58,9 @@ classDiagram
         Set set
     }
 
-
     CreateVerificationRequest --> IdentityCredentialType: identity_credential_type
-    CreateVerificationRequest --> IdentityProviderDid
     CreateVerificationRequest --> ProvingStatement: statements
+    ProvingStatement --> ProvingStatementType: type
     ProvingStatement --> AttributeInRange
     ProvingStatement --> AttributeInSet
 
