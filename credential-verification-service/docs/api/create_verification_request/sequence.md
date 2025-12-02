@@ -1,8 +1,6 @@
 
 # Create Verification Request – POST /verifiable-presentations/create-verification-request
 
-## Request Payload
-
 ```mermaid
 sequenceDiagram
     participant Merchant

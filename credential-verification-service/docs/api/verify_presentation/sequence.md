@@ -1,7 +1,5 @@
 
-# Create Verification Request – POST /verifiable-presentations/verify
-
-## Request Payload
+# Verify Presentation – POST /verifiable-presentations/verify
 
 ```mermaid
 sequenceDiagram
