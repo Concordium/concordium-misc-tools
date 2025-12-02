@@ -23,6 +23,7 @@ classDiagram
         <<Request>>
         string connectionId
         string description
+        string resourceId
         ClaimType claimType
         int[] trustedIDPs
         VerificationCheck[] verificationChecks
