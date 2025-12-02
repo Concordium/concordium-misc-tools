@@ -22,27 +22,41 @@ classDiagram
     class CreateVerificationRequest {
         <<Request>>
         string connectionId
-        string description
         string resourceId
         string contextString
-        ClaimType claimType
         int[] trustedIDPs
-        VerificationCheck[] verificationChecks
+        IdentityCredentialType identityCredentialType
+        IdentityProviderDid[] issuers
+        ProvingStatement[] statements
     }
 
-    class ClaimType {
+    class ProvingStatement {
         <<enum>>
-        Identity
+        AttributeInRange
+        AttributeInSet
+        AttributeNotInSet
+        RevealAttribute
     }
 
-    class VerificationCheck {
-        <<enum>>
-        AtLeastAge(int) // age in years
-        NationalityInCountryCodeList(IE,UK,DN,IN..) // country code list
+    class AttributeInRange{
+        string tag
+        int lower_bound
+        int upper_bound
+        // do we need to reflect phantom here?
     }
 
-    CreateVerificationRequest --> ClaimType: claimType
-    CreateVerificationRequest --> VerificationCheck: verification_checks
+    class AttributeInSet{
+        string tag
+        Set set
+    }
+
+
+    CreateVerificationRequest --> IdentityCredentialType: identity_credential_type
+    CreateVerificationRequest --> IdentityProviderDid
+    CreateVerificationRequest --> ProvingStatement: statements
+    ProvingStatement --> AttributeInRange
+    ProvingStatement --> AttributeInSet
+
 
     %% middle layer conversion into the Verification Request Data from the Merchants request above
     class VerificationRequestData {
