@@ -1,21 +1,29 @@
 use anyhow::Context;
 use concordium_rust_sdk::{
-    types::WalletAccount,
-    v2::{self, Client},
+    types::{Nonce, WalletAccount},
+    v2::{self},
 };
 use futures_util::TryFutureExt;
 use prometheus_client::metrics;
 use prometheus_client::registry::Registry;
 use std::sync::Arc;
 use tokio::net::TcpListener;
+use tokio::sync::Mutex;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
+use tonic::transport::ClientTlsConfig;
 use tracing::{error, info};
 
 use crate::{api, configs::ServiceConfigs};
 
+/// Server struct to store the serive setting into local memory.
+/// Note: This struct will be re-built at service re-start.
 pub struct Service {
-    pub client: v2::Client,
-    pub keys: WalletAccount,
+    /// Client to interact with the node.
+    pub node_client: v2::Client,
+    /// Key and address of the account submitting the anchor transactions on-chain.
+    pub account_keys: Arc<WalletAccount>,
+    /// Nonce of the account submitting the anchor transactions on-chain.
+    pub nonce: Arc<Mutex<Nonce>>,
 }
 
 pub async fn run(configs: ServiceConfigs) -> anyhow::Result<()> {
@@ -28,9 +36,50 @@ pub async fn run(configs: ServiceConfigs) -> anyhow::Result<()> {
         metrics::gauge::ConstGauge::new(chrono::Utc::now().timestamp_millis()),
     );
 
-    let client = Client::new(configs.node_address).await?;
-    let keys = WalletAccount::from_json_file(configs.account)?;
-    let service = Arc::new(Service { client, keys });
+    anyhow::ensure!(
+        configs.request_timeout >= 1000,
+        "Request timeout should be at least 1s."
+    );
+
+    let endpoint =
+        if configs.node_endpoint.uri().scheme() == Some(&concordium_rust_sdk::v2::Scheme::HTTPS) {
+            configs
+                .node_endpoint
+                .tls_config(ClientTlsConfig::new())
+                .context("Unable to construct TLS configuration for Concordium API.")?
+        } else {
+            configs.node_endpoint
+        };
+
+    // Make it 500ms less than request timeout to make sure we can fail properly
+    // with a connection timeout in case of node connectivity problems.
+    let node_timeout = std::time::Duration::from_millis(configs.request_timeout - 500);
+
+    let endpoint = endpoint
+        .connect_timeout(node_timeout)
+        .timeout(node_timeout)
+        .keep_alive_while_idle(true);
+
+    let mut node_client = v2::Client::new(endpoint)
+        .await
+        .context("Unable to establish connection to the node.")?;
+
+    // Load account keys and sender address from a file
+    let keys: WalletAccount =
+        WalletAccount::from_json_file(configs.account).context("Could not read the keys file.")?;
+
+    let account_keys = Arc::new(keys);
+
+    let nonce_response = node_client
+        .get_next_account_sequence_number(&account_keys.address)
+        .await
+        .context("NonceQueryError.")?;
+    let nonce = Arc::new(Mutex::new(nonce_response.nonce));
+    let service = Arc::new(Service {
+        node_client,
+        account_keys,
+        nonce,
+    });
 
     let cancel_token = CancellationToken::new();
     let monitoring_task = {
@@ -55,7 +104,10 @@ pub async fn run(configs: ServiceConfigs) -> anyhow::Result<()> {
             .await
             .context("Failed to parse API TCP address")?;
         let stop_signal = cancel_token.child_token();
-        info!("Server is running at {:?}", configs.api_address);
+        info!(
+            "API server is running at {:?} with account {} and current account nonce: {}.",
+            configs.api_address, service.account_keys.address, nonce_response.nonce
+        );
 
         axum::serve(listener, api::router(service))
             .with_graceful_shutdown(stop_signal.cancelled_owned())

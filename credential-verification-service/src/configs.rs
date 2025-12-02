@@ -7,7 +7,14 @@ use std::{net::SocketAddr, path::PathBuf};
 #[clap(arg_required_else_help(true))]
 pub struct ServiceConfigs {
     #[arg(long, env = "CREDENTIAL_VERIFICATION_SERVICE_NODE_GRPC_ENDPOINT")]
-    pub node_address: v2::Endpoint,
+    pub node_endpoint: v2::Endpoint,
+    #[clap(
+        long = "request-timeout",
+        help = "Request timeout (both of request to the node and server requests) in milliseconds.",
+        default_value = "10000",
+        env = "REQUEST_TIMEOUT"
+    )]
+    pub request_timeout: u64,
     #[arg(
         long,
         env = "CREDENTIAL_VERIFICATION_SERVICE_API_ADDRESS",

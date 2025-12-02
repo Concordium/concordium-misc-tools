@@ -1051,6 +1051,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tokio-util",
+ "tonic",
  "tracing",
  "tracing-subscriber",
 ]

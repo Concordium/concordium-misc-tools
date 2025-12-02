@@ -25,7 +25,34 @@ docker run --rm \
   credential-verification-service
 ```
 
-
-you should then be able to curl the health endpoint from outside the container, for example:
+You should then be able to curl the health endpoint from outside the container, for example:
 
 `curl http://localhost:8001/health`
+
+## Build the service from the source code
+
+You can build the serive locally as follows:
+
+```
+cargo build
+```
+
+## Run the servie from the source code
+
+You can run the serive locally as follows:
+
+```
+cargo run -- --node-endpoint https://grpc.testnet.concordium.com:20000 --account 4bbdAUCDK2D6cUvUeprGr4FaSaHXKuYmYVjyCa4bXSCu3NUXzA.export
+```
+
+## Configuration options
+
+The following options are supported:
+
+- `--node_endpoint [env: CREDENTIAL_VERIFICATION_SERVICE_NODE_GRPC_ENDPOINT]`: the URL of the node's GRPC V2 interface, e.g., http://node.testnet.concordium.com:20000
+- `--request_timeout [env: REQUEST_TIMEOUT]`:` The request timeout (both of request to the node and server requests) in milliseconds.
+- `--log-level [env: LOG_LEVEL]`: The maximum log level` (defaults to info if not given).
+- `--account [env: CREDENTIAL_VERIFICATION_SERVICE_ACCOUNT]`: The path to the account key 
+- `--api_address [env: CREDENTIAL_VERIFICATION_SERVICE_API_ADDRESS]`: The socket address where the service exposes its API.
+- `--monitoring_address [env: CREDENTIAL_VERIFICATION_SERVICE_MONITORING_ADDRESS]`: The socket address used for health and metrics monitoring.
+
