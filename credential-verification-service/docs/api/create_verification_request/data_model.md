@@ -24,6 +24,7 @@ classDiagram
         string connectionId
         string description
         string resourceId
+        string context
         ClaimType claimType
         int[] trustedIDPs
         VerificationCheck[] verificationChecks
@@ -37,20 +38,11 @@ classDiagram
     class VerificationCheck {
         <<enum>>
         AtLeastAge(int) // age in years
-        NationalityInRegion(Region)
-    }
-
-    class Region {
-        <<enum>>
-        EU
-        AFRICA
-        AMERICAS
-        APAC
+        NationalityInCountryCodeList(IE,UK,DN,IN..) // country code list
     }
 
     CreateVerificationRequest --> ClaimType: claimType
     CreateVerificationRequest --> VerificationCheck: verification_checks
-    VerificationCheck --> Region
 
     %% middle layer conversion into the Verification Request Data from the Merchants request above
     class VerificationRequestData {
