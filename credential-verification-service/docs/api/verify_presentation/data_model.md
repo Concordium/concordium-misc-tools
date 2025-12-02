@@ -13,6 +13,11 @@ later be used in the prove and verify flow
 
 The request sent by the Merchant when initiating a verification flow.
 
+<b>
+Note: Verification Request Model is absent below to simplify the diagram, as its already present in:
+- [Verification request model](../create_verification_request/data_model.md)
+</b>
+
 ## Structure (Mermaid)
 
 ```mermaid
@@ -22,7 +27,7 @@ classDiagram
     class VerifyPresentationRequest {
         <<API Request>>
         presentation: PresentationV1,
-        verificationRequest: VerificationRequest [Verification request model](../create_verification_request/data_model.md)
+        verificationRequest: VerificationRequest(link in Note above)
     }
 
     class PresentationV1 {
