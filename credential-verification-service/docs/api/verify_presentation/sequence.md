@@ -3,8 +3,6 @@
 
 ## Request Payload
 
-<TODO - remaining sequence below to be filled in>
-
 ```mermaid
 sequenceDiagram
     participant Merchant
