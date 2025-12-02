@@ -16,6 +16,11 @@ sequenceDiagram
     Merchant->>CredentialVerificationService: POST /verifiable-presentations/verify {VerifyPresentationRequest}
     CredentialVerificationService->>RustSDK:  web3id::v1::verify_presentation_and_submit_audit_anchor
 
+    RustSDK-->GRPCNode: get_cryptographic_parameters
+    GRPCNode-->RustSDK: endpoints::QueryResult<QueryResponse<types::CryptographicParameters>>
+
+    RustSDK-->GRPCNode: lookup_request_anchor
+    GRPCNode-->RustSDK: VerificationRequestAnchorAndBlockHash
 
     RustSDK->>GRPCNode: getBlockInfo
     GRPCNode->>RustSDK: BlockInfo 
