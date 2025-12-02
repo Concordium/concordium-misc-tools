@@ -1,6 +1,5 @@
 //! Handler for create-verification-request endpoint.
-use crate::service::Service;
-use crate::types::ServerError;
+use crate::types::{ServerError, Service, VerificationRequestParams};
 use axum::{Json, extract::State};
 use concordium_rust_sdk::{
     base::web3id::v1::anchor::VerificationRequest,
@@ -9,51 +8,36 @@ use concordium_rust_sdk::{
     web3id::v1::create_verification_request_and_submit_request_anchor,
     {
         base::web3id::v1::anchor::{
-            self, IdentityCredentialType, IdentityProviderDid,
-            RequestedIdentitySubjectClaimsBuilder, RequestedStatement,
+            IdentityProviderDid, RequestedIdentitySubjectClaimsBuilder,
             UnfilledContextInformationBuilder, VerificationRequestDataBuilder,
         },
         common::types::TransactionTime,
-        id::id_proof_types::AttributeInRangeStatement,
-        web3id::{Web3IdAttribute, v1::AnchorTransactionMetadata},
+        web3id::v1::AnchorTransactionMetadata,
     },
 };
 use std::sync::Arc;
-use std::{collections::HashMap, marker::PhantomData};
 
 pub async fn create_verification_request(
     State(state): State<Arc<Service>>,
+    Json(params): Json<VerificationRequestParams>,
 ) -> Result<Json<VerificationRequest>, ServerError> {
-    // Note: Future PRs will change these values to be posted to the service.
-    let nonce_bytes: [u8; 32] = [0u8; 32];
-    let context_nonce = anchor::Nonce(nonce_bytes);
-    let connection_id = "MyWalletConnectTopic".to_string();
-    let context_string = "MyGreateApp".to_string();
-    let statements = vec![RequestedStatement::AttributeInRange(
-        AttributeInRangeStatement {
-            attribute_tag: 17.into(),
-            lower: Web3IdAttribute::Numeric(80),
-            upper: Web3IdAttribute::Numeric(1237),
-            _phantom: PhantomData,
-        },
-    )];
-    let credential_types = vec![IdentityCredentialType::IdentityCredential];
-    let issuers = [0u32];
-    let public_info = HashMap::new();
-
     let statement = RequestedIdentitySubjectClaimsBuilder::default()
         .issuers(
-            issuers
+            params
+                .issuers
                 .iter()
                 .map(|issuer| IdentityProviderDid::new(*issuer, state.network)),
         )
-        .statements(statements)
-        .sources(credential_types)
+        .statements(params.statements)
+        .sources(params.credential_types)
         .build();
 
-    let context =
-        UnfilledContextInformationBuilder::new_simple(context_nonce, connection_id, context_string)
-            .build();
+    let context = UnfilledContextInformationBuilder::new_simple(
+        params.nonce,
+        params.connection_id,
+        params.context_string,
+    )
+    .build();
 
     let verification_request_data = VerificationRequestDataBuilder::new(context)
         .subject_claim(statement)
@@ -81,7 +65,7 @@ pub async fn create_verification_request(
         &mut node_client,
         anchor_transaction_metadata,
         verification_request_data,
-        Some(public_info.clone()),
+        Some(params.public_info.clone()),
     )
     .await;
 

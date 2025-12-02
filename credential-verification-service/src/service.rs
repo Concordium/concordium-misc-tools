@@ -1,7 +1,7 @@
 use anyhow::Context;
 use concordium_rust_sdk::{
     constants::TESTNET_GENESIS_BLOCK_HASH,
-    types::{Nonce, WalletAccount},
+    types::WalletAccount,
     v2::{self},
     web3id::did::Network,
 };
@@ -15,22 +15,7 @@ use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use tonic::transport::ClientTlsConfig;
 use tracing::{error, info};
 
-use crate::{api, configs::ServiceConfigs};
-
-/// Server struct to store the serive setting into local memory.
-/// Note: This struct will be re-built at service re-start.
-pub struct Service {
-    /// Client to interact with the node.
-    pub node_client: v2::Client,
-    /// Key and address of the account submitting the anchor transactions on-chain.
-    pub account_keys: Arc<WalletAccount>,
-    /// Nonce of the account submitting the anchor transactions on-chain.
-    pub nonce: Arc<Mutex<Nonce>>,
-    /// The number of seconds in the future when the anchor transactions should expiry.  
-    pub transaction_expiry_secs: u32,
-    /// The network of the connected node.  
-    pub network: Network,
-}
+use crate::{api, configs::ServiceConfigs, types::Service};
 
 pub async fn run(configs: ServiceConfigs) -> anyhow::Result<()> {
     let service_info = metrics::info::Info::new([("version", clap::crate_version!().to_string())]);

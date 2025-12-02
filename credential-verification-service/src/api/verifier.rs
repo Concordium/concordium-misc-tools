@@ -1,5 +1,5 @@
 //! Handler for verification endpoints.
-use crate::service::Service;
+use crate::types::Service;
 use axum::{Json, extract::State};
 use std::sync::Arc;
 

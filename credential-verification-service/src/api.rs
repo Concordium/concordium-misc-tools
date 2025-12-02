@@ -1,11 +1,10 @@
+use crate::types::Service;
 use axum::{
     Router,
     routing::{get, post},
 };
 use prometheus_client::registry::Registry;
 use std::sync::Arc;
-
-use crate::service::Service;
 
 mod monitoring;
 mod verification_request;
