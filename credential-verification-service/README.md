@@ -29,3 +29,42 @@ docker run --rm \
 you should then be able to curl the health endpoint from outside the container, for example:
 
 `curl http://localhost:8001/health`
+
+
+
+## API Documentation
+
+### Create Verification Request
+
+Endpoint: HTTP POST /verifiable-presentations/create-verification-request {CreateVerificationRequest}
+
+Purpose: Creates a Verification Request in order to prove some statements about the credentials.
+
+Process Overview:
+- Submits a register data transaction to the concordium network, in the form of a VRA (Verifiable Request Anchor)
+- Returns the `VerificationRequest` which contains the anchor transaction hash
+
+Diagrams and Sample Payloads: 
+- [Sequence Diagram](docs/api/create_verification_request/sequence.md)
+- [Data Model (Request + Response)](docs/api/create_verification_request/data_model.md)
+- [Example Payloads](docs/api/create_verification_request/examples.md)
+
+### Verify Presentation
+
+Endpoint: HTTP POST /verifiable-presentations/verify {VerifiablePresentationRequest}
+
+Purpose: To verify a Presentation
+
+Process Overview:
+- Submits a register data transaction to the concordium network, in the form of a VAA (Verifiable Audit Anchor)
+- Returns the `PresentationVerificationData` response which contains the verification result, the audit anchor record and the audit anchor transaction hash.
+
+Diagrams and Sample Payloads: 
+- [Sequence Diagram](docs/api/verify_presentation/sequence.md)
+- [Data Model (Request + Response)](docs/api/verify_presentation§/data_model.md)
+- [Example Payloads](docs/api/verify_presentation//examples.md)
+
+
+## Architecture
+- 🗺️ [Architecture Overview](docs/architecture.md)
+
