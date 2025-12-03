@@ -11,35 +11,39 @@
     "key": "value",
     "key2": "value"
   },
-  "trustedIDPs": [0, 1, 2, 3, 4],
-  "identityCredentialType": "IdentityCredential",
-  "issuers": [0,2,4,5],
-  "statements": [
+  claims: [
     {
-      "type": "ATTRIBUTE_IN_RANGE",
-      "tag": "age",
-      "lowerBound": 18,
-      "upperBound": 100
-    },
-    {
-      "type": "ATTRIBUTE_IN_SET",
-      "tag": "nationality",
-      "set": [
-        IE,
-        IN,
-        US,
-        UK
-      ],
-    },
-    {
-      "type": "ATTRIBUTE_IN_SET",
-      "tag": "residence",
-      "set": [
-        IE,
-        IN,
-        US,
-        UK
-      ],
+      "identityCredentialType": "Identity",
+      "trustedIdps": [1,2,3],
+      "issuers": [2,3],
+      "provingStatements": [
+        {
+          "type": "ATTRIBUTE_IN_RANGE",
+          "tag": "age",
+          "lowerBound": 18,
+          "upperBound": 100
+        },
+        {
+          "type": "ATTRIBUTE_IN_SET",
+          "tag": "nationality",
+          "set": [
+            IE,
+            IN,
+            US,
+            UK
+          ],
+        },
+        {
+          "type": "ATTRIBUTE_IN_SET",
+          "tag": "residence",
+          "set": [
+            IE,
+            IN,
+            US,
+            UK
+          ],
+        }
+      ]
     }
   ]
 }

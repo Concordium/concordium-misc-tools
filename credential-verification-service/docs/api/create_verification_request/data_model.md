@@ -25,8 +25,12 @@ classDiagram
         string resourceId
         string contextString
         HashMap publicInfo
+        ProofClaim[] proofClaims
+    }
+
+    class ProofClaim {
         int[] trustedIDPs
-        IdentityCredentialType identityCredentialType
+        IdentityCredentialType credentialType
         int[] issuers
         ProvingStatement[] statements
     }
@@ -58,8 +62,9 @@ classDiagram
         Set set
     }
 
-    CreateVerificationRequest --> IdentityCredentialType: identity_credential_type
-    CreateVerificationRequest --> ProvingStatement: statements
+    CreateVerificationRequest --> ProofClaim: proofClaims
+    ProofClaim --> ProvingStatement
+    ProofClaim --> IdentityCredentialType
     ProvingStatement --> ProvingStatementType: type
     ProvingStatement --> AttributeInRange
     ProvingStatement --> AttributeInSet
