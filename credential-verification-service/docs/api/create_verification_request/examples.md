@@ -11,12 +11,12 @@
     "key": "value",
     "key2": "value"
   },
-  proofClaims: [
+  subjectClaims: [
     {
       "credentialType": "Identity",
       "trustedIdps": [1,2,3],
       "issuers": [2,3],
-      "provingStatements": [
+      "claims": [
         {
           "type": "ATTRIBUTE_IN_RANGE",
           "tag": "age",
