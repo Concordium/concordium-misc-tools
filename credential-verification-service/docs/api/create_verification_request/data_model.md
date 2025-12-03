@@ -26,17 +26,17 @@ classDiagram
         string resourceId
         string contextString
         HashMap publicInfo
-        ProofClaim[] proofClaims
+        SubjectClaim[] claims
     }
 
-    class ProofClaim {
+    class SubjectClaim {
         int[] trustedIDPs
         IdentityCredentialType credentialType
         int[] issuers
-        ProvingStatement[] provingStatements
+        SubjectStatement[] statements
     }
 
-    class ProvingStatement{
+    class SubjectStatement{
         ProvingStatementType type,
         string tag,
         int lower_bound,
@@ -63,12 +63,12 @@ classDiagram
         Set set
     }
 
-    CreateVerificationRequest --> ProofClaim: proofClaims
-    ProofClaim --> ProvingStatement
-    ProofClaim --> IdentityCredentialType
-    ProvingStatement --> ProvingStatementType: type
-    ProvingStatement --> AttributeInRange
-    ProvingStatement --> AttributeInSet
+    CreateVerificationRequest --> SubjectClaim: claims
+    SubjectClaim --> SubjectStatement
+    SubjectClaim --> IdentityCredentialType
+    SubjectStatement --> ProvingStatementType: type
+    SubjectStatement --> AttributeInRange
+    SubjectStatement --> AttributeInSet
 
 
     %% middle layer conversion into the Verification Request Data from the Merchants request above
