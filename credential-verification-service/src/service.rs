@@ -24,24 +24,12 @@ pub async fn run(configs: ServiceConfigs) -> anyhow::Result<()> {
         metrics::gauge::ConstGauge::new(chrono::Utc::now().timestamp_millis()),
     );
 
-    let endpoint =
-        if configs.node_endpoint.uri().scheme() == Some(&concordium_rust_sdk::v2::Scheme::HTTPS) {
-            configs
-                .node_endpoint
-                .tls_config(ClientTlsConfig::new())
-                .context("Unable to construct TLS configuration for Concordium node.")?
-        } else {
-            configs.node_endpoint
-        };
+    let endpoint = configs
+        .node_endpoint
+        .tls_config(ClientTlsConfig::new())
+        .context("Unable to construct TLS configuration for Concordium node.")?;
 
-    anyhow::ensure!(
-        configs.request_timeout >= 1000,
-        "Request timeout should be at least 1s."
-    );
-
-    // Make it 500ms less than request timeout to make sure we can fail properly
-    // with a connection timeout in case of node connectivity problems.
-    let node_timeout = std::time::Duration::from_millis(configs.request_timeout);
+    let node_timeout = std::time::Duration::from_millis(configs.grpc_node_request_timeout);
 
     let endpoint = endpoint
         .connect_timeout(node_timeout)

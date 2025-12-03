@@ -9,11 +9,18 @@ pub struct ServiceConfigs {
     pub node_endpoint: v2::Endpoint,
     #[arg(
         long = "request-timeout",
-        help = "Request timeout (both of request to the node and server requests) in milliseconds.",
-        default_value = "10000",
+        help = "The request timeout for a request to be processed with the credential service api in milliseconds.",
+        default_value = "5000",
         env = "CREDENTIAL_VERIFICATION_SERVICE_REQUEST_TIMEOUT"
     )]
     pub request_timeout: u64,
+    #[arg(
+        long = "grpc-node-request-timeout",
+        help = "The request timeout to the Concordium node in milliseconds",
+        default_value = "1000",
+        env = "CREDENTIAL_VERIFICATION_GRPC_NODE_REQUEST_TIMEOUT"
+    )]
+    pub grpc_node_request_timeout: u64,
     #[arg(
         long,
         help = "The socket address where the service exposes its API.",

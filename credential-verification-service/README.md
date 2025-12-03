@@ -50,7 +50,8 @@ cargo run -- --node-endpoint https://grpc.testnet.concordium.com:20000 --account
 The following options are supported:
 
 - `--node-endpoint [env: CREDENTIAL_VERIFICATION_SERVICE_NODE_GRPC_ENDPOINT]`: the URL of the node's GRPC V2 interface, e.g., http://node.testnet.concordium.com:20000
-- `--request-timeout [env: CREDENTIAL_VERIFICATION_SERVICE_REQUEST_TIMEOUT]`: The request timeout (both of request to the node and server requests) in milliseconds.
+- `--request-timeout [env: CREDENTIAL_VERIFICATION_SERVICE_REQUEST_TIMEOUT]`: The request timeout for a request to be processed with the credential service api in milliseconds (defaults to `5` second if not given).
+- `--grpc-node-request-timeout [env: CREDENTIAL_VERIFICATION_GRPC_NODE_REQUEST_TIMEOUT]`: The request timeout to the Concordium node in milliseconds (defaults to `1` second if not given).
 - `--log-level [env: CREDENTIAL_VERIFICATION_SERVICE_LOG_LEVEL]`: The log level (defaults to info if not given).
 - `--account [env: CREDENTIAL_VERIFICATION_SERVICE_ACCOUNT]`: The path to the account key file.
 - `--api-address [env: CREDENTIAL_VERIFICATION_SERVICE_API_ADDRESS]`: The socket address where the service exposes its API (defaults to `127.0.0.1:8000` if not given).

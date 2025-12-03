@@ -1,5 +1,8 @@
 //! Handler for create-verification-request endpoint.
-use crate::types::{ServerError, Service, VerificationRequestParams};
+use crate::{
+    api_types::CreateVerificationRequest,
+    types::{ServerError, Service},
+};
 use axum::{Json, extract::State};
 use concordium_rust_sdk::{
     base::web3id::v1::anchor::{
@@ -17,7 +20,7 @@ use std::sync::Arc;
 
 pub async fn create_verification_request(
     State(state): State<Arc<Service>>,
-    Json(params): Json<VerificationRequestParams>,
+    Json(params): Json<CreateVerificationRequest>,
 ) -> Result<Json<VerificationRequest>, ServerError> {
     let context = UnfilledContextInformationBuilder::new_simple(
         params.nonce,
