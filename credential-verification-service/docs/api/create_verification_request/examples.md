@@ -11,9 +11,9 @@
     "key": "value",
     "key2": "value"
   },
-  claims: [
+  proofClaims: [
     {
-      "identityCredentialType": "Identity",
+      "credentialType": "Identity",
       "trustedIdps": [1,2,3],
       "issuers": [2,3],
       "provingStatements": [

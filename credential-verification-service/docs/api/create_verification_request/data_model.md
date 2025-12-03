@@ -32,7 +32,7 @@ classDiagram
         int[] trustedIDPs
         IdentityCredentialType credentialType
         int[] issuers
-        ProvingStatement[] statements
+        ProvingStatement[] provingStatements
     }
 
     class ProvingStatement{
