@@ -1,4 +1,4 @@
-use crate::plt::{CreatePltGenerator, PltOperationGenerator};
+use crate::{generator::SponsoredTransactionGenerator, plt::{CreatePltGenerator, PltOperationGenerator}};
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 use concordium_rust_sdk::{endpoints::Endpoint, types::WalletAccount, v2};
@@ -65,6 +65,7 @@ enum Command {
     Plt(plt::PltOperationArgs),
     /// Create PLT update instructions
     CreatePlt(plt::CreatePltArgs),
+    SponsoredTransaction(generator::SponsoredTransactionArgs)
 }
 
 #[tokio::main(flavor = "multi_thread")]
@@ -137,6 +138,11 @@ async fn main() -> anyhow::Result<()> {
         Command::CreatePlt(create_plt_args) => {
             let generator =
                 CreatePltGenerator::instantiate(client.clone(), args, create_plt_args).await?;
+            generate_transactions(client, generator, txn_interval).await
+        }
+        Command::SponsoredTransaction(sponsore_txn_args) => {
+            let generator = 
+            SponsoredTransactionGenerator::instantiate(client.clone(), args, sponsored_txn_args).await?;
             generate_transactions(client, generator, txn_interval).await
         }
     }
