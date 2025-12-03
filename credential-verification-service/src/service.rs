@@ -1,7 +1,7 @@
 use crate::{api, configs::ServiceConfigs, types::Service};
-use anyhow::Context;
+use anyhow::{Context, anyhow};
 use concordium_rust_sdk::{
-    constants::TESTNET_GENESIS_BLOCK_HASH,
+    constants::{MAINNET_GENESIS_BLOCK_HASH, TESTNET_GENESIS_BLOCK_HASH},
     types::WalletAccount,
     v2::{self},
     web3id::did::Network,
@@ -70,10 +70,16 @@ pub async fn run(configs: ServiceConfigs) -> anyhow::Result<()> {
         .await
         .context("Unable to query the consesnsus info from the chain")?;
     let genesis_hash = consensus_info.genesis_block.bytes;
-    let network = if genesis_hash == TESTNET_GENESIS_BLOCK_HASH {
-        Network::Testnet
-    } else {
-        Network::Mainnet
+
+    let network = match genesis_hash {
+        hash if hash == TESTNET_GENESIS_BLOCK_HASH => Network::Testnet,
+        hash if hash == MAINNET_GENESIS_BLOCK_HASH => Network::Mainnet,
+        _ => {
+            return Err(anyhow!(
+                "Only TESTNET/MAINNET supported. Unknown genesis hash: {:?}",
+                genesis_hash
+            ));
+        }
     };
 
     let service = Arc::new(Service {

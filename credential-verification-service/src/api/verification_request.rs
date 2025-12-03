@@ -2,16 +2,15 @@
 use crate::types::{ServerError, Service, VerificationRequestParams};
 use axum::{Json, extract::State};
 use concordium_rust_sdk::{
-    base::web3id::v1::anchor::VerificationRequest,
+    base::web3id::v1::anchor::{
+        LabeledContextProperty, UnfilledContextInformationBuilder, VerificationRequest,
+        VerificationRequestDataBuilder,
+    },
+    common::types::TransactionTime,
     v2::{QueryError, RPCError},
-    web3id::v1::CreateAnchorError::Query,
-    web3id::v1::create_verification_request_and_submit_request_anchor,
-    {
-        base::web3id::v1::anchor::{
-            UnfilledContextInformationBuilder, VerificationRequestDataBuilder,
-        },
-        common::types::TransactionTime,
-        web3id::v1::AnchorTransactionMetadata,
+    web3id::v1::{
+        AnchorTransactionMetadata, CreateAnchorError::Query,
+        create_verification_request_and_submit_request_anchor,
     },
 };
 use std::sync::Arc;
@@ -25,11 +24,14 @@ pub async fn create_verification_request(
         params.connection_id,
         params.context_string,
     )
+    .given(LabeledContextProperty::ResourceId(params.rescource_id))
     .build();
 
-    let verification_request_data = VerificationRequestDataBuilder::new(context)
-        .subject_claims(params.requested_claims)
-        .build();
+    let mut builder = VerificationRequestDataBuilder::new(context);
+    for claim in params.requested_claims {
+        builder = builder.subject_claim(claim);
+    }
+    let verification_request_data = builder.build();
 
     // Transaction should expiry after some seconds.
     let expiry = TransactionTime::seconds_after(state.transaction_expiry_secs);
@@ -52,34 +54,71 @@ pub async fn create_verification_request(
     let verification_request = create_verification_request_and_submit_request_anchor(
         &mut node_client,
         anchor_transaction_metadata,
-        verification_request_data,
-        Some(params.public_info),
+        verification_request_data.clone(),
+        None,
     )
     .await;
 
     match verification_request {
-        Ok(verification_request) => {
+        Ok(req) => {
             // If the submission of the anchor transaction was successful,
             // increase the account_sequence_number tracked in this service.
             *account_sequence_number = account_sequence_number.next();
-
-            Ok(Json(verification_request))
+            Ok(Json(req))
         }
 
         Err(e) => {
             // If the error is due to an account sequence number mismatch,
-            // refresh the value in the state.
+            // refresh the value in the state and try to resubmit the transaction.
             if let Query(QueryError::RPCError(RPCError::CallError(ref err))) = e {
-                if err.message() == "Duplicate nonce" || err.message() == "Nonce too large" {
+                let msg = err.message();
+                let is_nonce_err = msg == "Duplicate nonce" || msg == "Nonce too large";
+
+                if is_nonce_err {
+                    tracing::warn!(
+                        "Unable to submit transaction on-chain successfully due to account nonce mismatch: {}.
+                        Account nonce will be re-freshed and transaction will be re-submitted.",
+                        msg
+                    );
+
+                    // Refresh nonce
                     let nonce_response = node_client
                         .get_next_account_sequence_number(&state.account_keys.address)
                         .await
                         .map_err(|e| ServerError::SubmitAnchorTransaction(e.into()))?;
+
                     *account_sequence_number = nonce_response.nonce;
 
-                    return Err(ServerError::NonceMismatch(e));
+                    tracing::info!("Refreshed account nonce successfully.");
+
+                    // Retry anchor transaction.
+                    let meta = AnchorTransactionMetadata {
+                        signer: &state.account_keys,
+                        sender: state.account_keys.address,
+                        account_sequence_number: nonce_response.nonce,
+                        expiry,
+                    };
+
+                    let retry = create_verification_request_and_submit_request_anchor(
+                        &mut node_client,
+                        meta,
+                        verification_request_data,
+                        None,
+                    )
+                    .await;
+
+                    return retry
+                        .map(|req| {
+                            tracing::info!(
+                                "Successfully submitted anchor transaction after the account nonce was refreshed."
+                            );
+                            *account_sequence_number = account_sequence_number.next();
+                            Json(req)
+                        })
+                        .map_err(ServerError::SubmitAnchorTransaction);
                 }
             }
+
             Err(ServerError::SubmitAnchorTransaction(e))
         }
     }

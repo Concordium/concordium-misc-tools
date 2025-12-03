@@ -1,12 +1,11 @@
 use axum::{Json, http::StatusCode};
 use concordium_rust_sdk::{
     base::web3id::v1::anchor::{self, RequestedSubjectClaims},
-    common::cbor,
     types::{Nonce, WalletAccount},
     v2,
     web3id::{did::Network, v1::CreateAnchorError},
 };
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 use tokio::sync::Mutex;
 
 /// Holds the service state in memory.
@@ -37,21 +36,22 @@ pub struct VerificationRequestParams {
     pub nonce: anchor::Nonce,
     /// An identifier for some connection (e.g. wallet-connect topic) included in the verification request context.
     pub connection_id: String,
+    /// A rescource id to track the connected website (e.g. website URL or TLS fingerprint).
+    pub rescource_id: String,
     /// A general purpose string value included in the verification request context.
     pub context_string: String,
     /// The subject claims being requested to be proven.
     pub requested_claims: Vec<RequestedSubjectClaims>,
-    /// Additional public info which will be included in the anchor transaction (VRA)
-    /// that is submitted on-chain.
-    pub public_info: HashMap<String, cbor::value::Value>,
+    // TODO: Remaining missing field
+    // Additional public info which will be included in the anchor transaction (VRA)
+    // that is submitted on-chain.
+    // pub public_info: HashMap<String, SerdeCborValue>,
 }
 
 #[derive(Debug, thiserror::Error)]
 pub enum ServerError {
     #[error("Unable to submit anchor transaction on chain successfully: {0}.")]
     SubmitAnchorTransaction(#[from] CreateAnchorError),
-    #[error("Unable to submit transaction on chain successfully due to nonce mismatch: {0}.")]
-    NonceMismatch(CreateAnchorError),
 }
 
 impl axum::response::IntoResponse for ServerError {
@@ -62,13 +62,6 @@ impl axum::response::IntoResponse for ServerError {
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json("Internal error.".to_string()),
-                )
-            }
-            ServerError::NonceMismatch(error) => {
-                tracing::error!("Service unavailable: {error}.");
-                (
-                    StatusCode::SERVICE_UNAVAILABLE,
-                    Json("Service unavailable.".to_string()),
                 )
             }
         };

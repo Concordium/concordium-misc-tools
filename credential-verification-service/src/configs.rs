@@ -43,7 +43,7 @@ pub struct ServiceConfigs {
     pub transaction_expiry_secs: u32,
     #[arg(
         long,
-        help = "The maximum log level  [`off`, `error`, `warn`, `info`, `debug`, or `trace`]",
+        help = "The log level  [`off`, `error`, `warn`, `info`, `debug`, or `trace`]",
         default_value = "info",
         env = "CREDENTIAL_VERIFICATION_SERVICE_LOG_LEVEL"
     )]
