@@ -30,8 +30,7 @@ classDiagram
     }
 
     class SubjectClaims {
-        int[] trustedIDPs
-        IdentityCredentialType credentialType
+        IdentityCredentialType[] credentialType
         int[] issuers
         Claim[] claims
     }

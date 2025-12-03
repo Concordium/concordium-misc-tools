@@ -13,8 +13,7 @@
   },
   subjectClaims: [
     {
-      "credentialType": "Identity",
-      "trustedIdps": [1,2,3],
+      "credentialType": ["Identity"],
       "issuers": [2,3],
       "claims": [
         {
