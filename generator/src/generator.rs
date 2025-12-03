@@ -1010,24 +1010,15 @@ impl Generate for SponsoredTransactionGenerator {
             .finalize()
             .expect("Transaction is well-formed");
 
-        //TODO: still trying to figure this out, so we have the pre-sent txn object above
-        //now we want to create a full acc txn object, right?
-        let tx = send::transfer(
-            &self.args.keys,
-            self.args.keys.address,
-            self.nonce,
-            expiry,
-            next_account,
-            self.amount,
-        );
-
         self.nonce.next_mut();
-        self.count += 1;
 
         Ok(tx)
         
     }
 
+    ///TODO: I am missing something here...the generator is restricted by the trait which returns AccountTransaction
+    /// and it is not happy if i try to change the result type to AccountTransactionV1....what am I missing here...
+    /// 
     fn generate_block_item(&mut self) -> anyhow::Result<BlockItem<EncodedPayload>> {
         self.generate().map(BlockItem::AccountTransactionV1)
     }
