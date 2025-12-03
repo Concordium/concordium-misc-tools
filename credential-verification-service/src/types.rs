@@ -1,8 +1,7 @@
 use axum::{Json, http::StatusCode};
 use concordium_rust_sdk::{
-    base::web3id::v1::anchor::{self, IdentityCredentialType, RequestedStatement},
+    base::web3id::v1::anchor::{self, RequestedSubjectClaims},
     common::cbor,
-    id::types::AttributeTag,
     types::{Nonce, WalletAccount},
     v2,
     web3id::{did::Network, v1::CreateAnchorError},
@@ -40,12 +39,8 @@ pub struct VerificationRequestParams {
     pub connection_id: String,
     /// A general purpose string value included in the verification request context.
     pub context_string: String,
-    /// The statements requested to generate proofs about.
-    pub statements: Vec<RequestedStatement<AttributeTag>>,
-    /// The credential types requested to be used.
-    pub credential_types: Vec<IdentityCredentialType>,
-    /// The allowed credential issuer indexes (IDP indexes).
-    pub issuers: Vec<u32>,
+    /// The subject claims being requested to be proven.
+    pub requested_claims: Vec<RequestedSubjectClaims>,
     /// Additional public info which will be included in the anchor transaction (VRA)
     /// that is submitted on-chain.
     pub public_info: HashMap<String, cbor::value::Value>,

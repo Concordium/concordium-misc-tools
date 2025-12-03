@@ -8,7 +8,6 @@ use concordium_rust_sdk::{
     web3id::v1::create_verification_request_and_submit_request_anchor,
     {
         base::web3id::v1::anchor::{
-            IdentityProviderDid, RequestedIdentitySubjectClaimsBuilder,
             UnfilledContextInformationBuilder, VerificationRequestDataBuilder,
         },
         common::types::TransactionTime,
@@ -21,17 +20,6 @@ pub async fn create_verification_request(
     State(state): State<Arc<Service>>,
     Json(params): Json<VerificationRequestParams>,
 ) -> Result<Json<VerificationRequest>, ServerError> {
-    let statement = RequestedIdentitySubjectClaimsBuilder::default()
-        .issuers(
-            params
-                .issuers
-                .iter()
-                .map(|issuer| IdentityProviderDid::new(*issuer, state.network)),
-        )
-        .statements(params.statements)
-        .sources(params.credential_types)
-        .build();
-
     let context = UnfilledContextInformationBuilder::new_simple(
         params.nonce,
         params.connection_id,
@@ -40,7 +28,7 @@ pub async fn create_verification_request(
     .build();
 
     let verification_request_data = VerificationRequestDataBuilder::new(context)
-        .subject_claim(statement)
+        .subject_claims(params.requested_claims)
         .build();
 
     // Transaction should expiry after some seconds.
