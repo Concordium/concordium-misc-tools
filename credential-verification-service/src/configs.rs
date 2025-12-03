@@ -10,7 +10,7 @@ pub struct ServiceConfigs {
     #[arg(
         long = "request-timeout",
         help = "The request timeout for a request to be processed with the credential service api in milliseconds.",
-        default_value = "5000",
+        default_value = "15000",
         env = "CREDENTIAL_VERIFICATION_SERVICE_REQUEST_TIMEOUT"
     )]
     pub request_timeout: u64,
@@ -44,7 +44,7 @@ pub struct ServiceConfigs {
     #[arg(
         long = "transaction-expiry",
         help = "The number of seconds in the future when the anchor transactions should expiry.",
-        default_value = "1000000",
+        default_value = "15",
         env = "CREDENTIAL_VERIFICATION_SERVICE_TRANSACTION_EXPIRY"
     )]
     pub transaction_expiry_secs: u32,

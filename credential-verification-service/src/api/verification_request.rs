@@ -102,23 +102,22 @@ pub async fn create_verification_request(
                         expiry,
                     };
 
-                    let retry = create_verification_request_and_submit_request_anchor(
-                        &mut node_client,
-                        meta,
-                        verification_request_data,
-                        None,
-                    )
-                    .await;
+                    let verification_request =
+                        create_verification_request_and_submit_request_anchor(
+                            &mut node_client,
+                            meta,
+                            verification_request_data,
+                            None,
+                        )
+                        .await?;
 
-                    return retry
-                        .map(|req| {
-                            tracing::info!(
-                                "Successfully submitted anchor transaction after the account nonce was refreshed."
-                            );
-                            *account_sequence_number = account_sequence_number.next();
-                            Json(req)
-                        })
-                        .map_err(ServerError::SubmitAnchorTransaction);
+                    tracing::info!(
+                        "Successfully submitted anchor transaction after the account nonce was refreshed."
+                    );
+
+                    *account_sequence_number = account_sequence_number.next();
+
+                    return Ok(Json(verification_request));
                 }
             }
 
