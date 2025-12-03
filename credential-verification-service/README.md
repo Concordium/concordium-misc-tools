@@ -58,3 +58,38 @@ The following options are supported:
 - `--monitoring-address [env: CREDENTIAL_VERIFICATION_SERVICE_MONITORING_ADDRESS]`: The socket address used for health and metrics monitoring (defaults to `127.0.0.1:8001` if not given).
 - `--transaction-expiry [env: CREDENTIAL_VERIFICATION_SERVICE_TRANSACTION_EXPIRY]`: The number of seconds in the future when the anchor transactions should expiry (defaults to 1000000 if not given).
 
+## API Documentation
+
+### Create Verification Request
+
+Endpoint: HTTP POST /verifiable-presentations/create-verification-request {CreateVerificationRequest}
+
+Purpose: Creates a Verification Request in order to prove some statements about the credentials.
+
+Process Overview:
+- Submits a register data transaction to the concordium network, in the form of a VRA (Verifiable Request Anchor)
+- Returns the `VerificationRequest` which contains the anchor transaction hash
+
+Diagrams and Sample Payloads: 
+- [Sequence Diagram](docs/api/create_verification_request/sequence.md)
+- [Data Model (Request + Response)](docs/api/create_verification_request/data_model.md)
+- [Example Payloads](docs/api/create_verification_request/examples.md)
+
+### Verify Presentation
+
+Endpoint: HTTP POST /verifiable-presentations/verify {VerifiablePresentationRequest}
+
+Purpose: To verify a Presentation
+
+Process Overview:
+- Submits a register data transaction to the concordium network, in the form of a VAA (Verifiable Audit Anchor)
+- Returns the `PresentationVerificationData` response which contains the verification result, the audit anchor record and the audit anchor transaction hash.
+
+Diagrams and Sample Payloads: 
+- [Sequence Diagram](docs/api/verify_presentation/sequence.md)
+- [Data Model (Request + Response)](docs/api/verify_presentation§/data_model.md)
+- [Example Payloads](docs/api/verify_presentation//examples.md)
+
+
+## Architecture
+- 🗺️ [Architecture Overview](docs/architecture.md)
