@@ -21,6 +21,7 @@ classDiagram
     %% Request to the API to create a verification request
     class CreateVerificationRequest {
         <<Request>>
+        string nonce
         string connectionId
         string resourceId
         string contextString
