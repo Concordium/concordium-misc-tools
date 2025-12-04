@@ -61,7 +61,7 @@ fn string_key_from_cbor(k: &BaseCborValue) -> Result<String, String> {
         BaseCborValue::Bytes(bytes) => Ok(format!("0x{}", hex::encode(&bytes.0))),
         // We don't support arrays/maps/tags as keys in maps in this service.
         BaseCborValue::Array(_) | BaseCborValue::Map(_) | BaseCborValue::Tag(_, _) => {
-            Err("CBOR array/map/tags are not supported as key in maps in this service.".into())
+            Err("CBOR array/map/tags are not supported as keys in maps in this service.".into())
         }
         BaseCborValue::Simple(n) => Ok(n.to_string()),
     }
