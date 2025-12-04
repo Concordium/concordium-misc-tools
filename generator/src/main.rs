@@ -142,7 +142,7 @@ async fn main() -> anyhow::Result<()> {
         }
         Command::SponsoredTransaction(sponsored_txn_args) => {
             let generator = 
-            SponsoredTransactionGenerator::instantiate(client.clone(), sponsored_txn_args).await?;
+            SponsoredTransactionGenerator::instantiate(client.clone(), args, sponsored_txn_args).await?;
             generate_transactions(client, generator, txn_interval).await
         }
     }

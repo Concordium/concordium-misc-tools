@@ -1,7 +1,7 @@
 use anyhow::Context;
 use clap::Args;
 use concordium_rust_sdk::{
-    base::{cis4_types::CredentialInfo, transactions::{AccountTransactionV1, construct}},
+    base::{cis4_types::CredentialInfo, transactions::construct},
     cis2::{
         AdditionalData, Cis2Contract, Cis2TransactionMetadata, Receiver, TokenAmount, TokenId,
         Transfer,
@@ -949,7 +949,8 @@ pub struct SponsoredTransactionGenerator {
 
 impl SponsoredTransactionGenerator {
     pub async fn instantiate( 
-        mut client: v2::Client, 
+        mut client: v2::Client,
+        args: CommonArgs, 
         sponsored_transaction_args: SponsoredTransactionArgs, ) -> anyhow::Result<Self> { 
             //token id for the PLT token to be transferred
             let token_id = OtherTokenId::try_from(sponsored_transaction_args.token_id).expect("Invalid token Id");
@@ -964,7 +965,7 @@ impl SponsoredTransactionGenerator {
 
             let receiver_address = AccountAddress::from_str(&sponsored_transaction_args.receiver)?;
 
-            let sender_keys: WalletAccount = WalletAccount::from_json_file(sponsored_transaction_args.sender)?;
+            let sender_keys = args.keys;
 
             let sponsor_keys: WalletAccount = WalletAccount::from_json_file(sponsored_transaction_args.sponsor)?;
 
@@ -973,7 +974,7 @@ impl SponsoredTransactionGenerator {
                 .await?
                 .nonce;
 
-            let expiry: TransactionTime = TransactionTime::from_seconds((chrono::Utc::now().timestamp() + 300) as u64);
+            let expiry = TransactionTime::seconds_after(args.expiry);
 
             Ok( Self {
                 sender: sender_keys,
@@ -987,7 +988,6 @@ impl SponsoredTransactionGenerator {
     }
 }
 
-//TODO
 impl Generate for SponsoredTransactionGenerator {
     fn generate(&mut self) -> anyhow::Result<AccountTransaction<EncodedPayload>> {
         anyhow::bail!("generate() is not implemented for SponsoredTransactionGenerator; use generate_block_item() instead");
