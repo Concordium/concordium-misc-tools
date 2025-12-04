@@ -217,7 +217,7 @@ mod tests {
             hashes, AccountCreationDetails, AccountTransactionDetails, AccountTransactionEffects,
             BlockItemSummary, BlockItemSummaryDetails, CredentialRegistrationID, CredentialType,
             EncryptedSelfAmountAddedEvent, Energy, ExchangeRate, Memo, RejectReason,
-            TransactionIndex, TransactionType, UpdateDetails, UpdatePayload,
+            TransactionIndex, TransactionType, UpdateDetails, UpdatePayload, SponsorDetails,
         },
         v2::Upward,
     };
@@ -309,12 +309,17 @@ mod tests {
                 micro_ccd: u64::arbitrary(g),
             };
             let receiver_address = AccountAddress(random_account_address());
+            let sponsor_address = AccountAddress(random_account_address());
+            let sponsor_details = SponsorDetails {
+                sponsor: sponsor_address,
+                cost: amount,
+            };
 
             let details = |effects| AccountTransactionDetails {
                 cost: amount,
                 effects,
                 sender: receiver_address,
-                sponsor: None, //TODO: this is temporary, to get the pipeline build, no idea how this is populated at this stage?
+                sponsor: Some(sponsor_details.clone()),
             };
             let effects = vec![
                 AccountTransactionEffects::AccountTransfer {
@@ -378,12 +383,17 @@ mod tests {
                 micro_ccd: u64::arbitrary(g),
             };
             let receiver_address = AccountAddress(random_account_address());
+            let sponsor_address = AccountAddress(random_account_address());
+            let sponsor_details = SponsorDetails {
+                sponsor: sponsor_address,
+                cost: amount,
+            };
 
             let account_transaction_details = |effects| AccountTransactionDetails {
                 cost: amount,
                 effects,
                 sender: receiver_address,
-                sponsor: None, //TODO: temporary
+                sponsor: Some(sponsor_details.clone()),
             };
 
             let silent_block_summaries = vec![
@@ -442,12 +452,17 @@ mod tests {
                 micro_ccd: u64::arbitrary(g),
             };
             let receiver_address = AccountAddress(random_account_address());
+            let sponsor_address = AccountAddress(random_account_address());
+            let sponsor_details = SponsorDetails {
+                sponsor: sponsor_address,
+                cost: amount,
+            };
 
             let account_transaction_details = |effects| AccountTransactionDetails {
                 cost: amount,
                 effects,
                 sender: receiver_address,
-                sponsor: None, //TODO: temporary
+                sponsor: Some(sponsor_details.clone()),
             };
 
             let block_summaries = vec![
