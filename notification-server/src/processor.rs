@@ -314,6 +314,7 @@ mod tests {
                 cost: amount,
                 effects,
                 sender: receiver_address,
+                sponsor: None, //TODO: this is temporary, to get the pipeline build, no idea how this is populated at this stage?
             };
             let effects = vec![
                 AccountTransactionEffects::AccountTransfer {
@@ -382,6 +383,7 @@ mod tests {
                 cost: amount,
                 effects,
                 sender: receiver_address,
+                sponsor: None, //TODO: temporary
             };
 
             let silent_block_summaries = vec![
@@ -445,6 +447,7 @@ mod tests {
                 cost: amount,
                 effects,
                 sender: receiver_address,
+                sponsor: None, //TODO: temporary
             };
 
             let block_summaries = vec![
