@@ -31,7 +31,7 @@ classDiagram
 
     class SubjectClaims {
         RequestedIdenitytype type
-        IdentityCredentialType[] credentialType
+        IdentityCredentialType[] source
         int[] issuers
         Claim[] claims
     }

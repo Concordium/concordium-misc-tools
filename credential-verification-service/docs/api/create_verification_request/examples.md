@@ -14,7 +14,8 @@
   },
   subjectClaims: [
     {
-      "credentialType": ["Identity"],
+      "type": "Identity",
+      "source": ["Identity"],
       "issuers": [2,3],
       "claims": [
         {
