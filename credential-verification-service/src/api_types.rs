@@ -1,4 +1,11 @@
-use concordium_rust_sdk::base::web3id::v1::anchor::{self, RequestedSubjectClaims};
+use concordium_rust_sdk::{
+    base::web3id::v1::{
+        PresentationV1,
+        anchor::{self, RequestedSubjectClaims, VerificationRequest},
+    },
+    id::constants::{ArCurve, IpPairing},
+    web3id::Web3IdAttribute,
+};
 
 /// Parameters posted to this service when calling the API
 /// endpoint `/verifiable-presentations/create-verification-request`.
@@ -22,4 +29,17 @@ pub struct CreateVerificationRequest {
     // Additional public info which will be included in the anchor transaction (VRA)
     // that is submitted on-chain.
     // pub public_info: HashMap<String, SerdeCborValue>,
+}
+
+/// API request payload for verifying a presentation
+/// endpoint: `/verifiable-presentations/verify`.
+#[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
+pub struct VerifyPresentationRequest {
+    /// Verifiable presentation that contains verifiable credentials each
+    /// consisting of subject claims and proofs of them.
+    /// It is the response to proving a [`RequestV1`] with [`RequestV1::prove`].
+    pub presentation: PresentationV1<IpPairing, ArCurve, Web3IdAttribute>,
+    /// A verification request that specifies which subject claims are requested from a credential holder
+    /// and in which context.
+    pub verification_request: VerificationRequest,
 }
