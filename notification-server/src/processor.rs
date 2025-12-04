@@ -217,7 +217,7 @@ mod tests {
             hashes, AccountCreationDetails, AccountTransactionDetails, AccountTransactionEffects,
             BlockItemSummary, BlockItemSummaryDetails, CredentialRegistrationID, CredentialType,
             EncryptedSelfAmountAddedEvent, Energy, ExchangeRate, Memo, RejectReason,
-            TransactionIndex, TransactionType, UpdateDetails, UpdatePayload, SponsorDetails,
+            SponsorDetails, TransactionIndex, TransactionType, UpdateDetails, UpdatePayload,
         },
         v2::Upward,
     };
