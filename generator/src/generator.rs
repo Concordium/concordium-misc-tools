@@ -71,8 +71,6 @@ pub struct RegisterDataArgs {
 
 #[derive(Debug, Args)]
 pub struct SponsoredTransactionArgs {
-    #[arg(long = "sender", help = "Path to file containing sender account key.")]
-    sender: PathBuf,
     #[arg(
         long = "sponsor",
         help = "Path to file containing sponsor account key."
