@@ -9,14 +9,14 @@ use concordium_rust_sdk::{
         LabeledContextProperty, UnfilledContextInformationBuilder, VerificationRequest,
         VerificationRequestDataBuilder,
     },
-    common::types::TransactionTime,
+    common::{cbor, types::TransactionTime},
     v2::{QueryError, RPCError},
     web3id::v1::{
         AnchorTransactionMetadata, CreateAnchorError::Query,
         create_verification_request_and_submit_request_anchor,
     },
 };
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 pub async fn create_verification_request(
     State(state): State<Arc<Service>>,
@@ -41,6 +41,10 @@ pub async fn create_verification_request(
 
     let mut node_client = state.node_client.clone();
 
+    let public_info: Option<HashMap<String, cbor::value::Value>> = params
+        .public_info
+        .map(|map| map.into_iter().map(|(k, v)| (k, v.0)).collect());
+
     // Get the current nonce for the backend wallet and lock it. This is necessary
     // since it is possible that API requests come in parallel. The nonce is
     // increased by 1 and its lock is released after the transaction is submitted to
@@ -58,7 +62,7 @@ pub async fn create_verification_request(
         &mut node_client,
         anchor_transaction_metadata,
         verification_request_data.clone(),
-        None,
+        public_info,
     )
     .await;
 

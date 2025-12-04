@@ -8,7 +8,7 @@
     "connectionId": "MyWalletConnectTopic",
     "contextString": "MyGreateApp",
     "rescourceId": "MyGreateWebsite",
-    "subjectCaims": [
+    "subjectClaims": [
         {
             "type": "identity",
             "statements": [
@@ -28,10 +28,10 @@
         }
     ],
    "publicInfo": {
-        "version": {
+        "key1": {
             "Float": 1.0
         },
-        "anotherValue": {
+        "key2": {
             "Text": "somePublicInfo"
         }
     }
