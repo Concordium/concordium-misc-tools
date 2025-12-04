@@ -54,7 +54,7 @@ fn string_key_from_cbor(k: &BaseCborValue) -> Result<String, String> {
     match k {
         BaseCborValue::Text(t) => Ok(t.clone()),
         BaseCborValue::Positive(n) => Ok(n.to_string()),
-        BaseCborValue::Negative(n) => Ok(n.to_string()),
+        BaseCborValue::Negative(n) => Ok(format!("-{}", n)),
         BaseCborValue::Bool(b) => Ok(b.to_string()),
         BaseCborValue::Null => Ok("null".into()),
         BaseCborValue::Float(f) => Ok(f.to_string()),
@@ -73,7 +73,10 @@ where
 {
     match v {
         BaseCborValue::Positive(n) => Ok(JsonValue::from(*n)),
-        BaseCborValue::Negative(n) => Ok(JsonValue::from(*n)),
+        BaseCborValue::Negative(n) => {
+            let val: i128 = -(*n as i128);
+            Ok(JsonValue::from(val))
+        }
         BaseCborValue::Bytes(bytes) => Ok(JsonValue::String(hex::encode(&bytes.0))),
         BaseCborValue::Text(text) => Ok(JsonValue::String(text.clone())),
 
@@ -125,8 +128,16 @@ fn cbor_from_json(v: JsonValue) -> Result<BaseCborValue, String> {
         JsonValue::Number(n) => {
             if let Some(u) = n.as_u64() {
                 Ok(BaseCborValue::Positive(u))
-            } else if let Some(i) = n.as_i64() {
-                Ok(BaseCborValue::Negative(i.try_into().unwrap()))
+            } else if let Some(i) = n.as_i128() {
+                // Must be negative
+                if i < 0 && i.abs() <= u64::MAX as i128 {
+                    let encoded = -i as u64;
+                    Ok(BaseCborValue::Negative(encoded))
+                } else if let Some(f) = n.as_f64() {
+                    Ok(BaseCborValue::Float(f))
+                } else {
+                    Err("Unsupported JSON number".into())
+                }
             } else if let Some(f) = n.as_f64() {
                 Ok(BaseCborValue::Float(f))
             } else {
@@ -164,5 +175,247 @@ impl<'de> Deserialize<'de> for CborValue {
         let json_value = JsonValue::deserialize(deserializer)?;
         let cbor_value = cbor_from_json(json_value).map_err(serde::de::Error::custom)?;
         Ok(CborValue(cbor_value))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::{Number, json};
+
+    // Helper: roundtrip CBOR -> JSON -> CBOR
+    fn roundtrip_cbor(c: BaseCborValue) -> BaseCborValue {
+        let json = json_from_cbor::<serde_json::Error>(&c).unwrap();
+        cbor_from_json(json).unwrap()
+    }
+
+    // Helper: roundtrip JSON -> CBOR -> JSON
+    fn roundtrip_json(j: serde_json::Value) -> serde_json::Value {
+        let cbor = cbor_from_json(j.clone()).unwrap();
+        json_from_cbor::<serde_json::Error>(&cbor).unwrap()
+    }
+
+    #[test]
+    fn test_null_roundtrip() {
+        let value = json!(null);
+        assert_eq!(roundtrip_json(value.clone()), value);
+
+        let c = BaseCborValue::Null;
+        assert_eq!(roundtrip_cbor(c.clone()), c);
+    }
+
+    #[test]
+    fn test_bool_roundtrip() {
+        let value = json!(true);
+        assert_eq!(roundtrip_json(value.clone()), value);
+        let c = BaseCborValue::Bool(true);
+        assert_eq!(roundtrip_cbor(c.clone()), c);
+
+        let value = json!(false);
+        assert_eq!(roundtrip_json(value.clone()), value);
+        let c = BaseCborValue::Bool(false);
+        assert_eq!(roundtrip_cbor(c.clone()), c);
+    }
+
+    #[test]
+    fn test_zero_number() {
+        let num = Number::from_f64(0f64).unwrap();
+        let value = serde_json::Value::Number(num);
+        assert_eq!(roundtrip_json(value.clone()), value);
+
+        let num = Number::from_f64(-0f64).unwrap();
+        let value = serde_json::Value::Number(num);
+        assert_eq!(roundtrip_json(value.clone()), value);
+
+        let c = BaseCborValue::Positive(0);
+        assert_eq!(roundtrip_cbor(c.clone()), c);
+    }
+
+    #[test]
+    fn test_number_positive_roundtrip() {
+        let num = Number::from_u128(42).unwrap();
+        let value = serde_json::Value::Number(num);
+        assert_eq!(roundtrip_json(value.clone()), value);
+
+        let num = Number::from_u128(u64::MAX as u128).unwrap();
+        let value = serde_json::Value::Number(num);
+        assert_eq!(roundtrip_json(value.clone()), value);
+
+        let c = BaseCborValue::Positive(42);
+        assert_eq!(roundtrip_cbor(c.clone()), c);
+
+        let c = BaseCborValue::Positive(u64::MAX);
+        assert_eq!(roundtrip_cbor(c.clone()), c);
+    }
+
+    #[test]
+    fn test_number_negative_roundtrip() {
+        let num = Number::from_f64(-1234.56).unwrap();
+        let value = serde_json::Value::Number(num);
+        assert_eq!(roundtrip_json(value.clone()), value);
+
+        let num = Number::from_f64(
+            -12342342342342325243523423432422.2112421434235798327429847298347298347298347239842,
+        )
+        .unwrap();
+        let value = serde_json::Value::Number(num);
+        assert_eq!(roundtrip_json(value.clone()), value);
+
+        let num = Number::from_i128(-1234).unwrap();
+        let value = serde_json::Value::Number(num);
+        assert_eq!(roundtrip_json(value.clone()), value);
+
+        let num = Number::from_i128(-(u64::MAX as i128)).unwrap();
+        let value = serde_json::Value::Number(num);
+        assert_eq!(roundtrip_json(value.clone()), value);
+
+        let num = Number::from_i128(-(u64::MAX as i128) + 1).unwrap();
+        let value = serde_json::Value::Number(num);
+        assert_eq!(roundtrip_json(value.clone()), value);
+
+        let num = Number::from_i128(-(u64::MAX as i128) + 1).unwrap();
+        let value = serde_json::Value::Number(num);
+        assert_eq!(roundtrip_json(value.clone()), value);
+
+        let c = BaseCborValue::Negative(123);
+        assert_eq!(roundtrip_cbor(c.clone()), c);
+
+        let c = BaseCborValue::Negative(u64::MAX);
+        assert_eq!(roundtrip_cbor(c.clone()), c);
+    }
+
+    #[test]
+    fn test_number_float_roundtrip() {
+        let j_values = [
+            serde_json::Value::Number(Number::from_f64(0.0).unwrap()),
+        serde_json::Value::Number(Number::from_f64(-0.0).unwrap()),
+        serde_json::Value::Number(Number::from_f64(123456.789).unwrap()),
+        serde_json::Value::Number(Number::from_f64(
+            12342342342342325243523423432422.2112421434235798327429847298347298347298347239842f64,
+        ).unwrap())];
+
+        let c_values = vec![
+            BaseCborValue::Float(0.0),
+            BaseCborValue::Float(-0.0),
+            BaseCborValue::Float(123456.789),
+            BaseCborValue::Float(
+                12342342342342325243523423432422.2112421434235798327429847298347298347298347239842,
+            ),
+        ];
+
+        for v in j_values {
+            assert_eq!(roundtrip_json(v.clone()), v);
+        }
+        for cbor in c_values {
+            assert_eq!(roundtrip_cbor(cbor.clone()), cbor);
+        }
+    }
+
+    #[test]
+    fn test_string_roundtrip() {
+        let value = json!("hello world");
+        assert_eq!(roundtrip_json(value.clone()), value);
+
+        let c = BaseCborValue::Text("hello world".to_string());
+        assert_eq!(roundtrip_cbor(c.clone()), c);
+    }
+
+    #[test]
+    fn test_array_roundtrip() {
+        let value = json!([1, 2, "three", null, true]);
+        assert_eq!(roundtrip_json(value.clone()), value);
+
+        let c = BaseCborValue::Array(vec![
+            BaseCborValue::Positive(1),
+            BaseCborValue::Text("x".into()),
+        ]);
+        assert_eq!(roundtrip_cbor(c.clone()), c);
+    }
+
+    #[test]
+    fn test_nested_array_roundtrip() {
+        let value = json!([1, [2, [3, ["four"]]]]);
+        assert_eq!(roundtrip_json(value.clone()), value);
+
+        let c = BaseCborValue::Array(vec![
+            BaseCborValue::Positive(1),
+            BaseCborValue::Array(vec![
+                BaseCborValue::Positive(1),
+                BaseCborValue::Text("x".into()),
+            ]),
+        ]);
+        assert_eq!(roundtrip_cbor(c.clone()), c);
+    }
+
+    #[test]
+    fn test_object_roundtrip() {
+        let value = json!({
+            "a": 1,
+            "b": "text",
+            "c": true,
+            "d": null
+        });
+        let result = roundtrip_json(value.clone());
+        assert_eq!(result, value);
+
+        let c = BaseCborValue::Map(vec![
+            (BaseCborValue::Text("a".into()), BaseCborValue::Positive(1)),
+            (
+                BaseCborValue::Text("anotherField".into()),
+                BaseCborValue::Text("two".into()),
+            ),
+        ]);
+        assert_eq!(roundtrip_cbor(c.clone()), c);
+    }
+
+    #[test]
+    fn test_nested_object_roundtrip() {
+        let value = json!({
+            "outer": {
+                "inner": {
+                    "value": 123
+                }
+            }
+        });
+
+        let result = roundtrip_json(value.clone());
+        assert_eq!(result, value);
+
+        let c = BaseCborValue::Map(vec![
+            (BaseCborValue::Text("a".into()), BaseCborValue::Positive(1)),
+            (
+                BaseCborValue::Text("anotherField".into()),
+                BaseCborValue::Map(vec![
+                    (BaseCborValue::Text("a".into()), BaseCborValue::Positive(1)),
+                    (
+                        BaseCborValue::Text("anotherField".into()),
+                        BaseCborValue::Text("two".into()),
+                    ),
+                ]),
+            ),
+        ]);
+        assert_eq!(roundtrip_cbor(c.clone()), c);
+    }
+
+    #[test]
+    fn test_array_of_objects_roundtrip() {
+        let value = json!([
+            {"a": 1},
+            {"b": 2},
+            {"c": [1,2,3]},
+        ]);
+        assert_eq!(roundtrip_json(value.clone()), value);
+
+        let c = BaseCborValue::Array(vec![
+            BaseCborValue::Positive(1),
+            BaseCborValue::Map(vec![
+                (BaseCborValue::Text("a".into()), BaseCborValue::Positive(1)),
+                (
+                    BaseCborValue::Text("anotherField".into()),
+                    BaseCborValue::Text("two".into()),
+                ),
+            ]),
+        ]);
+        assert_eq!(roundtrip_cbor(c.clone()), c);
     }
 }
