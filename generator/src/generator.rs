@@ -20,8 +20,9 @@ use concordium_rust_sdk::{
     types::{
         smart_contracts::{OwnedContractName, OwnedParameter, WasmModule},
         transactions::{
+            construct,
             send::{self, GivenEnergy},
-            AccountTransaction, BlockItem, EncodedPayload, InitContractPayload, construct
+            AccountTransaction, BlockItem, EncodedPayload, InitContractPayload,
         },
         Address, ContractAddress, Energy, NodeDetails, Nonce, RegisteredData, WalletAccount,
     },
