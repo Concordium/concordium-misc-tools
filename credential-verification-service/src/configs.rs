@@ -1,31 +1,58 @@
 use clap::Parser;
 use concordium_rust_sdk::v2;
-
 use std::{net::SocketAddr, path::PathBuf};
 
 #[derive(Parser, Debug)]
 #[clap(arg_required_else_help(true))]
 pub struct ServiceConfigs {
     #[arg(long, env = "CREDENTIAL_VERIFICATION_SERVICE_NODE_GRPC_ENDPOINT")]
-    pub node_address: v2::Endpoint,
+    pub node_endpoint: v2::Endpoint,
+    #[arg(
+        long = "request-timeout",
+        help = "The request timeout for a request to be processed with the credential service api in milliseconds.",
+        default_value = "15000",
+        env = "CREDENTIAL_VERIFICATION_SERVICE_REQUEST_TIMEOUT"
+    )]
+    pub request_timeout: u64,
+    #[arg(
+        long = "grpc-node-request-timeout",
+        help = "The request timeout to the Concordium node in milliseconds",
+        default_value = "1000",
+        env = "CREDENTIAL_VERIFICATION_GRPC_NODE_REQUEST_TIMEOUT"
+    )]
+    pub grpc_node_request_timeout: u64,
     #[arg(
         long,
-        env = "CREDENTIAL_VERIFICATION_SERVICE_API_ADDRESS",
-        default_value = "127.0.0.1:8000"
+        help = "The socket address where the service exposes its API.",
+        default_value = "127.0.0.1:8000",
+        env = "CREDENTIAL_VERIFICATION_SERVICE_API_ADDRESS"
     )]
     pub api_address: SocketAddr,
     #[arg(
         long,
-        env = "CREDENTIAL_VERIFICATION_SERVICE_MONITORING_ADDRESS",
-        default_value = "127.0.0.1:8001"
+        help = "The socket address used for health and metrics monitoring.",
+        default_value = "127.0.0.1:8001",
+        env = "CREDENTIAL_VERIFICATION_SERVICE_MONITORING_ADDRESS"
     )]
     pub monitoring_address: SocketAddr,
     #[arg(
         long,
-        env = "CREDENTIAL_VERIFICATION_SERVICE_ACCOUNT",
-        help = "Path to the wallet keys."
+        help = "Path to the wallet keys.",
+        env = "CREDENTIAL_VERIFICATION_SERVICE_ACCOUNT"
     )]
     pub account: PathBuf,
-    #[arg(long, default_value = "info", env = "LOG_LEVEL")]
+    #[arg(
+        long = "transaction-expiry",
+        help = "The number of seconds in the future when the anchor transactions should expiry.",
+        default_value = "15",
+        env = "CREDENTIAL_VERIFICATION_SERVICE_TRANSACTION_EXPIRY"
+    )]
+    pub transaction_expiry_secs: u32,
+    #[arg(
+        long,
+        help = "The log level  [`off`, `error`, `warn`, `info`, `debug`, or `trace`]",
+        default_value = "info",
+        env = "CREDENTIAL_VERIFICATION_SERVICE_LOG_LEVEL"
+    )]
     pub log_level: tracing_subscriber::filter::LevelFilter,
 }

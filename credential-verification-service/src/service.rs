@@ -1,22 +1,18 @@
-use anyhow::Context;
+use crate::{api, configs::ServiceConfigs, types::Service};
+use anyhow::{Context, anyhow};
 use concordium_rust_sdk::{
+    constants::{MAINNET_GENESIS_BLOCK_HASH, TESTNET_GENESIS_BLOCK_HASH},
     types::WalletAccount,
-    v2::{self, Client},
+    v2::{self},
+    web3id::did::Network,
 };
 use futures_util::TryFutureExt;
-use prometheus_client::metrics;
-use prometheus_client::registry::Registry;
+use prometheus_client::{metrics, registry::Registry};
 use std::sync::Arc;
-use tokio::net::TcpListener;
+use tokio::{net::TcpListener, sync::Mutex};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
+use tonic::transport::ClientTlsConfig;
 use tracing::{error, info};
-
-use crate::{api, configs::ServiceConfigs};
-
-pub struct Service {
-    pub client: v2::Client,
-    pub keys: WalletAccount,
-}
 
 pub async fn run(configs: ServiceConfigs) -> anyhow::Result<()> {
     let service_info = metrics::info::Info::new([("version", clap::crate_version!().to_string())]);
@@ -28,9 +24,59 @@ pub async fn run(configs: ServiceConfigs) -> anyhow::Result<()> {
         metrics::gauge::ConstGauge::new(chrono::Utc::now().timestamp_millis()),
     );
 
-    let client = Client::new(configs.node_address).await?;
-    let keys = WalletAccount::from_json_file(configs.account)?;
-    let service = Arc::new(Service { client, keys });
+    let endpoint = configs
+        .node_endpoint
+        .tls_config(ClientTlsConfig::new())
+        .context("Unable to construct TLS configuration for Concordium node.")?;
+
+    let node_timeout = std::time::Duration::from_millis(configs.grpc_node_request_timeout);
+
+    let endpoint = endpoint
+        .connect_timeout(node_timeout)
+        .timeout(node_timeout)
+        .keep_alive_while_idle(true);
+
+    let mut node_client = v2::Client::new(endpoint)
+        .await
+        .context("Unable to establish connection to the node.")?;
+
+    // Load account keys and sender address from a file
+    let keys: WalletAccount =
+        WalletAccount::from_json_file(configs.account).context("Could not read the keys file.")?;
+
+    let account_keys = Arc::new(keys);
+
+    let nonce_response = node_client
+        .get_next_account_sequence_number(&account_keys.address)
+        .await
+        .context("Unable to query the next account sequence number.")?;
+
+    let nonce = Arc::new(Mutex::new(nonce_response.nonce));
+
+    let consensus_info = node_client
+        .get_consensus_info()
+        .await
+        .context("Unable to query the consesnsus info from the chain")?;
+    let genesis_hash = consensus_info.genesis_block.bytes;
+
+    let network = match genesis_hash {
+        hash if hash == TESTNET_GENESIS_BLOCK_HASH => Network::Testnet,
+        hash if hash == MAINNET_GENESIS_BLOCK_HASH => Network::Mainnet,
+        _ => {
+            return Err(anyhow!(
+                "Only TESTNET/MAINNET supported. Unknown genesis hash: {:?}",
+                genesis_hash
+            ));
+        }
+    };
+
+    let service = Arc::new(Service {
+        node_client,
+        account_keys,
+        nonce,
+        transaction_expiry_secs: configs.transaction_expiry_secs,
+        network,
+    });
 
     let cancel_token = CancellationToken::new();
     let monitoring_task = {
@@ -55,9 +101,12 @@ pub async fn run(configs: ServiceConfigs) -> anyhow::Result<()> {
             .await
             .context("Failed to parse API TCP address")?;
         let stop_signal = cancel_token.child_token();
-        info!("Server is running at {:?}", configs.api_address);
+        info!(
+            "API server is running at {:?} with account {} and current account nonce: {}.",
+            configs.api_address, service.account_keys.address, nonce_response.nonce
+        );
 
-        axum::serve(listener, api::router(service))
+        axum::serve(listener, api::router(service, configs.request_timeout))
             .with_graceful_shutdown(stop_signal.cancelled_owned())
             .into_future()
     };

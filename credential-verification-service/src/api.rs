@@ -1,17 +1,29 @@
-use axum::{Router, routing::get};
+use crate::types::Service;
+use axum::{
+    Router,
+    routing::{get, post},
+};
 use prometheus_client::registry::Registry;
 use std::sync::Arc;
 
-use crate::service::Service;
-
 mod monitoring;
+mod verification_request;
 mod verifier;
 
 /// Router exposing the service's endpoints
-pub fn router(service: Arc<Service>) -> Router {
+pub fn router(service: Arc<Service>, request_timeout: u64) -> Router {
     Router::new()
-        .route("/verify", get(verifier::verify))
+        .route("/verifiable-presentations/verify", post(verifier::verify))
+        .route(
+            "/verifiable-presentations/create-verification-request",
+            post(verification_request::create_verification_request),
+        )
         .with_state(service)
+        .layer(tower_http::timeout::TimeoutLayer::new(
+            std::time::Duration::from_millis(request_timeout),
+        ))
+        .layer(tower_http::limit::RequestBodyLimitLayer::new(1_000_000)) // at most 1000kB of data.
+        .layer(tower_http::compression::CompressionLayer::new())
 }
 
 /// Router exposing the Prometheus metrics and health endpoint.
