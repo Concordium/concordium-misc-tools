@@ -8,26 +8,32 @@ use concordium_rust_sdk::{
     },
     cis4::{Cis4Contract, Cis4TransactionMetadata},
     common::{
-        Deserial, types::{Amount, KeyPair, TransactionTime}
+        types::{Amount, KeyPair, TransactionTime},
+        Deserial,
     },
     contract_client::{ContractTransactionMetadata, MetadataUrl, SchemaRef},
     id::types::AccountAddress,
+    protocol_level_tokens::{
+        operations, ConversionRule, TokenAmount as OtherTokenAmount, TokenId as OtherTokenId,
+    },
     smart_contracts::common::{self as concordium_std, Timestamp},
     types::{
-        Address, ContractAddress, Energy, NodeDetails, Nonce, RegisteredData, WalletAccount, smart_contracts::{OwnedContractName, OwnedParameter, WasmModule}, transactions::{
-            AccountTransaction, BlockItem, EncodedPayload, InitContractPayload, send::{self, GivenEnergy}
-        }
+        smart_contracts::{OwnedContractName, OwnedParameter, WasmModule},
+        transactions::{
+            send::{self, GivenEnergy},
+            AccountTransaction, BlockItem, EncodedPayload, InitContractPayload,
+        },
+        Address, ContractAddress, Energy, NodeDetails, Nonce, RegisteredData, WalletAccount,
     },
     v2::{self, BlockIdentifier},
     web3id::CredentialHolderId,
-    protocol_level_tokens::{operations, TokenId as OtherTokenId, ConversionRule, TokenAmount as OtherTokenAmount},
 };
 use futures::TryStreamExt;
 use rand::{rngs::StdRng, Rng, SeedableRng};
+use rust_decimal::Decimal;
 use std::{
     collections, collections::BTreeMap, io::Cursor, path::PathBuf, str::FromStr, time::Duration,
 };
-use rust_decimal::Decimal;
 
 #[derive(Debug, Args)]
 pub struct CcdArgs {
@@ -62,17 +68,19 @@ pub struct RegisterDataArgs {
 }
 
 #[derive(Debug, Args)]
-pub struct SponsoredTransactionArgs { 
-    #[arg(long = "sender", help = "Path to file containing sender account key.")] 
-    sender: PathBuf, 
-    #[arg(long = "sponsor", help = "Path to file containing sponsor account key.")] 
-    sponsor: PathBuf, 
-    #[arg(long = "receiver", help = "Receiver adddress.")] 
-    receiver: String, 
-    #[arg(long = "token", help = "Token id.")] 
-    token_id: String, #[clap( long = "amount", 
-    help = "CCD amount to send", 
-    default_value = "100.0" )] 
+pub struct SponsoredTransactionArgs {
+    #[arg(long = "sender", help = "Path to file containing sender account key.")]
+    sender: PathBuf,
+    #[arg(
+        long = "sponsor",
+        help = "Path to file containing sponsor account key."
+    )]
+    sponsor: PathBuf,
+    #[arg(long = "receiver", help = "Receiver adddress.")]
+    receiver: String,
+    #[arg(long = "token", help = "Token id.")]
+    token_id: String,
+    #[clap(long = "amount", help = "CCD amount to send", default_value = "100.0")]
     amount: Decimal,
 }
 
@@ -937,54 +945,60 @@ impl Generate for RegisterDataGenerator {
 }
 
 /// A generator that makes a sponsored transaction
-pub struct SponsoredTransactionGenerator { 
+pub struct SponsoredTransactionGenerator {
     sender: WalletAccount,
-    sponsor: WalletAccount, 
+    sponsor: WalletAccount,
     receiver: AccountAddress,
-    token_id: OtherTokenId, 
-    amount: OtherTokenAmount, 
+    token_id: OtherTokenId,
+    amount: OtherTokenAmount,
     nonce: Nonce,
     expiry: TransactionTime,
 }
 
 impl SponsoredTransactionGenerator {
-    pub async fn instantiate( 
+    pub async fn instantiate(
         mut client: v2::Client,
-        args: CommonArgs, 
-        sponsored_transaction_args: SponsoredTransactionArgs, ) -> anyhow::Result<Self> { 
-            //token id for the PLT token to be transferred
-            let token_id = OtherTokenId::try_from(sponsored_transaction_args.token_id).expect("Invalid token Id");
+        args: CommonArgs,
+        sponsored_transaction_args: SponsoredTransactionArgs,
+    ) -> anyhow::Result<Self> {
+        //token id for the PLT token to be transferred
+        let token_id =
+            OtherTokenId::try_from(sponsored_transaction_args.token_id).expect("Invalid token Id");
 
-            let token_info = client.get_token_info(token_id.clone(), BlockIdentifier::LastFinal).await?.response;
+        let token_info = client
+            .get_token_info(token_id.clone(), BlockIdentifier::LastFinal)
+            .await?
+            .response;
 
-            let token_amount = OtherTokenAmount::try_from_rust_decimal(
-                sponsored_transaction_args.amount, 
-                token_info.token_state.decimals,
-                ConversionRule::AllowRounding,
-            )?;
+        let token_amount = OtherTokenAmount::try_from_rust_decimal(
+            sponsored_transaction_args.amount,
+            token_info.token_state.decimals,
+            ConversionRule::AllowRounding,
+        )?;
 
-            let receiver_address = AccountAddress::from_str(&sponsored_transaction_args.receiver)?;
+        let receiver_address = AccountAddress::from_str(&sponsored_transaction_args.receiver)?;
 
-            let sender_keys = args.keys;
+        let sender_keys = args.keys;
 
-            let sponsor_keys: WalletAccount = WalletAccount::from_json_file(sponsored_transaction_args.sponsor)?;
+        let sponsor_keys: WalletAccount =
+            WalletAccount::from_json_file(sponsored_transaction_args.sponsor)?;
 
-            let nonce = client
-                .get_next_account_sequence_number(&sender_keys.address)
-                .await?
-                .nonce;
+        let nonce = client
+            .get_next_account_sequence_number(&sender_keys.address)
+            .await?
+            .nonce;
 
-            let expiry = TransactionTime::seconds_after(args.expiry);
+        let expiry = TransactionTime::seconds_after(args.expiry);
 
-            Ok( Self {
-                sender: sender_keys,
-                sponsor: sponsor_keys,
-                receiver: receiver_address,
-                token_id,
-                amount: token_amount, 
-                nonce,
-                expiry,
-            })
+        Ok(Self {
+            sender: sender_keys,
+            sponsor: sponsor_keys,
+            receiver: receiver_address,
+            token_id,
+            amount: token_amount,
+            nonce,
+            expiry,
+        })
     }
 }
 
@@ -994,33 +1008,29 @@ impl Generate for SponsoredTransactionGenerator {
     }
 
     fn generate_block_item(&mut self) -> anyhow::Result<BlockItem<EncodedPayload>> {
-
         let operation = operations::transfer_tokens(self.receiver, self.amount);
 
-        let txn_to_be_submitted = 
-            construct::token_update_operations(
-                1, 
-                self.sender.address,
-                self.nonce, 
-                self.expiry, 
-                self.token_id.clone(), 
-                [operation].into_iter().collect(),
-            )?
-            .extend()
-            .add_sponsor(self.sponsor.address, 1)
-            .expect("Can add sponsor account")
-            .sign(&self.sender)
-            .sponsor(&self.sponsor)
-            .expect("Can sponsor the transaction")
-            .finalize()
-            .expect("Transaction is well-formed");
+        let txn_to_be_submitted = construct::token_update_operations(
+            1,
+            self.sender.address,
+            self.nonce,
+            self.expiry,
+            self.token_id.clone(),
+            [operation].into_iter().collect(),
+        )?
+        .extend()
+        .add_sponsor(self.sponsor.address, 1)
+        .expect("Can add sponsor account")
+        .sign(&self.sender)
+        .sponsor(&self.sponsor)
+        .expect("Can sponsor the transaction")
+        .finalize()
+        .expect("Transaction is well-formed");
 
         self.nonce.next_mut();
 
         let item = BlockItem::AccountTransactionV1(txn_to_be_submitted);
 
         Ok(item)
-
     }
-    
 }
