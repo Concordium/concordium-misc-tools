@@ -4,48 +4,37 @@
 
 ```
 {
-  "connectionId": "conn_8291yuw",
-  "resourceId": "some string for resource",
-  "contextString": "context string here",
-  "publicInfo": {
-    "key": "value",
-    "key2": "value"
-  },
-  subjectClaims: [
-    {
-      "credentialType": "Identity",
-      "trustedIdps": [1,2,3],
-      "issuers": [2,3],
-      "claims": [
+    "nonce": "0000000000000000000000000000000000000000000000000000000000000000",
+    "connectionId": "MyWalletConnectTopic",
+    "contextString": "MyGreateApp",
+    "rescourceId": "MyGreateWebsite",
+    "subjectCaims": [
         {
-          "type": "ATTRIBUTE_IN_RANGE",
-          "tag": "age",
-          "lowerBound": 18,
-          "upperBound": 100
-        },
-        {
-          "type": "ATTRIBUTE_IN_SET",
-          "tag": "nationality",
-          "set": [
-            IE,
-            IN,
-            US,
-            UK
-          ],
-        },
-        {
-          "type": "ATTRIBUTE_IN_SET",
-          "tag": "residence",
-          "set": [
-            IE,
-            IN,
-            US,
-            UK
-          ],
+            "type": "identity",
+            "statements": [
+                {
+                    "type": "AttributeInRange",
+                    "attributeTag": "registrationAuth",
+                    "lower": 80,
+                    "upper": 1237
+                }
+            ],
+            "issuers": [
+                "did:ccd:testnet:idp:0"
+            ],
+            "source": [
+                "identityCredential"
+            ]
         }
-      ]
+    ],
+   "publicInfo": {
+        "version": {
+            "Float": 1.0
+        },
+        "anotherValue": {
+            "Text": "somePublicInfo"
+        }
     }
-  ]
 }
 ```
 

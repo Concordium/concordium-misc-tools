@@ -31,7 +31,7 @@ pub async fn create_verification_request(
     .build();
 
     let mut builder = VerificationRequestDataBuilder::new(context);
-    for claim in params.requested_claims {
+    for claim in params.subject_claims {
         builder = builder.subject_claim(claim);
     }
     let verification_request_data = builder.build();
@@ -79,7 +79,7 @@ pub async fn create_verification_request(
 
                 if is_nonce_err {
                     tracing::warn!(
-                        "Unable to submit transaction on-chain successfully due to account nonce mismatch: {}.
+                        "Unable to submit transaction on-chain due to account nonce mismatch: {}.
                         Account nonce will be re-freshed and transaction will be re-submitted.",
                         msg
                     );
@@ -94,7 +94,7 @@ pub async fn create_verification_request(
 
                     tracing::info!("Refreshed account nonce successfully.");
 
-                    // Retry anchor transaction.
+                    // Retry submitting anchor transaction.
                     let meta = AnchorTransactionMetadata {
                         signer: &state.account_keys,
                         sender: state.account_keys.address,
