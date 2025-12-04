@@ -22,7 +22,8 @@ use concordium_rust_sdk::{
         transactions::{
             construct,
             send::{self, GivenEnergy},
-            AccountTransaction, BlockItem, EncodedPayload, InitContractPayload,
+            AccountTransaction, AccountTransactionV1, BlockItem, EncodedPayload,
+            InitContractPayload,
         },
         Address, ContractAddress, Energy, NodeDetails, Nonce, RegisteredData, WalletAccount,
     },
@@ -192,16 +193,24 @@ pub struct CommonArgs {
     pub expiry: u32,
 }
 
+pub enum VersionedAccountTransaction {
+    V0(AccountTransaction<EncodedPayload>),
+    V1(AccountTransactionV1<EncodedPayload>),
+}
 /// A transaction generator.
 pub trait Generate {
     /// Generate a transaction. Will be called in a loop.
-    fn generate(&mut self) -> anyhow::Result<AccountTransaction<EncodedPayload>>;
+    fn generate(&mut self) -> anyhow::Result<VersionedAccountTransaction>;
 
     /// Generate a block item. Will be called in a loop.
     ///
     /// If this function is overridden, [`Self::generate`] will not be called.
     fn generate_block_item(&mut self) -> anyhow::Result<BlockItem<EncodedPayload>> {
-        self.generate().map(BlockItem::AccountTransaction)
+        match self.generate()? {
+            VersionedAccountTransaction::V0(tx) => Ok(BlockItem::AccountTransaction(tx)),
+
+            VersionedAccountTransaction::V1(tx_v1) => Ok(BlockItem::AccountTransactionV1(tx_v1)),
+        }
     }
 }
 
@@ -353,7 +362,7 @@ impl CcdGenerator {
 }
 
 impl Generate for CcdGenerator {
-    fn generate(&mut self) -> anyhow::Result<AccountTransaction<EncodedPayload>> {
+    fn generate(&mut self) -> anyhow::Result<VersionedAccountTransaction> {
         let next_account = if self.random {
             let n = self.rng.gen_range(0..self.accounts.len());
             self.accounts[n]
@@ -374,7 +383,7 @@ impl Generate for CcdGenerator {
         self.nonce.next_mut();
         self.count += 1;
 
-        Ok(tx)
+        Ok(VersionedAccountTransaction::V0(tx))
     }
 }
 
@@ -430,7 +439,7 @@ impl MintCis2Generator {
 }
 
 impl Generate for MintCis2Generator {
-    fn generate(&mut self) -> anyhow::Result<AccountTransaction<EncodedPayload>> {
+    fn generate(&mut self) -> anyhow::Result<VersionedAccountTransaction> {
         // We mint a single token for ourselves.
         let params = MintCis2NftParams {
             owner: Address::Account(self.args.keys.address),
@@ -455,7 +464,7 @@ impl Generate for MintCis2Generator {
         self.nonce.next_mut();
         self.next_id += 1;
 
-        Ok(tx)
+        Ok(VersionedAccountTransaction::V0(tx))
     }
 }
 
@@ -584,7 +593,7 @@ impl TransferCis2Generator {
 }
 
 impl Generate for TransferCis2Generator {
-    fn generate(&mut self) -> anyhow::Result<AccountTransaction<EncodedPayload>> {
+    fn generate(&mut self) -> anyhow::Result<VersionedAccountTransaction> {
         let next_account = self.accounts[self.count % self.accounts.len()];
         let transfer = Transfer {
             token_id: TokenId::new_u8(0),
@@ -609,7 +618,7 @@ impl Generate for TransferCis2Generator {
         self.nonce.next_mut();
         self.count += 1;
 
-        Ok(tx)
+        Ok(VersionedAccountTransaction::V0(tx))
     }
 }
 
@@ -693,7 +702,7 @@ impl WccdGenerator {
 }
 
 impl Generate for WccdGenerator {
-    fn generate(&mut self) -> anyhow::Result<AccountTransaction<EncodedPayload>> {
+    fn generate(&mut self) -> anyhow::Result<VersionedAccountTransaction> {
         let mut metadata = ContractTransactionMetadata {
             sender_address: self.args.keys.address,
             nonce: self.nonce,
@@ -723,7 +732,7 @@ impl Generate for WccdGenerator {
             self.nonce.next_mut();
             self.count += 1;
 
-            return Ok(tx);
+            return Ok(VersionedAccountTransaction::V0(tx));
         }
 
         // We modulate between wrapping, transferring, and unwrapping. All wCCD are
@@ -779,7 +788,7 @@ impl Generate for WccdGenerator {
         self.nonce.next_mut();
         self.count += 1;
 
-        Ok(tx)
+        Ok(VersionedAccountTransaction::V0(tx))
     }
 }
 
@@ -861,7 +870,7 @@ impl RegisterCredentialsGenerator {
 }
 
 impl Generate for RegisterCredentialsGenerator {
-    fn generate(&mut self) -> anyhow::Result<AccountTransaction<EncodedPayload>> {
+    fn generate(&mut self) -> anyhow::Result<VersionedAccountTransaction> {
         // Create 32 byte holder id.
         let public_key = KeyPair::generate(&mut self.rng).public();
 
@@ -887,7 +896,7 @@ impl Generate for RegisterCredentialsGenerator {
                 .make_register_credential(&self.args.keys, &metadata, &cred_info, &[])?;
         self.nonce.next_mut();
 
-        Ok(tx)
+        Ok(VersionedAccountTransaction::V0(tx))
     }
 }
 
@@ -927,7 +936,7 @@ impl RegisterDataGenerator {
 }
 
 impl Generate for RegisterDataGenerator {
-    fn generate(&mut self) -> anyhow::Result<AccountTransaction<EncodedPayload>> {
+    fn generate(&mut self) -> anyhow::Result<VersionedAccountTransaction> {
         let data_bytes: Vec<u8> = (0..self.size).map(|_| self.rng.gen()).collect();
         let data: RegisteredData = data_bytes.try_into()?;
         let expiry = TransactionTime::seconds_after(self.args.expiry);
@@ -941,7 +950,7 @@ impl Generate for RegisterDataGenerator {
         );
         self.nonce.next_mut();
 
-        Ok(tx)
+        Ok(VersionedAccountTransaction::V0(tx))
     }
 }
 
@@ -1004,8 +1013,29 @@ impl SponsoredTransactionGenerator {
 }
 
 impl Generate for SponsoredTransactionGenerator {
-    fn generate(&mut self) -> anyhow::Result<AccountTransaction<EncodedPayload>> {
-        anyhow::bail!("generate() is not implemented for SponsoredTransactionGenerator; use generate_block_item() instead");
+    fn generate(&mut self) -> anyhow::Result<VersionedAccountTransaction> {
+        let operation = operations::transfer_tokens(self.receiver, self.amount);
+
+        let txn_to_be_submitted = construct::token_update_operations(
+            1,
+            self.sender.address,
+            self.nonce,
+            self.expiry,
+            self.token_id.clone(),
+            [operation].into_iter().collect(),
+        )?
+        .extend()
+        .add_sponsor(self.sponsor.address, 1)
+        .expect("Can add sponsor account")
+        .sign(&self.sender)
+        .sponsor(&self.sponsor)
+        .expect("Can sponsor the transaction")
+        .finalize()
+        .expect("Transaction is well-formed");
+
+        self.nonce.next_mut();
+
+        Ok(VersionedAccountTransaction::V1(txn_to_be_submitted))
     }
 
     fn generate_block_item(&mut self) -> anyhow::Result<BlockItem<EncodedPayload>> {
