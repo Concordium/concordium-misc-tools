@@ -1,5 +1,6 @@
 #![allow(clippy::uninlined_format_args)]
 
+use crate::generator::VersionedAccountTransaction;
 use crate::generator::{CommonArgs, Generate};
 use anyhow::{ensure, Context};
 use clap::Args;
@@ -13,7 +14,7 @@ use concordium_rust_sdk::{
         TokenId, TokenInfo, TokenModuleInitializationParameters, TokenModuleRef,
     },
     types::{
-        transactions::{send, AccountTransaction, BlockItem, EncodedPayload},
+        transactions::{send, BlockItem, EncodedPayload},
         update, CreatePlt, Nonce, UpdateKeyPair, UpdateKeysIndex, UpdatePayload,
         UpdateSequenceNumber,
     },
@@ -318,7 +319,7 @@ impl PltOperationGenerator {
 }
 
 impl Generate for PltOperationGenerator {
-    fn generate(&mut self) -> anyhow::Result<AccountTransaction<EncodedPayload>> {
+    fn generate(&mut self) -> anyhow::Result<VersionedAccountTransaction> {
         let expiry = TransactionTime::seconds_after(self.args.expiry);
 
         let plt_operation = self.random_operation();
@@ -368,7 +369,7 @@ impl Generate for PltOperationGenerator {
 
         self.nonce.next_mut();
 
-        Ok(txn)
+        Ok(VersionedAccountTransaction::V0(txn))
     }
 }
 
@@ -462,7 +463,7 @@ impl CreatePltGenerator {
 }
 
 impl Generate for CreatePltGenerator {
-    fn generate(&mut self) -> anyhow::Result<AccountTransaction<EncodedPayload>> {
+    fn generate(&mut self) -> anyhow::Result<VersionedAccountTransaction> {
         unreachable!()
     }
 
