@@ -4,6 +4,7 @@
 
 ```
 {
+  "nonce": "1234...."
   "connectionId": "conn_8291yuw",
   "resourceId": "some string for resource",
   "contextString": "context string here",
@@ -13,8 +14,8 @@
   },
   subjectClaims: [
     {
-      "credentialType": "Identity",
-      "trustedIdps": [1,2,3],
+      "type": "Identity",
+      "source": ["Identity"],
       "issuers": [2,3],
       "claims": [
         {
