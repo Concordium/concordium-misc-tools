@@ -38,7 +38,7 @@ pub struct CreateVerificationRequest {
 /// endpoint: `/verifiable-presentations/verify`.
 #[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
 pub struct VerifyPresentationRequest {
-    /// Audit record id that the client wants to set for this presentation verification
+    /// Audit record id that the client wants to include in the audit anchor.
     pub audit_record_id: String,
     /// Verifiable presentation that contains verifiable credentials each
     /// consisting of subject claims and proofs of them.
