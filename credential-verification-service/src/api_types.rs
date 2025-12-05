@@ -53,7 +53,7 @@ pub struct VerifyPresentationRequest {
 /// endpoint: `/verifiable-presentations/verify`.
 #[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
 pub struct VerifyPresentationResponse {
-    /// whether the verification was successfull or not for the presentation
+    /// Whether the verification was successful or not for the presentation
     pub result: VerificationResult,
     /// Audit record which contains the complete verified request and presentation
     pub verification_audit_record: VerificationAuditRecord,
