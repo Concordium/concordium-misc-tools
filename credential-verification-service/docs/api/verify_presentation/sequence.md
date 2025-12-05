@@ -29,5 +29,5 @@ sequenceDiagram
     RustSDK->>GRPCNode: submit verification audit record anchor (register data TX)
     GRPCNode->>RustSDK: Transaction Hash
 
-    RustSDK->>CredentialVerificationService: PresentationVerificationData(verification result, audit record, audit anchor hash)
-    CredentialVerificationService->>Merchant: PresentationVerificationData
+    RustSDK->>CredentialVerificationService: VerifyPresentationResponse(verification result, audit record, audit anchor hash)
+    CredentialVerificationService->>Merchant: VerifyPresentationResponse
