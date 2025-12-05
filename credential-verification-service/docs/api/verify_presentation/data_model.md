@@ -132,7 +132,7 @@ classDiagram
     IdentityBasedCredentialV1 --> AtomicStatement
 
 
-    PresentationVerificationData --> VerificationResult: result
-    PresentationVerificationData --> VerificationAuditRecord: audit_record
+    VerifyPresentationResponse --> VerificationResult: result
+    VerifyPresentationResponse --> VerificationAuditRecord: audit_record
     VerificationAuditRecord --> PresentationV1
     VerificationAuditRecord --> VerificationRequest
