@@ -66,6 +66,6 @@ pub struct VerifyPresentationResponse {
 pub enum VerificationResult {
     /// Verified
     Verified,
-    /// Failed with a String message
+    /// Failed with an error message
     Failed(String),
 }
