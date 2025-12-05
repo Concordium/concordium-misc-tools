@@ -25,18 +25,30 @@ pub struct Service {
 
 #[derive(Debug, thiserror::Error)]
 pub enum ServerError {
-    #[error("Unable to submit anchor transaction on chain successfully: {0}.")]
+    #[error("Unable to submit anchor transaction on chain: {0}.")]
     SubmitAnchorTransaction(#[from] CreateAnchorError),
+    #[error("Invalid public info: {0}.")]
+    InvalidPublicInfo(String),
 }
 
 impl axum::response::IntoResponse for ServerError {
     fn into_response(self) -> axum::response::Response {
         let r = match self {
             ServerError::SubmitAnchorTransaction(error) => {
-                tracing::error!("Internal error: {error}.");
+                tracing::error!(
+                    "Internal error: Unable to submit anchor transaction on chain: {}.",
+                    error
+                );
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json("Internal error.".to_string()),
+                )
+            }
+            ServerError::InvalidPublicInfo(error) => {
+                tracing::warn!("Bad request: Invalid public info: {error}.");
+                (
+                    StatusCode::BAD_REQUEST,
+                    Json(format!("Bad request: Invalid public info: {}.", error)),
                 )
             }
         };

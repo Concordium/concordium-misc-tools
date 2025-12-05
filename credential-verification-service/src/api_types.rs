@@ -2,7 +2,8 @@ use concordium_rust_sdk::base::web3id::v1::anchor::{self, RequestedSubjectClaims
 
 /// Parameters posted to this service when calling the API
 /// endpoint `/verifiable-presentations/create-verification-request`.
-#[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct CreateVerificationRequest {
     /// The nonce included in the verification request context.  
     /// This nonce must be freshly and randomly generated for each request so that the
@@ -17,9 +18,17 @@ pub struct CreateVerificationRequest {
     /// A general purpose string value included in the verification request context.
     pub context_string: String,
     /// The subject claims being requested to be proven.
-    pub requested_claims: Vec<RequestedSubjectClaims>,
-    // TODO: Remaining missing field
+    pub subject_claims: Vec<RequestedSubjectClaims>,
     // Additional public info which will be included in the anchor transaction (VRA)
     // that is submitted on-chain.
-    // pub public_info: HashMap<String, SerdeCborValue>,
+    pub public_info: Option<PublicInfo>,
+}
+
+/// Additional public info which will be included in the anchor transaction (VRA)
+/// that is submitted on-chain.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PublicInfo {
+    /// CBOR value encoded as hex string.
+    pub cbor_hex: String,
 }

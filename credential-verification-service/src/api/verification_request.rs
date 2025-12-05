@@ -1,5 +1,6 @@
 //! Handler for create-verification-request endpoint.
 use crate::{
+    api::helpers::parse_public_info,
     api_types::CreateVerificationRequest,
     types::{ServerError, Service},
 };
@@ -9,14 +10,14 @@ use concordium_rust_sdk::{
         LabeledContextProperty, UnfilledContextInformationBuilder, VerificationRequest,
         VerificationRequestDataBuilder,
     },
-    common::types::TransactionTime,
+    common::{cbor, types::TransactionTime},
     v2::{QueryError, RPCError},
     web3id::v1::{
         AnchorTransactionMetadata, CreateAnchorError::Query,
         create_verification_request_and_submit_request_anchor,
     },
 };
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 pub async fn create_verification_request(
     State(state): State<Arc<Service>>,
@@ -31,7 +32,7 @@ pub async fn create_verification_request(
     .build();
 
     let mut builder = VerificationRequestDataBuilder::new(context);
-    for claim in params.requested_claims {
+    for claim in params.subject_claims {
         builder = builder.subject_claim(claim);
     }
     let verification_request_data = builder.build();
@@ -40,6 +41,9 @@ pub async fn create_verification_request(
     let expiry = TransactionTime::seconds_after(state.transaction_expiry_secs);
 
     let mut node_client = state.node_client.clone();
+
+    let public_info: Option<HashMap<String, cbor::value::Value>> =
+        params.public_info.map(parse_public_info).transpose()?;
 
     // Get the current nonce for the backend wallet and lock it. This is necessary
     // since it is possible that API requests come in parallel. The nonce is
@@ -58,7 +62,7 @@ pub async fn create_verification_request(
         &mut node_client,
         anchor_transaction_metadata,
         verification_request_data.clone(),
-        None,
+        public_info,
     )
     .await;
 
@@ -79,7 +83,7 @@ pub async fn create_verification_request(
 
                 if is_nonce_err {
                     tracing::warn!(
-                        "Unable to submit transaction on-chain successfully due to account nonce mismatch: {}.
+                        "Unable to submit transaction on-chain due to account nonce mismatch: {}.
                         Account nonce will be re-freshed and transaction will be re-submitted.",
                         msg
                     );
@@ -94,7 +98,7 @@ pub async fn create_verification_request(
 
                     tracing::info!("Refreshed account nonce successfully.");
 
-                    // Retry anchor transaction.
+                    // Retry submitting anchor transaction.
                     let meta = AnchorTransactionMetadata {
                         signer: &state.account_keys,
                         sender: state.account_keys.address,
