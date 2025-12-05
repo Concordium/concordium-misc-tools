@@ -44,7 +44,7 @@ pub async fn verify_presentation(
     let public_info: Option<HashMap<String, cbor::value::Value>> = Some(HashMap::new());
     let audit_record_argument = AuditRecordArgument {
         audit_record_id: verify_presentation_request.audit_record_id,
-        public_info: public_info,
+        public_info,
         audit_record_anchor_transaction_metadata: anchor_transaction_metadata,
     };
 
