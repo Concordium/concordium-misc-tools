@@ -1,6 +1,4 @@
-use crate::types::CborValue;
 use concordium_rust_sdk::base::web3id::v1::anchor::{self, RequestedSubjectClaims};
-use std::collections::HashMap;
 
 /// Parameters posted to this service when calling the API
 /// endpoint `/verifiable-presentations/create-verification-request`.
@@ -23,5 +21,14 @@ pub struct CreateVerificationRequest {
     pub subject_claims: Vec<RequestedSubjectClaims>,
     // Additional public info which will be included in the anchor transaction (VRA)
     // that is submitted on-chain.
-    pub public_info: Option<HashMap<String, CborValue>>,
+    pub public_info: Option<PublicInfo>,
+}
+
+/// Additional public info which will be included in the anchor transaction (VRA)
+/// that is submitted on-chain.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PublicInfo {
+    /// CBOR value encoded as hex string.
+    pub cbor_hex: String,
 }

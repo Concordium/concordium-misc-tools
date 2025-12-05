@@ -6,6 +6,7 @@ use axum::{
 use prometheus_client::registry::Registry;
 use std::sync::Arc;
 
+mod helpers;
 mod monitoring;
 mod verification_request;
 mod verifier;

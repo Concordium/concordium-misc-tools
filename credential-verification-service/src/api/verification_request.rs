@@ -1,5 +1,6 @@
 //! Handler for create-verification-request endpoint.
 use crate::{
+    api::helpers::parse_public_info,
     api_types::CreateVerificationRequest,
     types::{ServerError, Service},
 };
@@ -41,9 +42,8 @@ pub async fn create_verification_request(
 
     let mut node_client = state.node_client.clone();
 
-    let public_info: Option<HashMap<String, cbor::value::Value>> = params
-        .public_info
-        .map(|map| map.into_iter().map(|(k, v)| (k, v.0)).collect());
+    let public_info: Option<HashMap<String, cbor::value::Value>> =
+        params.public_info.map(parse_public_info).transpose()?;
 
     // Get the current nonce for the backend wallet and lock it. This is necessary
     // since it is possible that API requests come in parallel. The nonce is

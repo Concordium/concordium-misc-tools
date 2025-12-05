@@ -28,12 +28,7 @@
         }
     ],
    "publicInfo": {
-        "key1": {
-            "Float": 1.0
-        },
-        "key2": {
-            "Text": "somePublicInfo"
-        }
+        "cborHex": "a26161016c616e6f746865724669656c646374776f"
     }
 }
 ```
