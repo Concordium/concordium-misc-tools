@@ -13,7 +13,10 @@ mod verifier;
 /// Router exposing the service's endpoints
 pub fn router(service: Arc<Service>, request_timeout: u64) -> Router {
     Router::new()
-        .route("/verifiable-presentations/verify", post(verifier::verify_presentation))
+        .route(
+            "/verifiable-presentations/verify",
+            post(verifier::verify_presentation),
+        )
         .route(
             "/verifiable-presentations/create-verification-request",
             post(verification_request::create_verification_request),

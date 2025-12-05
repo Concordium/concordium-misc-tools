@@ -1,9 +1,11 @@
 use axum::{Json, http::StatusCode};
 use concordium_rust_sdk::{
-    types::{Nonce, WalletAccount}, v2, web3id::{
+    types::{Nonce, WalletAccount},
+    v2,
+    web3id::{
         did::Network,
         v1::{CreateAnchorError, VerifyError},
-    }
+    },
 };
 use std::sync::Arc;
 use tokio::sync::Mutex;

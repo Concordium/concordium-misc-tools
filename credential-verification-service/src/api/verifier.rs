@@ -1,15 +1,17 @@
 //! Handler for the verification endpoints.
 use crate::{
-    api_types::VerifyPresentationRequest,
+    api_types::{VerificationResult, VerifyPresentationRequest, VerifyPresentationResponse},
     types::{ServerError, Service},
 };
 use axum::{Json, extract::State};
 use concordium_rust_sdk::{
+    base::web3id::v1::anchor::PresentationVerificationResult,
     common::{cbor, types::TransactionTime},
-    v2::{BlockIdentifier},
-    web3id::{self, did::Network, v1::{
-        AnchorTransactionMetadata, AuditRecordArgument, PresentationVerificationData
-    }},
+    v2::BlockIdentifier,
+    web3id::{
+        self,
+        v1::{AnchorTransactionMetadata, AuditRecordArgument},
+    },
 };
 use std::{collections::HashMap, sync::Arc};
 
@@ -18,15 +20,12 @@ use std::{collections::HashMap, sync::Arc};
 pub async fn verify_presentation(
     state: State<Arc<Service>>,
     Json(verify_presentation_request): Json<VerifyPresentationRequest>,
-) -> Result<Json<PresentationVerificationData>, ServerError> {
+) -> Result<Json<VerifyPresentationResponse>, ServerError> {
     // Transaction should expiry after some seconds.
     let expiry = TransactionTime::seconds_after(state.transaction_expiry_secs);
 
     // client
     let mut client = state.node_client.clone();
-
-    // TODO - network should be taken from env config later
-    let network = Network::Testnet;
 
     // Get the current nonce for the backend wallet and lock it. This is necessary
     // since it is possible that API requests come in parallel. The nonce is
@@ -41,26 +40,41 @@ pub async fn verify_presentation(
         expiry,
     };
 
-    // TODO - Audit record Argument creation - public info needs to be taken in here probably throught the VerifyPresentationRequest, audit record id could be the original nonce that was associated with the verification request
+    // TODO - fix public info later after merge of the other PR
     let public_info: Option<HashMap<String, cbor::value::Value>> = Some(HashMap::new());
     let audit_record_argument = AuditRecordArgument {
-        audit_record_id: "dummy_for_now".to_string(),
+        audit_record_id: verify_presentation_request.audit_record_id,
         public_info: public_info,
         audit_record_anchor_transaction_metadata: anchor_transaction_metadata,
     };
 
-    let presentation_verification_data_result = web3id::v1::verify_presentation_and_submit_audit_anchor(
-        &mut client,
-        network,
-        BlockIdentifier::LastFinal,
-        verify_presentation_request.verification_request,
-        verify_presentation_request.presentation,
-        audit_record_argument,
-    )
-    .await;
+    let presentation_verification_data_result =
+        web3id::v1::verify_presentation_and_submit_audit_anchor(
+            &mut client,
+            state.network,
+            BlockIdentifier::LastFinal,
+            verify_presentation_request.verification_request,
+            verify_presentation_request.presentation,
+            audit_record_argument,
+        )
+        .await;
 
     match presentation_verification_data_result {
-        Ok(result) => Ok(Json(result)),
-        Err(e) => Err(ServerError::PresentationVerifificationFailed(e))
+        Ok(presentation_verification_data) => {
+            let result = match presentation_verification_data.verification_result {
+                PresentationVerificationResult::Verified => VerificationResult::Verified,
+                PresentationVerificationResult::Failed(e) => {
+                    VerificationResult::Failed(e.to_string())
+                }
+            };
+
+            let verify_presentation_response = VerifyPresentationResponse {
+                result,
+                anchor_transaction_hash: presentation_verification_data.anchor_transaction_hash,
+                verification_audit_record: presentation_verification_data.audit_record,
+            };
+            Ok(Json(verify_presentation_response))
+        }
+        Err(e) => Err(ServerError::PresentationVerifificationFailed(e)),
     }
 }
