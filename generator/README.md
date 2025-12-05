@@ -78,3 +78,11 @@ The tool first deploys and initializes the [`credential-registry`](https://githu
 ### `register-data`
 
 The transactions are register data transactions with randomly-generated data of a fixed size (specified with `--size`, defaulting to 32 bytes).
+
+### `sponsored-transaction`
+
+The tool can be used to generate transactions with a sponsor. Sender and recipient need to be in the allowed list of the token used.
+- sender argument points to the path of the accounts keys file of the sender
+- sponsor argument points to the path of the account keys file of the sponsor covering the CCD cost
+- receiver argument is the account address of the receiver of the token
+- token argument represents the token ID
