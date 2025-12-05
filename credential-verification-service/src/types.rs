@@ -30,7 +30,7 @@ pub struct Service {
 pub enum ServerError {
     #[error("Unable to submit anchor transaction on chain successfully: {0}.")]
     SubmitAnchorTransaction(#[from] CreateAnchorError),
-    #[error("Unable to submit anchor transaction on chain successfully: {0}.")]
+    #[error("Unable to submit anchor transaction on chain: {0}.")]
     PresentationVerifificationFailed(#[from] VerifyError),
 }
 
