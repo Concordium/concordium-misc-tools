@@ -2,7 +2,10 @@ use axum::{Json, http::StatusCode};
 use concordium_rust_sdk::{
     types::{Nonce, WalletAccount},
     v2,
-    web3id::{did::Network, v1::CreateAnchorError},
+    web3id::{
+        did::Network,
+        v1::{CreateAnchorError, VerifyError},
+    },
 };
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -27,6 +30,8 @@ pub struct Service {
 pub enum ServerError {
     #[error("Unable to submit anchor transaction on chain successfully: {0}.")]
     SubmitAnchorTransaction(#[from] CreateAnchorError),
+    #[error("Unable to submit anchor transaction on chain: {0}.")]
+    PresentationVerifificationFailed(#[from] VerifyError),
 }
 
 impl axum::response::IntoResponse for ServerError {
@@ -37,6 +42,14 @@ impl axum::response::IntoResponse for ServerError {
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json("Internal error.".to_string()),
+                )
+            }
+            // TODO - here needs to be expanded with some code reasoning probably. Blanket 400 for now
+            ServerError::PresentationVerifificationFailed(error) => {
+                tracing::error!("Presentaion Verification Failed: {error}.");
+                (
+                    StatusCode::BAD_REQUEST,
+                    Json("Presentation failed its verification.".to_string()),
                 )
             }
         };

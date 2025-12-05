@@ -87,7 +87,7 @@ Process Overview:
 
 Diagrams and Sample Payloads: 
 - [Sequence Diagram](docs/api/verify_presentation/sequence.md)
-- [Data Model (Request + Response)](docs/api/verify_presentation§/data_model.md)
+- [Data Model (Request + Response)](docs/api/verify_presentation/data_model.md)
 - [Example Payloads](docs/api/verify_presentation//examples.md)
 
 

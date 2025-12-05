@@ -26,6 +26,7 @@ classDiagram
     %% Request to the API to verify a presentation
     class VerifyPresentationRequest {
         <<API Request>>
+        auditRecordId: String,
         presentation: PresentationV1,
         verificationRequest: VerificationRequest(link in Note above)
     }
@@ -68,17 +69,17 @@ classDiagram
 
 
     %%%% Response Structure
-    class PresentationVerificationData{
+    class VerifyPresentationResponse{
         <<API Response>>
-        verification_result: PresentationVerificationResult
+        result: VerificationResult
         audit_record: VerificationAuditRecord
         anchor_transaction_hash: TransactionHash
     }
 
-    class PresentationVerificationResult{
+    class VerificationResult {
         <<enum>>
-        Verified
-        Failed(CredentialInvalidReason)
+        Verified,
+        Failed(String)
     }
 
     class VerificationAuditRecord{
@@ -131,7 +132,7 @@ classDiagram
     IdentityBasedCredentialV1 --> AtomicStatement
 
 
-    PresentationVerificationData --> PresentationVerificationResult: verification_result
-    PresentationVerificationData --> VerificationAuditRecord: audit_record
+    VerifyPresentationResponse --> VerificationResult: result
+    VerifyPresentationResponse --> VerificationAuditRecord: audit_record
     VerificationAuditRecord --> PresentationV1
     VerificationAuditRecord --> VerificationRequest
