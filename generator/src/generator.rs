@@ -1035,31 +1035,4 @@ impl Generate for SponsoredTransactionGenerator {
 
         Ok(VersionedAccountTransaction::V1(txn_to_be_submitted))
     }
-
-    fn generate_block_item(&mut self) -> anyhow::Result<BlockItem<EncodedPayload>> {
-        let operation = operations::transfer_tokens(self.receiver, self.amount);
-
-        let txn_to_be_submitted = construct::token_update_operations(
-            1,
-            self.sender.address,
-            self.nonce,
-            self.expiry,
-            self.token_id.clone(),
-            [operation].into_iter().collect(),
-        )?
-        .extend()
-        .add_sponsor(self.sponsor.address, 1)
-        .expect("Can add sponsor account")
-        .sign(&self.sender)
-        .sponsor(&self.sponsor)
-        .expect("Can sponsor the transaction")
-        .finalize()
-        .expect("Transaction is well-formed");
-
-        self.nonce.next_mut();
-
-        let item = BlockItem::AccountTransactionV1(txn_to_be_submitted);
-
-        Ok(item)
-    }
 }
