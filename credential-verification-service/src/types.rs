@@ -46,7 +46,7 @@ impl axum::response::IntoResponse for ServerError {
             }
             // TODO - here needs to be expanded with some code reasoning probably. Blanket 400 for now
             ServerError::PresentationVerifificationFailed(error) => {
-                tracing::error!("Presentaion Verification Failed: {error}.");
+                tracing::error!("Presentation Verification Failed: {error}.");
                 (
                     StatusCode::BAD_REQUEST,
                     Json("Presentation failed its verification.".to_string()),
