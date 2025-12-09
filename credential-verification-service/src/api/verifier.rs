@@ -19,7 +19,9 @@ use concordium_rust_sdk::{
 use std::{collections::HashMap, sync::Arc};
 
 /// Verify Presentation endpoint handler.
-/// Accepts a VerifyPresentationRequest payload and calls the Rust SDK function `verify_presentation_and_submit_audit_anchor` to perform the cryptographic verification, context checking and Verifiable request anchor checks, and finally submits the Verifiable Audit Anchor on chain
+/// Accepts a VerifyPresentationRequest payload and calls the Rust SDK function `verify_presentation_with_request_anchor` 
+/// to perform the cryptographic verification, context checking and Verifiable request anchor checks, and calls 
+/// `submit_verification_audit_record_anchor` to publish the audit anchor on chain, only when the verification has succeeded.
 pub async fn verify_presentation(
     state: State<Arc<Service>>,
     Json(verify_presentation_request): Json<VerifyPresentationRequest>,
