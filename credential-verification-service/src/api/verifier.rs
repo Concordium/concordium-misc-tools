@@ -217,7 +217,7 @@ async fn create_and_submit_audit_anchor(
     Ok(PresentationVerificationData {
         verification_result,
         audit_record,
-        anchor_transaction_hash: anchor_transaction_hash,
+        anchor_transaction_hash,
     })
 }
 
