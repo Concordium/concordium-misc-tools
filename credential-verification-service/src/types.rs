@@ -48,12 +48,12 @@ impl axum::response::IntoResponse for ServerError {
             }
             ServerError::PresentationVerifificationFailed(error) => {
                 let error_message = format!("Presentation Verification Failed: {}", error);
-                tracing::error!(error_message);
+                tracing::warn!(error_message);
                 (StatusCode::BAD_REQUEST, Json(error_message))
             }
             ServerError::QueryError(error) => {
                 let error_message = format!("Query Error occurred with Node: {}", error);
-                tracing::error!(error_message);
+                tracing::warn!(error_message);
                 (StatusCode::BAD_REQUEST, Json(error_message))
             }
         };
