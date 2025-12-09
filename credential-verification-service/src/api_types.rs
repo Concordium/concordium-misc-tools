@@ -1,4 +1,14 @@
-use concordium_rust_sdk::base::web3id::v1::anchor::{self, RequestedSubjectClaims};
+use concordium_rust_sdk::{
+    base::{
+        hashes::TransactionHash,
+        web3id::v1::{
+            PresentationV1,
+            anchor::{self, RequestedSubjectClaims, VerificationAuditRecord, VerificationRequest},
+        },
+    },
+    id::constants::{ArCurve, IpPairing},
+    web3id::Web3IdAttribute,
+};
 
 /// Parameters posted to this service when calling the API
 /// endpoint `/verifiable-presentations/create-verification-request`.
@@ -31,4 +41,40 @@ pub struct CreateVerificationRequest {
 pub struct PublicInfo {
     /// CBOR value encoded as hex string.
     pub cbor_hex: String,
+}
+
+/// API request payload for verifying a presentation
+/// endpoint: `/verifiable-presentations/verify`.
+#[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
+pub struct VerifyPresentationRequest {
+    /// Audit record id that the client wants to include in the audit anchor.
+    pub audit_record_id: String,
+    /// Verifiable presentation that contains verifiable credentials each
+    /// consisting of subject claims and proofs of them.
+    /// It is the response to proving a [`RequestV1`] with [`RequestV1::prove`].
+    pub presentation: PresentationV1<IpPairing, ArCurve, Web3IdAttribute>,
+    /// A verification request that specifies which subject claims are requested from a credential holder
+    /// and in which context.
+    pub verification_request: VerificationRequest,
+}
+
+/// Response to verifying a presentation
+/// endpoint: `/verifiable-presentations/verify`.
+#[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
+pub struct VerifyPresentationResponse {
+    /// Whether the verification was successful or not for the presentation
+    pub result: VerificationResult,
+    /// Audit record which contains the complete verified request and presentation
+    pub verification_audit_record: VerificationAuditRecord,
+    /// Audit anchor transaction hash reference that was put on chain
+    pub anchor_transaction_hash: Option<TransactionHash>,
+}
+
+/// Presentation Verification Result, contains: Success or Failed with a String message
+#[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
+pub enum VerificationResult {
+    /// Verified
+    Verified,
+    /// Failed with reason for the verification failing
+    Failed(String),
 }
