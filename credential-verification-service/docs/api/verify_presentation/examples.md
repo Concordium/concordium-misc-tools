@@ -4,6 +4,7 @@
 
 ```
 VerifyPresentationRequest {
+      auditRecordId: String,
       presentation: PresentationV1,
       verificationRequest: VerificationRequest
   }
