@@ -180,7 +180,8 @@ async fn verify_presentation_with_request_anchor(
     Ok(presentation_verification_result)
 }
 
-/// Creates and submits the Verification Audit anchor to the chain
+/// Creates and submits the Verification Audit anchor to the chain.
+/// Only submits the anchor if the presenation verification result was a success.
 async fn create_and_submit_audit_anchor(
     client: &mut v2::Client,
     verify_presentation_request: &VerifyPresentationRequest,
@@ -200,18 +201,23 @@ async fn create_and_submit_audit_anchor(
         build_audit_record(state, verify_presentation_request, account_sequence_number).await;
 
     // submit the audit anchor transaction
-    let anchor_transaction_hash = v1::submit_verification_audit_record_anchor(
-        client,
-        audit_record_argument.audit_record_anchor_transaction_metadata,
-        &audit_record,
-        audit_record_argument.public_info,
-    )
-    .await?;
+    let anchor_transaction_hash = if verification_result.is_success() {
+        let txn_hash = v1::submit_verification_audit_record_anchor(
+            client,
+            audit_record_argument.audit_record_anchor_transaction_metadata,
+            &audit_record,
+            audit_record_argument.public_info,
+        )
+        .await?;
+        Some(txn_hash)
+    } else {
+        None
+    };
 
     Ok(PresentationVerificationData {
         verification_result,
         audit_record,
-        anchor_transaction_hash: Some(anchor_transaction_hash),
+        anchor_transaction_hash: anchor_transaction_hash,
     })
 }
 
