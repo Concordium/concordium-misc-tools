@@ -119,7 +119,7 @@ pub async fn verify_presentation(
                             .audit_record,
                     };
 
-                    return Ok(Json(verify_presentation_response))
+                    return Ok(Json(verify_presentation_response));
                 }
 
                 Err(ServerError::PresentationVerifificationFailed(e))
@@ -147,11 +147,9 @@ async fn verify_presentation_with_request_anchor(
 
     let block_info = client.get_block_info(block_identifier).await?.response;
 
-    let request_anchor = v1::lookup_request_anchor(
-        client,
-        &verify_presentation_request.verification_request,
-    )
-    .await?;
+    let request_anchor =
+        v1::lookup_request_anchor(client, &verify_presentation_request.verification_request)
+            .await?;
 
     let verification_material = v1::lookup_verification_materials_and_validity(
         client,
@@ -196,12 +194,8 @@ async fn create_and_submit_audit_anchor(
         verify_presentation_request_clone.presentation,
     );
 
-    let audit_record_argument = build_audit_record(
-        state,
-        verify_presentation_request,
-        account_sequence_number,
-    )
-    .await;
+    let audit_record_argument =
+        build_audit_record(state, verify_presentation_request, account_sequence_number).await;
 
     // submit the audit anchor transaction
     let anchor_transaction_hash = v1::submit_verification_audit_record_anchor(
