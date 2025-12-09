@@ -119,6 +119,9 @@ pub async fn verify_presentation(
                             .audit_record,
                     };
 
+                    // finally increase the nonce in the state
+                    *account_sequence_number = account_sequence_number.next();
+
                     return Ok(Json(verify_presentation_response));
                 }
 
@@ -178,7 +181,6 @@ async fn verify_presentation_with_request_anchor(
 }
 
 /// Creates and submits the Verification Audit anchor to the chain
-/// Note: this function also locks for the account nonce
 async fn create_and_submit_audit_anchor(
     client: &mut v2::Client,
     verify_presentation_request: &VerifyPresentationRequest,
