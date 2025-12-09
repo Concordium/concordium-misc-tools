@@ -44,13 +44,10 @@ impl axum::response::IntoResponse for ServerError {
                     Json("Internal error.".to_string()),
                 )
             }
-            // TODO - here needs to be expanded with some code reasoning probably. Blanket 400 for now
             ServerError::PresentationVerifificationFailed(error) => {
-                tracing::error!("Presentation Verification Failed: {error}.");
-                (
-                    StatusCode::BAD_REQUEST,
-                    Json("Presentation failed its verification.".to_string()),
-                )
+                let error_message = format!("Presentation Verification Failed: {}", error);
+                tracing::error!(error_message);
+                (StatusCode::BAD_REQUEST, Json(error_message))
             }
         };
         r.into_response()
