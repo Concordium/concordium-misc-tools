@@ -1,7 +1,7 @@
 use axum::{Json, http::StatusCode};
 use concordium_rust_sdk::{
     types::{Nonce, WalletAccount},
-    v2,
+    v2::{self, QueryError},
     web3id::{
         did::Network,
         v1::{CreateAnchorError, VerifyError},
@@ -32,6 +32,8 @@ pub enum ServerError {
     SubmitAnchorTransaction(#[from] CreateAnchorError),
     #[error("Unable to submit anchor transaction on chain: {0}.")]
     PresentationVerifificationFailed(#[from] VerifyError),
+    #[error("Unable to submit anchor transaction on chain: {0}.")]
+    QueryError(#[from] QueryError),
 }
 
 impl axum::response::IntoResponse for ServerError {
@@ -46,6 +48,11 @@ impl axum::response::IntoResponse for ServerError {
             }
             ServerError::PresentationVerifificationFailed(error) => {
                 let error_message = format!("Presentation Verification Failed: {}", error);
+                tracing::error!(error_message);
+                (StatusCode::BAD_REQUEST, Json(error_message))
+            }
+            ServerError::QueryError(error) => {
+                let error_message = format!("Query Error occurred with Node: {}", error);
                 tracing::error!(error_message);
                 (StatusCode::BAD_REQUEST, Json(error_message))
             }
