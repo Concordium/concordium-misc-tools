@@ -2,17 +2,21 @@
 
 ## Request Example
 
-```
-VerifyPresentationRequest {
-      auditRecordId: String,
-      presentation: PresentationV1,
-      verificationRequest: VerificationRequest
-  }
+```json
+{
+  "auditRecordId": "recordid1234",
+  "publicInfo": {
+    "key1": "6676616C756531",
+    "key2": "6676616C756532"
+  },
+  "presentation": <PresentationV1>,
+  "verificationRequest": <VerificationRequest>
+}
 ```
 
-Internal Structure example for Presentation V1
+Structure example for Presentation V1 (obtained from wallet or ID app)
 
-``` 
+```json
 {
   "type": [
     "VerifiablePresentation",

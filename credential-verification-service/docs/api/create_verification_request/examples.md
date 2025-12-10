@@ -2,17 +2,17 @@
 
 ## Request Example
 
-```
+```json
 {
-  "nonce": "1234...."
+  "nonce": "1234....",
   "connectionId": "conn_8291yuw",
   "resourceId": "some string for resource",
   "contextString": "context string here",
   "publicInfo": {
-    "key": "value",
-    "key2": "value"
+    "key1": "6676616C756531",
+    "key2": "6676616C756532"
   },
-  subjectClaims: [
+  "subjectClaims": [
     {
       "type": "Identity",
       "source": ["Identity"],
@@ -28,21 +28,21 @@
           "type": "ATTRIBUTE_IN_SET",
           "tag": "nationality",
           "set": [
-            IE,
-            IN,
-            US,
-            UK
-          ],
+            "IE",
+            "IN",
+            "US",
+            "UK"
+          ]
         },
         {
           "type": "ATTRIBUTE_IN_SET",
           "tag": "residence",
           "set": [
-            IE,
-            IN,
-            US,
-            UK
-          ],
+            "IE",
+            "IN",
+            "US",
+            "UK"
+          ]
         }
       ]
     }
@@ -50,10 +50,9 @@
 }
 ```
 
+Returned Verification Request Sample:
 
-Verification Request Internal Sample:
-
-```
+```json
 {
   "type": "ConcordiumVerificationRequestV1",
   "context": {
