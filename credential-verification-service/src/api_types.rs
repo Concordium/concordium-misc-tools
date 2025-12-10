@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use concordium_rust_sdk::common::cbor;
 use concordium_rust_sdk::{
     base::{
         hashes::TransactionHash,
@@ -10,12 +10,12 @@ use concordium_rust_sdk::{
     id::constants::{ArCurve, IpPairing},
     web3id::Web3IdAttribute,
 };
-use concordium_rust_sdk::common::cbor;
+use std::collections::HashMap;
 
 /// Parameters posted to this service when calling the API
 /// endpoint `/verifiable-presentations/create-verification-request`.
 #[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
-#[serde(rename_all="camelCase")]
+#[serde(rename_all = "camelCase")]
 pub struct CreateVerificationRequest {
     /// The nonce included in the verification request context.  
     /// This nonce must be freshly and randomly generated for each request so that the
@@ -44,7 +44,7 @@ pub struct CreateVerificationRequest {
 /// API request payload for verifying a presentation
 /// endpoint: `/verifiable-presentations/verify`.
 #[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
-#[serde(rename_all="camelCase")]
+#[serde(rename_all = "camelCase")]
 pub struct VerifyPresentationRequest {
     /// Audit record id that the client wants to include in the audit anchor.
     pub audit_record_id: String,
@@ -68,7 +68,7 @@ pub struct VerifyPresentationRequest {
 /// Response to verifying a presentation
 /// endpoint: `/verifiable-presentations/verify`.
 #[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
-#[serde(rename_all="camelCase")]
+#[serde(rename_all = "camelCase")]
 pub struct VerifyPresentationResponse {
     /// Whether the verification was successful or not for the presentation
     pub result: VerificationResult,
@@ -80,7 +80,7 @@ pub struct VerifyPresentationResponse {
 
 /// Presentation Verification Result, contains: Success or Failed with a String message
 #[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
-#[serde(rename_all="camelCase")]
+#[serde(rename_all = "camelCase")]
 pub enum VerificationResult {
     /// Verified
     Verified,
@@ -88,12 +88,10 @@ pub enum VerificationResult {
     Failed(String),
 }
 
-
 mod map_hex_cbor_values_option {
-    use hex::{FromHex, ToHex};
     use super::*;
+    use hex::{FromHex, ToHex};
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
-
 
     /// Serialize a `HashMap<String, value::Value>` as hex-encoded CBOR.
     pub fn serialize<S>(
@@ -112,7 +110,9 @@ mod map_hex_cbor_values_option {
     }
 
     /// Deserialize a `HashMap<String, value::Value>` from hex-encoded CBOR.
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<HashMap<String, cbor::value::Value>>, D::Error>
+    pub fn deserialize<'de, D>(
+        deserializer: D,
+    ) -> Result<Option<HashMap<String, cbor::value::Value>>, D::Error>
     where
         D: Deserializer<'de>,
     {

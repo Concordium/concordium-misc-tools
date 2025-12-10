@@ -8,7 +8,7 @@ use concordium_rust_sdk::{
     base::web3id::v1::anchor::{
         self, PresentationVerificationResult, VerificationAuditRecord, VerificationContext,
     },
-    common::{types::TransactionTime},
+    common::types::TransactionTime,
     types::WalletAccount,
     v2::{self, BlockIdentifier, QueryError, RPCError},
     web3id::v1::{
@@ -16,7 +16,7 @@ use concordium_rust_sdk::{
         VerifyError,
     },
 };
-use std::{ sync::Arc};
+use std::sync::Arc;
 
 /// Verify Presentation endpoint handler.
 /// Accepts a VerifyPresentationRequest payload and calls the Rust SDK function `verify_presentation_with_request_anchor`
