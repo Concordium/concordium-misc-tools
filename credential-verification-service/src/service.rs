@@ -56,7 +56,7 @@ pub async fn run(configs: ServiceConfigs) -> anyhow::Result<()> {
     let consensus_info = node_client
         .get_consensus_info()
         .await
-        .context("Unable to query the consesnsus info from the chain")?;
+        .context("Unable to query the consensus info from the chain")?;
     let genesis_hash = consensus_info.genesis_block.bytes;
 
     let network = match genesis_hash {

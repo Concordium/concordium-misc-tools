@@ -25,6 +25,12 @@ tower-http = {workspace = true, features = [
   "compression-zstd",
 ] }
 
+[dev-dependencies]
+mocktail.workspace = true
+parking_lot.workspace = true
+rand.workspace = true
+reqwest = { workspace = true, features = ["json"] }
+
 [[bin]]
 name = "credential-verification-service"
 path = "src/bin/service.rs"
