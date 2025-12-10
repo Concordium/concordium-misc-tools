@@ -1,12 +1,14 @@
+use std::collections::BTreeSet;
+
 use concordium_rust_sdk::{
     base::{
         hashes::TransactionHash,
         web3id::v1::{
             PresentationV1,
-            anchor::{self, RequestedSubjectClaims, VerificationAuditRecord, VerificationRequest},
+            anchor::{self, IdentityCredentialType, VerificationAuditRecord, VerificationRequest},
         },
     },
-    id::constants::{ArCurve, IpPairing},
+    id::constants::{ArCurve, AttributeKind, IpPairing},
     web3id::Web3IdAttribute,
 };
 
@@ -27,11 +29,32 @@ pub struct CreateVerificationRequest {
     /// A general purpose string value included in the verification request context.
     pub context_string: String,
     /// The subject claims being requested to be proven.
-    pub requested_claims: Vec<RequestedSubjectClaims>,
+    pub requested_claims: Vec<SubjectClaims>,
     // TODO: Remaining missing field
     // Additional public info which will be included in the anchor transaction (VRA)
     // that is submitted on-chain.
     // pub public_info: HashMap<String, SerdeCborValue>,
+}
+
+#[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
+pub struct SubjectClaims {
+    pub claim_type: String,
+    pub source: Vec<IdentityCredentialType>,
+    pub issuers: Vec<u8>,
+    pub claims: Vec<ClaimType>
+}
+
+/// Represents a high level claim to be made about a given subject.
+/// This will later be translated to the Atomic Statements that make up Credential Statements
+#[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
+pub enum ClaimType {
+    AgeOlderThan { min_age: u64 },
+    AgeYoungerThan { max_age: u64 },
+    AgeInRange { min_age: u64, max_age: u64 },
+    ResidentInSet{ set: BTreeSet<AttributeKind> },
+    ResidentNotInSet{ set: BTreeSet<AttributeKind> },
+    NationalityInSet{ set: BTreeSet<AttributeKind> },
+    NationalityNotInSet{set: BTreeSet<AttributeKind> },
 }
 
 /// API request payload for verifying a presentation

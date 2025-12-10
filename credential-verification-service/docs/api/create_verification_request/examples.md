@@ -14,7 +14,7 @@
   },
   "subjectClaims": [
     {
-      "type": "Identity",
+      "claim_type": "Identity",
       "source": [
         "Identity"
       ],

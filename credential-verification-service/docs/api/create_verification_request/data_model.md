@@ -30,7 +30,7 @@ classDiagram
     }
 
     class SubjectClaims {
-        String type
+        String claim_type
         IdentityCredentialType[] source
         int[] issuers
         ClaimType[] claims

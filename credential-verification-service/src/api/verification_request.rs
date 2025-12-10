@@ -1,23 +1,20 @@
 //! Handler for create-verification-request endpoint.
 use crate::{
-    api_types::CreateVerificationRequest,
+    api_types::{ClaimType, CreateVerificationRequest, SubjectClaims},
     types::{ServerError, Service},
 };
 use axum::{Json, extract::State};
 use concordium_rust_sdk::{
-    base::web3id::v1::anchor::{
-        LabeledContextProperty, UnfilledContextInformationBuilder, VerificationRequest,
-        VerificationRequestDataBuilder,
-    },
-    common::types::TransactionTime,
-    v2::{QueryError, RPCError},
-    web3id::v1::{
+    base::web3id::v1::{AtomicStatementV1, anchor::{
+        IdentityProviderDid, LabeledContextProperty, RequestedIdentitySubjectClaims, RequestedStatement, RequestedSubjectClaims, UnfilledContextInformation, UnfilledContextInformationBuilder, VerificationRequest, VerificationRequestData
+    }}, common::types::TransactionTime, id::{constants::{ArCurve, AttributeKind}, id_proof_types::{self, RevealAttributeStatement, Statement}, types::{AttributeTag, IpIdentity}}, v2::{QueryError, RPCError}, web3id::{Web3IdAttribute, did::Network, v1::{
         AnchorTransactionMetadata, CreateAnchorError::Query,
         create_verification_request_and_submit_request_anchor,
-    },
+    }}
 };
 use std::sync::Arc;
 
+/// Handler for the create verification request API
 pub async fn create_verification_request(
     State(state): State<Arc<Service>>,
     Json(params): Json<CreateVerificationRequest>,
@@ -30,11 +27,13 @@ pub async fn create_verification_request(
     .given(LabeledContextProperty::ResourceId(params.rescource_id))
     .build();
 
-    let mut builder = VerificationRequestDataBuilder::new(context);
-    for claim in params.requested_claims {
-        builder = builder.subject_claim(claim);
-    }
-    let verification_request_data = builder.build();
+    // build the verification request data from our API
+    let verification_request_data = build_verification_request_data(
+        context, 
+        params.requested_claims, 
+        state.network
+    );
+
 
     // Transaction should expiry after some seconds.
     let expiry = TransactionTime::seconds_after(state.transaction_expiry_secs);
@@ -122,6 +121,112 @@ pub async fn create_verification_request(
             }
 
             Err(ServerError::SubmitAnchorTransaction(e))
+        }
+    }
+}
+
+
+/// Converts the API's high level abstraction of subject claims into the
+/// RequestedSubjectClaims which are made up of the Atomic statements for the 
+/// VerificationRequestData.
+/// Finally, returns the VerificationRequestData to the caller.
+fn build_verification_request_data(
+    context: UnfilledContextInformation,
+    subject_claims: Vec<SubjectClaims>,
+    network: Network
+) -> VerificationRequestData {
+    let requested_statements = vec![];
+    let requested_subject_claims_list: Vec<RequestedSubjectClaims> = vec![];
+
+    // deal with root subject claims array
+    for subject_claims in subject_claims {
+
+        // for each subject claim, go through the claims
+        let statement = Statement::new();
+        for claim in subject_claims.claims {
+            map_claim_type(claim, statement);
+        }
+
+        // now convert statement to requested statement
+        for atomic_statement in statement.statements {
+            let requested_statement = statement_to_requested_statement(atomic_statement);
+            requested_statements.push(requested_statement);
+        }
+
+        let issuers = vec![];
+        for issuer in subject_claims.issuers {
+            let idp = IdentityProviderDid {
+                network: network,
+                identity_provider: IpIdentity(u32::from(issuer))
+            };
+            issuers.push(idp);
+        }
+
+        let requested_subject_claims = RequestedIdentitySubjectClaims {
+            issuers: issuers,
+            source: subject_claims.source,
+            statements: requested_statements
+        };
+
+        let rsc = RequestedSubjectClaims::Identity(requested_subject_claims);
+
+        requested_subject_claims_list.push(rsc);
+    }
+
+    VerificationRequestData {
+        context,
+        subject_claims: requested_subject_claims_list
+    }
+}
+
+/// Mapping function to map from a provided claim type to append the atomic statement to the statement
+/// passed as argument
+/// let statement = Statement::new();
+fn map_claim_type(
+    claim_type: ClaimType,
+    statement: Statement<ArCurve, AttributeKind>
+) -> Option<id_proof_types::Statement<ArCurve, AttributeKind>> {
+    match claim_type {
+        ClaimType::AgeOlderThan { min_age } => {
+            statement.older_than(min_age)
+        }
+        ClaimType::AgeYoungerThan { max_age } => {
+            statement.younger_than(max_age)
+        }
+        ClaimType::AgeInRange { min_age, max_age } => {
+            statement.age_in_range(min_age, max_age)
+        }
+        ClaimType::NationalityInSet { set } => {
+            statement.nationality_in(set)
+        }
+        ClaimType::NationalityNotInSet { set } => {
+            statement.nationality_not_in(set)
+        }
+        ClaimType::ResidentInSet { set } => {
+            statement.residence_in(set)
+        }
+        ClaimType::ResidentNotInSet { set } => {
+            statement.residence_not_in(set)
+        }
+    }
+}
+
+/// converts an atomic statement into a RequestedStatement which is used to build the VerificationRequestData
+fn statement_to_requested_statement(
+    statement: &AtomicStatementV1<ArCurve, AttributeTag, Web3IdAttribute>,
+) -> RequestedStatement<AttributeTag> {
+    match statement {
+        AtomicStatementV1::AttributeValue(stmt) => {
+            RequestedStatement::RevealAttribute(RevealAttributeStatement {
+                attribute_tag: stmt.attribute_tag,
+            })
+        }
+        AtomicStatementV1::AttributeInRange(stmt) => {
+            RequestedStatement::AttributeInRange(stmt.clone())
+        }
+        AtomicStatementV1::AttributeInSet(stmt) => RequestedStatement::AttributeInSet(stmt.clone()),
+        AtomicStatementV1::AttributeNotInSet(stmt) => {
+            RequestedStatement::AttributeNotInSet(stmt.clone())
         }
     }
 }
