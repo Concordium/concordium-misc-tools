@@ -8,7 +8,7 @@ use concordium_rust_sdk::{
     base::web3id::v1::anchor::{
         self, PresentationVerificationResult, VerificationAuditRecord, VerificationContext,
     },
-    common::{cbor, types::TransactionTime},
+    common::{types::TransactionTime},
     types::WalletAccount,
     v2::{self, BlockIdentifier, QueryError, RPCError},
     web3id::v1::{
@@ -16,7 +16,7 @@ use concordium_rust_sdk::{
         VerifyError,
     },
 };
-use std::{collections::HashMap, sync::Arc};
+use std::{ sync::Arc};
 
 /// Verify Presentation endpoint handler.
 /// Accepts a VerifyPresentationRequest payload and calls the Rust SDK function `verify_presentation_with_request_anchor`
@@ -199,11 +199,11 @@ async fn create_and_submit_audit_anchor(
         verify_presentation_request_clone.presentation,
     );
 
-    let audit_record_argument =
-        build_audit_record(state, verify_presentation_request, account_sequence_number).await;
-
     // submit the audit anchor transaction
     let anchor_transaction_hash = if verification_result.is_success() {
+        let audit_record_argument =
+            build_audit_record(state, verify_presentation_request, account_sequence_number).await;
+
         let txn_hash = v1::submit_verification_audit_record_anchor(
             client,
             audit_record_argument.audit_record_anchor_transaction_metadata,
@@ -238,11 +238,9 @@ async fn build_audit_record<'s>(
         expiry,
     };
 
-    // TODO - fix public info later after merge of the other PR
-    let public_info: Option<HashMap<String, cbor::value::Value>> = Some(HashMap::new());
     AuditRecordArgument {
         audit_record_id: verify_presentation_request.audit_record_id.clone(),
-        public_info,
+        public_info: verify_presentation_request.public_info.clone(),
         audit_record_anchor_transaction_metadata,
     }
 }

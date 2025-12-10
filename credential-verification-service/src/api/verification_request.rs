@@ -27,7 +27,7 @@ pub async fn create_verification_request(
         params.connection_id,
         params.context_string,
     )
-    .given(LabeledContextProperty::ResourceId(params.rescource_id))
+    .given(LabeledContextProperty::ResourceId(params.resource_id))
     .build();
 
     let mut builder = VerificationRequestDataBuilder::new(context);
@@ -58,7 +58,7 @@ pub async fn create_verification_request(
         &mut node_client,
         anchor_transaction_metadata,
         verification_request_data.clone(),
-        None,
+        params.public_info.clone(),
     )
     .await;
 
@@ -107,7 +107,7 @@ pub async fn create_verification_request(
                             &mut node_client,
                             meta,
                             verification_request_data,
-                            None,
+                            params.public_info,
                         )
                         .await?;
 
