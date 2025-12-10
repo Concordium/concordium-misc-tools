@@ -30,45 +30,28 @@ classDiagram
     }
 
     class SubjectClaims {
-        RequestedIdenitytype type
+        String type
         IdentityCredentialType[] source
         int[] issuers
-        Claim[] claims
-    }
-
-    class Claim{
-        ClaimType type,
-        string tag,
-        int lower_bound,
-        int upper_bound,
-        Set set
+        ClaimType[] claims
     }
 
     class ClaimType {
         <<enum>>
-        AttributeInRange
-        AttributeInSet
-        AttributeNotInSet
-        RevealAttribute
-    }
+        AgeOlderThan(int minAge),
+        AgeYoungerThan(int maxAge),
+        AgeInRange(int min_age, int max_age),
 
-    class AttributeInRange{
-        string tag
-        int lower_bound
-        int upper_bound
-    }
+        ResidentInSet(Vec<String>),
+        ResidentNotInSet(Vec<String>),
 
-    class AttributeInSet{
-        string tag
-        Set set
+        NationalityInSet(Vec<String>),
+        NationalityNotInSet(Vec<String>),
     }
 
     CreateVerificationRequest --> SubjectClaims: claims
-    SubjectClaims --> Claim
     SubjectClaims --> IdentityCredentialType
-    Claim --> ClaimType: type
-    Claim --> AttributeInRange
-    Claim --> AttributeInSet
+    SubjectClaims --> ClaimType
 
 
     %% middle layer conversion into the Verification Request Data from the Merchants request above
