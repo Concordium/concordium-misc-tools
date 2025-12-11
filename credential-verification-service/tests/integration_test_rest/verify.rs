@@ -1,20 +1,14 @@
 use crate::integration_test_helpers::{fixtures, server};
-use concordium_rust_sdk::base::web3id::v1::anchor::{
-    IdentityCredentialType, IdentityProviderDid, Nonce, RequestedIdentitySubjectClaimsBuilder,
-    RequestedStatement, VerificationRequest,
-};
+use concordium_rust_sdk::base::web3id::v1::anchor::{IdentityCredentialType, IdentityProviderDid, RequestedIdentitySubjectClaimsBuilder, RequestedStatement, VerificationRequest};
 use concordium_rust_sdk::id::id_proof_types::AttributeInSetStatement;
 use concordium_rust_sdk::id::types::{AttributeTag, IpIdentity};
 use concordium_rust_sdk::v2::generated;
 use concordium_rust_sdk::web3id::did::Network;
 use concordium_rust_sdk::web3id::Web3IdAttribute;
-use credential_verification_service::api_types::CreateVerificationRequest;
+use credential_verification_service::api_types::{VerifyPresentationRequest, VerifyPresentationResponse};
 use reqwest::StatusCode;
 
-#[tokio::test]
-async fn test_create_verification_request() {
-    let handle = server::start_server();
-
+fn verification_request() -> VerificationRequest {
     let identity_claims = RequestedIdentitySubjectClaimsBuilder::new()
         .source(IdentityCredentialType::IdentityCredential)
         .issuer(IdentityProviderDid {
@@ -32,15 +26,29 @@ async fn test_create_verification_request() {
         ))
         .build();
 
-    let create_request = CreateVerificationRequest {
-        nonce: Nonce([1u8; 32]),
-        connection_id: "conid1".to_string(),
-        resource_id: "resid1".to_string(),
-        context_string: "contextstr".to_string(),
-        requested_claims: vec![identity_claims.into()],
+    VerificationRequest {
+        context: Default::default(),
+        subject_claims: vec![identity_claims.into()],
+        anchor_transaction_hash: fixtures::generate_txn_hash(),
+    }
+}
+
+/// Test verify identity based presentation
+#[tokio::test]
+async fn test_verify_identity_based() {
+    let handle = server::start_server();
+
+    let verification_request = verification_request();
+
+    let presentation = todo!();
+
+    let verify_request = VerifyPresentationRequest {
+        audit_record_id: "auditrecid1".to_string(),
         public_info: Some(
             fixtures::public_info()
         ),
+        presentation,
+        verification_request,
     };
 
     let txn_hash = fixtures::generate_txn_hash();
@@ -52,12 +60,12 @@ async fn test_create_verification_request() {
     let resp = handle
         .rest_client()
         .post("verifiable-presentations/create-verification-request")
-        .json(&create_request)
+        .json(&verify_request)
         .send()
         .await
         .unwrap();
 
     assert_eq!(resp.status(), StatusCode::OK);
-    let verification_request: VerificationRequest = resp.json().await.unwrap();
-    assert_eq!(verification_request.anchor_transaction_hash, txn_hash);
+    let verify_response: VerifyPresentationResponse = resp.json().await.unwrap();
+
 }

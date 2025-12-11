@@ -1,16 +1,16 @@
 use crate::integration_test_helpers::node_stub::NodeStub;
 use crate::integration_test_helpers::rest_client::RestClient;
-use crate::integration_test_helpers::{fixtures, node_stub, rest_client};
-use concordium_rust_sdk::base::hashes::BlockHash;
+use crate::integration_test_helpers::{ node_stub, rest_client};
+
 use concordium_rust_sdk::constants;
-use concordium_rust_sdk::types::queries::{ConsensusInfo, ProtocolVersionInt};
+
 use concordium_rust_sdk::types::{AbsoluteBlockHeight, GenesisIndex, Nonce, WalletAccount};
 use concordium_rust_sdk::v2::generated;
 use concordium_rust_sdk::v2::generated::Empty;
 use credential_verification_service::configs::ServiceConfigs;
 use credential_verification_service::{logging, service};
 use std::net::{SocketAddr, TcpStream};
-use std::str::FromStr;
+
 use std::sync::{Arc, OnceLock};
 use std::time::Instant;
 use std::{thread, time::Duration};
@@ -30,15 +30,7 @@ fn config(node_base_url: &str) -> ServiceConfigs {
     }
 }
 
-struct Stubs {
-    config: ServiceConfigs,
-}
 
-fn init_stubs(node_base_url: &str) -> Stubs {
-    let config = config(node_base_url);
-
-    Stubs { config }
-}
 
 const REST_PORT: u16 = 19000;
 const MONITORING_PORT: u16 = 19003;
