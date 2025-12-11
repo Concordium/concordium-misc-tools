@@ -1044,6 +1044,7 @@ name = "credential-verification-service"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "assert_matches",
  "axum 0.8.4",
  "chrono",
  "clap",

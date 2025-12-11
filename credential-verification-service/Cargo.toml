@@ -30,7 +30,10 @@ mocktail.workspace = true
 parking_lot.workspace = true
 rand.workspace = true
 reqwest = { workspace = true, features = ["json"] }
+assert_matches.workspace = true
 
 [[bin]]
 name = "credential-verification-service"
 path = "src/bin/service.rs"
+
+

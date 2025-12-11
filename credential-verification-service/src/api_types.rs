@@ -79,7 +79,7 @@ pub struct VerifyPresentationResponse {
 }
 
 /// Presentation Verification Result, contains: Success or Failed with a String message
-#[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
+#[derive(serde::Deserialize, serde::Serialize, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum VerificationResult {
     /// Verified

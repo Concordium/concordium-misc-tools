@@ -17,6 +17,7 @@ use concordium_rust_sdk::{
     },
 };
 use std::sync::Arc;
+use tracing::info;
 
 /// Verify Presentation endpoint handler.
 /// Accepts a VerifyPresentationRequest payload and calls the Rust SDK function `verify_presentation_with_request_anchor`
@@ -244,3 +245,4 @@ async fn build_audit_record<'s>(
         audit_record_anchor_transaction_metadata,
     }
 }
+
