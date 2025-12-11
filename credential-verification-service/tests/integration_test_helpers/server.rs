@@ -1,19 +1,19 @@
 use crate::integration_test_helpers::node_stub::NodeStub;
 use crate::integration_test_helpers::rest_client::RestClient;
 use crate::integration_test_helpers::{fixtures, node_stub, rest_client};
+use concordium_rust_sdk::base::hashes::BlockHash;
+use concordium_rust_sdk::constants;
+use concordium_rust_sdk::types::queries::{ConsensusInfo, ProtocolVersionInt};
 use concordium_rust_sdk::types::{AbsoluteBlockHeight, GenesisIndex, Nonce, WalletAccount};
 use concordium_rust_sdk::v2::generated;
 use concordium_rust_sdk::v2::generated::Empty;
 use credential_verification_service::configs::ServiceConfigs;
 use credential_verification_service::{logging, service};
 use std::net::{SocketAddr, TcpStream};
+use std::str::FromStr;
 use std::sync::{Arc, OnceLock};
 use std::time::Instant;
 use std::{thread, time::Duration};
-use std::str::FromStr;
-use concordium_rust_sdk::base::hashes::BlockHash;
-use concordium_rust_sdk::constants;
-use concordium_rust_sdk::types::queries::{ConsensusInfo, ProtocolVersionInt};
 use tracing::info;
 use tracing_subscriber::filter;
 
@@ -161,7 +161,6 @@ fn start_server_impl() -> ServerHandle {
             current_epoch: Some(generated::Epoch { value: 1 }),
             trigger_block_time: Some(generated::Timestamp { value: 1 }),
         });
-
     });
 
     // Start runtime and server in new thread
