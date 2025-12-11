@@ -1,6 +1,6 @@
 use crate::integration_test_helpers::node_stub::NodeStub;
 use crate::integration_test_helpers::rest_client::RestClient;
-use crate::integration_test_helpers::{ node_stub, rest_client};
+use crate::integration_test_helpers::{node_stub, rest_client};
 
 use concordium_rust_sdk::constants;
 
@@ -29,8 +29,6 @@ fn config(node_base_url: &str) -> ServiceConfigs {
         transaction_expiry_secs: 10,
     }
 }
-
-
 
 const REST_PORT: u16 = 19000;
 const MONITORING_PORT: u16 = 19003;
