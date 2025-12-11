@@ -7,25 +7,25 @@ use mocktail::mock_builder::{Then, When};
 use std::sync::Arc;
 use tracing::info;
 
-pub async fn init_mock(_startup: &ServerStartup) -> NodeMock {
+pub async fn init_stub(_startup: &ServerStartup) -> NodeStub {
     let server = MockServer::new_grpc("node");
     server.start().await.unwrap();
 
     info!("started node mock: {}", server.base_url().unwrap());
 
-    let node_mock = NodeMock {
+    let node_stub = NodeStub {
         server: Arc::new(Mutex::new(server)),
     };
 
-    node_mock
+    node_stub
 }
 
 #[derive(Clone)]
-pub struct NodeMock {
+pub struct NodeStub {
     server: Arc<Mutex<MockServer>>,
 }
 
-impl Debug for NodeMock {
+impl Debug for NodeStub {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("NodeMock")
             .field("server", &"<MockServer>")
@@ -33,7 +33,7 @@ impl Debug for NodeMock {
     }
 }
 
-impl NodeMock {
+impl NodeStub {
     pub fn base_url(&self) -> String {
         self.server.lock().base_url().unwrap().as_str().to_owned()
     }

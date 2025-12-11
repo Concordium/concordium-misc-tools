@@ -1,4 +1,4 @@
 pub mod fixtures;
-pub mod node_mock;
+pub mod node_stub;
 pub mod rest_client;
 pub mod server;

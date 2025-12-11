@@ -5,5 +5,5 @@
 mod integration_test_helpers;
 /// Test HTTP monitoring endpoints
 mod integration_test_monitoring;
-// /// Test Wallet Proxy REST endpoints
-// mod integration_test_rest;
+/// Test Wallet Proxy REST endpoints
+mod integration_test_rest;
