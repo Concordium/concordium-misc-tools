@@ -3,6 +3,7 @@ use concordium_rust_sdk::base::web3id::v1::anchor::VerificationRequest;
 use concordium_rust_sdk::v2::generated;
 use reqwest::StatusCode;
 
+/// Test create verification request
 #[tokio::test]
 async fn test_create_verification_request() {
     let handle = server::start_server();
