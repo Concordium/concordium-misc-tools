@@ -3,7 +3,13 @@ use crate::integration_test_helpers::fixtures::credentials::{
 };
 
 use concordium_rust_sdk::base::hashes::{BlockHash, TransactionHash};
-use concordium_rust_sdk::base::web3id::v1::anchor::{ContextLabel, IdentityCredentialType, IdentityProviderDid, LabeledContextProperty, Nonce, RequestedIdentitySubjectClaimsBuilder, RequestedStatement, RequestedSubjectClaims, UnfilledContextInformation, UnfilledContextInformationBuilder, VerifiablePresentationRequestV1, VerifiablePresentationV1, VerificationRequest, VerificationRequestAnchor, VerificationRequestData};
+use concordium_rust_sdk::base::web3id::v1::anchor::{
+    ContextLabel, IdentityCredentialType, IdentityProviderDid, LabeledContextProperty, Nonce,
+    RequestedIdentitySubjectClaimsBuilder, RequestedStatement, RequestedSubjectClaims,
+    UnfilledContextInformation, UnfilledContextInformationBuilder, VerifiablePresentationRequestV1,
+    VerifiablePresentationV1, VerificationRequest, VerificationRequestAnchor,
+    VerificationRequestData,
+};
 use concordium_rust_sdk::common::cbor;
 use concordium_rust_sdk::id::id_proof_types::{AttributeInSetStatement, AttributeValueStatement};
 use concordium_rust_sdk::id::types::{AttributeTag, GlobalContext, IpIdentity};
@@ -291,8 +297,11 @@ pub fn verify_request(
             &account_cred,
             &verification_request,
         );
-    let presentation =
-        generate_presentation_account(&global_context, &account_cred, verifiable_presentation_request);
+    let presentation = generate_presentation_account(
+        &global_context,
+        &account_cred,
+        verifiable_presentation_request,
+    );
 
     let verification_data = VerificationRequestData {
         context: verification_request.context.clone(),

@@ -1,0 +1,228 @@
+use chrono::{DateTime, Utc};
+use concordium_rust_sdk::base::hashes::{BlockHash, TransactionHash};
+use concordium_rust_sdk::base::pedersen_commitment::Commitment;
+use concordium_rust_sdk::base::transactions::{BlockItem, EncodedPayload};
+use concordium_rust_sdk::base::web3id::v1::AccountCredentialVerificationMaterial;
+use concordium_rust_sdk::base::web3id::v1::anchor::{
+    CredentialValidityType, VerificationMaterial, VerificationMaterialWithValidity,
+};
+use concordium_rust_sdk::common::types::AccountAddress;
+use concordium_rust_sdk::endpoints::{QueryResult, RPCError};
+use concordium_rust_sdk::id::constants::{ArCurve, IpPairing};
+use concordium_rust_sdk::id::types;
+use concordium_rust_sdk::id::types::{
+    AccountCredentialWithoutProofs, ArInfo, AttributeTag, GlobalContext, IpIdentity, IpInfo,
+};
+use concordium_rust_sdk::types::{
+    BlockItemSummary, CredentialRegistrationID, Nonce, TransactionStatus,
+};
+use concordium_rust_sdk::v2;
+use concordium_rust_sdk::v2::{AccountIdentifier, BlockIdentifier, QueryError, RPCResult};
+use concordium_rust_sdk::web3id::v1::VerifyError;
+use futures_util::TryStreamExt;
+use futures_util::future::BoxFuture;
+use std::collections::BTreeMap;
+use std::fmt::Debug;
+
+/// Node interface used by the verifier service. Used to stub out node in tests
+#[async_trait::async_trait]
+pub trait NodeClient: Send + Sync + 'static + Debug {
+    async fn get_next_account_sequence_number(
+        &mut self,
+        address: &AccountAddress,
+    ) -> QueryResult<Nonce>;
+
+    async fn get_genesis_block_hash(&mut self) -> QueryResult<BlockHash>;
+
+    async fn send_block_item(
+        &mut self,
+        bi: &BlockItem<EncodedPayload>,
+    ) -> RPCResult<TransactionHash>;
+
+    async fn get_cryptographic_parameters(
+        &mut self,
+        bi: BlockIdentifier,
+    ) -> QueryResult<GlobalContext<ArCurve>>;
+
+    async fn get_block_slot_time(&mut self, bi: BlockIdentifier) -> QueryResult<DateTime<Utc>>;
+
+    async fn get_block_item_status(
+        &mut self,
+        th: &TransactionHash,
+    ) -> QueryResult<TransactionStatus>;
+
+    async fn get_account_credential_verification_material(
+        &mut self,
+        cred_id: CredentialRegistrationID,
+        bi: BlockIdentifier,
+    ) -> Result<VerificationMaterialWithValidity, VerifyError>;
+
+    async fn get_identity_providers(
+        &mut self,
+        bi: BlockIdentifier,
+    ) -> QueryResult<Vec<IpInfo<IpPairing>>>;
+
+    async fn get_anonymity_revokers(
+        &mut self,
+        bi: BlockIdentifier,
+    ) -> QueryResult<Vec<ArInfo<ArCurve>>>;
+
+    fn boxed(self) -> Box<dyn NodeClient>
+    where
+        Self: Sized,
+    {
+        Box::new(self)
+    }
+
+    fn box_clone(&self) -> Box<dyn NodeClient>;
+}
+
+impl Clone for Box<dyn NodeClient> {
+    fn clone(&self) -> Self {
+        self.box_clone()
+    }
+}
+
+/// Node interface using the node gRPC client
+#[derive(Debug, Clone)]
+pub struct NodeClientImpl {
+    client: v2::Client,
+}
+
+impl NodeClientImpl {
+    pub fn new(client: v2::Client) -> Self {
+        Self { client }
+    }
+}
+
+#[async_trait::async_trait]
+impl NodeClient for NodeClientImpl {
+    async fn get_next_account_sequence_number(
+        &mut self,
+        address: &AccountAddress,
+    ) -> QueryResult<Nonce> {
+        Ok(self
+            .client
+            .get_next_account_sequence_number(address)
+            .await?
+            .nonce)
+    }
+
+    async fn get_genesis_block_hash(&mut self) -> QueryResult<BlockHash> {
+        Ok(self.client.get_consensus_info().await?.genesis_block)
+    }
+
+    async fn send_block_item(
+        &mut self,
+        bi: &BlockItem<EncodedPayload>,
+    ) -> RPCResult<TransactionHash> {
+        self.client.send_block_item(bi).await
+    }
+
+    async fn get_cryptographic_parameters(
+        &mut self,
+        bi: BlockIdentifier,
+    ) -> QueryResult<GlobalContext<ArCurve>> {
+        self.client
+            .get_cryptographic_parameters(bi)
+            .await
+            .map(|res| res.response)
+    }
+
+    async fn get_block_slot_time(&mut self, bi: BlockIdentifier) -> QueryResult<DateTime<Utc>> {
+        Ok(self
+            .client
+            .get_block_info(bi)
+            .await?
+            .response
+            .block_slot_time)
+    }
+
+    async fn get_block_item_status(
+        &mut self,
+        th: &TransactionHash,
+    ) -> QueryResult<TransactionStatus> {
+        self.client.get_block_item_status(th).await
+    }
+
+    async fn get_account_credential_verification_material(
+        &mut self,
+        cred_id: CredentialRegistrationID,
+        bi: BlockIdentifier,
+    ) -> Result<VerificationMaterialWithValidity, VerifyError> {
+        let account_info = self
+            .client
+            .get_account_info(&AccountIdentifier::CredId(cred_id), bi)
+            .await?;
+
+        let Some(account_cred) =
+            account_info
+                .response
+                .account_credentials
+                .values()
+                .find_map(|cred| {
+                    cred.value
+                        .as_ref()
+                        .known()
+                        .and_then(|c| (c.cred_id() == cred_id.as_ref()).then_some(c))
+                })
+        else {
+            return Err(VerifyError::CredentialNotPresent {
+                cred_id,
+                account: account_info.response.account_address,
+            });
+        };
+
+        match account_cred {
+            AccountCredentialWithoutProofs::Initial { .. } => {
+                Err(VerifyError::InitialCredential { cred_id: cred_id })
+            }
+            AccountCredentialWithoutProofs::Normal { cdv, commitments } => {
+                let credential_validity = types::CredentialValidity {
+                    created_at: account_cred.policy().created_at,
+                    valid_to: cdv.policy.valid_to,
+                };
+
+                Ok(VerificationMaterialWithValidity {
+                    verification_material: VerificationMaterial::Account(
+                        AccountCredentialVerificationMaterial {
+                            issuer: cdv.ip_identity,
+                            attribute_commitments: commitments.cmm_attributes.clone(),
+                        },
+                    ),
+                    validity: CredentialValidityType::ValidityPeriod(credential_validity),
+                })
+            }
+        }
+    }
+
+    async fn get_identity_providers(
+        &mut self,
+        bi: BlockIdentifier,
+    ) -> QueryResult<Vec<IpInfo<IpPairing>>> {
+        self.client
+            .get_identity_providers(bi)
+            .await?
+            .response
+            .map_err(|err| QueryError::RPCError(RPCError::CallError(err)))
+            .try_collect()
+            .await
+    }
+
+    async fn get_anonymity_revokers(
+        &mut self,
+        bi: BlockIdentifier,
+    ) -> QueryResult<Vec<ArInfo<ArCurve>>> {
+        self.client
+            .get_anonymity_revokers(bi)
+            .await?
+            .response
+            .map_err(|err| QueryError::RPCError(RPCError::CallError(err)))
+            .try_collect()
+            .await
+    }
+
+    fn box_clone(&self) -> Box<dyn NodeClient> {
+        self.clone().boxed()
+    }
+}

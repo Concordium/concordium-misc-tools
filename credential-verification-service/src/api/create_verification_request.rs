@@ -1,11 +1,18 @@
 //! Handler for create-verification-request endpoint.
+
 use crate::api::util::QueryErrorExt;
+use crate::node_client::NodeClient;
+use crate::types::AppJson;
 use crate::{
     api_types::CreateVerificationRequest,
     types::{ServerError, Service},
 };
 use anyhow::Context;
 use axum::{Json, extract::State};
+use concordium_rust_sdk::base::transactions::{BlockItem, ExactSizeTransactionSigner, send};
+use concordium_rust_sdk::base::web3id::v1::anchor::VerificationRequestData;
+use concordium_rust_sdk::common::cbor;
+use concordium_rust_sdk::types::RegisteredData;
 use concordium_rust_sdk::web3id::v1::CreateAnchorError;
 use concordium_rust_sdk::{
     base::web3id::v1::anchor::{
@@ -14,12 +21,10 @@ use concordium_rust_sdk::{
     },
     common::types::TransactionTime,
     v2::{QueryError, RPCError},
-    web3id::v1::{
-        AnchorTransactionMetadata, create_verification_request_and_submit_request_anchor,
-    },
+    web3id::v1::AnchorTransactionMetadata,
 };
+use std::collections::HashMap;
 use std::sync::Arc;
-use crate::types::AppJson;
 
 pub async fn create_verification_request(
     State(state): State<Arc<Service>>,
@@ -58,7 +63,7 @@ pub async fn create_verification_request(
     };
 
     let verification_request_result = create_verification_request_and_submit_request_anchor(
-        &mut node_client,
+        &mut *node_client,
         anchor_transaction_metadata,
         verification_request_data.clone(),
         params.public_info.clone(),
@@ -82,12 +87,12 @@ pub async fn create_verification_request(
             );
 
             // Refresh nonce
-            let nonce_response = node_client
+            let nonce = node_client
                 .get_next_account_sequence_number(&state.account_keys.address)
                 .await
                 .context("get next account sequence number")?;
 
-            *account_sequence_number = nonce_response.nonce;
+            *account_sequence_number = nonce;
 
             tracing::info!("Refreshed account nonce successfully.");
 
@@ -95,12 +100,12 @@ pub async fn create_verification_request(
             let meta = AnchorTransactionMetadata {
                 signer: &state.account_keys,
                 sender: state.account_keys.address,
-                account_sequence_number: nonce_response.nonce,
+                account_sequence_number: nonce,
                 expiry,
             };
 
             let verification_request = create_verification_request_and_submit_request_anchor(
-                &mut node_client,
+                &mut *node_client,
                 meta,
                 verification_request_data,
                 params.public_info,
@@ -120,4 +125,32 @@ pub async fn create_verification_request(
             .context("create and submit request anchor")
             .into()),
     }
+}
+
+async fn create_verification_request_and_submit_request_anchor<S: ExactSizeTransactionSigner>(
+    client: &mut dyn NodeClient,
+    anchor_transaction_metadata: AnchorTransactionMetadata<S>,
+    verification_request_data: VerificationRequestData,
+    public_info: Option<HashMap<String, cbor::value::Value>>,
+) -> Result<VerificationRequest, CreateAnchorError> {
+    let verification_request_anchor = verification_request_data.to_anchor(public_info);
+    let cbor = cbor::cbor_encode(&verification_request_anchor)?;
+    let register_data = RegisteredData::try_from(cbor)?;
+
+    let tx = send::register_data(
+        &anchor_transaction_metadata.signer,
+        anchor_transaction_metadata.sender,
+        anchor_transaction_metadata.account_sequence_number,
+        anchor_transaction_metadata.expiry,
+        register_data,
+    );
+    let block_item = BlockItem::AccountTransaction(tx);
+
+    let transaction_hash = client.send_block_item(&block_item).await?;
+
+    Ok(VerificationRequest {
+        context: verification_request_data.context,
+        subject_claims: verification_request_data.subject_claims,
+        anchor_transaction_hash: transaction_hash,
+    })
 }

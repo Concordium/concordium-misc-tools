@@ -165,7 +165,6 @@ pub fn cryptographic_parameters(
     }
 }
 
-
 pub fn account_info(
     issuer: &IpIdentity,
     commitments: &BTreeMap<AttributeTag, Commitment<ArCurve>>,

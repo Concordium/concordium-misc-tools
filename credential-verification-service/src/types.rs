@@ -1,3 +1,4 @@
+use crate::node_client::NodeClient;
 use axum::extract::FromRequest;
 use axum::extract::rejection::JsonRejection;
 use axum::response::{IntoResponse, Response};
@@ -19,7 +20,7 @@ use tokio::sync::Mutex;
 /// Note: A new instance of this struct is created whenever the service restarts.
 pub struct Service {
     /// The client to interact with the node.
-    pub node_client: v2::Client,
+    pub node_client: Box<dyn NodeClient>,
     /// The network of the connected node.  
     pub network: Network,
     /// The key and address of the account submitting the anchor transactions on-chain.
