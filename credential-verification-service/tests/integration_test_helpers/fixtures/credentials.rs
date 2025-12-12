@@ -3,9 +3,8 @@ use concordium_rust_sdk::base::ed25519::SigningKey;
 use concordium_rust_sdk::base::elgamal::PublicKey;
 use concordium_rust_sdk::base::web3id::v1::{
     AccountCredentialVerificationMaterial, CredentialProofPrivateInputs,
-    CredentialVerificationMaterial, IdentityCredentialVerificationMaterial,
-    OwnedAccountCredentialProofPrivateInputs, OwnedCredentialProofPrivateInputs,
-    OwnedIdentityCredentialProofPrivateInputs,
+    CredentialVerificationMaterial, OwnedAccountCredentialProofPrivateInputs,
+    OwnedCredentialProofPrivateInputs, OwnedIdentityCredentialProofPrivateInputs,
 };
 use concordium_rust_sdk::base::{dodis_yampolskiy_prf, ps_sig};
 use concordium_rust_sdk::id::account_holder::generate_pio_v1_with_rng;
@@ -26,7 +25,7 @@ use std::collections::BTreeMap;
 fn create_attribute_list(
     alist: BTreeMap<AttributeTag, Web3IdAttribute>,
 ) -> AttributeList<<ArCurve as Curve>::Scalar, Web3IdAttribute> {
-    let valid_to = YearMonth::new(2022, 5).unwrap();
+    let valid_to = YearMonth::new(2050, 5).unwrap();
     let created_at = YearMonth::new(2020, 5).unwrap();
     AttributeList {
         valid_to,
@@ -39,7 +38,6 @@ fn create_attribute_list(
 
 pub struct IdentityCredentialsFixture {
     pub private_inputs: OwnedCredentialProofPrivateInputs<IpPairing, ArCurve, Web3IdAttribute>,
-    pub verification_material: CredentialVerificationMaterial<IpPairing, ArCurve>,
     pub issuer: IpIdentity,
 }
 
@@ -99,15 +97,8 @@ pub fn identity_credentials_fixture(
         },
     ));
 
-    let credential_inputs =
-        CredentialVerificationMaterial::Identity(IdentityCredentialVerificationMaterial {
-            ip_info: ip_info.clone(),
-            ars_infos,
-        });
-
     IdentityCredentialsFixture {
         private_inputs: commitment_inputs,
-        verification_material: credential_inputs,
         issuer: ip_info.ip_identity,
     }
 }
@@ -230,7 +221,7 @@ pub fn ip() -> IpData<IpPairing> {
     // Return IpData with public and private keys.
     IpData {
         public_ip_info: IpInfo {
-            ip_identity: IpIdentity(0),
+            ip_identity: IpIdentity(1),
             ip_description: Description {
                 name: "IP0".to_owned(),
                 url: "IP0.com".to_owned(),

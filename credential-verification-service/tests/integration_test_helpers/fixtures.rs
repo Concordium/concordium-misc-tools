@@ -19,6 +19,7 @@ use credential_verification_service::api_types::{
     CreateVerificationRequest, VerifyPresentationRequest,
 };
 
+use crate::integration_test_helpers::fixtures;
 use concordium_rust_sdk::base::web3id::v1::{
     AccountBasedSubjectClaims, AtomicStatementV1, ContextInformation, IdentityBasedSubjectClaims,
     SubjectClaims,
@@ -88,6 +89,10 @@ pub fn verification_request(anchor_transaction_hash: TransactionHash) -> Verific
             network: Network::Testnet,
             identity_provider: IpIdentity(1),
         })
+        .issuer(IdentityProviderDid {
+            network: Network::Testnet,
+            identity_provider: IpIdentity(2),
+        })
         .statements(statements)
         .build();
 
@@ -99,6 +104,7 @@ pub fn verification_request(anchor_transaction_hash: TransactionHash) -> Verific
             .given(LabeledContextProperty::ContextString(
                 "contextstr".to_string(),
             ))
+            .requested(ContextLabel::BlockHash)
             .build(),
         subject_claims: vec![identity_claims.into()],
         anchor_transaction_hash,
@@ -178,9 +184,9 @@ fn unfilled_context_information_to_context_information(
             .requested
             .iter()
             .map(|label| match label {
-                ContextLabel::BlockHash => {
-                    LabeledContextProperty::BlockHash(BlockHash::from([2u8; 32]))
-                }
+                ContextLabel::BlockHash => LabeledContextProperty::BlockHash(BlockHash::from(
+                    fixtures::chain::GENESIS_BLOCK_HASH,
+                )),
                 _ => panic!("unexpected label"),
             })
             .map(|prop| prop.to_context_property())

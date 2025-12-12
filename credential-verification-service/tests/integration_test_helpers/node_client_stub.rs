@@ -1,4 +1,5 @@
 use crate::integration_test_helpers::fixtures;
+use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
 use concordium_rust_sdk::base::contracts_common::AccountAddress;
@@ -28,6 +29,7 @@ pub fn node_client(global_context: GlobalContext<ArCurve>) -> NodeClientStub {
         block_slot_time: DateTime::parse_from_rfc3339("2024-06-01T12:34:56Z")
             .unwrap()
             .to_utc(),
+        block_item_statuses: Default::default(),
     };
 
     NodeClientStub(Arc::new(Mutex::new(inner)))
@@ -36,7 +38,13 @@ pub fn node_client(global_context: GlobalContext<ArCurve>) -> NodeClientStub {
 #[derive(Debug, Clone)]
 pub struct NodeClientStub(Arc<Mutex<NodeClientStubInner>>);
 
-#[derive(Debug, Clone)]
+impl NodeClientStub {
+    pub fn stub_block_item_status(&self, txn_hash: TransactionHash, summary: TransactionStatus) {
+        self.0.lock().block_item_statuses.insert(txn_hash, summary);
+    }
+}
+
+#[derive(Debug)]
 pub struct NodeClientStubInner {
     global_context: GlobalContext<ArCurve>,
     ips: Vec<IpInfo<IpPairing>>,
@@ -44,6 +52,7 @@ pub struct NodeClientStubInner {
     account_sequence_number: Nonce,
     genesis_block_hash: BlockHash,
     block_slot_time: DateTime<Utc>,
+    block_item_statuses: HashMap<TransactionHash, TransactionStatus>,
 }
 
 #[async_trait::async_trait]
@@ -81,13 +90,18 @@ impl NodeClient for NodeClientStub {
         &mut self,
         th: &TransactionHash,
     ) -> QueryResult<TransactionStatus> {
-        todo!()
+        Ok(self
+            .0
+            .lock()
+            .block_item_statuses
+            .remove(&th)
+            .expect("block_item_status"))
     }
 
     async fn get_account_credential_verification_material(
         &mut self,
-        cred_id: CredentialRegistrationID,
-        bi: BlockIdentifier,
+        _cred_id: CredentialRegistrationID,
+        _bi: BlockIdentifier,
     ) -> Result<VerificationMaterialWithValidity, VerifyError> {
         todo!()
     }
