@@ -3,18 +3,15 @@ use crate::integration_test_helpers::fixtures::credentials::{
 };
 
 use concordium_rust_sdk::base::hashes::{BlockHash, TransactionHash};
-use concordium_rust_sdk::base::web3id::v1::anchor::{
-    ContextLabel, IdentityCredentialType, IdentityProviderDid, LabeledContextProperty, Nonce,
-    RequestedIdentitySubjectClaimsBuilder, RequestedStatement, RequestedSubjectClaims,
-    UnfilledContextInformation, UnfilledContextInformationBuilder, VerifiablePresentationRequestV1,
-    VerifiablePresentationV1, VerificationRequest,
-};
+use concordium_rust_sdk::base::web3id::v1::anchor::{ContextLabel, IdentityCredentialType, IdentityProviderDid, LabeledContextProperty, Nonce, RequestedIdentitySubjectClaimsBuilder, RequestedStatement, RequestedSubjectClaims, UnfilledContextInformation, UnfilledContextInformationBuilder, VerifiablePresentationRequestV1, VerifiablePresentationV1, VerificationRequest, VerificationRequestAnchor, VerificationRequestData};
 use concordium_rust_sdk::common::cbor;
 use concordium_rust_sdk::id::id_proof_types::{AttributeInSetStatement, AttributeValueStatement};
 use concordium_rust_sdk::id::types::{AttributeTag, GlobalContext, IpIdentity};
 use concordium_rust_sdk::web3id::Web3IdAttribute;
 use concordium_rust_sdk::web3id::did::Network;
-use credential_verification_service::api_types::CreateVerificationRequest;
+use credential_verification_service::api_types::{
+    CreateVerificationRequest, VerifyPresentationRequest,
+};
 
 use concordium_rust_sdk::base::web3id::v1::{
     AccountBasedSubjectClaims, AtomicStatementV1, ContextInformation, IdentityBasedSubjectClaims,
@@ -27,9 +24,9 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::str::FromStr;
 
-pub mod credentials;
 pub mod chain;
-
+pub mod credentials;
+pub mod node;
 
 pub fn public_info() -> HashMap<String, cbor::value::Value> {
     [(
@@ -74,29 +71,6 @@ pub fn generate_presentation_account(
         .expect("prove");
 
     presentation
-}
-
-pub fn create_verification_request() -> CreateVerificationRequest {
-    let statements = statements_and_attributes().0;
-
-    let identity_claims = RequestedIdentitySubjectClaimsBuilder::new()
-        .source(IdentityCredentialType::IdentityCredential)
-        .source(IdentityCredentialType::AccountCredential)
-        .issuer(IdentityProviderDid {
-            network: Network::Testnet,
-            identity_provider: IpIdentity(1),
-        })
-        .statements(statements)
-        .build();
-
-    CreateVerificationRequest {
-        nonce: Nonce([1u8; 32]),
-        connection_id: "conid1".to_string(),
-        resource_id: "resid1".to_string(),
-        context_string: "contextstr".to_string(),
-        requested_claims: vec![identity_claims.into()],
-        public_info: Some(public_info()),
-    }
 }
 
 pub fn verification_request(anchor_transaction_hash: TransactionHash) -> VerificationRequest {
@@ -272,5 +246,71 @@ fn requested_statement_to_statement(
         RequestedStatement::AttributeNotInSet(stmt) => {
             AtomicStatementV1::AttributeNotInSet(stmt.clone())
         }
+    }
+}
+
+pub fn create_verification_request() -> CreateVerificationRequest {
+    let statements = statements_and_attributes().0;
+
+    let identity_claims = RequestedIdentitySubjectClaimsBuilder::new()
+        .source(IdentityCredentialType::IdentityCredential)
+        .source(IdentityCredentialType::AccountCredential)
+        .issuer(IdentityProviderDid {
+            network: Network::Testnet,
+            identity_provider: IpIdentity(1),
+        })
+        .statements(statements)
+        .build();
+
+    CreateVerificationRequest {
+        nonce: Nonce([1u8; 32]),
+        connection_id: "conid1".to_string(),
+        resource_id: "resid1".to_string(),
+        context_string: "contextstr".to_string(),
+        requested_claims: vec![identity_claims.into()],
+        public_info: Some(public_info()),
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct VerifyPresentationRequestFixture {
+    pub request: VerifyPresentationRequest,
+    pub anchor: VerificationRequestAnchor,
+    pub anchor_txn_hash: TransactionHash,
+}
+
+pub fn verify_request(
+    global_context: &GlobalContext<ArCurve>,
+    account_cred: &AccountCredentialsFixture,
+) -> VerifyPresentationRequestFixture {
+    let anchor_txn_hash = chain::generate_txn_hash();
+    let verification_request = verification_request(anchor_txn_hash);
+
+    let verifiable_presentation_request =
+        verification_request_to_verifiable_presentation_request_account(
+            &account_cred,
+            &verification_request,
+        );
+    let presentation =
+        generate_presentation_account(&global_context, &account_cred, verifiable_presentation_request);
+
+    let verification_data = VerificationRequestData {
+        context: verification_request.context.clone(),
+        subject_claims: verification_request.subject_claims.clone(),
+    };
+
+    let request = VerifyPresentationRequest {
+        audit_record_id: "auditrecid1".to_string(),
+        public_info: Some(public_info()),
+        presentation,
+        verification_request,
+    };
+
+    let anchor = verification_data.to_anchor(Some(public_info()));
+
+    VerifyPresentationRequestFixture {
+        anchor_txn_hash,
+        request,
+        anchor,
     }
 }

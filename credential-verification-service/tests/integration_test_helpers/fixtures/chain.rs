@@ -1,9 +1,13 @@
 use concordium_rust_sdk::base::hashes::TransactionHash;
+use concordium_rust_sdk::base::pedersen_commitment::Commitment;
 use concordium_rust_sdk::id::constants::{ArCurve, IpPairing};
-use concordium_rust_sdk::id::types::{ArInfo, GlobalContext, IpInfo};
+use concordium_rust_sdk::id::types::{ArInfo, AttributeTag, GlobalContext, IpIdentity, IpInfo};
 use concordium_rust_sdk::types::{AbsoluteBlockHeight, BlockHeight, GenesisIndex, RegisteredData};
 use concordium_rust_sdk::v2::generated;
 use concordium_rust_sdk::{base, constants};
+use std::collections::BTreeMap;
+
+pub const BLOCK_HASH: [u8; 32] = constants::TESTNET_GENESIS_BLOCK_HASH;
 
 pub fn generate_txn_hash() -> TransactionHash {
     TransactionHash::new(rand::random())
@@ -12,7 +16,7 @@ pub fn generate_txn_hash() -> TransactionHash {
 pub fn consensus_info() -> generated::ConsensusInfo {
     let block_height = AbsoluteBlockHeight::from(1).into();
     let block_hash = generated::BlockHash {
-        value: constants::TESTNET_GENESIS_BLOCK_HASH.into(),
+        value: BLOCK_HASH.into(),
     };
 
     generated::ConsensusInfo {
@@ -57,7 +61,7 @@ pub fn block_info() -> generated::BlockInfo {
     let abs_block_height = AbsoluteBlockHeight::from(1).into();
     let block_height = BlockHeight::from(1).into();
     let block_hash = generated::BlockHash {
-        value: constants::TESTNET_GENESIS_BLOCK_HASH.into(),
+        value: BLOCK_HASH.into(),
     };
 
     generated::BlockInfo {
@@ -94,7 +98,7 @@ pub fn data_registration_block_item_finalized(
             generated::block_item_status::Finalized {
                 outcome: Some(generated::BlockItemSummaryInBlock {
                     block_hash: Some(generated::BlockHash {
-                        value: constants::TESTNET_GENESIS_BLOCK_HASH.into(),
+                        value: BLOCK_HASH.into(),
                     }),
                     outcome: Some(generated::BlockItemSummary {
                         index: Some(generated::block_item_summary::TransactionIndex { value: 1 }),
@@ -151,10 +155,94 @@ pub fn map_ar_info(ar_info: &ArInfo<ArCurve>) -> generated::ArInfo {
     }
 }
 
-pub fn cryptographic_parameters(global_context: &GlobalContext<ArCurve>) -> generated::CryptographicParameters {
+pub fn cryptographic_parameters(
+    global_context: &GlobalContext<ArCurve>,
+) -> generated::CryptographicParameters {
     generated::CryptographicParameters {
         genesis_string: "test".to_string(),
         bulletproof_generators: base::common::to_bytes(&global_context.bulletproof_generators),
-        on_chain_commitment_key: base::common::to_bytes(& global_context.on_chain_commitment_key),
+        on_chain_commitment_key: base::common::to_bytes(&global_context.on_chain_commitment_key),
+    }
+}
+
+
+pub fn account_info(
+    issuer: &IpIdentity,
+    commitments: &BTreeMap<AttributeTag, Commitment<ArCurve>>,
+) -> generated::AccountInfo {
+    generated::AccountInfo {
+        sequence_number: Some(Default::default()),
+        amount: Some(Default::default()),
+        schedule: Some(generated::ReleaseSchedule {
+            total: Some(Default::default()),
+            schedules: vec![],
+        }),
+        creds: [(
+            0,
+            generated::AccountCredential {
+                credential_values: Some(generated::account_credential::CredentialValues::Normal({
+                    generated::NormalCredentialValues {
+                        keys: Some(generated::CredentialPublicKeys {
+                            keys: [].into_iter().collect(),
+                            threshold: Some(generated::SignatureThreshold {
+                                value: 1,
+                            }),
+                        }),
+                        cred_id: Some(generated::CredentialRegistrationId {
+                            value: hex::decode("a075536bd5aa8cae5067ca084b787d0f2b50af6f40a9c661585880c7917132c15bf4f326848b7b577aa118c32f8da129").unwrap(),
+                        }),
+                        ip_id: Some(generated::IdentityProviderIdentity {
+                            value: issuer.0,
+                        }),
+                        policy: Some(generated::Policy {
+                            created_at: Some(Default::default()),
+                            valid_to: Some(Default::default()),
+                            attributes: Default::default(),
+                        }),
+                        ar_threshold: Some(generated::ArThreshold {
+                            value: 1,
+                        }),
+                        ar_data: Default::default(),
+                        commitments: Some(generated::CredentialCommitments {
+                            prf: Some(generated::Commitment {
+                                value: vec![0u8;48],
+                            }),
+                            cred_counter: Some(generated::Commitment {
+                                value: vec![0u8;48],
+                            }),
+                            max_accounts: Some(generated::Commitment {
+                                value: vec![0u8;48],
+                            }),
+                            attributes: Default::default(),
+                            id_cred_sec_sharing_coeff: vec![],
+                        }),
+
+                    }
+                })),
+            },
+        )].into_iter().collect(),
+        threshold: Some(generated::AccountThreshold {
+            value: 1,
+        }),
+        encrypted_balance: Some(generated::EncryptedBalance {
+            self_amount: Some(generated::EncryptedAmount {
+                value: hex::decode("c00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000c00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000c00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000c00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000").unwrap(),
+            }),
+            start_index: 0,
+            aggregated_amount: None,
+            num_aggregated: None,
+            incoming_amounts: vec![],
+        }),
+        encryption_key: Some(generated::EncryptionKey {
+            value: hex::decode("b14cbfe44a02c6b1f78711176d5f437295367aa4f2a8c2551ee10d25a03adc69d61a332a058971919dad7312e1fc94c5a075536bd5aa8cae5067ca084b787d0f2b50af6f40a9c661585880c7917132c15bf4f326848b7b577aa118c32f8da129").unwrap(),
+        }),
+        index: Some(Default::default()),
+        stake: None,
+        address: Some(generated::AccountAddress {
+            value: vec![0u8;32],
+        }),
+        cooldowns: vec![],
+        available_balance: Some(Default::default()),
+        tokens: vec![],
     }
 }

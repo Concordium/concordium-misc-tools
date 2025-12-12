@@ -127,9 +127,10 @@ impl AccountCredentialsFixture {
     }
 }
 
-pub fn account_credentials_fixture(global_context: &GlobalContext<ArCurve>) -> AccountCredentialsFixture {
+pub fn account_credentials_fixture(
+    global_context: &GlobalContext<ArCurve>,
+) -> AccountCredentialsFixture {
     let attrs = super::statements_and_attributes().1;
-
 
     let cred_id_exp = ArCurve::generate_scalar(&mut seed0());
     let cred_id = CredentialRegistrationID::from_exponent(global_context, cred_id_exp);
@@ -181,7 +182,9 @@ pub fn global_context() -> GlobalContext<ArCurve> {
 }
 
 /// Create #num_ars anonymity revokers to be used by test
-fn ars(global_context: &GlobalContext<ArCurve>) -> (
+fn ars(
+    global_context: &GlobalContext<ArCurve>,
+) -> (
     BTreeMap<ArIdentity, ArInfo<ArCurve>>,
     BTreeMap<ArIdentity, SecretKey<ArCurve>>,
 ) {
@@ -191,7 +194,7 @@ fn ars(global_context: &GlobalContext<ArCurve>) -> (
     let mut ar_keys = BTreeMap::new();
     for i in 1..=NUM_ARS {
         let ar_id = ArIdentity::try_from(i as u32).unwrap();
-        let ar_secret_key = SecretKey::generate( &ar_base, &mut csprng);
+        let ar_secret_key = SecretKey::generate(&ar_base, &mut csprng);
         let ar_public_key = PublicKey::from(&ar_secret_key);
         let ar_info = ArInfo::<ArCurve> {
             ar_identity: ar_id,
