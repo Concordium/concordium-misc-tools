@@ -1,15 +1,11 @@
 use crate::node_client::NodeClient;
 use axum::extract::FromRequest;
 use axum::extract::rejection::JsonRejection;
+use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::{Json, http::StatusCode};
 use concordium_rust_sdk::{
     types::{Nonce, WalletAccount},
-    v2::{self, QueryError},
-    web3id::{
-        did::Network,
-        v1::{CreateAnchorError, VerifyError},
-    },
+    web3id::did::Network,
 };
 use std::fmt::Display;
 use std::sync::Arc;

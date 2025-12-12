@@ -60,7 +60,7 @@ pub fn identity_credentials_fixture(
         public_ip_info: ip_info,
         ip_secret_key,
         ..
-    } = ip_info();
+    } = ip();
 
     let (ars_infos, _ars_secret) = ars(global_context);
     let ars_infos = ArInfos {
@@ -182,7 +182,7 @@ pub fn global_context() -> GlobalContext<ArCurve> {
 }
 
 /// Create #num_ars anonymity revokers to be used by test
-fn ars(
+pub fn ars(
     global_context: &GlobalContext<ArCurve>,
 ) -> (
     BTreeMap<ArIdentity, ArInfo<ArCurve>>,
@@ -215,7 +215,7 @@ const MAX_ATTRS: usize = 10;
 const NUM_ARS: usize = 5;
 
 /// Create identity provider with #num_ars ARs to be used by tests
-pub fn ip_info() -> IpData<IpPairing> {
+pub fn ip() -> IpData<IpPairing> {
     let mut csprng = seed0();
     // Create key for IP long enough to encode the attributes and anonymity
     // revokers.

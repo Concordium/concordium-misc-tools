@@ -17,16 +17,16 @@ use concordium_rust_sdk::base::web3id::v1::anchor::{
     VerificationRequestAnchorAndBlockHash,
 };
 use concordium_rust_sdk::base::web3id::v1::{
-    AccountCredentialVerificationMaterial, CredentialMetadataTypeV1, CredentialMetadataV1,
-    IdentityCredentialVerificationMaterial,
+    CredentialMetadataTypeV1, CredentialMetadataV1, IdentityCredentialVerificationMaterial,
 };
 use concordium_rust_sdk::common::cbor;
-use concordium_rust_sdk::id::types;
-use concordium_rust_sdk::id::types::{AccountCredentialWithoutProofs, ArInfos};
+
+use concordium_rust_sdk::id::types::ArInfos;
 use concordium_rust_sdk::types::{
     AccountTransactionEffects, BlockItemSummaryDetails, RegisteredData,
 };
-use concordium_rust_sdk::v2::AccountIdentifier;
+
+use concordium_rust_sdk::v2::BlockIdentifier;
 use concordium_rust_sdk::web3id::v1::CreateAnchorError;
 use concordium_rust_sdk::{
     base::web3id::v1::anchor::{
@@ -34,10 +34,8 @@ use concordium_rust_sdk::{
     },
     common::types::TransactionTime,
     types::WalletAccount,
-    v2::{self, BlockIdentifier, QueryError, RPCError},
     web3id::v1::{
-        self, AnchorTransactionMetadata, AuditRecordArgument, PresentationVerificationData,
-        VerifyError,
+        AnchorTransactionMetadata, AuditRecordArgument, PresentationVerificationData, VerifyError,
     },
 };
 use futures_util::future;

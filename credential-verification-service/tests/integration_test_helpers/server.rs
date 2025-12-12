@@ -1,25 +1,23 @@
-use crate::integration_test_helpers::node_stub::NodeStub;
 use crate::integration_test_helpers::rest_client::RestClient;
-use crate::integration_test_helpers::{fixtures, node_stub, rest_client};
+use crate::integration_test_helpers::{fixtures, node_client_stub, rest_client};
 
-use concordium_rust_sdk::constants;
-
-use concordium_rust_sdk::types::{AbsoluteBlockHeight, GenesisIndex, Nonce, WalletAccount};
-use concordium_rust_sdk::v2::generated;
-use concordium_rust_sdk::v2::generated::Empty;
 use credential_verification_service::configs::ServiceConfigs;
 use credential_verification_service::{logging, service};
 use std::net::{SocketAddr, TcpStream};
 
+use crate::integration_test_helpers::node_client_stub::NodeClientStub;
+use concordium_rust_sdk::id::constants::ArCurve;
+use concordium_rust_sdk::id::types::GlobalContext;
+use credential_verification_service::node_client::NodeClient;
 use std::sync::{Arc, OnceLock};
 use std::time::Instant;
 use std::{thread, time::Duration};
 use tracing::info;
 use tracing_subscriber::filter;
 
-fn config(node_base_url: &str) -> ServiceConfigs {
+fn config() -> ServiceConfigs {
     ServiceConfigs {
-        node_endpoint: node_base_url.parse().unwrap(),
+        node_endpoint: "http://test".parse().unwrap(),
         request_timeout: 5000,
         grpc_node_request_timeout: 1000,
         api_address: SocketAddr::new("0.0.0.0".parse().unwrap(), REST_PORT),
@@ -36,9 +34,10 @@ const MONITORING_PORT: u16 = 19003;
 #[derive(Debug, Clone)]
 pub struct ServerHandle {
     properties: Arc<ServerProperties>,
-    node_mock: NodeStub,
     rest_client: RestClient,
     monitoring_client: RestClient,
+    node_client_stub: NodeClientStub,
+    global_context: GlobalContext<ArCurve>,
 }
 
 #[allow(dead_code)]
@@ -46,15 +45,10 @@ pub struct ServerHandle {
 pub struct ServerProperties {
     pub rest_url: String,
     pub monitoring_url: String,
-    pub node_url: String,
 }
 
 #[allow(dead_code)]
 impl ServerHandle {
-    pub fn node_stub(&self) -> &NodeStub {
-        &self.node_mock
-    }
-
     pub fn rest_client(&self) -> &RestClient {
         &self.rest_client
     }
@@ -65,6 +59,14 @@ impl ServerHandle {
 
     pub fn properties(&self) -> &ServerProperties {
         &self.properties
+    }
+
+    pub fn global_context(&self) -> &GlobalContext<ArCurve> {
+        &self.global_context
+    }
+
+    pub fn node_client_stub(&self) -> &NodeClientStub {
+        &self.node_client_stub
     }
 }
 
@@ -84,38 +86,19 @@ fn start_server_impl() -> ServerHandle {
         .build()
         .expect("tokio runtime");
 
-    let server_init = ServerStartup::new();
-    let rt_handle = runtime.handle().clone();
-    let node_stub = thread::spawn(move || rt_handle.block_on(node_stub::init_stub(&server_init)))
-        .join()
-        .unwrap();
-
-    let config = config(&node_stub.base_url());
+    let config = config();
 
     let properties = ServerProperties {
         rest_url: format!("http://localhost:{}", REST_PORT),
         monitoring_url: format!("http://localhost:{}", MONITORING_PORT),
-        node_url: config.node_endpoint.uri().to_string(),
     };
 
-    // Stub node calls done during service start
-    let account: WalletAccount = WalletAccount::from_json_file(config.account.clone()).unwrap();
-    node_stub.mock(|when, then| {
-        when.path("/concordium.v2.Queries/GetNextAccountSequenceNumber")
-            .pb(generated::AccountAddress::from(&account.address));
-        then.pb(generated::NextAccountSequenceNumber {
-            sequence_number: Some(generated::SequenceNumber::from(Nonce::from(1))),
-            all_final: true,
-        });
-    });
-    node_stub.mock(|when, then| {
-        when.path("/concordium.v2.Queries/GetConsensusInfo")
-            .pb(Empty {});
-        then.pb(fixtures::chain::consensus_info());
-    });
+    let global_context = fixtures::credentials::global_context();
+    let node_client_stub = node_client_stub::node_client(global_context.clone());
 
     // Start runtime and server in new thread
-    thread::spawn(move || runtime.block_on(run_server(config)));
+    let node_client_stub_cloned = node_client_stub.clone();
+    thread::spawn(move || runtime.block_on(run_server(config, node_client_stub_cloned)));
 
     // Wait for server to start
     info!("waiting for verifier service to start");
@@ -138,24 +121,17 @@ fn start_server_impl() -> ServerHandle {
 
     ServerHandle {
         properties: Arc::new(properties),
-        node_mock: node_stub,
+        node_client_stub,
+        global_context,
         rest_client,
         monitoring_client,
     }
 }
 
-async fn run_server(config: ServiceConfigs) {
+async fn run_server(config: ServiceConfigs, node_client_stub: NodeClientStub) {
     info!("starting server for test");
 
-    service::run(config).await.expect("running server")
-}
-
-pub struct ServerStartup {
-    _private: (),
-}
-
-impl ServerStartup {
-    fn new() -> Self {
-        Self { _private: () }
-    }
+    service::run_with_dependencies(config, node_client_stub.boxed())
+        .await
+        .expect("running server")
 }

@@ -20,7 +20,6 @@ use concordium_rust_sdk::{
         VerificationRequestDataBuilder,
     },
     common::types::TransactionTime,
-    v2::{QueryError, RPCError},
     web3id::v1::AnchorTransactionMetadata,
 };
 use std::collections::HashMap;

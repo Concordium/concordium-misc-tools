@@ -1,6 +1,6 @@
 use crate::node_client::{NodeClient, NodeClientImpl};
 use crate::{api, configs::ServiceConfigs, types::Service};
-use anyhow::{Context, anyhow, bail};
+use anyhow::{Context, bail};
 use concordium_rust_sdk::{
     constants::{MAINNET_GENESIS_BLOCK_HASH, TESTNET_GENESIS_BLOCK_HASH},
     types::WalletAccount,

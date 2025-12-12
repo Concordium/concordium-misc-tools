@@ -32,7 +32,6 @@ use std::str::FromStr;
 
 pub mod chain;
 pub mod credentials;
-pub mod node;
 
 pub fn public_info() -> HashMap<String, cbor::value::Value> {
     [(
@@ -285,7 +284,7 @@ pub struct VerifyPresentationRequestFixture {
     pub anchor_txn_hash: TransactionHash,
 }
 
-pub fn verify_request(
+pub fn verify_request_account(
     global_context: &GlobalContext<ArCurve>,
     account_cred: &AccountCredentialsFixture,
 ) -> VerifyPresentationRequestFixture {
@@ -302,6 +301,42 @@ pub fn verify_request(
         &account_cred,
         verifiable_presentation_request,
     );
+
+    let verification_data = VerificationRequestData {
+        context: verification_request.context.clone(),
+        subject_claims: verification_request.subject_claims.clone(),
+    };
+
+    let request = VerifyPresentationRequest {
+        audit_record_id: "auditrecid1".to_string(),
+        public_info: Some(public_info()),
+        presentation,
+        verification_request,
+    };
+
+    let anchor = verification_data.to_anchor(Some(public_info()));
+
+    VerifyPresentationRequestFixture {
+        anchor_txn_hash,
+        request,
+        anchor,
+    }
+}
+
+pub fn verify_request_identity(
+    global_context: &GlobalContext<ArCurve>,
+    id_cred: &IdentityCredentialsFixture,
+) -> VerifyPresentationRequestFixture {
+    let anchor_txn_hash = chain::generate_txn_hash();
+    let verification_request = verification_request(anchor_txn_hash);
+
+    let verifiable_presentation_request =
+        verification_request_to_verifiable_presentation_request_identity(
+            &id_cred,
+            &verification_request,
+        );
+    let presentation =
+        generate_presentation_identity(&global_context, &id_cred, verifiable_presentation_request);
 
     let verification_data = VerificationRequestData {
         context: verification_request.context.clone(),

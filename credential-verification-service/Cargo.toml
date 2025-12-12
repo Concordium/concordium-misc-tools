@@ -27,7 +27,6 @@ tower-http = {workspace = true, features = [
 ] }
 
 [dev-dependencies]
-mocktail.workspace = true
 parking_lot.workspace = true
 rand.workspace = true
 reqwest = { workspace = true, features = ["json"] }

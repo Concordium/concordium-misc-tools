@@ -1,6 +1,5 @@
 use chrono::{DateTime, Utc};
 use concordium_rust_sdk::base::hashes::{BlockHash, TransactionHash};
-use concordium_rust_sdk::base::pedersen_commitment::Commitment;
 use concordium_rust_sdk::base::transactions::{BlockItem, EncodedPayload};
 use concordium_rust_sdk::base::web3id::v1::AccountCredentialVerificationMaterial;
 use concordium_rust_sdk::base::web3id::v1::anchor::{
@@ -11,17 +10,13 @@ use concordium_rust_sdk::endpoints::{QueryResult, RPCError};
 use concordium_rust_sdk::id::constants::{ArCurve, IpPairing};
 use concordium_rust_sdk::id::types;
 use concordium_rust_sdk::id::types::{
-    AccountCredentialWithoutProofs, ArInfo, AttributeTag, GlobalContext, IpIdentity, IpInfo,
+    AccountCredentialWithoutProofs, ArInfo, GlobalContext, IpInfo,
 };
-use concordium_rust_sdk::types::{
-    BlockItemSummary, CredentialRegistrationID, Nonce, TransactionStatus,
-};
+use concordium_rust_sdk::types::{CredentialRegistrationID, Nonce, TransactionStatus};
 use concordium_rust_sdk::v2;
 use concordium_rust_sdk::v2::{AccountIdentifier, BlockIdentifier, QueryError, RPCResult};
 use concordium_rust_sdk::web3id::v1::VerifyError;
 use futures_util::TryStreamExt;
-use futures_util::future::BoxFuture;
-use std::collections::BTreeMap;
 use std::fmt::Debug;
 
 /// Node interface used by the verifier service. Used to stub out node in tests
