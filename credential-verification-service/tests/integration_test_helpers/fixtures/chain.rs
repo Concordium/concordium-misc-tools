@@ -12,4 +12,5 @@ pub fn transaction_status_finalized(
     txn_hash: TransactionHash,
     data: RegisteredData,
 ) -> TransactionStatus {
+    todo!()
 }
