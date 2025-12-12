@@ -72,7 +72,10 @@ concordium_base = { path = "deps/concordium-rust-sdk/concordium-base/rust-src/co
 key_derivation = { path = "deps/concordium-rust-sdk/concordium-base/rust-src/key_derivation/" }
 misc_tools = { path = "deps/concordium-rust-sdk/concordium-base/rust-bins" }
 
-[profile.dev.package.ark-ec]
+# Optimize builds of credential-verification-service for tests since it contains
+# cryptographic prover and verifier that else runs slow. Notice the
+# crypto primitives are implemented in ark-ec and ark-ff, but the implementations are generic
+# and monomorphized in credential-verification-service.
+[profile.dev.package.credential-verification-service]
 opt-level = 3
-[profile.dev.package.ark-ff]
-opt-level = 3
+
