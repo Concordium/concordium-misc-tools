@@ -10,7 +10,7 @@ async fn test_create_verification_request() {
 
     let create_request = fixtures::create_verification_request();
 
-    let txn_hash = fixtures::generate_txn_hash();
+    let txn_hash = fixtures::chain::generate_txn_hash();
     handle.node_stub().mock(|when, then| {
         when.path("/concordium.v2.Queries/SendBlockItem");
         then.pb(generated::TransactionHash::from(&txn_hash));

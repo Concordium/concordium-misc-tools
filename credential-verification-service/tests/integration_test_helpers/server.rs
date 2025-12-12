@@ -1,6 +1,6 @@
 use crate::integration_test_helpers::node_stub::NodeStub;
 use crate::integration_test_helpers::rest_client::RestClient;
-use crate::integration_test_helpers::{node_stub, rest_client};
+use crate::integration_test_helpers::{fixtures, node_stub, rest_client};
 
 use concordium_rust_sdk::constants;
 
@@ -109,48 +109,9 @@ fn start_server_impl() -> ServerHandle {
         });
     });
     node_stub.mock(|when, then| {
-        let block_height = AbsoluteBlockHeight::from(1).into();
-        let block_hash = generated::BlockHash {
-            value: constants::TESTNET_GENESIS_BLOCK_HASH.into(),
-        };
         when.path("/concordium.v2.Queries/GetConsensusInfo")
             .pb(Empty {});
-        then.pb(generated::ConsensusInfo {
-            last_finalized_block_height: Some(block_height),
-            block_arrive_latency_emsd: 0.0,
-            block_receive_latency_emsd: 0.0,
-            last_finalized_block: Some(block_hash.clone()),
-            block_receive_period_emsd: Some(0.0),
-            block_arrive_period_emsd: Some(0.0),
-            blocks_received_count: 1,
-            transactions_per_block_emsd: 0.0,
-            finalization_period_ema: Some(0.0),
-            best_block_height: Some(block_height),
-            last_finalized_time: Some(generated::Timestamp { value: 1 }),
-            finalization_count: 1,
-            epoch_duration: Some(generated::Duration { value: 1 }),
-            blocks_verified_count: 1,
-            slot_duration: Some(generated::Duration { value: 1 }),
-            genesis_time: Some(generated::Timestamp { value: 1 }),
-            finalization_period_emsd: Some(0.0),
-            transactions_per_block_ema: 0.0,
-            block_arrive_latency_ema: 0.0,
-            block_receive_latency_ema: 0.0,
-            block_arrive_period_ema: Some(0.0),
-            block_receive_period_ema: Some(0.0),
-            block_last_arrived_time: Some(generated::Timestamp { value: 1 }),
-            best_block: Some(block_hash.clone()),
-            genesis_block: Some(block_hash.clone()),
-            block_last_received_time: Some(generated::Timestamp { value: 1 }),
-            protocol_version: 1,
-            genesis_index: Some(GenesisIndex::from(1).into()),
-            current_era_genesis_block: Some(block_hash),
-            current_era_genesis_time: Some(generated::Timestamp { value: 1 }),
-            current_timeout_duration: Some(generated::Duration { value: 1 }),
-            current_round: Some(generated::Round { value: 1 }),
-            current_epoch: Some(generated::Epoch { value: 1 }),
-            trigger_block_time: Some(generated::Timestamp { value: 1 }),
-        });
+        then.pb(fixtures::chain::consensus_info());
     });
 
     // Start runtime and server in new thread

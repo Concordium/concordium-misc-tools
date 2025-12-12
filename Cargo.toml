@@ -24,6 +24,7 @@ exclude = ["deps"]
 
 [workspace.dependencies]
 anyhow = "1.0"
+assert_matches = "1.5.0"
 axum = { version = "0.8", features = ["http2"]}
 axum-prometheus = { version = "0.8" }
 backoff = { version = "0.4" }
@@ -71,3 +72,7 @@ concordium_base = { path = "deps/concordium-rust-sdk/concordium-base/rust-src/co
 key_derivation = { path = "deps/concordium-rust-sdk/concordium-base/rust-src/key_derivation/" }
 misc_tools = { path = "deps/concordium-rust-sdk/concordium-base/rust-bins" }
 
+[profile.dev.package.ark-ec]
+opt-level = 3
+[profile.dev.package.ark-ff]
+opt-level = 3

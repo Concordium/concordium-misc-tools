@@ -1,9 +1,12 @@
 //! Handler for the verification endpoints.
+use crate::api::util::QueryErrorExt;
 use crate::{
     api_types::{VerificationResult, VerifyPresentationRequest, VerifyPresentationResponse},
     types::{ServerError, Service},
 };
+use anyhow::Context;
 use axum::{Json, extract::State};
+use concordium_rust_sdk::web3id::v1::CreateAnchorError;
 use concordium_rust_sdk::{
     base::web3id::v1::anchor::{
         self, PresentationVerificationResult, VerificationAuditRecord, VerificationContext,
@@ -17,6 +20,7 @@ use concordium_rust_sdk::{
     },
 };
 use std::sync::Arc;
+use crate::types::AppJson;
 
 /// Verify Presentation endpoint handler.
 /// Accepts a VerifyPresentationRequest payload and calls the Rust SDK function `verify_presentation_with_request_anchor`
@@ -24,13 +28,13 @@ use std::sync::Arc;
 /// `submit_verification_audit_record_anchor` to publish the audit anchor on chain, only when the verification has succeeded.
 pub async fn verify_presentation(
     state: State<Arc<Service>>,
-    Json(verify_presentation_request): Json<VerifyPresentationRequest>,
+    AppJson(verify_presentation_request): AppJson<VerifyPresentationRequest>,
 ) -> Result<Json<VerifyPresentationResponse>, ServerError> {
     let block_identifier = BlockIdentifier::LastFinal;
 
     let mut client = state.node_client.clone();
 
-    // Verify the presentation with respect to the verificatin request anchor.
+    // Verify the presentation with respect to the verification request anchor.
     // note: we do not lock for the account nonce until the anchor submission
     let presentation_verification_result = verify_presentation_with_request_anchor(
         &mut client,
@@ -73,65 +77,55 @@ pub async fn verify_presentation(
             *account_sequence_number = account_sequence_number.next();
             Ok(Json(verify_presentation_response))
         }
-        Err(e) => {
-            if let VerifyError::Query(QueryError::RPCError(RPCError::CallError(ref err))) = e {
-                // if error was nonce related, we will retry the audit anchor submission
-                let msg = err.message();
-                let is_nonce_err = msg == "Duplicate nonce" || msg == "Nonce too large";
+        Err(CreateAnchorError::Query(err)) if err.is_account_sequence_number_error() => {
+            tracing::warn!(
+                "Unable to submit transaction on-chain successfully due to account nonce mismatch. Account nonce will be refreshed and transaction will be re-submitted: {}",
+                err
+            );
 
-                if is_nonce_err {
-                    tracing::warn!(
-                        "Unable to submit transaction on-chain successfully due to account nonce mismatch: {}.
-                        Account nonce will be re-freshed and transaction will be re-submitted.",
-                        msg
-                    );
+            let mut client = state.node_client.clone();
 
-                    let mut client = state.node_client.clone();
+            // Refresh nonce
+            let nonce_response = client
+                .get_next_account_sequence_number(&state.account_keys.address)
+                .await
+                .context("get next account sequence number")?;
 
-                    // Refresh nonce
-                    let nonce_response = client
-                        .get_next_account_sequence_number(&state.account_keys.address)
-                        .await
-                        .map_err(|e| ServerError::SubmitAnchorTransaction(e.into()))?;
+            // resubmit the audit anchor with the updated account sequence number
+            *account_sequence_number = nonce_response.nonce;
+            tracing::info!("Refreshed account nonce successfully.");
+            let presentation_verification_data_result = create_and_submit_audit_anchor(
+                &mut client,
+                &verify_presentation_request,
+                &state,
+                presentation_verification_result,
+                *account_sequence_number,
+            )
+            .await
+            .context("submit audit anchor")?;
 
-                    // resubmit the audit anchor with the updated account sequence number
-                    *account_sequence_number = nonce_response.nonce;
-                    tracing::info!("Refreshed account nonce successfully.");
-                    let presentation_verification_data_result = create_and_submit_audit_anchor(
-                        &mut client,
-                        &verify_presentation_request,
-                        &state,
-                        presentation_verification_result,
-                        *account_sequence_number,
-                    )
-                    .await?;
-
-                    let result = match presentation_verification_data_result.verification_result {
-                        PresentationVerificationResult::Verified => VerificationResult::Verified,
-                        PresentationVerificationResult::Failed(e) => {
-                            VerificationResult::Failed(e.to_string())
-                        }
-                    };
-
-                    let verify_presentation_response = VerifyPresentationResponse {
-                        result,
-                        anchor_transaction_hash: presentation_verification_data_result
-                            .anchor_transaction_hash,
-                        verification_audit_record: presentation_verification_data_result
-                            .audit_record,
-                    };
-
-                    // finally increase the nonce in the state
-                    *account_sequence_number = account_sequence_number.next();
-
-                    return Ok(Json(verify_presentation_response));
+            let result = match presentation_verification_data_result.verification_result {
+                PresentationVerificationResult::Verified => VerificationResult::Verified,
+                PresentationVerificationResult::Failed(e) => {
+                    VerificationResult::Failed(e.to_string())
                 }
+            };
 
-                Err(ServerError::PresentationVerifificationFailed(e))
-            } else {
-                Err(ServerError::PresentationVerifificationFailed(e))
-            }
+            let verify_presentation_response = VerifyPresentationResponse {
+                result,
+                anchor_transaction_hash: presentation_verification_data_result
+                    .anchor_transaction_hash,
+                verification_audit_record: presentation_verification_data_result.audit_record,
+            };
+
+            // finally increase the nonce in the state
+            *account_sequence_number = account_sequence_number.next();
+
+            Ok(Json(verify_presentation_response))
         }
+        Err(err) => Err(anyhow::Error::from(err)
+            .context("create and submit request anchor")
+            .into()),
     }
 }
 
@@ -147,21 +141,28 @@ async fn verify_presentation_with_request_anchor(
 ) -> Result<PresentationVerificationResult, ServerError> {
     let global_context = client
         .get_cryptographic_parameters(block_identifier)
-        .await?
+        .await
+        .context("get cryptographic parameters")?
         .response;
 
-    let block_info = client.get_block_info(block_identifier).await?.response;
+    let block_info = client
+        .get_block_info(block_identifier)
+        .await
+        .context("get block info")?
+        .response;
 
     let request_anchor =
         v1::lookup_request_anchor(client, &verify_presentation_request.verification_request)
-            .await?;
+            .await
+            .context("lookup request anchor")?;
 
     let verification_material = v1::lookup_verification_materials_and_validity(
         client,
         block_identifier,
         &verify_presentation_request.presentation,
     )
-    .await?;
+    .await
+    .context("lookup verification material")?;
 
     let verification_context = VerificationContext {
         network: state.network,
@@ -190,7 +191,7 @@ async fn create_and_submit_audit_anchor(
     state: &State<Arc<Service>>,
     verification_result: PresentationVerificationResult,
     account_sequence_number: concordium_rust_sdk::types::Nonce,
-) -> Result<PresentationVerificationData, VerifyError> {
+) -> Result<PresentationVerificationData, CreateAnchorError> {
     // Prepare Data for Audit anchor submission
     let verify_presentation_request_clone = verify_presentation_request.clone();
     let audit_record = VerificationAuditRecord::new(

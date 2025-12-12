@@ -52,9 +52,9 @@ impl IdentityCredentialsFixture {
 }
 
 pub fn identity_credentials_fixture(
-    attrs: BTreeMap<AttributeTag, Web3IdAttribute>,
+    global_context: &GlobalContext<ArCurve>,
 ) -> IdentityCredentialsFixture {
-    let global_context = global_context();
+    let attrs = super::statements_and_attributes().1;
 
     let IpData {
         public_ip_info: ip_info,
@@ -62,7 +62,7 @@ pub fn identity_credentials_fixture(
         ..
     } = ip_info();
 
-    let (ars_infos, _ars_secret) = ars();
+    let (ars_infos, _ars_secret) = ars(global_context);
     let ars_infos = ArInfos {
         anonymity_revokers: ars_infos,
     };
@@ -128,11 +128,12 @@ impl AccountCredentialsFixture {
 }
 
 pub fn account_credentials_fixture(
-    attrs: BTreeMap<AttributeTag, Web3IdAttribute>,
+    global_context: &GlobalContext<ArCurve>,
 ) -> AccountCredentialsFixture {
-    let global_context = global_context();
+    let attrs = super::statements_and_attributes().1;
+
     let cred_id_exp = ArCurve::generate_scalar(&mut seed0());
-    let cred_id = CredentialRegistrationID::from_exponent(&global_context, cred_id_exp);
+    let cred_id = CredentialRegistrationID::from_exponent(global_context, cred_id_exp);
 
     let mut attr_rand = BTreeMap::new();
     let mut attr_cmm = BTreeMap::new();
@@ -181,17 +182,19 @@ pub fn global_context() -> GlobalContext<ArCurve> {
 }
 
 /// Create #num_ars anonymity revokers to be used by test
-fn ars() -> (
+fn ars(
+    global_context: &GlobalContext<ArCurve>,
+) -> (
     BTreeMap<ArIdentity, ArInfo<ArCurve>>,
     BTreeMap<ArIdentity, SecretKey<ArCurve>>,
 ) {
-    let ar_base = &global_context().on_chain_commitment_key.g;
+    let ar_base = global_context.on_chain_commitment_key.g;
     let mut csprng = seed0();
     let mut ar_infos = BTreeMap::new();
     let mut ar_keys = BTreeMap::new();
     for i in 1..=NUM_ARS {
         let ar_id = ArIdentity::try_from(i as u32).unwrap();
-        let ar_secret_key = SecretKey::generate(ar_base, &mut csprng);
+        let ar_secret_key = SecretKey::generate(&ar_base, &mut csprng);
         let ar_public_key = PublicKey::from(&ar_secret_key);
         let ar_info = ArInfo::<ArCurve> {
             ar_identity: ar_id,

@@ -6,19 +6,16 @@ use reqwest::StatusCode;
 async fn test_invalid_json_in_request() {
     let handle = server::start_server();
 
-    // invalid transaction hash
-    let txn_hash = "aaa";
-
     let resp = handle
         .rest_client()
-        .get(format!("v0/submissionStatus/{}", txn_hash))
+        .post("verifiable-presentations/create-verification-request")
+        .json("notvalid")
         .send()
         .await
         .unwrap();
 
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
-    assert_eq!(
-        "aa",
-        String::from_utf8_lossy(resp.bytes().await.unwrap().as_ref()),
-    );
+
+    let text = resp.text().await.unwrap();
+    assert!(text.contains("invalid json"), "test: {}", text);
 }
