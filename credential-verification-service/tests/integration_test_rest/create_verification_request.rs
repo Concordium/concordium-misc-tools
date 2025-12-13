@@ -18,5 +18,8 @@ async fn test_create_verification_request() {
         .unwrap();
 
     assert_eq!(resp.status(), StatusCode::OK);
-    let _verification_request: VerificationRequest = resp.json().await.unwrap();
+    let verification_request: VerificationRequest = resp.json().await.unwrap();
+    handle
+        .node_client_stub()
+        .expect_send_block_item(&verification_request.anchor_transaction_hash);
 }

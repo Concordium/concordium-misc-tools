@@ -27,6 +27,23 @@ async fn test_verify_account_based() {
     assert_eq!(resp.status(), StatusCode::OK);
     let verify_response: VerifyPresentationResponse = resp.json().await.unwrap();
     assert_eq!(verify_response.result, VerificationResult::Verified);
+    handle.node_client_stub().expect_send_block_item(
+        &verify_response
+            .anchor_transaction_hash
+            .expect("anchor should be submitted"),
+    );
+    assert_eq!(
+        verify_response.verification_audit_record.id,
+        verify_fixture.request.audit_record_id
+    );
+    assert_eq!(
+        verify_response.verification_audit_record.request,
+        verify_fixture.request.verification_request
+    );
+    assert_eq!(
+        verify_response.verification_audit_record.presentation,
+        verify_fixture.request.presentation
+    );
 }
 
 /// Test verify account based presentation
@@ -60,6 +77,23 @@ async fn test_verify_identity_based() {
     assert_eq!(resp.status(), StatusCode::OK);
     let verify_response: VerifyPresentationResponse = resp.json().await.unwrap();
     assert_eq!(verify_response.result, VerificationResult::Verified);
+    handle.node_client_stub().expect_send_block_item(
+        &verify_response
+            .anchor_transaction_hash
+            .expect("anchor should be submitted"),
+    );
+    assert_eq!(
+        verify_response.verification_audit_record.id,
+        verify_fixture.request.audit_record_id
+    );
+    assert_eq!(
+        verify_response.verification_audit_record.request,
+        verify_fixture.request.verification_request
+    );
+    assert_eq!(
+        verify_response.verification_audit_record.presentation,
+        verify_fixture.request.presentation
+    );
 }
 
 /// Test verification that fails
@@ -100,5 +134,20 @@ async fn test_verify_fail() {
 
     assert_eq!(resp.status(), StatusCode::OK);
     let verify_response: VerifyPresentationResponse = resp.json().await.unwrap();
-    assert_matches!(verify_response.result, VerificationResult::Failed(_));
+    assert_matches!(verify_response.result, VerificationResult::Failed(err) => {
+        assert_eq!(err, "verification request anchor block hash not set in context");
+    });
+    assert!(verify_response.anchor_transaction_hash.is_none());
+    assert_eq!(
+        verify_response.verification_audit_record.id,
+        verify_fixture.request.audit_record_id
+    );
+    assert_eq!(
+        verify_response.verification_audit_record.request,
+        verify_fixture.request.verification_request
+    );
+    assert_eq!(
+        verify_response.verification_audit_record.presentation,
+        verify_fixture.request.presentation
+    );
 }

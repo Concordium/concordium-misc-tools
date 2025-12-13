@@ -30,6 +30,7 @@ pub fn node_client(global_context: GlobalContext<ArCurve>) -> NodeClientStub {
             .unwrap()
             .to_utc(),
         block_item_statuses: Default::default(),
+        send_block_items: Default::default(),
     };
 
     NodeClientStub(Arc::new(Mutex::new(inner)))
@@ -42,6 +43,14 @@ impl NodeClientStub {
     pub fn stub_block_item_status(&self, txn_hash: TransactionHash, summary: TransactionStatus) {
         self.0.lock().block_item_statuses.insert(txn_hash, summary);
     }
+
+    pub fn expect_send_block_item(&self, txn_hash: &TransactionHash) -> BlockItem<EncodedPayload> {
+        self.0
+            .lock()
+            .send_block_items
+            .remove(txn_hash)
+            .expect("expected send block item")
+    }
 }
 
 #[derive(Debug)]
@@ -53,6 +62,7 @@ pub struct NodeClientStubInner {
     genesis_block_hash: BlockHash,
     block_slot_time: DateTime<Utc>,
     block_item_statuses: HashMap<TransactionHash, TransactionStatus>,
+    send_block_items: HashMap<TransactionHash, BlockItem<EncodedPayload>>,
 }
 
 #[async_trait::async_trait]
@@ -70,9 +80,11 @@ impl NodeClient for NodeClientStub {
 
     async fn send_block_item(
         &mut self,
-        _bi: &BlockItem<EncodedPayload>,
+        bi: &BlockItem<EncodedPayload>,
     ) -> RPCResult<TransactionHash> {
-        Ok(fixtures::chain::generate_txn_hash())
+        let txn_hash = fixtures::chain::generate_txn_hash();
+        self.0.lock().send_block_items.insert(txn_hash, bi.clone());
+        Ok(txn_hash)
     }
 
     async fn get_cryptographic_parameters(
