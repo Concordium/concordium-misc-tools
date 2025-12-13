@@ -25,7 +25,7 @@ pub struct CreateVerificationRequest {
     pub nonce: anchor::Nonce,
     /// An identifier for some connection (e.g. wallet-connect topic) included in the verification request context.
     pub connection_id: String,
-    /// A rescource id to track the connected website (e.g. website URL or TLS fingerprint).
+    /// A resource id to track the connected website (e.g. website URL or TLS fingerprint).
     pub resource_id: String,
     /// A general purpose string value included in the verification request context.
     pub context_string: String,
@@ -79,7 +79,7 @@ pub struct VerifyPresentationResponse {
 }
 
 /// Presentation Verification Result, contains: Success or Failed with a String message
-#[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
+#[derive(serde::Deserialize, serde::Serialize, Debug, Clone, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum VerificationResult {
     /// Verified
