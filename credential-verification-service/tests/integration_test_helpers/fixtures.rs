@@ -274,10 +274,9 @@ pub fn create_verification_request() -> CreateVerificationRequest {
         .build();
 
     CreateVerificationRequest {
-        nonce: Nonce([1u8; 32]),
         connection_id: "conid1".to_string(),
         resource_id: "resid1".to_string(),
-        context_string: "contextstr".to_string(),
+        context_string: None,
         requested_claims: vec![identity_claims.into()],
         public_info: Some(public_info()),
     }
