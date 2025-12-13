@@ -4,7 +4,7 @@ use concordium_rust_sdk::{
         hashes::TransactionHash,
         web3id::v1::{
             PresentationV1,
-            anchor::{self, RequestedSubjectClaims, VerificationAuditRecord, VerificationRequest},
+            anchor::{RequestedSubjectClaims, VerificationAuditRecord, VerificationRequest},
         },
     },
     id::constants::{ArCurve, IpPairing},

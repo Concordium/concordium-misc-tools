@@ -6,9 +6,9 @@ use axum::{
 use prometheus_client::registry::Registry;
 use std::sync::Arc;
 
+mod create_verification_request;
 mod monitoring;
 mod util;
-mod create_verification_request;
 mod verify;
 
 /// Router exposing the service's endpoints
