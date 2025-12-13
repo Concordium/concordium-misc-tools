@@ -10,7 +10,7 @@ use crate::{
 use anyhow::Context;
 use axum::{Json, extract::State};
 use concordium_rust_sdk::base::transactions::{BlockItem, ExactSizeTransactionSigner, send};
-use concordium_rust_sdk::base::web3id::v1::anchor::{ContextLabel, VerificationRequestData};
+use concordium_rust_sdk::base::web3id::v1::anchor::{ContextLabel, Nonce, VerificationRequestData};
 use concordium_rust_sdk::common::cbor;
 use concordium_rust_sdk::types::RegisteredData;
 use concordium_rust_sdk::web3id::v1::CreateAnchorError;
@@ -29,13 +29,20 @@ pub async fn create_verification_request(
     State(state): State<Arc<Service>>,
     AppJson(params): AppJson<CreateVerificationRequest>,
 ) -> Result<Json<VerificationRequest>, ServerError> {
-    let context = UnfilledContextInformationBuilder::new()
-        .given(LabeledContextProperty::Nonce(params.nonce))
+    let context_nonce = Nonce(rand::random());
+    let context_builder = UnfilledContextInformationBuilder::new()
+        .given(LabeledContextProperty::Nonce(context_nonce))
         .given(LabeledContextProperty::ConnectionId(params.connection_id))
         .given(LabeledContextProperty::ResourceId(params.resource_id))
-        .given(LabeledContextProperty::ContextString(params.context_string))
-        .requested(ContextLabel::BlockHash)
-        .build();
+        .requested(ContextLabel::BlockHash);
+
+    let context_builder = if let Some(context_string) = params.context_string {
+        context_builder.given(LabeledContextProperty::ContextString(context_string))
+    } else {
+        context_builder
+    };
+
+    let context = context_builder.build();
 
     let mut builder = VerificationRequestDataBuilder::new(context);
     for claim in params.requested_claims {
