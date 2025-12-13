@@ -70,7 +70,7 @@ pub fn identity_credentials_fixture(
         &id_object_use_data,
         &ip_info,
         &ars_infos.anonymity_revokers,
-        &global_context,
+        global_context,
     );
     let alist = create_attribute_list(attrs);
     let ip_sig = identity_provider::sign_identity_object_v1_with_rng(
@@ -210,7 +210,7 @@ pub fn ip() -> IpData<IpPairing> {
     let mut csprng = seed0();
     // Create key for IP long enough to encode the attributes and anonymity
     // revokers.
-    let ps_len = (5 + NUM_ARS + MAX_ATTRS) as usize;
+    let ps_len = 5 + NUM_ARS + MAX_ATTRS;
     let ip_secret_key = ps_sig::SecretKey::<IpPairing>::generate(ps_len, &mut csprng);
     let ip_verify_key = ps_sig::PublicKey::from(&ip_secret_key);
     let signing = SigningKey::generate(&mut csprng);

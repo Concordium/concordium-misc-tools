@@ -5,14 +5,13 @@ use chrono::{DateTime, Utc};
 use concordium_rust_sdk::base::contracts_common::AccountAddress;
 use concordium_rust_sdk::base::hashes::{BlockHash, TransactionHash};
 use concordium_rust_sdk::base::transactions::{BlockItem, EncodedPayload};
-use concordium_rust_sdk::base::web3id::v1::anchor::VerificationMaterialWithValidity;
+use concordium_rust_sdk::common;
 use concordium_rust_sdk::endpoints::{QueryResult, RPCResult};
 use concordium_rust_sdk::id::constants::{ArCurve, IpPairing};
 use concordium_rust_sdk::id::types::{ArInfo, GlobalContext, IpInfo};
 use concordium_rust_sdk::types::{CredentialRegistrationID, Nonce, TransactionStatus};
 use concordium_rust_sdk::v2::BlockIdentifier;
-use concordium_rust_sdk::web3id::v1::VerifyError;
-use credential_verification_service::node_client::NodeClient;
+use credential_verification_service::node_client::{AccountCredentials, NodeClient};
 use parking_lot::Mutex;
 use std::sync::Arc;
 
@@ -30,6 +29,7 @@ pub fn node_client(global_context: GlobalContext<ArCurve>) -> NodeClientStub {
             .unwrap()
             .to_utc(),
         block_item_statuses: Default::default(),
+        account_credentials: Default::default(),
         send_block_items: Default::default(),
     };
 
@@ -42,6 +42,18 @@ pub struct NodeClientStub(Arc<Mutex<NodeClientStubInner>>);
 impl NodeClientStub {
     pub fn stub_block_item_status(&self, txn_hash: TransactionHash, summary: TransactionStatus) {
         self.0.lock().block_item_statuses.insert(txn_hash, summary);
+    }
+
+    pub fn stub_account_credentials(
+        &self,
+        cred_id: CredentialRegistrationID,
+        credentials: (AccountCredentials, AccountAddress),
+    ) {
+        let cred_id_bytes = common::to_bytes(&cred_id);
+        self.0
+            .lock()
+            .account_credentials
+            .insert(cred_id_bytes, credentials);
     }
 
     pub fn expect_send_block_item(&self, txn_hash: &TransactionHash) -> BlockItem<EncodedPayload> {
@@ -62,6 +74,7 @@ pub struct NodeClientStubInner {
     genesis_block_hash: BlockHash,
     block_slot_time: DateTime<Utc>,
     block_item_statuses: HashMap<TransactionHash, TransactionStatus>,
+    account_credentials: HashMap<Vec<u8>, (AccountCredentials, AccountAddress)>,
     send_block_items: HashMap<TransactionHash, BlockItem<EncodedPayload>>,
 }
 
@@ -95,7 +108,7 @@ impl NodeClient for NodeClientStub {
     }
 
     async fn get_block_slot_time(&mut self, _bi: BlockIdentifier) -> QueryResult<DateTime<Utc>> {
-        Ok(self.0.lock().block_slot_time.clone())
+        Ok(self.0.lock().block_slot_time)
     }
 
     async fn get_block_item_status(
@@ -106,16 +119,23 @@ impl NodeClient for NodeClientStub {
             .0
             .lock()
             .block_item_statuses
-            .remove(&th)
-            .expect("block_item_status"))
+            .remove(th)
+            .expect("get block item status"))
     }
 
-    async fn get_account_credential_verification_material(
+    async fn get_account_credentials(
         &mut self,
-        _cred_id: CredentialRegistrationID,
+        cred_id: CredentialRegistrationID,
         _bi: BlockIdentifier,
-    ) -> Result<VerificationMaterialWithValidity, VerifyError> {
-        todo!()
+    ) -> QueryResult<(AccountCredentials, AccountAddress)> {
+        // CredentialRegistrationID does not implement Hash, hence we convert to bytes
+        let cred_id_bytes = common::to_bytes(&cred_id);
+        Ok(self
+            .0
+            .lock()
+            .account_credentials
+            .remove(&cred_id_bytes)
+            .expect("get account credentials"))
     }
 
     async fn get_identity_providers(

@@ -1,22 +1,18 @@
 use chrono::{DateTime, Utc};
 use concordium_rust_sdk::base::hashes::{BlockHash, TransactionHash};
 use concordium_rust_sdk::base::transactions::{BlockItem, EncodedPayload};
-use concordium_rust_sdk::base::web3id::v1::AccountCredentialVerificationMaterial;
-use concordium_rust_sdk::base::web3id::v1::anchor::{
-    CredentialValidityType, VerificationMaterial, VerificationMaterialWithValidity,
-};
-use concordium_rust_sdk::common::types::AccountAddress;
+use concordium_rust_sdk::common::Versioned;
+use concordium_rust_sdk::common::types::{AccountAddress, CredentialIndex};
 use concordium_rust_sdk::endpoints::{QueryResult, RPCError};
-use concordium_rust_sdk::id::constants::{ArCurve, IpPairing};
-use concordium_rust_sdk::id::types;
+use concordium_rust_sdk::id::constants::{ArCurve, AttributeKind, IpPairing};
 use concordium_rust_sdk::id::types::{
     AccountCredentialWithoutProofs, ArInfo, GlobalContext, IpInfo,
 };
 use concordium_rust_sdk::types::{CredentialRegistrationID, Nonce, TransactionStatus};
 use concordium_rust_sdk::v2;
-use concordium_rust_sdk::v2::{AccountIdentifier, BlockIdentifier, QueryError, RPCResult};
-use concordium_rust_sdk::web3id::v1::VerifyError;
+use concordium_rust_sdk::v2::{AccountIdentifier, BlockIdentifier, QueryError, RPCResult, Upward};
 use futures_util::TryStreamExt;
+use std::collections::BTreeMap;
 use std::fmt::Debug;
 
 /// Node interface used by the verifier service. Used to stub out node in tests
@@ -46,11 +42,11 @@ pub trait NodeClient: Send + Sync + 'static + Debug {
         th: &TransactionHash,
     ) -> QueryResult<TransactionStatus>;
 
-    async fn get_account_credential_verification_material(
+    async fn get_account_credentials(
         &mut self,
         cred_id: CredentialRegistrationID,
         bi: BlockIdentifier,
-    ) -> Result<VerificationMaterialWithValidity, VerifyError>;
+    ) -> QueryResult<(AccountCredentials, AccountAddress)>;
 
     async fn get_identity_providers(
         &mut self,
@@ -71,6 +67,11 @@ pub trait NodeClient: Send + Sync + 'static + Debug {
 
     fn box_clone(&self) -> Box<dyn NodeClient>;
 }
+
+pub type AccountCredentials = BTreeMap<
+    CredentialIndex,
+    Versioned<Upward<AccountCredentialWithoutProofs<ArCurve, AttributeKind>>>,
+>;
 
 impl Clone for Box<dyn NodeClient> {
     fn clone(&self) -> Self {
@@ -140,55 +141,20 @@ impl NodeClient for NodeClientImpl {
         self.client.get_block_item_status(th).await
     }
 
-    async fn get_account_credential_verification_material(
+    async fn get_account_credentials(
         &mut self,
         cred_id: CredentialRegistrationID,
         bi: BlockIdentifier,
-    ) -> Result<VerificationMaterialWithValidity, VerifyError> {
+    ) -> QueryResult<(AccountCredentials, AccountAddress)> {
         let account_info = self
             .client
             .get_account_info(&AccountIdentifier::CredId(cred_id), bi)
             .await?;
 
-        let Some(account_cred) =
-            account_info
-                .response
-                .account_credentials
-                .values()
-                .find_map(|cred| {
-                    cred.value
-                        .as_ref()
-                        .known()
-                        .and_then(|c| (c.cred_id() == cred_id.as_ref()).then_some(c))
-                })
-        else {
-            return Err(VerifyError::CredentialNotPresent {
-                cred_id,
-                account: account_info.response.account_address,
-            });
-        };
-
-        match account_cred {
-            AccountCredentialWithoutProofs::Initial { .. } => {
-                Err(VerifyError::InitialCredential { cred_id: cred_id })
-            }
-            AccountCredentialWithoutProofs::Normal { cdv, commitments } => {
-                let credential_validity = types::CredentialValidity {
-                    created_at: account_cred.policy().created_at,
-                    valid_to: cdv.policy.valid_to,
-                };
-
-                Ok(VerificationMaterialWithValidity {
-                    verification_material: VerificationMaterial::Account(
-                        AccountCredentialVerificationMaterial {
-                            issuer: cdv.ip_identity,
-                            attribute_commitments: commitments.cmm_attributes.clone(),
-                        },
-                    ),
-                    validity: CredentialValidityType::ValidityPeriod(credential_validity),
-                })
-            }
-        }
+        Ok((
+            account_info.response.account_credentials,
+            account_info.response.account_address,
+        ))
     }
 
     async fn get_identity_providers(

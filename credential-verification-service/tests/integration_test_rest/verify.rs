@@ -14,7 +14,30 @@ async fn test_verify_account_based() {
 
     let verify_fixture = fixtures::verify_request_account(&global_context, &account_cred);
 
-    let _verification_material = assert_matches!(&account_cred.verification_material, CredentialVerificationMaterial::Account(ver_mat) => ver_mat);
+    handle.node_client_stub().stub_block_item_status(
+        verify_fixture.anchor_txn_hash,
+        fixtures::chain::transaction_status_finalized(
+            verify_fixture.anchor_txn_hash,
+            cbor::cbor_encode(&verify_fixture.anchor)
+                .unwrap()
+                .try_into()
+                .unwrap(),
+        ),
+    );
+
+    let verification_material = assert_matches!(&account_cred.verification_material, CredentialVerificationMaterial::Account(ver_mat) => ver_mat);
+
+    handle.node_client_stub().stub_account_credentials(
+        account_cred.cred_id,
+        (
+            fixtures::chain::account_credentials(
+                &account_cred.cred_id,
+                verification_material.issuer,
+                verification_material.attribute_commitments.clone(),
+            ),
+            fixtures::chain::account_address(1),
+        ),
+    );
 
     let resp = handle
         .rest_client()

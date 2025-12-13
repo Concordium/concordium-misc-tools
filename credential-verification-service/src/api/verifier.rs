@@ -17,15 +17,17 @@ use concordium_rust_sdk::base::web3id::v1::anchor::{
     VerificationRequestAnchorAndBlockHash,
 };
 use concordium_rust_sdk::base::web3id::v1::{
-    CredentialMetadataTypeV1, CredentialMetadataV1, IdentityCredentialVerificationMaterial,
+    AccountCredentialVerificationMaterial, CredentialMetadataTypeV1, CredentialMetadataV1,
+    IdentityCredentialVerificationMaterial,
 };
 use concordium_rust_sdk::common::cbor;
 
-use concordium_rust_sdk::id::types::ArInfos;
+use concordium_rust_sdk::id::types::{AccountCredentialWithoutProofs, ArInfos};
 use concordium_rust_sdk::types::{
     AccountTransactionEffects, BlockItemSummaryDetails, RegisteredData,
 };
 
+use concordium_rust_sdk::id::types;
 use concordium_rust_sdk::v2::BlockIdentifier;
 use concordium_rust_sdk::web3id::v1::CreateAnchorError;
 use concordium_rust_sdk::{
@@ -266,9 +268,45 @@ async fn lookup_verification_material_and_validity(
 ) -> Result<VerificationMaterialWithValidity, VerifyError> {
     Ok(match &cred_metadata.cred_metadata {
         CredentialMetadataTypeV1::Account(metadata) => {
-            client
-                .get_account_credential_verification_material(metadata.cred_id, block_identifier)
-                .await?
+            let (account_credentials, account_address) = client
+                .get_account_credentials(metadata.cred_id, block_identifier)
+                .await?;
+
+            let Some(account_cred) = account_credentials.values().find_map(|cred| {
+                cred.value
+                    .as_ref()
+                    .known()
+                    .and_then(|c| (c.cred_id() == metadata.cred_id.as_ref()).then_some(c))
+            }) else {
+                return Err(VerifyError::CredentialNotPresent {
+                    cred_id: metadata.cred_id,
+                    account: account_address,
+                });
+            };
+
+            match account_cred {
+                AccountCredentialWithoutProofs::Initial { .. } => {
+                    return Err(VerifyError::InitialCredential {
+                        cred_id: metadata.cred_id,
+                    });
+                }
+                AccountCredentialWithoutProofs::Normal { cdv, commitments } => {
+                    let credential_validity = types::CredentialValidity {
+                        created_at: account_cred.policy().created_at,
+                        valid_to: cdv.policy.valid_to,
+                    };
+
+                    VerificationMaterialWithValidity {
+                        verification_material: VerificationMaterial::Account(
+                            AccountCredentialVerificationMaterial {
+                                issuer: cdv.ip_identity,
+                                attribute_commitments: commitments.cmm_attributes.clone(),
+                            },
+                        ),
+                        validity: CredentialValidityType::ValidityPeriod(credential_validity),
+                    }
+                }
+            }
         }
         CredentialMetadataTypeV1::Identity(metadata) => {
             let ip_info = client

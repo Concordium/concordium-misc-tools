@@ -51,7 +51,7 @@ pub fn generate_presentation_identity(
     let now = chrono::Utc::now();
     let presentation = request
         .prove_with_rng(
-            &global_context,
+            global_context,
             [id_cred.private_inputs()].into_iter(),
             &mut seed0(),
             now,
@@ -203,7 +203,7 @@ fn requested_subject_claims_to_subject_claims_identity(
             let statements = claims
                 .statements
                 .iter()
-                .map(|stmt| requested_statement_to_statement(stmt))
+                .map(requested_statement_to_statement)
                 .collect();
 
             SubjectClaims::Identity(IdentityBasedSubjectClaims {
@@ -224,7 +224,7 @@ fn requested_subject_claims_to_subject_claims_account(
             let statements = id_claims
                 .statements
                 .iter()
-                .map(|stmt| requested_statement_to_statement(stmt))
+                .map(requested_statement_to_statement)
                 .collect();
 
             SubjectClaims::Account(AccountBasedSubjectClaims {
@@ -299,12 +299,12 @@ pub fn verify_request_account(
 
     let verifiable_presentation_request =
         verification_request_to_verifiable_presentation_request_account(
-            &account_cred,
+            account_cred,
             &verification_request,
         );
     let presentation = generate_presentation_account(
-        &global_context,
-        &account_cred,
+        global_context,
+        account_cred,
         verifiable_presentation_request,
     );
 
@@ -338,11 +338,11 @@ pub fn verify_request_identity(
 
     let verifiable_presentation_request =
         verification_request_to_verifiable_presentation_request_identity(
-            &id_cred,
+            id_cred,
             &verification_request,
         );
     let presentation =
-        generate_presentation_identity(&global_context, &id_cred, verifiable_presentation_request);
+        generate_presentation_identity(global_context, id_cred, verifiable_presentation_request);
 
     let verification_data = VerificationRequestData {
         context: verification_request.context.clone(),

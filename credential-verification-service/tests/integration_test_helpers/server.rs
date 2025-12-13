@@ -73,7 +73,7 @@ impl ServerHandle {
 static START_SERVER_ONCE: OnceLock<ServerHandle> = OnceLock::new();
 
 pub fn start_server() -> ServerHandle {
-    Clone::clone(START_SERVER_ONCE.get_or_init(|| start_server_impl()))
+    Clone::clone(START_SERVER_ONCE.get_or_init(start_server_impl))
 }
 
 fn start_server_impl() -> ServerHandle {
@@ -103,7 +103,7 @@ fn start_server_impl() -> ServerHandle {
     // Wait for server to start
     info!("waiting for verifier service to start");
     let start = Instant::now();
-    while TcpStream::connect(&format!("localhost:{}", MONITORING_PORT)).is_err() {
+    while TcpStream::connect(format!("localhost:{}", MONITORING_PORT)).is_err() {
         if start.elapsed() > Duration::from_secs(10) {
             panic!("server did not start");
         }
