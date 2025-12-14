@@ -1,6 +1,7 @@
 use crate::integration_test_helpers::fixtures;
 use std::collections::HashMap;
 
+use assert_matches::assert_matches;
 use chrono::{DateTime, Utc};
 use concordium_rust_sdk::base::contracts_common::AccountAddress;
 use concordium_rust_sdk::base::hashes::{BlockHash, TransactionHash};
@@ -96,7 +97,14 @@ impl NodeClient for NodeClientStub {
         bi: &BlockItem<EncodedPayload>,
     ) -> RPCResult<TransactionHash> {
         let txn_hash = fixtures::chain::generate_txn_hash();
-        self.0.lock().send_block_items.insert(txn_hash, bi.clone());
+        let txn = assert_matches!(bi, BlockItem::AccountTransaction(txn) => txn);
+        let mut inner = self.0.lock();
+        assert_eq!(
+            txn.header.nonce, inner.account_sequence_number,
+            "account sequence number"
+        );
+        inner.send_block_items.insert(txn_hash, bi.clone());
+        inner.account_sequence_number.next_mut();
         Ok(txn_hash)
     }
 

@@ -17,7 +17,6 @@ use concordium_rust_sdk::types::{
 };
 use concordium_rust_sdk::v2::Upward;
 use credential_verification_service::node_client::AccountCredentials;
-use rand::SeedableRng;
 use std::collections::BTreeMap;
 
 pub const GENESIS_BLOCK_HASH: [u8; 32] = constants::TESTNET_GENESIS_BLOCK_HASH;
@@ -55,16 +54,11 @@ pub fn transaction_status_finalized(
     )
 }
 
-fn seed0() -> rand::rngs::StdRng {
-    rand::rngs::StdRng::seed_from_u64(0)
-}
-
 pub fn account_credentials(
     cred_id: &CredentialRegistrationID,
     ip_identity: IpIdentity,
     cmm_attributes: BTreeMap<AttributeTag, Commitment<ArCurve>>,
 ) -> AccountCredentials {
-    let mut rng = seed0();
     let cred = AccountCredentialWithoutProofs::Normal {
         cdv: CredentialDeploymentValues {
             cred_key_info: CredentialPublicKeys {
@@ -83,11 +77,11 @@ pub fn account_credentials(
             },
         },
         commitments: CredentialDeploymentCommitments {
-            cmm_prf: Commitment(ArCurve::generate(&mut rng)),
-            cmm_cred_counter: Commitment(ArCurve::generate(&mut rng)),
-            cmm_max_accounts: Commitment(ArCurve::generate(&mut rng)),
+            cmm_prf: Commitment(ArCurve::zero_point()),
+            cmm_cred_counter: Commitment(ArCurve::zero_point()),
+            cmm_max_accounts: Commitment(ArCurve::zero_point()),
             cmm_attributes,
-            cmm_id_cred_sec_sharing_coeff: vec![Commitment(ArCurve::generate(&mut rng))],
+            cmm_id_cred_sec_sharing_coeff: vec![Commitment(ArCurve::zero_point())],
         },
     };
 
