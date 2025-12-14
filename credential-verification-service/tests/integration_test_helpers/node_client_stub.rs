@@ -11,10 +11,11 @@ use concordium_rust_sdk::endpoints::{QueryResult, RPCResult};
 use concordium_rust_sdk::id::constants::{ArCurve, IpPairing};
 use concordium_rust_sdk::id::types::{ArInfo, GlobalContext, IpInfo};
 use concordium_rust_sdk::types::{CredentialRegistrationID, Nonce, TransactionStatus};
-use concordium_rust_sdk::v2::BlockIdentifier;
+use concordium_rust_sdk::v2::{BlockIdentifier, QueryError, RPCError};
 use credential_verification_service::node_client::{AccountCredentials, NodeClient};
 use parking_lot::Mutex;
 use std::sync::Arc;
+use tonic::Status;
 
 pub fn node_client(global_context: GlobalContext<ArCurve>) -> NodeClientStub {
     let inner = NodeClientStubInner {
@@ -106,14 +107,17 @@ impl NodeClient for NodeClientStub {
         bi: &BlockItem<EncodedPayload>,
     ) -> RPCResult<TransactionHash> {
         let txn_hash = fixtures::chain::generate_txn_hash();
-        let txn = assert_matches!(bi, BlockItem::AccountTransaction(txn) => txn);
         let mut inner = self.0.lock();
-        assert_eq!(
-            txn.header.nonce, inner.account_sequence_number,
-            "account sequence number"
-        );
+        if let BlockItem::AccountTransaction(txn) = bi {
+            if txn.header.nonce != inner.account_sequence_number {
+                return Err(call_error(format!(
+                    "account transaction sequence number {} does not match sequence number expected by stub: {}",
+                    txn.header.nonce, inner.account_sequence_number
+                )));
+            }
+            inner.account_sequence_number.next_mut();
+        }
         inner.send_block_items.insert(txn_hash, bi.clone());
-        inner.account_sequence_number.next_mut();
         Ok(txn_hash)
     }
 
@@ -132,13 +136,17 @@ impl NodeClient for NodeClientStub {
         &mut self,
         th: &TransactionHash,
     ) -> QueryResult<TransactionStatus> {
-        Ok(clone_transaction_status(
-            self.0
-                .lock()
-                .block_item_statuses
-                .get(th)
-                .expect("get block item status"),
-        ))
+        self.0
+            .lock()
+            .block_item_statuses
+            .get(th)
+            .map(clone_transaction_status)
+            .ok_or_else(|| {
+                QueryError::RPCError(call_error(format!(
+                    "block item status not present in stub: {}",
+                    th
+                )))
+            })
     }
 
     async fn get_account_credentials(
@@ -148,12 +156,17 @@ impl NodeClient for NodeClientStub {
     ) -> QueryResult<(AccountCredentials, AccountAddress)> {
         // CredentialRegistrationID does not implement Hash, hence we convert to bytes
         let cred_id_bytes = common::to_bytes(&cred_id);
-        Ok(self
-            .0
+        self.0
             .lock()
             .account_credentials
-            .remove(&cred_id_bytes)
-            .expect("get account credentials"))
+            .get(&cred_id_bytes)
+            .cloned()
+            .ok_or_else(|| {
+                QueryError::RPCError(call_error(format!(
+                    "account credentials not present in stub: {}",
+                    cred_id
+                )))
+            })
     }
 
     async fn get_identity_providers(
@@ -173,4 +186,8 @@ impl NodeClient for NodeClientStub {
     fn box_clone(&self) -> Box<dyn NodeClient> {
         Box::new(self.clone())
     }
+}
+
+fn call_error(message: impl Into<String>) -> RPCError {
+    RPCError::CallError(Status::internal(message))
 }
