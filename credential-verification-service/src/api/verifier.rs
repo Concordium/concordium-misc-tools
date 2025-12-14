@@ -96,7 +96,9 @@ pub async fn verify_presentation(
             };
 
             // increment states nonce now
-            *account_sequence_number = account_sequence_number.next();
+            if presentation_verification_data.anchor_transaction_hash.is_some() {
+                *account_sequence_number = account_sequence_number.next();
+            }
             Ok(Json(verify_presentation_response))
         }
         Err(CreateAnchorError::Query(err)) if err.is_account_sequence_number_error() => {
@@ -141,7 +143,9 @@ pub async fn verify_presentation(
             };
 
             // finally increase the nonce in the state
-            *account_sequence_number = account_sequence_number.next();
+            if presentation_verification_data_result.anchor_transaction_hash.is_some() {
+                *account_sequence_number = account_sequence_number.next();
+            }
 
             Ok(Json(verify_presentation_response))
         }

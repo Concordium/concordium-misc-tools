@@ -79,6 +79,15 @@ pub struct NodeClientStubInner {
     send_block_items: HashMap<TransactionHash, BlockItem<EncodedPayload>>,
 }
 
+/// Clone TransactionStatus. Function can be removed when Clone is implemented on TransactionStatus in base.
+fn clone_transaction_status(txn_status: &TransactionStatus) -> TransactionStatus {
+    match txn_status {
+        TransactionStatus::Received => TransactionStatus::Received,
+        TransactionStatus::Finalized(val) => TransactionStatus::Finalized(val.clone()),
+        TransactionStatus::Committed(val) => TransactionStatus::Committed(val.clone()),
+    }
+}
+
 #[async_trait::async_trait]
 impl NodeClient for NodeClientStub {
     async fn get_next_account_sequence_number(
@@ -123,12 +132,13 @@ impl NodeClient for NodeClientStub {
         &mut self,
         th: &TransactionHash,
     ) -> QueryResult<TransactionStatus> {
-        Ok(self
-            .0
-            .lock()
-            .block_item_statuses
-            .remove(th)
-            .expect("get block item status"))
+        Ok(clone_transaction_status(
+            self.0
+                .lock()
+                .block_item_statuses
+                .get(th)
+                .expect("get block item status"),
+        ))
     }
 
     async fn get_account_credentials(

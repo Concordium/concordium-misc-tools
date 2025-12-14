@@ -133,5 +133,5 @@ async fn run_server(config: ServiceConfigs, node_client_stub: NodeClientStub) {
 
     service::run_with_dependencies(config, node_client_stub.boxed())
         .await
-        .expect("running server")
+        .expect("running server");
 }
