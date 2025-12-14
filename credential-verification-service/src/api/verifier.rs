@@ -96,7 +96,10 @@ pub async fn verify_presentation(
             };
 
             // increment states nonce now
-            if presentation_verification_data.anchor_transaction_hash.is_some() {
+            if presentation_verification_data
+                .anchor_transaction_hash
+                .is_some()
+            {
                 *account_sequence_number = account_sequence_number.next();
             }
             Ok(Json(verify_presentation_response))
@@ -143,7 +146,10 @@ pub async fn verify_presentation(
             };
 
             // finally increase the nonce in the state
-            if presentation_verification_data_result.anchor_transaction_hash.is_some() {
+            if presentation_verification_data_result
+                .anchor_transaction_hash
+                .is_some()
+            {
                 *account_sequence_number = account_sequence_number.next();
             }
 

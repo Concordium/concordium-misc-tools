@@ -1,6 +1,6 @@
 use crate::integration_test_helpers::{fixtures, server};
 use concordium_rust_sdk::common::cbor;
-use futures_util::{future, FutureExt};
+use futures_util::{FutureExt, future};
 use reqwest::StatusCode;
 
 /// Test send a lot of requests. Tests can nonce management is correct and
