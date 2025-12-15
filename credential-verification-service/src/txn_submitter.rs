@@ -7,7 +7,9 @@ use concordium_rust_sdk::common::types::TransactionTime;
 use concordium_rust_sdk::endpoints::RPCError;
 use concordium_rust_sdk::types::{Nonce, RegisteredData, WalletAccount};
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::Mutex;
+use tokio::time;
 use tracing::{info, warn};
 
 /// Submitter of transactions. Holds account keys and local view on account sequence number.
@@ -20,6 +22,8 @@ pub struct TransactionSubmitter {
     account: Arc<Mutex<AccountWithSequence>>,
     /// The number of seconds in the future when the anchor transactions should expiry.
     transaction_expiry_secs: u32,
+    /// Timeout to acquire lock on account sequence number
+    acquire_account_sequence_lock_timeout: Duration,
 }
 
 impl TransactionSubmitter {
@@ -27,6 +31,7 @@ impl TransactionSubmitter {
         mut node_client: Box<dyn NodeClient>,
         account_keys: WalletAccount,
         transaction_expiry_secs: u32,
+        acquire_account_sequence_lock_timeout: Duration,
     ) -> Result<Self, ServerError> {
         let nonce = node_client
             .get_next_account_sequence_number(&account_keys.address)
@@ -47,6 +52,7 @@ impl TransactionSubmitter {
             node_client,
             account: Arc::new(Mutex::new(account)),
             transaction_expiry_secs,
+            acquire_account_sequence_lock_timeout,
         })
     }
 
@@ -58,7 +64,12 @@ impl TransactionSubmitter {
         // since it is possible that API requests come in parallel. The nonce is
         // increased by 1 and its lock is released after the transaction is submitted to
         // the blockchain.
-        let mut account_guard = self.account.lock().await;
+        let mut account_guard = time::timeout(
+            self.acquire_account_sequence_lock_timeout,
+            self.account.lock(),
+        )
+        .await
+        .context("timeout waiting for local account sequence lock")?;
 
         let mut node_client = self.node_client.clone();
 

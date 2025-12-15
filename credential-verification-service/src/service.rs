@@ -11,6 +11,7 @@ use concordium_rust_sdk::{
 use futures_util::TryFutureExt;
 use prometheus_client::{metrics, registry::Registry};
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::net::TcpListener;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use tonic::transport::ClientTlsConfig;
@@ -73,6 +74,7 @@ pub async fn run_with_dependencies(
         node_client.clone(),
         account_keys,
         configs.transaction_expiry_secs,
+        Duration::from_millis(configs.acquire_account_sequence_lock_timeout),
     )
     .await
     .context("initialize transaction submitter")?;

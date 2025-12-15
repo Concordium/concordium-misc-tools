@@ -17,10 +17,18 @@ pub struct ServiceConfigs {
     #[arg(
         long = "grpc-node-request-timeout",
         help = "The request timeout to the Concordium node in milliseconds",
-        default_value = "1000",
+        default_value = "2000",
         env = "CREDENTIAL_VERIFICATION_GRPC_NODE_REQUEST_TIMEOUT"
     )]
     pub grpc_node_request_timeout: u64,
+    #[arg(
+        long = "acquire-account-sequence-lock-timeout",
+        help = "Timeout for acquiring the local lock on the account sequence number in order to submit anchor transaction",
+        default_value = "5000",
+        env = "CREDENTIAL_VERIFICATION_ACQUIRE_ACCOUNT_SEQUENCE_LOCK_TIMEOUT"
+    )]
+    pub acquire_account_sequence_lock_timeout: u64,
+
     #[arg(
         long,
         help = "The socket address where the service exposes its API.",
