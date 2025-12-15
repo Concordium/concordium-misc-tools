@@ -3,13 +3,9 @@ use axum::extract::FromRequest;
 use axum::extract::rejection::JsonRejection;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use concordium_rust_sdk::{
-    types::{Nonce, WalletAccount},
-    web3id::did::Network,
-};
+use concordium_rust_sdk::web3id::did::Network;
 use std::fmt::Display;
-use std::sync::Arc;
-use tokio::sync::Mutex;
+
 use crate::txn_submitter::TransactionSubmitter;
 
 /// Holds the service state in memory.
@@ -22,7 +18,7 @@ pub struct Service {
     /// The network of the connected node.  
     pub network: Network,
     /// Submitter for transactions
-    pub transaction_submitter: TransactionSubmitter
+    pub transaction_submitter: TransactionSubmitter,
 }
 
 /// Extractor with build in error handling. Like [axum::Json](Json) but will use [`RejectionError`] for rejection errors

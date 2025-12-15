@@ -11,7 +11,7 @@ use concordium_rust_sdk::{
 use futures_util::TryFutureExt;
 use prometheus_client::{metrics, registry::Registry};
 use std::sync::Arc;
-use tokio::{net::TcpListener, sync::Mutex};
+use tokio::net::TcpListener;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use tonic::transport::ClientTlsConfig;
 use tracing::{error, info};
@@ -73,7 +73,9 @@ pub async fn run_with_dependencies(
         node_client.clone(),
         account_keys,
         configs.transaction_expiry_secs,
-    ).await.context("initialize transaction submitter")?;
+    )
+    .await
+    .context("initialize transaction submitter")?;
 
     let service = Arc::new(Service {
         node_client,
@@ -104,10 +106,7 @@ pub async fn run_with_dependencies(
             .await
             .context("Failed to parse API TCP address")?;
         let stop_signal = cancel_token.child_token();
-        info!(
-            "API server is running at {:?}",
-            configs.api_address
-        );
+        info!("API server is running at {:?}", configs.api_address);
 
         axum::serve(listener, api::router(service, configs.request_timeout))
             .with_graceful_shutdown(stop_signal.cancelled_owned())
