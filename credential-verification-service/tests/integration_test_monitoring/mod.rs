@@ -1,2 +1,0 @@
-mod healthcheck;
-mod metrics;
