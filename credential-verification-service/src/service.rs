@@ -1,4 +1,5 @@
 use crate::node_client::{NodeClient, NodeClientImpl};
+use crate::txn_submitter::TransactionSubmitter;
 use crate::{api, configs::ServiceConfigs, types::Service};
 use anyhow::{Context, bail};
 use concordium_rust_sdk::{
@@ -51,15 +52,8 @@ pub async fn run_with_dependencies(
     );
 
     // Load account keys and sender address from a file
-    let keys: WalletAccount =
+    let account_keys: WalletAccount =
         WalletAccount::from_json_file(configs.account).context("Could not read the keys file.")?;
-
-    let account_keys = Arc::new(keys);
-
-    let nonce = node_client
-        .get_next_account_sequence_number(&account_keys.address)
-        .await
-        .context("get account sequence number")?;
 
     let genesis_hash = node_client
         .get_genesis_block_hash()
@@ -75,12 +69,16 @@ pub async fn run_with_dependencies(
         ),
     };
 
+    let transaction_submitter = TransactionSubmitter::init(
+        node_client.clone(),
+        account_keys,
+        configs.transaction_expiry_secs,
+    ).await.context("initialize transaction submitter")?;
+
     let service = Arc::new(Service {
         node_client,
-        account_keys,
-        nonce: Arc::new(Mutex::new(nonce)),
-        transaction_expiry_secs: configs.transaction_expiry_secs,
         network,
+        transaction_submitter,
     });
 
     let cancel_token = CancellationToken::new();
@@ -107,8 +105,8 @@ pub async fn run_with_dependencies(
             .context("Failed to parse API TCP address")?;
         let stop_signal = cancel_token.child_token();
         info!(
-            "API server is running at {:?} with account {} and current account nonce: {}.",
-            configs.api_address, service.account_keys.address, nonce
+            "API server is running at {:?}",
+            configs.api_address
         );
 
         axum::serve(listener, api::router(service, configs.request_timeout))

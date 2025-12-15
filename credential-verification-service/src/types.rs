@@ -22,7 +22,7 @@ pub struct Service {
     /// The network of the connected node.  
     pub network: Network,
     /// Submitter for transactions
-    pub txn_submitter: TransactionSubmitter
+    pub transaction_submitter: TransactionSubmitter
 }
 
 /// Extractor with build in error handling. Like [axum::Json](Json) but will use [`RejectionError`] for rejection errors
