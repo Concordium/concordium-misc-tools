@@ -10,21 +10,19 @@ use concordium_rust_sdk::{
 use std::fmt::Display;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use crate::txn_submitter::TransactionSubmitter;
 
 /// Holds the service state in memory.
 ///
 /// Note: A new instance of this struct is created whenever the service restarts.
+#[derive(Debug, Clone)]
 pub struct Service {
     /// The client to interact with the node.
     pub node_client: Box<dyn NodeClient>,
     /// The network of the connected node.  
     pub network: Network,
-    /// The key and address of the account submitting the anchor transactions on-chain.
-    pub account_keys: Arc<WalletAccount>,
-    /// The current nonce of the account submitting the anchor transactions on-chain.
-    pub nonce: Arc<Mutex<Nonce>>,
-    /// The number of seconds in the future when the anchor transactions should expiry.  
-    pub transaction_expiry_secs: u32,
+    /// Submitter for transactions
+    pub txn_submitter: TransactionSubmitter
 }
 
 /// Extractor with build in error handling. Like [axum::Json](Json) but will use [`RejectionError`] for rejection errors
