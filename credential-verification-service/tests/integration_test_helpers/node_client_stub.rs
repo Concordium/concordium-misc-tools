@@ -1,7 +1,4 @@
 use crate::integration_test_helpers::fixtures;
-use std::collections::HashMap;
-
-use assert_matches::assert_matches;
 use chrono::{DateTime, Utc};
 use concordium_rust_sdk::base::contracts_common::AccountAddress;
 use concordium_rust_sdk::base::hashes::{BlockHash, TransactionHash};
@@ -14,6 +11,7 @@ use concordium_rust_sdk::types::{CredentialRegistrationID, Nonce, TransactionSta
 use concordium_rust_sdk::v2::{BlockIdentifier, QueryError, RPCError};
 use credential_verification_service::node_client::{AccountCredentials, NodeClient};
 use parking_lot::Mutex;
+use std::collections::HashMap;
 use std::sync::Arc;
 use tonic::Status;
 
