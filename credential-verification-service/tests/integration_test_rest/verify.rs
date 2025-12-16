@@ -29,13 +29,10 @@ async fn test_verify_account_based() {
 
     handle.node_client_stub().stub_account_credentials(
         account_cred.cred_id,
-        (
-            fixtures::chain::account_credentials(
-                &account_cred.cred_id,
-                verification_material.issuer,
-                verification_material.attribute_commitments.clone(),
-            ),
-            fixtures::chain::account_address(1),
+        fixtures::chain::account_credentials(
+            &account_cred.cred_id,
+            verification_material.issuer,
+            verification_material.attribute_commitments.clone(),
         ),
     );
 

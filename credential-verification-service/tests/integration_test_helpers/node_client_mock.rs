@@ -49,7 +49,7 @@ impl NodeClientMock {
     pub fn stub_account_credentials(
         &self,
         cred_id: CredentialRegistrationID,
-        credentials: (AccountCredentials, AccountAddress),
+        credentials: AccountCredentials,
     ) {
         let cred_id_bytes = common::to_bytes(&cred_id);
         self.0
@@ -76,7 +76,7 @@ pub struct NodeClientMockInner {
     genesis_block_hash: BlockHash,
     block_slot_time: DateTime<Utc>,
     block_item_statuses: HashMap<TransactionHash, TransactionStatus>,
-    account_credentials: HashMap<Vec<u8>, (AccountCredentials, AccountAddress)>,
+    account_credentials: HashMap<Vec<u8>, AccountCredentials>,
     send_block_items: HashMap<TransactionHash, BlockItem<EncodedPayload>>,
 }
 
@@ -153,7 +153,7 @@ impl NodeClient for NodeClientMock {
         &mut self,
         cred_id: CredentialRegistrationID,
         _bi: BlockIdentifier,
-    ) -> QueryResult<(AccountCredentials, AccountAddress)> {
+    ) -> QueryResult<AccountCredentials> {
         // CredentialRegistrationID does not implement Hash, hence we convert to bytes
         let cred_id_bytes = common::to_bytes(&cred_id);
         self.0

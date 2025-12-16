@@ -7,8 +7,11 @@ use crate::{
     api_types::{VerificationResult, VerifyPresentationRequest, VerifyPresentationResponse},
     types::{ServerError, Service},
 };
-use anyhow::Context;
+use anyhow::{Context, anyhow};
 use axum::{Json, extract::State};
+use concordium_rust_sdk::base::web3id::v1::anchor::{
+    self, PresentationVerificationResult, VerificationAuditRecord, VerificationContext,
+};
 use concordium_rust_sdk::base::web3id::v1::anchor::{
     CredentialValidityType, VerifiablePresentationV1, VerificationMaterial,
     VerificationMaterialWithValidity, VerificationRequest, VerificationRequestAnchor,
@@ -21,14 +24,10 @@ use concordium_rust_sdk::base::web3id::v1::{
 use concordium_rust_sdk::common::cbor;
 use concordium_rust_sdk::id::types;
 use concordium_rust_sdk::id::types::{AccountCredentialWithoutProofs, ArInfos};
-use concordium_rust_sdk::types::{AccountTransactionEffects, BlockItemSummaryDetails};
-use concordium_rust_sdk::v2::BlockIdentifier;
-use concordium_rust_sdk::{
-    base::web3id::v1::anchor::{
-        self, PresentationVerificationResult, VerificationAuditRecord, VerificationContext,
-    },
-    web3id::v1::VerifyError,
+use concordium_rust_sdk::types::{
+    AccountTransactionDetails, AccountTransactionEffects, BlockItemSummaryDetails,
 };
+use concordium_rust_sdk::v2::{BlockIdentifier, Upward};
 use futures_util::future;
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -65,14 +64,12 @@ pub async fn verify_presentation(
     let anchor_transaction_hash = if presentation_verification_result.is_success() {
         let audit_record_anchor =
             verification_audit_record.to_anchor(verify_presentation_request.public_info);
-        let anchor_data = util::anchor_to_registered_data(&audit_record_anchor)
-            .context("create audit record anchor registration data")?;
+        let anchor_data = util::anchor_to_registered_data(&audit_record_anchor)?;
 
         let txn_hash = state
             .transaction_submitter
             .submit_register_data_txn(anchor_data)
-            .await
-            .context("submit audit anchor register data transaction")?;
+            .await?;
 
         Some(txn_hash)
     } else {
@@ -114,17 +111,14 @@ async fn verify_presentation_with_request_anchor(
         .context("get block slot time")?;
 
     let request_anchor =
-        lookup_request_anchor(client, &verify_presentation_request.verification_request)
-            .await
-            .context("lookup request anchor")?;
+        lookup_request_anchor(client, &verify_presentation_request.verification_request).await?;
 
     let verification_material = lookup_verification_materials_and_validity(
         client,
         block_identifier,
         &verify_presentation_request.presentation,
     )
-    .await
-    .context("lookup verification material")?;
+    .await?;
 
     let verification_context = VerificationContext {
         network: state.network,
@@ -147,32 +141,46 @@ async fn verify_presentation_with_request_anchor(
 async fn lookup_request_anchor(
     client: &mut dyn NodeClient,
     verification_request: &VerificationRequest,
-) -> Result<VerificationRequestAnchorAndBlockHash, VerifyError> {
+) -> Result<VerificationRequestAnchorAndBlockHash, ServerError> {
     // Fetch the transaction
     let item_status = client
         .get_block_item_status(&verification_request.anchor_transaction_hash)
-        .await?;
+        .await
+        .map_err(|err| {
+            if err.is_not_found() {
+                ServerError::RequestAnchorTransactionNotFound(
+                    verification_request.anchor_transaction_hash,
+                )
+            } else {
+                anyhow!(err)
+                    .context("get anchor transaction block item status")
+                    .into()
+            }
+        })?;
 
-    let (block_hash, summary) = item_status
-        .is_finalized()
-        .ok_or(VerifyError::RequestAnchorNotFinalized)?;
-
-    // Extract account transaction
-    let BlockItemSummaryDetails::AccountTransaction(anchor_tx) =
-        summary.details.as_ref().known_or_err()?
-    else {
-        return Err(VerifyError::InvalidRequestAnchor);
-    };
+    let (block_hash, summary) =
+        item_status
+            .is_finalized()
+            .ok_or(ServerError::RequestAnchorTransactionNotFinalized(
+                verification_request.anchor_transaction_hash,
+            ))?;
 
     // Extract data registered payload
-    let AccountTransactionEffects::DataRegistered { data } =
-        anchor_tx.effects.as_ref().known_or_err()?
+    let Upward::Known(BlockItemSummaryDetails::AccountTransaction(AccountTransactionDetails {
+        effects: Upward::Known(AccountTransactionEffects::DataRegistered { data }),
+        ..
+    })) = &summary.details
     else {
-        return Err(VerifyError::InvalidRequestAnchor);
+        return Err(ServerError::RequestAnchorTransactionNotRegisterData(
+            verification_request.anchor_transaction_hash,
+        ));
     };
 
     // Decode anchor hash
-    let verification_request_anchor: VerificationRequestAnchor = cbor::cbor_decode(data.as_ref())?;
+    let verification_request_anchor: VerificationRequestAnchor = cbor::cbor_decode(data.as_ref())
+        .map_err(|err| {
+        ServerError::RequestAnchorDecode(verification_request.anchor_transaction_hash, err)
+    })?;
 
     Ok(VerificationRequestAnchorAndBlockHash {
         verification_request_anchor,
@@ -184,7 +192,7 @@ async fn lookup_verification_materials_and_validity(
     client: &mut dyn NodeClient,
     block_identifier: BlockIdentifier,
     presentation: &VerifiablePresentationV1,
-) -> Result<Vec<VerificationMaterialWithValidity>, VerifyError> {
+) -> Result<Vec<VerificationMaterialWithValidity>, ServerError> {
     let verification_material =
         future::try_join_all(presentation.metadata().map(|cred_metadata| {
             let mut client = client.box_clone();
@@ -206,12 +214,19 @@ async fn lookup_verification_material_and_validity(
     client: &mut dyn NodeClient,
     block_identifier: BlockIdentifier,
     cred_metadata: &CredentialMetadataV1,
-) -> Result<VerificationMaterialWithValidity, VerifyError> {
+) -> Result<VerificationMaterialWithValidity, ServerError> {
     Ok(match &cred_metadata.cred_metadata {
         CredentialMetadataTypeV1::Account(metadata) => {
-            let (account_credentials, account_address) = client
+            let account_credentials = client
                 .get_account_credentials(metadata.cred_id, block_identifier)
-                .await?;
+                .await
+                .map_err(|err| {
+                    if err.is_not_found() {
+                        ServerError::AccountCredentialNotFound(Box::new(metadata.cred_id))
+                    } else {
+                        anyhow!(err).context("get account credentials").into()
+                    }
+                })?;
 
             let Some(account_cred) = account_credentials.values().find_map(|cred| {
                 cred.value
@@ -219,17 +234,16 @@ async fn lookup_verification_material_and_validity(
                     .known()
                     .and_then(|c| (c.cred_id() == metadata.cred_id.as_ref()).then_some(c))
             }) else {
-                return Err(VerifyError::CredentialNotPresent {
-                    cred_id: metadata.cred_id,
-                    account: account_address,
-                });
+                return Err(ServerError::AccountCredentialNotFound(Box::new(
+                    metadata.cred_id,
+                )));
             };
 
             match account_cred {
                 AccountCredentialWithoutProofs::Initial { .. } => {
-                    return Err(VerifyError::InitialCredential {
-                        cred_id: metadata.cred_id,
-                    });
+                    return Err(ServerError::AccountCredentialNotFound(Box::new(
+                        metadata.cred_id,
+                    )));
                 }
                 AccountCredentialWithoutProofs::Normal { cdv, commitments } => {
                     let credential_validity = types::CredentialValidity {
@@ -252,14 +266,16 @@ async fn lookup_verification_material_and_validity(
         CredentialMetadataTypeV1::Identity(metadata) => {
             let ip_info = client
                 .get_identity_providers(block_identifier)
-                .await?
+                .await
+                .context("get identity providers")?
                 .into_iter()
                 .find(|ip| ip.ip_identity == metadata.issuer)
-                .ok_or(VerifyError::UnknownIdentityProvider(metadata.issuer))?;
+                .ok_or(ServerError::IdentityProviderNotFound(metadata.issuer))?;
 
             let ars_infos: BTreeMap<_, _> = client
                 .get_anonymity_revokers(block_identifier)
-                .await?
+                .await
+                .context("get anonymity revokers")?
                 .into_iter()
                 .map(|ar_info| (ar_info.ar_identity, ar_info))
                 .collect();
