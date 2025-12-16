@@ -44,7 +44,7 @@ impl TransactionSubmitter {
         };
 
         info!(
-            "Transaction submitter configured with account {} and current account nonce: {}.",
+            "Transaction submitter initialized with account {} and current account nonce: {}.",
             account.account_keys.address, nonce
         );
 
@@ -61,8 +61,9 @@ impl TransactionSubmitter {
         register_data: RegisteredData,
     ) -> Result<TransactionHash, ServerError> {
         // Lock local view on account sequence number. This is necessary
-        // since it is possible that API requests come in parallel. The nonce is
-        // increased by 1 and its lock is released after the transaction is submitted to
+        // since requests to submit transaction are processed concurrently, but
+        // "using" a sequence number and submitting the transaction must be done sequentially.
+        // The nonce is increased by 1 and its lock is released after the transaction is submitted to
         // the blockchain.
         let mut account_guard = time::timeout(
             self.acquire_account_sequence_lock_timeout,

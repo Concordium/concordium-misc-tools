@@ -15,6 +15,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tonic::Status;
 
+/// Return stub implementation of the node interface
 pub fn node_client(global_context: GlobalContext<ArCurve>) -> NodeClientStub {
     let inner = NodeClientStubInner {
         ars: fixtures::credentials::ars(&global_context)
@@ -36,6 +37,7 @@ pub fn node_client(global_context: GlobalContext<ArCurve>) -> NodeClientStub {
     NodeClientStub(Arc::new(Mutex::new(inner)))
 }
 
+/// Stub implementation of the node interface
 #[derive(Debug, Clone)]
 pub struct NodeClientStub(Arc<Mutex<NodeClientStubInner>>);
 

@@ -73,6 +73,9 @@ impl ServerHandle {
 
 static START_SERVER_ONCE: OnceLock<ServerHandle> = OnceLock::new();
 
+/// Start verifier service to be used for integration tests. The returned handle contains:
+/// * a REST client to interact with the server
+/// * a node interface stub to "mock" interactions with the node
 pub fn start_server() -> ServerHandle {
     Clone::clone(START_SERVER_ONCE.get_or_init(start_server_impl))
 }
