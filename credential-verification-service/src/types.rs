@@ -43,7 +43,7 @@ pub enum ServerError {
 /// See <https://docs.rs/axum/latest/axum/extract/index.html#customizing-extractor-responses>
 #[derive(Debug, thiserror::Error)]
 pub enum RejectionError {
-    #[error("invalid json in request")]
+    #[error("invalid json in request: {0}")]
     JsonRejection(#[from] JsonRejection),
 }
 
