@@ -17,7 +17,7 @@ pub struct ServiceConfigs {
     #[arg(
         long = "grpc-node-request-timeout",
         help = "The request timeout to the Concordium node in milliseconds",
-        default_value = "2000",
+        default_value = "1000",
         env = "CREDENTIAL_VERIFICATION_GRPC_NODE_REQUEST_TIMEOUT"
     )]
     pub grpc_node_request_timeout: u64,
