@@ -1,5 +1,6 @@
 use concordium_rust_sdk::base::contracts_common::AccountAddress;
 use concordium_rust_sdk::base::curve_arithmetic::Curve;
+use concordium_rust_sdk::base::hashes;
 use concordium_rust_sdk::base::hashes::TransactionHash;
 use concordium_rust_sdk::base::pedersen_commitment::Commitment;
 use concordium_rust_sdk::common::Versioned;
@@ -33,25 +34,37 @@ pub fn transaction_status_finalized(
     txn_hash: TransactionHash,
     data: RegisteredData,
 ) -> TransactionStatus {
-    TransactionStatus::Finalized(
-        [(
-            GENESIS_BLOCK_HASH.into(),
-            BlockItemSummary {
-                index: TransactionIndex { index: 1 },
-                energy_cost: 10.into(),
-                hash: txn_hash,
-                details: Upward::Known(BlockItemSummaryDetails::AccountTransaction(
-                    AccountTransactionDetails {
-                        cost: "10".parse().unwrap(),
-                        sender: account_address(10),
-                        effects: Upward::Known(AccountTransactionEffects::DataRegistered { data }),
-                    },
-                )),
-            },
-        )]
-        .into_iter()
-        .collect(),
-    )
+    TransactionStatus::Finalized(transaction_status_map(txn_hash, data))
+}
+
+pub fn transaction_status_committed(
+    txn_hash: TransactionHash,
+    data: RegisteredData,
+) -> TransactionStatus {
+    TransactionStatus::Committed(transaction_status_map(txn_hash, data))
+}
+
+fn transaction_status_map(
+    txn_hash: TransactionHash,
+    data: RegisteredData,
+) -> BTreeMap<hashes::BlockHash, BlockItemSummary> {
+    [(
+        GENESIS_BLOCK_HASH.into(),
+        BlockItemSummary {
+            index: TransactionIndex { index: 1 },
+            energy_cost: 10.into(),
+            hash: txn_hash,
+            details: Upward::Known(BlockItemSummaryDetails::AccountTransaction(
+                AccountTransactionDetails {
+                    cost: "10".parse().unwrap(),
+                    sender: account_address(10),
+                    effects: Upward::Known(AccountTransactionEffects::DataRegistered { data }),
+                },
+            )),
+        },
+    )]
+    .into_iter()
+    .collect()
 }
 
 pub fn account_credentials(

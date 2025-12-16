@@ -142,10 +142,7 @@ impl NodeClient for NodeClientMock {
             .get(th)
             .map(clone_transaction_status)
             .ok_or_else(|| {
-                QueryError::RPCError(call_error(format!(
-                    "block item status not present in stub: {}",
-                    th
-                )))
+                QueryError::RPCError(RPCError::CallError(Status::not_found("not found")))
             })
     }
 
@@ -162,10 +159,7 @@ impl NodeClient for NodeClientMock {
             .get(&cred_id_bytes)
             .cloned()
             .ok_or_else(|| {
-                QueryError::RPCError(call_error(format!(
-                    "account credentials not present in stub: {}",
-                    cred_id
-                )))
+                QueryError::RPCError(RPCError::CallError(Status::not_found("not found")))
             })
     }
 

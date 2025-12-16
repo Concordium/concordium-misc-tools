@@ -8,6 +8,7 @@ pub fn anchor_to_registered_data(
     anchor: &impl CborSerialize,
 ) -> Result<RegisteredData, ServerError> {
     let cbor = cbor::cbor_encode(anchor).context("cbor encode anchor")?;
-    let register_data = RegisteredData::try_from(cbor).map_err(ServerError::PublicInfoTooBig)?;
+    let register_data =
+        RegisteredData::try_from(cbor).map_err(ServerError::AnchorPublicInfoTooBig)?;
     Ok(register_data)
 }

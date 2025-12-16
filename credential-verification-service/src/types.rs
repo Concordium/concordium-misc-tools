@@ -44,14 +44,14 @@ pub enum ServerError {
     RequestAnchorTransactionNotFinalized(TransactionHash),
     #[error("request anchor transaction {0} not a register data transaction")]
     RequestAnchorTransactionNotRegisterData(TransactionHash),
-    #[error("registered data in request anchor transaction {0} is not a valid anchor: {1}")]
+    #[error("error decoding registered data in request anchor transaction {0}: {1}")]
     RequestAnchorDecode(TransactionHash, CborSerializationError),
     #[error("identity provider {0} not found")]
     IdentityProviderNotFound(IpIdentity),
     #[error("account credential {0} not found")]
     AccountCredentialNotFound(Box<CredentialRegistrationID>),
     #[error("anchor public info too big: {0}")]
-    PublicInfoTooBig(TooLargeError),
+    AnchorPublicInfoTooBig(TooLargeError),
 }
 
 /// Error for handling rejections of invalid requests.
@@ -78,7 +78,7 @@ impl IntoResponse for ServerError {
             | ServerError::RequestAnchorDecode(_, _)
             | ServerError::IdentityProviderNotFound(_)
             | ServerError::AccountCredentialNotFound(_)
-            | ServerError::PublicInfoTooBig(_) => {
+            | ServerError::AnchorPublicInfoTooBig(_) => {
                 (StatusCode::UNPROCESSABLE_ENTITY, self.to_string()).into_response()
             }
         }
