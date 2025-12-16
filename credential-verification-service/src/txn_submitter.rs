@@ -188,6 +188,7 @@ mod test {
     use std::time::Duration;
     use tonic::Status;
 
+    /// Register data that makes mock fail when calling send_block_item
     const SUBMIT_FAIL_DATA: [u8; 10] = [0x0fu8; 10];
 
     async fn submitter(node_mock: NodeClientMock) -> TransactionSubmitter {
