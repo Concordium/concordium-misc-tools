@@ -15,9 +15,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tonic::Status;
 
-/// Return stub implementation of the node interface
-pub fn node_client(global_context: GlobalContext<ArCurve>) -> NodeClientStub {
-    let inner = NodeClientStubInner {
+/// Return mock implementation of the node interface
+pub fn node_client(global_context: GlobalContext<ArCurve>) -> NodeClientMock {
+    let inner = NodeClientMockInner {
         ars: fixtures::credentials::ars(&global_context)
             .0
             .into_values()
@@ -34,14 +34,14 @@ pub fn node_client(global_context: GlobalContext<ArCurve>) -> NodeClientStub {
         send_block_items: Default::default(),
     };
 
-    NodeClientStub(Arc::new(Mutex::new(inner)))
+    NodeClientMock(Arc::new(Mutex::new(inner)))
 }
 
-/// Stub implementation of the node interface
+/// Mock implementation of the node interface
 #[derive(Debug, Clone)]
-pub struct NodeClientStub(Arc<Mutex<NodeClientStubInner>>);
+pub struct NodeClientMock(Arc<Mutex<NodeClientMockInner>>);
 
-impl NodeClientStub {
+impl NodeClientMock {
     pub fn stub_block_item_status(&self, txn_hash: TransactionHash, summary: TransactionStatus) {
         self.0.lock().block_item_statuses.insert(txn_hash, summary);
     }
@@ -68,7 +68,7 @@ impl NodeClientStub {
 }
 
 #[derive(Debug)]
-pub struct NodeClientStubInner {
+pub struct NodeClientMockInner {
     global_context: GlobalContext<ArCurve>,
     ips: Vec<IpInfo<IpPairing>>,
     ars: Vec<ArInfo<ArCurve>>,
@@ -90,7 +90,7 @@ fn clone_transaction_status(txn_status: &TransactionStatus) -> TransactionStatus
 }
 
 #[async_trait::async_trait]
-impl NodeClient for NodeClientStub {
+impl NodeClient for NodeClientMock {
     async fn get_next_account_sequence_number(
         &mut self,
         _address: &AccountAddress,
@@ -106,7 +106,7 @@ impl NodeClient for NodeClientStub {
         &mut self,
         bi: &BlockItem<EncodedPayload>,
     ) -> RPCResult<TransactionHash> {
-        let txn_hash = fixtures::chain::generate_txn_hash();
+        let txn_hash = bi.hash();
         let mut inner = self.0.lock();
         if let BlockItem::AccountTransaction(txn) = bi {
             if txn.header.nonce != inner.account_sequence_number {

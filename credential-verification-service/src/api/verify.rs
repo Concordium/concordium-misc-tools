@@ -1,5 +1,6 @@
 //! Handler for the verification endpoints.
 
+use crate::api::util;
 use crate::node_client::NodeClient;
 use crate::types::AppJson;
 use crate::{
@@ -18,12 +19,9 @@ use concordium_rust_sdk::base::web3id::v1::{
     IdentityCredentialVerificationMaterial,
 };
 use concordium_rust_sdk::common::cbor;
-
+use concordium_rust_sdk::id::types;
 use concordium_rust_sdk::id::types::{AccountCredentialWithoutProofs, ArInfos};
 use concordium_rust_sdk::types::{AccountTransactionEffects, BlockItemSummaryDetails};
-
-use crate::api::util;
-use concordium_rust_sdk::id::types;
 use concordium_rust_sdk::v2::BlockIdentifier;
 use concordium_rust_sdk::{
     base::web3id::v1::anchor::{

@@ -98,7 +98,7 @@ pub fn verification_request(anchor_transaction_hash: TransactionHash) -> Verific
 
     VerificationRequest {
         context: UnfilledContextInformationBuilder::new()
-            .given(LabeledContextProperty::Nonce(Nonce([1u8; 32])))
+            .given(LabeledContextProperty::Nonce(Nonce(rand::random())))
             .given(LabeledContextProperty::ConnectionId("conid1".to_string()))
             .given(LabeledContextProperty::ResourceId("resid1".to_string()))
             .given(LabeledContextProperty::ContextString(
