@@ -4,7 +4,7 @@ use concordium_rust_sdk::{
         hashes::TransactionHash,
         web3id::v1::{
             PresentationV1,
-            anchor::{self, RequestedSubjectClaims, VerificationAuditRecord, VerificationRequest},
+            anchor::{RequestedSubjectClaims, VerificationAuditRecord, VerificationRequest},
         },
     },
     id::constants::{ArCurve, IpPairing},
@@ -17,18 +17,13 @@ use std::collections::HashMap;
 #[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateVerificationRequest {
-    /// The nonce included in the verification request context.  
-    /// This nonce must be freshly and randomly generated for each request so that the
-    /// verification request cannot be inferred from the on-chain request anchor hash
-    /// by attempting to guess its preimage.  
-    /// In short: to keep the anchor hash random, this nonce must be truly random.
-    pub nonce: anchor::Nonce,
     /// An identifier for some connection (e.g. wallet-connect topic) included in the verification request context.
     pub connection_id: String,
     /// A resource id to track the connected website (e.g. website URL or TLS fingerprint).
     pub resource_id: String,
     /// A general purpose string value included in the verification request context.
-    pub context_string: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context_string: Option<String>,
     /// The subject claims being requested to be proven.
     pub requested_claims: Vec<RequestedSubjectClaims>,
     /// Additional public info which will be included in the anchor transaction (VRA)

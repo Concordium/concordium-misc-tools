@@ -4,10 +4,9 @@
 
 ```json
 {
-  "nonce": "1234....",
   "connectionId": "conn_8291yuw",
   "resourceId": "some string for resource",
-  "contextString": "context string here",
+  "contextString": "optional context string here",
   "publicInfo": {
     "key1": "6676616C756531",
     "key2": "6676616C756532"
