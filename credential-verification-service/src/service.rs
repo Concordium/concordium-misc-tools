@@ -1,5 +1,6 @@
+use crate::node_client::{NodeClient, NodeClientImpl};
 use crate::{api, configs::ServiceConfigs, types::Service};
-use anyhow::{Context, anyhow};
+use anyhow::{Context, bail};
 use concordium_rust_sdk::{
     constants::{MAINNET_GENESIS_BLOCK_HASH, TESTNET_GENESIS_BLOCK_HASH},
     types::WalletAccount,
@@ -15,17 +16,9 @@ use tonic::transport::ClientTlsConfig;
 use tracing::{error, info};
 
 pub async fn run(configs: ServiceConfigs) -> anyhow::Result<()> {
-    let service_info = metrics::info::Info::new([("version", clap::crate_version!().to_string())]);
-    let mut metrics_registry = Registry::default();
-    metrics_registry.register("service", "Information about the software", service_info);
-    metrics_registry.register(
-        "service_startup_timestamp_millis",
-        "Timestamp of starting up the API service (Unix time in milliseconds)",
-        metrics::gauge::ConstGauge::new(chrono::Utc::now().timestamp_millis()),
-    );
-
     let endpoint = configs
         .node_endpoint
+        .clone()
         .tls_config(ClientTlsConfig::new())
         .context("Unable to construct TLS configuration for Concordium node.")?;
 
@@ -36,9 +29,26 @@ pub async fn run(configs: ServiceConfigs) -> anyhow::Result<()> {
         .timeout(node_timeout)
         .keep_alive_while_idle(true);
 
-    let mut node_client = v2::Client::new(endpoint)
+    let node_client = v2::Client::new(endpoint)
         .await
         .context("Unable to establish connection to the node.")?;
+    let node_client = NodeClientImpl::new(node_client);
+
+    run_with_dependencies(configs, node_client.boxed()).await
+}
+
+pub async fn run_with_dependencies(
+    configs: ServiceConfigs,
+    mut node_client: Box<dyn NodeClient>,
+) -> anyhow::Result<()> {
+    let service_info = metrics::info::Info::new([("version", clap::crate_version!().to_string())]);
+    let mut metrics_registry = Registry::default();
+    metrics_registry.register("service", "Information about the software", service_info);
+    metrics_registry.register(
+        "service_startup_timestamp_millis",
+        "Timestamp of starting up the API service (Unix time in milliseconds)",
+        metrics::gauge::ConstGauge::new(chrono::Utc::now().timestamp_millis()),
+    );
 
     // Load account keys and sender address from a file
     let keys: WalletAccount =
@@ -46,34 +56,29 @@ pub async fn run(configs: ServiceConfigs) -> anyhow::Result<()> {
 
     let account_keys = Arc::new(keys);
 
-    let nonce_response = node_client
+    let nonce = node_client
         .get_next_account_sequence_number(&account_keys.address)
         .await
-        .context("Unable to query the next account sequence number.")?;
+        .context("get account sequence number")?;
 
-    let nonce = Arc::new(Mutex::new(nonce_response.nonce));
-
-    let consensus_info = node_client
-        .get_consensus_info()
+    let genesis_hash = node_client
+        .get_genesis_block_hash()
         .await
-        .context("Unable to query the consesnsus info from the chain")?;
-    let genesis_hash = consensus_info.genesis_block.bytes;
+        .context("get genesis block hash")?;
 
-    let network = match genesis_hash {
-        hash if hash == TESTNET_GENESIS_BLOCK_HASH => Network::Testnet,
-        hash if hash == MAINNET_GENESIS_BLOCK_HASH => Network::Mainnet,
-        _ => {
-            return Err(anyhow!(
-                "Only TESTNET/MAINNET supported. Unknown genesis hash: {:?}",
-                genesis_hash
-            ));
-        }
+    let network = match genesis_hash.bytes {
+        TESTNET_GENESIS_BLOCK_HASH => Network::Testnet,
+        MAINNET_GENESIS_BLOCK_HASH => Network::Mainnet,
+        _ => bail!(
+            "Only TESTNET/MAINNET supported. Unknown genesis hash: {:?}",
+            genesis_hash
+        ),
     };
 
     let service = Arc::new(Service {
         node_client,
         account_keys,
-        nonce,
+        nonce: Arc::new(Mutex::new(nonce)),
         transaction_expiry_secs: configs.transaction_expiry_secs,
         network,
     });
@@ -103,7 +108,7 @@ pub async fn run(configs: ServiceConfigs) -> anyhow::Result<()> {
         let stop_signal = cancel_token.child_token();
         info!(
             "API server is running at {:?} with account {} and current account nonce: {}.",
-            configs.api_address, service.account_keys.address, nonce_response.nonce
+            configs.api_address, service.account_keys.address, nonce
         );
 
         axum::serve(listener, api::router(service, configs.request_timeout))

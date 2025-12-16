@@ -7,6 +7,7 @@ use prometheus_client::registry::Registry;
 use std::sync::Arc;
 
 mod monitoring;
+mod util;
 mod verification_request;
 mod verifier;
 
