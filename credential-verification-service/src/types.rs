@@ -79,6 +79,7 @@ impl IntoResponse for ServerError {
             | ServerError::IdentityProviderNotFound(_)
             | ServerError::AccountCredentialNotFound(_)
             | ServerError::AnchorPublicInfoTooBig(_) => {
+                tracing::warn!("unprocessable entity: {self}");
                 (StatusCode::UNPROCESSABLE_ENTITY, self.to_string()).into_response()
             }
         }
