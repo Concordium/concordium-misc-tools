@@ -1,6 +1,7 @@
 //! Handler for the verification endpoints.
 
 use crate::api::util;
+use crate::api_types::VerificationFailure;
 use crate::node_client::NodeClient;
 use crate::types::AppJson;
 use crate::{
@@ -78,7 +79,12 @@ pub async fn verify_presentation(
 
     let result = match presentation_verification_result {
         PresentationVerificationResult::Verified => VerificationResult::Verified,
-        PresentationVerificationResult::Failed(e) => VerificationResult::Failed(e.to_string()),
+        PresentationVerificationResult::Failed(code) => {
+            VerificationResult::Failed(VerificationFailure {
+                code,
+                message: code.to_string(),
+            })
+        }
     };
 
     let verify_presentation_response = VerifyPresentationResponse {

@@ -1,6 +1,7 @@
 use crate::integration_test_helpers::{fixtures, server};
 use assert_matches::assert_matches;
 use concordium_rust_sdk::base::web3id::v1::CredentialVerificationMaterial;
+use concordium_rust_sdk::base::web3id::v1::anchor::PresentationVerifyFailure;
 use concordium_rust_sdk::common::cbor;
 use credential_verification_service::api_types::{VerificationResult, VerifyPresentationResponse};
 use reqwest::StatusCode;
@@ -154,8 +155,9 @@ async fn test_verify_fail() {
 
     assert_eq!(resp.status(), StatusCode::OK);
     let verify_response: VerifyPresentationResponse = resp.json().await.unwrap();
-    assert_matches!(verify_response.result, VerificationResult::Failed(err) => {
-        assert_eq!(err, "verification request anchor block hash not set in context");
+    assert_matches!(verify_response.result, VerificationResult::Failed(failure) => {
+        assert_eq!(failure.code, PresentationVerifyFailure::NoVraBlockHash);
+        assert_eq!(failure.message, "verification request anchor block hash not set in context");
     });
     assert!(verify_response.anchor_transaction_hash.is_none());
     assert_eq!(
