@@ -182,7 +182,7 @@ async fn lookup_request_anchor(
         ));
     };
 
-    // Decode anchor hash
+    // Decode anchor
     let verification_request_anchor: VerificationRequestAnchor = cbor::cbor_decode(data.as_ref())
         .map_err(|err| {
         ServerError::RequestAnchorDecode(verification_request.anchor_transaction_hash, err)
