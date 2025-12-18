@@ -3,8 +3,10 @@ use axum::{
     Router,
     routing::{get, post},
 };
-use prometheus_client::registry::Registry;
+use prometheus_client::registry::{Metric, Registry};
 use std::sync::Arc;
+
+use crate::rest::middleware::metrics::MetricsLayer;
 
 mod create_verification_request;
 mod monitoring;
@@ -13,6 +15,8 @@ mod verify;
 
 /// Router exposing the service's endpoints
 pub fn router(service: Arc<Service>, request_timeout: u64) -> Router {
+    let mut registry = Registry::default();
+
     Router::new()
         .route(
             "/verifiable-presentations/verify",
@@ -28,6 +32,7 @@ pub fn router(service: Arc<Service>, request_timeout: u64) -> Router {
         ))
         .layer(tower_http::limit::RequestBodyLimitLayer::new(1_000_000)) // at most 1000kB of data.
         .layer(tower_http::compression::CompressionLayer::new())
+        .layer(MetricsLayer::new(&mut registry))
 }
 
 /// Router exposing the Prometheus metrics and health endpoint.
