@@ -120,10 +120,11 @@ impl AccountCredentialsFixture {
 
 pub fn account_credentials_fixture(
     global_context: &GlobalContext<ArCurve>,
+    index: u64,
 ) -> AccountCredentialsFixture {
     let attrs = super::statements_and_attributes().1;
 
-    let cred_id_exp = ArCurve::generate_scalar(&mut seed0());
+    let cred_id_exp = ArCurve::generate_scalar(&mut seed(index));
     let cred_id = CredentialRegistrationID::from_exponent(global_context, cred_id_exp);
 
     let mut attr_rand = BTreeMap::new();

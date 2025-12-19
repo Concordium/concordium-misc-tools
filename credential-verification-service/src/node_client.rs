@@ -46,7 +46,7 @@ pub trait NodeClient: Send + Sync + 'static + Debug {
         &mut self,
         cred_id: CredentialRegistrationID,
         bi: BlockIdentifier,
-    ) -> QueryResult<(AccountCredentials, AccountAddress)>;
+    ) -> QueryResult<AccountCredentials>;
 
     async fn get_identity_providers(
         &mut self,
@@ -145,16 +145,13 @@ impl NodeClient for NodeClientImpl {
         &mut self,
         cred_id: CredentialRegistrationID,
         bi: BlockIdentifier,
-    ) -> QueryResult<(AccountCredentials, AccountAddress)> {
+    ) -> QueryResult<AccountCredentials> {
         let account_info = self
             .client
             .get_account_info(&AccountIdentifier::CredId(cred_id), bi)
             .await?;
 
-        Ok((
-            account_info.response.account_credentials,
-            account_info.response.account_address,
-        ))
+        Ok(account_info.response.account_credentials)
     }
 
     async fn get_identity_providers(

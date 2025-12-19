@@ -1,17 +1,14 @@
-use concordium_rust_sdk::endpoints::{QueryError, RPCError};
+use crate::types::ServerError;
+use anyhow::Context;
+use concordium_rust_sdk::common::cbor;
+use concordium_rust_sdk::common::cbor::CborSerialize;
+use concordium_rust_sdk::types::RegisteredData;
 
-pub trait QueryErrorExt {
-    /// If the query error is account sequence mismatch error
-    fn is_account_sequence_number_error(&self) -> bool;
-}
-
-impl QueryErrorExt for QueryError {
-    fn is_account_sequence_number_error(&self) -> bool {
-        match self {
-            QueryError::RPCError(RPCError::CallError(err)) => {
-                err.message() == "Duplicate nonce" || err.message() == "Nonce too large"
-            }
-            _ => false,
-        }
-    }
+pub fn anchor_to_registered_data(
+    anchor: &impl CborSerialize,
+) -> Result<RegisteredData, ServerError> {
+    let cbor = cbor::cbor_encode(anchor).context("cbor encode anchor")?;
+    let register_data =
+        RegisteredData::try_from(cbor).map_err(ServerError::AnchorPublicInfoTooBig)?;
+    Ok(register_data)
 }

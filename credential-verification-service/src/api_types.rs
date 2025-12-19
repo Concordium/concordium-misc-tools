@@ -1,3 +1,4 @@
+use concordium_rust_sdk::base::web3id::v1::anchor::PresentationVerifyFailure;
 use concordium_rust_sdk::common::cbor;
 use concordium_rust_sdk::{
     base::{
@@ -80,7 +81,17 @@ pub enum VerificationResult {
     /// Verified
     Verified,
     /// Failed with reason for the verification failing
-    Failed(String),
+    Failed(VerificationFailure),
+}
+
+/// Representation of why a presentation did not verify
+#[derive(serde::Deserialize, serde::Serialize, Debug, Clone, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct VerificationFailure {
+    /// Reason presentation did not verify
+    pub code: PresentationVerifyFailure,
+    /// User displayable message of why presentation did not verify
+    pub message: String,
 }
 
 mod map_hex_cbor_values_option {

@@ -15,8 +15,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tonic::Status;
 
-pub fn node_client(global_context: GlobalContext<ArCurve>) -> NodeClientStub {
-    let inner = NodeClientStubInner {
+/// Return mock implementation of the node interface
+pub fn node_client(global_context: GlobalContext<ArCurve>) -> NodeClientMock {
+    let inner = NodeClientMockInner {
         ars: fixtures::credentials::ars(&global_context)
             .0
             .into_values()
@@ -33,13 +34,14 @@ pub fn node_client(global_context: GlobalContext<ArCurve>) -> NodeClientStub {
         send_block_items: Default::default(),
     };
 
-    NodeClientStub(Arc::new(Mutex::new(inner)))
+    NodeClientMock(Arc::new(Mutex::new(inner)))
 }
 
+/// Mock implementation of the node interface
 #[derive(Debug, Clone)]
-pub struct NodeClientStub(Arc<Mutex<NodeClientStubInner>>);
+pub struct NodeClientMock(Arc<Mutex<NodeClientMockInner>>);
 
-impl NodeClientStub {
+impl NodeClientMock {
     pub fn stub_block_item_status(&self, txn_hash: TransactionHash, summary: TransactionStatus) {
         self.0.lock().block_item_statuses.insert(txn_hash, summary);
     }
@@ -47,7 +49,7 @@ impl NodeClientStub {
     pub fn stub_account_credentials(
         &self,
         cred_id: CredentialRegistrationID,
-        credentials: (AccountCredentials, AccountAddress),
+        credentials: AccountCredentials,
     ) {
         let cred_id_bytes = common::to_bytes(&cred_id);
         self.0
@@ -66,7 +68,7 @@ impl NodeClientStub {
 }
 
 #[derive(Debug)]
-pub struct NodeClientStubInner {
+pub struct NodeClientMockInner {
     global_context: GlobalContext<ArCurve>,
     ips: Vec<IpInfo<IpPairing>>,
     ars: Vec<ArInfo<ArCurve>>,
@@ -74,7 +76,7 @@ pub struct NodeClientStubInner {
     genesis_block_hash: BlockHash,
     block_slot_time: DateTime<Utc>,
     block_item_statuses: HashMap<TransactionHash, TransactionStatus>,
-    account_credentials: HashMap<Vec<u8>, (AccountCredentials, AccountAddress)>,
+    account_credentials: HashMap<Vec<u8>, AccountCredentials>,
     send_block_items: HashMap<TransactionHash, BlockItem<EncodedPayload>>,
 }
 
@@ -87,8 +89,11 @@ fn clone_transaction_status(txn_status: &TransactionStatus) -> TransactionStatus
     }
 }
 
+/// Transaction hash that makes mock fail when get_block_item_status is called with this hash
+pub const GET_BLOCK_ITEM_FAIL_TXN_HASH: [u8; 32] = [0x0fu8; 32];
+
 #[async_trait::async_trait]
-impl NodeClient for NodeClientStub {
+impl NodeClient for NodeClientMock {
     async fn get_next_account_sequence_number(
         &mut self,
         _address: &AccountAddress,
@@ -104,7 +109,7 @@ impl NodeClient for NodeClientStub {
         &mut self,
         bi: &BlockItem<EncodedPayload>,
     ) -> RPCResult<TransactionHash> {
-        let txn_hash = fixtures::chain::generate_txn_hash();
+        let txn_hash = bi.hash();
         let mut inner = self.0.lock();
         if let BlockItem::AccountTransaction(txn) = bi {
             if txn.header.nonce != inner.account_sequence_number {
@@ -134,16 +139,19 @@ impl NodeClient for NodeClientStub {
         &mut self,
         th: &TransactionHash,
     ) -> QueryResult<TransactionStatus> {
+        if TransactionHash::from(GET_BLOCK_ITEM_FAIL_TXN_HASH) == *th {
+            return Err(QueryError::RPCError(RPCError::CallError(Status::internal(
+                "fail for test",
+            ))));
+        }
+
         self.0
             .lock()
             .block_item_statuses
             .get(th)
             .map(clone_transaction_status)
             .ok_or_else(|| {
-                QueryError::RPCError(call_error(format!(
-                    "block item status not present in stub: {}",
-                    th
-                )))
+                QueryError::RPCError(RPCError::CallError(Status::not_found("not found")))
             })
     }
 
@@ -151,7 +159,7 @@ impl NodeClient for NodeClientStub {
         &mut self,
         cred_id: CredentialRegistrationID,
         _bi: BlockIdentifier,
-    ) -> QueryResult<(AccountCredentials, AccountAddress)> {
+    ) -> QueryResult<AccountCredentials> {
         // CredentialRegistrationID does not implement Hash, hence we convert to bytes
         let cred_id_bytes = common::to_bytes(&cred_id);
         self.0
@@ -160,10 +168,7 @@ impl NodeClient for NodeClientStub {
             .get(&cred_id_bytes)
             .cloned()
             .ok_or_else(|| {
-                QueryError::RPCError(call_error(format!(
-                    "account credentials not present in stub: {}",
-                    cred_id
-                )))
+                QueryError::RPCError(RPCError::CallError(Status::not_found("not found")))
             })
     }
 

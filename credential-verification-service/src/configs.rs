@@ -22,6 +22,14 @@ pub struct ServiceConfigs {
     )]
     pub grpc_node_request_timeout: u64,
     #[arg(
+        long = "acquire-account-sequence-lock-timeout",
+        help = "Timeout for acquiring the local lock on the account sequence number in order to submit anchor transaction",
+        default_value = "5000",
+        env = "CREDENTIAL_VERIFICATION_ACQUIRE_ACCOUNT_SEQUENCE_LOCK_TIMEOUT"
+    )]
+    pub acquire_account_sequence_lock_timeout: u64,
+
+    #[arg(
         long,
         help = "The socket address where the service exposes its API.",
         default_value = "127.0.0.1:8000",

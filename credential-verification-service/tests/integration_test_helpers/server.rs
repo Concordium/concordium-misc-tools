@@ -1,11 +1,11 @@
 use crate::integration_test_helpers::rest_client::RestClient;
-use crate::integration_test_helpers::{fixtures, node_client_stub, rest_client};
+use crate::integration_test_helpers::{fixtures, node_client_mock, rest_client};
 
 use credential_verification_service::configs::ServiceConfigs;
 use credential_verification_service::{logging, service};
 use std::net::{SocketAddr, TcpStream};
 
-use crate::integration_test_helpers::node_client_stub::NodeClientStub;
+use crate::integration_test_helpers::node_client_mock::NodeClientMock;
 use concordium_rust_sdk::id::constants::ArCurve;
 use concordium_rust_sdk::id::types::GlobalContext;
 use credential_verification_service::node_client::NodeClient;
@@ -20,6 +20,7 @@ fn config() -> ServiceConfigs {
         node_endpoint: "http://test".parse().unwrap(),
         request_timeout: 5000,
         grpc_node_request_timeout: 1000,
+        acquire_account_sequence_lock_timeout: 1000,
         api_address: SocketAddr::new("0.0.0.0".parse().unwrap(), REST_PORT),
         monitoring_address: SocketAddr::new("0.0.0.0".parse().unwrap(), MONITORING_PORT),
         account: "tests/dummyaccount.json".into(),
@@ -33,10 +34,15 @@ const MONITORING_PORT: u16 = 19003;
 
 #[derive(Debug, Clone)]
 pub struct ServerHandle {
-    properties: Arc<ServerProperties>,
+    shared: ServerHandleShared,
     rest_client: RestClient,
     monitoring_client: RestClient,
-    node_client_stub: NodeClientStub,
+}
+
+#[derive(Debug, Clone)]
+pub struct ServerHandleShared {
+    properties: Arc<ServerProperties>,
+    node_client_stub: NodeClientMock,
     global_context: GlobalContext<ArCurve>,
 }
 
@@ -58,25 +64,41 @@ impl ServerHandle {
     }
 
     pub fn properties(&self) -> &ServerProperties {
-        &self.properties
+        &self.shared.properties
     }
 
     pub fn global_context(&self) -> &GlobalContext<ArCurve> {
-        &self.global_context
+        &self.shared.global_context
     }
 
-    pub fn node_client_stub(&self) -> &NodeClientStub {
-        &self.node_client_stub
+    pub fn node_client_stub(&self) -> &NodeClientMock {
+        &self.shared.node_client_stub
     }
 }
 
-static START_SERVER_ONCE: OnceLock<ServerHandle> = OnceLock::new();
+static START_SERVER_ONCE: OnceLock<ServerHandleShared> = OnceLock::new();
 
+/// Start verifier service to be used for integration tests. The returned handle contains:
+///
+/// * a REST client to interact with the server
+/// * a node interface stub to "mock" interactions with the node
+///
+/// Only a single service is started for all tests. Second time the function is called,
+/// a handle to the same service is returned.
 pub fn start_server() -> ServerHandle {
-    Clone::clone(START_SERVER_ONCE.get_or_init(start_server_impl))
+    let shared = Clone::clone(START_SERVER_ONCE.get_or_init(start_server_impl));
+
+    let rest_client = rest_client::create_client(shared.properties.rest_url.clone());
+    let monitoring_client = rest_client::create_client(shared.properties.monitoring_url.clone());
+
+    ServerHandle {
+        shared,
+        rest_client,
+        monitoring_client,
+    }
 }
 
-fn start_server_impl() -> ServerHandle {
+fn start_server_impl() -> ServerHandleShared {
     logging::init_logging(filter::LevelFilter::INFO).unwrap();
 
     // Create runtime that persists between tests
@@ -94,7 +116,7 @@ fn start_server_impl() -> ServerHandle {
     };
 
     let global_context = fixtures::credentials::global_context();
-    let node_client_stub = node_client_stub::node_client(global_context.clone());
+    let node_client_stub = node_client_mock::node_client(global_context.clone());
 
     // Start runtime and server in new thread
     let node_client_stub_cloned = node_client_stub.clone();
@@ -111,24 +133,19 @@ fn start_server_impl() -> ServerHandle {
         thread::sleep(Duration::from_millis(500));
     }
 
-    let rest_client = rest_client::create_client(properties.rest_url.clone());
-    let monitoring_client = rest_client::create_client(properties.monitoring_url.clone());
-
     info!(
         "verifier service started with properties:\n{:#?}",
         properties
     );
 
-    ServerHandle {
+    ServerHandleShared {
         properties: Arc::new(properties),
         node_client_stub,
         global_context,
-        rest_client,
-        monitoring_client,
     }
 }
 
-async fn run_server(config: ServiceConfigs, node_client_stub: NodeClientStub) {
+async fn run_server(config: ServiceConfigs, node_client_stub: NodeClientMock) {
     info!("starting server for test");
 
     service::run_with_dependencies(config, node_client_stub.boxed())
