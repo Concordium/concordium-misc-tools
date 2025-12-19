@@ -62,6 +62,7 @@ tokio-util = { version = "0.7", features = ["rt"] }
 toml = "0.5"
 tonic = { version = "0.12" }
 tower-http = {version = "0.6", features = ["trace", "timeout", "limit", "cors"]}
+tower = "0.5.2"
 tracing = { version = "0.1" }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 url = { version = "2.3" }

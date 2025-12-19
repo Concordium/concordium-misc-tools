@@ -37,9 +37,9 @@ You can build the serive locally as follows:
 cargo build
 ```
 
-## Run the servie from the source code
+## Run the service from the source code
 
-You can run the serive locally as follows:
+You can run the service locally as follows:
 
 ```
 cargo run -- --node-endpoint https://grpc.testnet.concordium.com:20000 --account 4bbdAUCDK2D6cUvUeprGr4FaSaHXKuYmYVjyCa4bXSCu3NUXzA.export

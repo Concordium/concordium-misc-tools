@@ -3,10 +3,8 @@ use axum::{
     Router,
     routing::{get, post},
 };
-use prometheus_client::registry::{Metric, Registry};
-use std::sync::Arc;
-
-use crate::rest::middleware::metrics::MetricsLayer;
+use prometheus_client::registry::{Registry};
+use std::sync::{Arc, Mutex};
 
 mod create_verification_request;
 mod monitoring;
@@ -15,7 +13,6 @@ mod verify;
 
 /// Router exposing the service's endpoints
 pub fn router(service: Arc<Service>, request_timeout: u64) -> Router {
-    let mut registry = Registry::default();
 
     Router::new()
         .route(
@@ -32,14 +29,14 @@ pub fn router(service: Arc<Service>, request_timeout: u64) -> Router {
         ))
         .layer(tower_http::limit::RequestBodyLimitLayer::new(1_000_000)) // at most 1000kB of data.
         .layer(tower_http::compression::CompressionLayer::new())
-        .layer(MetricsLayer::new(&mut registry))
 }
 
 /// Router exposing the Prometheus metrics and health endpoint.
-pub fn monitoring_router(metrics_registry: Registry, service: Arc<Service>) -> Router {
+pub fn monitoring_router(metrics_registry: Arc<Mutex<Registry>>, service: Arc<Service>) -> Router {
     let metric_routes = Router::new()
         .route("/", get(monitoring::metrics))
-        .with_state(Arc::new(metrics_registry));
+        .with_state(Arc::clone(&metrics_registry));
+
     let health_routes = Router::new()
         .route("/", get(monitoring::health))
         .with_state(service);
