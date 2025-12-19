@@ -1,5 +1,6 @@
 ## Build Phase
-FROM rust:1.91-slim as build
+ARG build_image=rust:1.91-slim
+FROM ${build_image} AS build
 WORKDIR /build
 COPY . .
 RUN ls
