@@ -49,7 +49,7 @@ impl NodeClientMock {
     pub fn stub_account_credentials(
         &self,
         cred_id: CredentialRegistrationID,
-        credentials: (AccountCredentials, AccountAddress),
+        credentials: AccountCredentials,
     ) {
         let cred_id_bytes = common::to_bytes(&cred_id);
         self.0
@@ -76,7 +76,7 @@ pub struct NodeClientMockInner {
     genesis_block_hash: BlockHash,
     block_slot_time: DateTime<Utc>,
     block_item_statuses: HashMap<TransactionHash, TransactionStatus>,
-    account_credentials: HashMap<Vec<u8>, (AccountCredentials, AccountAddress)>,
+    account_credentials: HashMap<Vec<u8>, AccountCredentials>,
     send_block_items: HashMap<TransactionHash, BlockItem<EncodedPayload>>,
 }
 
@@ -88,6 +88,9 @@ fn clone_transaction_status(txn_status: &TransactionStatus) -> TransactionStatus
         TransactionStatus::Committed(val) => TransactionStatus::Committed(val.clone()),
     }
 }
+
+/// Transaction hash that makes mock fail when get_block_item_status is called with this hash
+pub const GET_BLOCK_ITEM_FAIL_TXN_HASH: [u8; 32] = [0x0fu8; 32];
 
 #[async_trait::async_trait]
 impl NodeClient for NodeClientMock {
@@ -136,16 +139,19 @@ impl NodeClient for NodeClientMock {
         &mut self,
         th: &TransactionHash,
     ) -> QueryResult<TransactionStatus> {
+        if TransactionHash::from(GET_BLOCK_ITEM_FAIL_TXN_HASH) == *th {
+            return Err(QueryError::RPCError(RPCError::CallError(Status::internal(
+                "fail for test",
+            ))));
+        }
+
         self.0
             .lock()
             .block_item_statuses
             .get(th)
             .map(clone_transaction_status)
             .ok_or_else(|| {
-                QueryError::RPCError(call_error(format!(
-                    "block item status not present in stub: {}",
-                    th
-                )))
+                QueryError::RPCError(RPCError::CallError(Status::not_found("not found")))
             })
     }
 
@@ -153,7 +159,7 @@ impl NodeClient for NodeClientMock {
         &mut self,
         cred_id: CredentialRegistrationID,
         _bi: BlockIdentifier,
-    ) -> QueryResult<(AccountCredentials, AccountAddress)> {
+    ) -> QueryResult<AccountCredentials> {
         // CredentialRegistrationID does not implement Hash, hence we convert to bytes
         let cred_id_bytes = common::to_bytes(&cred_id);
         self.0
@@ -162,10 +168,7 @@ impl NodeClient for NodeClientMock {
             .get(&cred_id_bytes)
             .cloned()
             .ok_or_else(|| {
-                QueryError::RPCError(call_error(format!(
-                    "account credentials not present in stub: {}",
-                    cred_id
-                )))
+                QueryError::RPCError(RPCError::CallError(Status::not_found("not found")))
             })
     }
 

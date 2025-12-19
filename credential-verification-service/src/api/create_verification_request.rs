@@ -6,7 +6,6 @@ use crate::{
     api_types::CreateVerificationRequest,
     types::{ServerError, Service},
 };
-use anyhow::Context;
 use axum::{Json, extract::State};
 use concordium_rust_sdk::base::web3id::v1::anchor::{ContextLabel, Nonce};
 use concordium_rust_sdk::base::web3id::v1::anchor::{
@@ -42,15 +41,13 @@ pub async fn create_verification_request(
 
     // Create the request anchor
     let verification_request_anchor = verification_request_data.to_anchor(params.public_info);
-    let anchor_data = util::anchor_to_registered_data(&verification_request_anchor)
-        .context("create request anchor registration data")?;
+    let anchor_data = util::anchor_to_registered_data(&verification_request_anchor)?;
 
     // Submit the anchor
     let anchor_transaction_hash = state
         .transaction_submitter
         .submit_register_data_txn(anchor_data)
-        .await
-        .context("submit request anchor register data transaction")?;
+        .await?;
 
     let verification_request = VerificationRequest {
         context: verification_request_data.context,

@@ -1,6 +1,8 @@
 ## Unreleased
 
 - Refactored transaction submit logic
+- Changed a number of errors resulting in HTTP status code 500 to now result in status code in 4xx range
+- Changed verification failure results to include a failure code in addition to a failure message
  
 ## 0.1.0
 

@@ -34,9 +34,14 @@ const MONITORING_PORT: u16 = 19003;
 
 #[derive(Debug, Clone)]
 pub struct ServerHandle {
-    properties: Arc<ServerProperties>,
+    shared: ServerHandleShared,
     rest_client: RestClient,
     monitoring_client: RestClient,
+}
+
+#[derive(Debug, Clone)]
+pub struct ServerHandleShared {
+    properties: Arc<ServerProperties>,
     node_client_stub: NodeClientMock,
     global_context: GlobalContext<ArCurve>,
 }
@@ -59,19 +64,19 @@ impl ServerHandle {
     }
 
     pub fn properties(&self) -> &ServerProperties {
-        &self.properties
+        &self.shared.properties
     }
 
     pub fn global_context(&self) -> &GlobalContext<ArCurve> {
-        &self.global_context
+        &self.shared.global_context
     }
 
     pub fn node_client_stub(&self) -> &NodeClientMock {
-        &self.node_client_stub
+        &self.shared.node_client_stub
     }
 }
 
-static START_SERVER_ONCE: OnceLock<ServerHandle> = OnceLock::new();
+static START_SERVER_ONCE: OnceLock<ServerHandleShared> = OnceLock::new();
 
 /// Start verifier service to be used for integration tests. The returned handle contains:
 ///
@@ -81,10 +86,19 @@ static START_SERVER_ONCE: OnceLock<ServerHandle> = OnceLock::new();
 /// Only a single service is started for all tests. Second time the function is called,
 /// a handle to the same service is returned.
 pub fn start_server() -> ServerHandle {
-    Clone::clone(START_SERVER_ONCE.get_or_init(start_server_impl))
+    let shared = Clone::clone(START_SERVER_ONCE.get_or_init(start_server_impl));
+
+    let rest_client = rest_client::create_client(shared.properties.rest_url.clone());
+    let monitoring_client = rest_client::create_client(shared.properties.monitoring_url.clone());
+
+    ServerHandle {
+        shared,
+        rest_client,
+        monitoring_client,
+    }
 }
 
-fn start_server_impl() -> ServerHandle {
+fn start_server_impl() -> ServerHandleShared {
     logging::init_logging(filter::LevelFilter::INFO).unwrap();
 
     // Create runtime that persists between tests
@@ -119,20 +133,15 @@ fn start_server_impl() -> ServerHandle {
         thread::sleep(Duration::from_millis(500));
     }
 
-    let rest_client = rest_client::create_client(properties.rest_url.clone());
-    let monitoring_client = rest_client::create_client(properties.monitoring_url.clone());
-
     info!(
         "verifier service started with properties:\n{:#?}",
         properties
     );
 
-    ServerHandle {
+    ServerHandleShared {
         properties: Arc::new(properties),
         node_client_stub,
         global_context,
-        rest_client,
-        monitoring_client,
     }
 }
 

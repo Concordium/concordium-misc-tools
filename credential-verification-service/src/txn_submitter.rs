@@ -1,6 +1,6 @@
 use crate::node_client::NodeClient;
 use crate::types::ServerError;
-use anyhow::Context;
+use anyhow::{Context, anyhow};
 use concordium_rust_sdk::base::hashes::TransactionHash;
 use concordium_rust_sdk::base::transactions::{BlockItem, send};
 use concordium_rust_sdk::common::types::TransactionTime;
@@ -127,7 +127,7 @@ impl TransactionSubmitter {
                 let txn_hash = node_client
                     .send_block_item(&block_item)
                     .await
-                    .context("submit transaction")?;
+                    .context("submit transaction, second try with updated nonce")?;
 
                 info!(
                     "Successfully submitted anchor transaction after the account nonce was refreshed."
@@ -138,9 +138,7 @@ impl TransactionSubmitter {
 
                 Ok(txn_hash)
             }
-            Err(err) => Err(anyhow::Error::from(err)
-                .context("submit transaction")
-                .into()),
+            Err(err) => Err(anyhow!(err).context("submit transaction").into()),
         }
     }
 }
@@ -190,6 +188,7 @@ mod test {
     use std::time::Duration;
     use tonic::Status;
 
+    /// Register data that makes mock fail when calling send_block_item
     const SUBMIT_FAIL_DATA: [u8; 10] = [0x0fu8; 10];
 
     async fn submitter(node_mock: NodeClientMock) -> TransactionSubmitter {
@@ -396,7 +395,7 @@ mod test {
             &mut self,
             _cred_id: CredentialRegistrationID,
             _bi: BlockIdentifier,
-        ) -> QueryResult<(AccountCredentials, AccountAddress)> {
+        ) -> QueryResult<AccountCredentials> {
             unimplemented!()
         }
 
