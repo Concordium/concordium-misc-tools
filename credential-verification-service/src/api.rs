@@ -3,8 +3,8 @@ use axum::{
     Router,
     routing::{get, post},
 };
-use prometheus_client::registry::Registry;
-use std::sync::Arc;
+use prometheus_client::registry::{Registry};
+use std::sync::{Arc, Mutex};
 
 mod create_verification_request;
 mod monitoring;
@@ -13,6 +13,7 @@ mod verify;
 
 /// Router exposing the service's endpoints
 pub fn router(service: Arc<Service>, request_timeout: u64) -> Router {
+
     Router::new()
         .route(
             "/verifiable-presentations/verify",
@@ -31,10 +32,11 @@ pub fn router(service: Arc<Service>, request_timeout: u64) -> Router {
 }
 
 /// Router exposing the Prometheus metrics and health endpoint.
-pub fn monitoring_router(metrics_registry: Registry, service: Arc<Service>) -> Router {
+pub fn monitoring_router(metrics_registry: Arc<Mutex<Registry>>, service: Arc<Service>) -> Router {
     let metric_routes = Router::new()
         .route("/", get(monitoring::metrics))
-        .with_state(Arc::new(metrics_registry));
+        .with_state(Arc::clone(&metrics_registry));
+
     let health_routes = Router::new()
         .route("/", get(monitoring::health))
         .with_state(service);
