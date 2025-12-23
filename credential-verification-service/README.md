@@ -4,7 +4,13 @@ This service is used for carrying out operations related to requesting verificat
 
 ## Build Docker image
 
-`docker build -f Dockerfile ../ -t credential-verification-service`
+`docker build -f Dockerfile ../ -t concordium/credential-verification-service:0.1.0`
+
+## Pull Docker image from Docker Hub 
+
+```
+docker pull concordium/credential-verification-service:0.1.0
+```
 
 ## Run Docker image
 
@@ -22,7 +28,7 @@ docker run --rm \
   -e CREDENTIAL_VERIFICATION_SERVICE_ACCOUNT="/keys/test_key.export" \
   -p 8000:8000 \
   -p 8001:8001 \
-  concordium/credential-verification-service
+  concordium/credential-verification-service:0.1.0
 ```
 
 You should then be able to curl the health endpoint from outside the container, for example:
