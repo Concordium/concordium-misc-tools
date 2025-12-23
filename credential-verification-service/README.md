@@ -14,7 +14,7 @@ Note: The `CREDENTIAL_VERIFICATION_SERVICE_ACCOUNT` environment variable below d
 
 ```
 docker run --rm \
-  -e CREDENTIAL_VERIFICATION_SERVICE_NODE_GRPC_ENDPOINT="http://grpc.testnet.concordium.com:20000" \
+  -e CREDENTIAL_VERIFICATION_SERVICE_NODE_GRPC_ENDPOINT="https://grpc.testnet.concordium.com:20000" \
   -e CREDENTIAL_VERIFICATION_SERVICE_API_ADDRESS="0.0.0.0:8000" \
   -e CREDENTIAL_VERIFICATION_SERVICE_MONITORING_ADDRESS="0.0.0.0:8001" \
   -e LOG_LEVEL="info" \
@@ -22,7 +22,7 @@ docker run --rm \
   -e CREDENTIAL_VERIFICATION_SERVICE_ACCOUNT="/keys/test_key.export" \
   -p 8000:8000 \
   -p 8001:8001 \
-  credential-verification-service
+  concordium/credential-verification-service
 ```
 
 You should then be able to curl the health endpoint from outside the container, for example:
@@ -31,11 +31,19 @@ You should then be able to curl the health endpoint from outside the container, 
 
 ## Build the service from the source code
 
+Make sure to check out git submodules
+
+```console
+git submodule update --init --recursive
+```
+
 You can build the serive locally as follows:
 
 ```
 cargo build
 ```
+
+This will produce a single binary `../target/debug/credential-verification-service`.
 
 ## Run the servie from the source code
 
