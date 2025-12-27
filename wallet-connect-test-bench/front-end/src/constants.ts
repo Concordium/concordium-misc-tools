@@ -96,10 +96,10 @@ export const CONTRACT_SUB_INDEX = 0n;
 const WALLET_CONNECT_OPTS: SignClientTypes.Options = {
   projectId: CONCORDIUM_WALLET_CONNECT_PROJECT_ID,
   metadata: {
-    name: "Test_Bench",
+    name: "Wallet Testing Bench",
     description: "Example dApp for testing.",
     url: "https://wallet-test-bench.testnet.concordium.com/",
-    icons: ["https://walletconnect.com/walletconnect-logo.png"],
+    icons: ["https://static.wikia.nocookie.net/minecraft_gamepedia/images/b/b7/Crafting_Table_JE4_BE3.png"],
   },
 };
 
