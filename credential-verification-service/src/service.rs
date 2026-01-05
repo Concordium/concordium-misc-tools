@@ -1,5 +1,6 @@
 use crate::node_client::{NodeClient, NodeClientImpl};
 use crate::rest::middleware::metrics::MetricsLayer;
+use crate::service::metrics::family::Family;
 use crate::txn_submitter::TransactionSubmitter;
 use crate::{api, configs::ServiceConfigs, types::Service};
 use anyhow::{Context, bail};
@@ -10,18 +11,17 @@ use concordium_rust_sdk::{
     web3id::did::Network,
 };
 use futures_util::TryFutureExt;
+use prometheus_client::encoding::EncodeLabelSet;
+use prometheus_client::metrics::gauge::Gauge;
 use prometheus_client::{metrics, registry::Registry};
 use std::sync::Arc;
 use std::sync::Mutex as StdMutex;
-use tokio::{net::TcpListener, sync::Mutex};
 use std::time::Duration;
 use tokio::net::TcpListener;
+use tokio::{net::TcpListener, sync::Mutex};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use tonic::transport::ClientTlsConfig;
 use tracing::{error, info};
-use prometheus_client::metrics::gauge::Gauge;
-use crate::service::metrics::family::Family;
-use prometheus_client::encoding::EncodeLabelSet;
 
 pub async fn run(configs: ServiceConfigs) -> anyhow::Result<()> {
     let endpoint = configs
@@ -58,25 +58,25 @@ pub async fn run_with_dependencies(
     let service_info: Family<ServiceLabels, Gauge> = Family::default();
     // Add one metric with a label
     service_info
-        .get_or_create(&ServiceLabels { version: clap::crate_version!().to_string() })
+        .get_or_create(&ServiceLabels {
+            version: clap::crate_version!().to_string(),
+        })
         .set(1);
 
     let metrics_registry = Arc::new(StdMutex::new(Registry::default()));
     let metrics_layer = MetricsLayer::new(Arc::clone(&metrics_registry));
 
-    metrics_registry
-        .lock()
-        .unwrap()
-        .register("service", "Information about the software", service_info.clone());
+    metrics_registry.lock().unwrap().register(
+        "service",
+        "Information about the software",
+        service_info.clone(),
+    );
 
-    metrics_registry
-        .lock()
-        .unwrap()
-        .register(
-            "service_startup_timestamp_millis",
-            "Timestamp of starting up the API service (Unix time in milliseconds)",
-            metrics::gauge::ConstGauge::new(chrono::Utc::now().timestamp_millis()),
-        );
+    metrics_registry.lock().unwrap().register(
+        "service_startup_timestamp_millis",
+        "Timestamp of starting up the API service (Unix time in milliseconds)",
+        metrics::gauge::ConstGauge::new(chrono::Utc::now().timestamp_millis()),
+    );
 
     // Load account keys and sender address from a file
     let account_keys: WalletAccount =
@@ -136,9 +136,7 @@ pub async fn run_with_dependencies(
         let stop_signal = cancel_token.child_token();
         info!("API server is running at {:?}", configs.api_address);
 
-        let api_router = 
-            api::router(service, configs.request_timeout)
-                .layer(metrics_layer);
+        let api_router = api::router(service, configs.request_timeout).layer(metrics_layer);
 
         axum::serve(listener, api_router)
             .with_graceful_shutdown(stop_signal.cancelled_owned())

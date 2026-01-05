@@ -3,7 +3,7 @@ use axum::{
     Router,
     routing::{get, post},
 };
-use prometheus_client::registry::{Registry};
+use prometheus_client::registry::Registry;
 use std::sync::{Arc, Mutex};
 
 mod create_verification_request;
@@ -13,7 +13,6 @@ mod verify;
 
 /// Router exposing the service's endpoints
 pub fn router(service: Arc<Service>, request_timeout: u64) -> Router {
-
     Router::new()
         .route(
             "/verifiable-presentations/verify",

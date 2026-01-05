@@ -7,8 +7,8 @@ use prometheus_client::{
     metrics::{family::Family, histogram},
     registry::Registry,
 };
-use std::{future::Future, task};
 use std::sync::{Arc, Mutex};
+use std::{future::Future, task};
 
 /// tower layer adding monitoring to a service.
 #[derive(Debug, Clone)]
