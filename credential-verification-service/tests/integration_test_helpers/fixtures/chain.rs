@@ -67,6 +67,27 @@ fn transaction_status_map(
     .collect()
 }
 
+// pub fn block_item_summary(
+//     txn_hash: TransactionHash,
+//     data: RegisteredData,
+// ) -> (hashes::BlockHash, BlockItemSummary){
+//     (
+//         GENESIS_BLOCK_HASH.into(),
+//         BlockItemSummary {
+//             index: TransactionIndex { index: 1 },
+//             energy_cost: 10.into(),
+//             hash: txn_hash,
+//             details: Upward::Known(BlockItemSummaryDetails::AccountTransaction(
+//                 AccountTransactionDetails {
+//                     cost: "10".parse().unwrap(),
+//                     sender: account_address(10),
+//                     effects: Upward::Known(AccountTransactionEffects::DataRegistered { data }),
+//                 },
+//             )),
+//         },
+//     )
+// }
+
 pub fn account_credentials(
     cred_id: &CredentialRegistrationID,
     ip_identity: IpIdentity,

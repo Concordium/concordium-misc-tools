@@ -1,4 +1,5 @@
 use crate::integration_test_helpers::fixtures;
+use crate::integration_test_helpers::fixtures::chain::GENESIS_BLOCK_HASH;
 use chrono::{DateTime, Utc};
 use concordium_rust_sdk::base::contracts_common::AccountAddress;
 use concordium_rust_sdk::base::hashes::{BlockHash, TransactionHash};
@@ -7,7 +8,9 @@ use concordium_rust_sdk::common;
 use concordium_rust_sdk::endpoints::{QueryResult, RPCResult};
 use concordium_rust_sdk::id::constants::{ArCurve, IpPairing};
 use concordium_rust_sdk::id::types::{ArInfo, GlobalContext, IpInfo};
-use concordium_rust_sdk::types::{CredentialRegistrationID, Nonce, TransactionStatus};
+use concordium_rust_sdk::types::{
+    BlockItemSummary, CredentialRegistrationID, Nonce, TransactionStatus,
+};
 use concordium_rust_sdk::v2::{BlockIdentifier, QueryError, RPCError};
 use credential_verification_service::node_client::{AccountCredentials, NodeClient};
 use parking_lot::Mutex;
@@ -153,6 +156,41 @@ impl NodeClient for NodeClientMock {
             .ok_or_else(|| {
                 QueryError::RPCError(RPCError::CallError(Status::not_found("not found")))
             })
+    }
+
+    async fn wait_until_finalized(
+        &mut self,
+        th: &TransactionHash,
+    ) -> QueryResult<(BlockHash, BlockItemSummary)> {
+        if TransactionHash::from(GET_BLOCK_ITEM_FAIL_TXN_HASH) == *th {
+            return Err(QueryError::RPCError(RPCError::CallError(Status::internal(
+                "fail for test",
+            ))));
+        }
+
+        let txn_status = self
+            .0
+            .lock()
+            .block_item_statuses
+            .get(th)
+            .map(clone_transaction_status)
+            .ok_or_else(|| {
+                QueryError::RPCError(RPCError::CallError(Status::not_found("not found")))
+            })?;
+
+        let summary = match txn_status {
+            TransactionStatus::Received => {
+                // TODO: maybe sleep for 5 seconds to simulate the process until the tx is finalized.
+                // Currently it never finalizes.
+                return Err(QueryError::NotFound);
+            }
+            // We only inserted block items at the `GENESIS_BLOCK_HASH`.
+            TransactionStatus::Finalized(ref val) | TransactionStatus::Committed(ref val) => val
+                .get(&fixtures::chain::GENESIS_BLOCK_HASH.into())
+                .ok_or(QueryError::NotFound)?,
+        };
+
+        Ok((GENESIS_BLOCK_HASH.into(), summary.clone()))
     }
 
     async fn get_account_credentials(

@@ -148,9 +148,10 @@ async fn lookup_request_anchor(
     client: &mut dyn NodeClient,
     verification_request: &VerificationRequest,
 ) -> Result<VerificationRequestAnchorAndBlockHash, ServerError> {
-    // Fetch the transaction
-    let item_status = client
-        .get_block_item_status(&verification_request.anchor_transaction_hash)
+    // Wait for the transaction to be finalized.
+    // TODO: maybe add dedicated time-out after `` seconds.
+    let (block_hash, summary) = client
+        .wait_until_finalized(&verification_request.anchor_transaction_hash)
         .await
         .map_err(|err| {
             if err.is_not_found() {
@@ -159,17 +160,10 @@ async fn lookup_request_anchor(
                 )
             } else {
                 anyhow!(err)
-                    .context("get anchor transaction block item status")
+                    .context("Error during waiting for anchor transaction to finalize")
                     .into()
             }
         })?;
-
-    let (block_hash, summary) =
-        item_status
-            .is_finalized()
-            .ok_or(ServerError::RequestAnchorTransactionNotFinalized(
-                verification_request.anchor_transaction_hash,
-            ))?;
 
     // Extract data registered payload
     let Upward::Known(BlockItemSummaryDetails::AccountTransaction(AccountTransactionDetails {
@@ -190,7 +184,7 @@ async fn lookup_request_anchor(
 
     Ok(VerificationRequestAnchorAndBlockHash {
         verification_request_anchor,
-        block_hash: *block_hash,
+        block_hash,
     })
 }
 

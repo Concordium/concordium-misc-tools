@@ -40,8 +40,6 @@ pub enum ServerError {
     Anyhow(#[from] anyhow::Error),
     #[error("request anchor transaction {0} not found")]
     RequestAnchorTransactionNotFound(TransactionHash),
-    #[error("request anchor transaction {0} not finalized")]
-    RequestAnchorTransactionNotFinalized(TransactionHash),
     #[error("request anchor transaction {0} not a register data transaction")]
     RequestAnchorTransactionNotRegisterData(TransactionHash),
     #[error("error decoding registered data in request anchor transaction {0}: {1}")]
@@ -74,7 +72,6 @@ impl IntoResponse for ServerError {
             }
             ServerError::RequestAnchorTransactionNotRegisterData(_)
             | ServerError::RequestAnchorTransactionNotFound(_)
-            | ServerError::RequestAnchorTransactionNotFinalized(_)
             | ServerError::RequestAnchorDecode(_, _)
             | ServerError::IdentityProviderNotFound(_)
             | ServerError::AccountCredentialNotFound(_)

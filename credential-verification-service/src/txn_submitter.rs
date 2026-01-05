@@ -180,7 +180,7 @@ mod test {
     use concordium_rust_sdk::id::constants::{ArCurve, IpPairing};
     use concordium_rust_sdk::id::types::{ArInfo, GlobalContext, IpInfo};
     use concordium_rust_sdk::types::{
-        CredentialRegistrationID, Nonce, TransactionStatus, WalletAccount,
+        BlockItemSummary, CredentialRegistrationID, Nonce, TransactionStatus, WalletAccount,
     };
     use concordium_rust_sdk::v2::BlockIdentifier;
     use std::collections::HashMap;
@@ -388,6 +388,13 @@ mod test {
             &mut self,
             _th: &TransactionHash,
         ) -> QueryResult<TransactionStatus> {
+            unimplemented!()
+        }
+
+        async fn wait_until_finalized(
+            &mut self,
+            _th: &TransactionHash,
+        ) -> QueryResult<(BlockHash, BlockItemSummary)> {
             unimplemented!()
         }
 
