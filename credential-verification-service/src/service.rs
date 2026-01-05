@@ -18,7 +18,6 @@ use std::sync::Arc;
 use std::sync::Mutex as StdMutex;
 use std::time::Duration;
 use tokio::net::TcpListener;
-use tokio::{net::TcpListener, sync::Mutex};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use tonic::transport::ClientTlsConfig;
 use tracing::{error, info};
