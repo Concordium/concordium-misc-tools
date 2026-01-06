@@ -180,17 +180,29 @@ impl NodeClient for NodeClientMock {
 
         let summary = match txn_status {
             TransactionStatus::Received => {
-                // TODO: maybe sleep for 5 seconds to simulate the process until the tx is finalized.
-                // Currently it never finalizes.
-                return Err(QueryError::NotFound);
+                unimplemented!()
             }
-            // We only inserted block items at the `GENESIS_BLOCK_HASH`.
-            TransactionStatus::Finalized(ref val) | TransactionStatus::Committed(ref val) => val
-                .get(&fixtures::chain::GENESIS_BLOCK_HASH.into())
-                .ok_or(QueryError::NotFound)?,
+            TransactionStatus::Committed(val) => {
+                // Enable locally to sleep for 5 seconds to simulate the process until the tx is finalized.
+                // Note: As this step would slow down testing in the CI pipeline it is disabled but can be used locally by removing the comment.
+                // use std::thread;
+                // use std::time::Duration;
+                // thread::sleep(Duration::from_secs(5));
+
+                // We only inserted one block item at the `GENESIS_BLOCK_HASH` in the test cases.
+                val.get(&fixtures::chain::GENESIS_BLOCK_HASH.into())
+                    .ok_or(QueryError::NotFound)?
+                    .clone()
+            }
+            TransactionStatus::Finalized(val) => {
+                // We only inserted one block item at the `GENESIS_BLOCK_HASH` in the test cases.
+                val.get(&fixtures::chain::GENESIS_BLOCK_HASH.into())
+                    .ok_or(QueryError::NotFound)?
+                    .clone()
+            }
         };
 
-        Ok((GENESIS_BLOCK_HASH.into(), summary.clone()))
+        Ok((GENESIS_BLOCK_HASH.into(), summary))
     }
 
     async fn get_account_credentials(
