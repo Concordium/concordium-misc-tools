@@ -32,6 +32,8 @@ use concordium_rust_sdk::v2::{BlockIdentifier, Upward};
 use futures_util::future;
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::time::Duration;
+use tokio::time;
 
 /// Verify Presentation endpoint handler.
 /// Accepts a VerifyPresentationRequest payload and calls the Rust SDK function `verify_presentation_with_request_anchor`
@@ -116,8 +118,12 @@ async fn verify_presentation_with_request_anchor(
         .await
         .context("get block slot time")?;
 
-    let request_anchor =
-        lookup_request_anchor(client, &verify_presentation_request.verification_request).await?;
+    let request_anchor = lookup_request_anchor(
+        state.anchor_wait_for_finalization_timeout,
+        client,
+        &verify_presentation_request.verification_request,
+    )
+    .await?;
 
     let verification_material = lookup_verification_materials_and_validity(
         client,
@@ -145,25 +151,30 @@ async fn verify_presentation_with_request_anchor(
 }
 
 async fn lookup_request_anchor(
+    anchor_wait_for_finalization_timeout: Duration,
     client: &mut dyn NodeClient,
     verification_request: &VerificationRequest,
 ) -> Result<VerificationRequestAnchorAndBlockHash, ServerError> {
-    // Wait for the transaction to be finalized.
-    // TODO: maybe add dedicated time-out after `` seconds.
-    let (block_hash, summary) = client
-        .wait_until_finalized(&verification_request.anchor_transaction_hash)
-        .await
-        .map_err(|err| {
-            if err.is_not_found() {
-                ServerError::RequestAnchorTransactionNotFound(
-                    verification_request.anchor_transaction_hash,
-                )
-            } else {
-                anyhow!(err)
-                    .context("Error during waiting for anchor transaction to finalize")
-                    .into()
-            }
-        })?;
+    let tx_hash = verification_request.anchor_transaction_hash;
+
+    // Wait for the request anchor transaction to finalize or timeout
+    let anchor_result = time::timeout(
+        anchor_wait_for_finalization_timeout,
+        client.wait_until_finalized(&tx_hash),
+    )
+    .await
+    .map_err(|_| ServerError::TimeoutWaitingForFinalization(tx_hash))?;
+
+    // Map the QueryError to the ServerError
+    let (block_hash, summary) = anchor_result.map_err(|err| {
+        if err.is_not_found() {
+            ServerError::RequestAnchorTransactionNotFound(tx_hash)
+        } else {
+            anyhow!(err)
+                .context("Error during waiting for anchor transaction to finalize")
+                .into()
+        }
+    })?;
 
     // Extract data registered payload
     let Upward::Known(BlockItemSummaryDetails::AccountTransaction(AccountTransactionDetails {

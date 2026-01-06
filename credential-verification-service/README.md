@@ -71,6 +71,8 @@ The following options are supported:
 - `--api-address [env: CREDENTIAL_VERIFICATION_SERVICE_API_ADDRESS]`: The socket address where the service exposes its API (defaults to `127.0.0.1:8000` if not given).
 - `--monitoring-address [env: CREDENTIAL_VERIFICATION_SERVICE_MONITORING_ADDRESS]`: The socket address used for health and metrics monitoring (defaults to `127.0.0.1:8001` if not given).
 - `--transaction-expiry [env: CREDENTIAL_VERIFICATION_SERVICE_TRANSACTION_EXPIRY]`: The number of seconds in the future when the anchor transactions should expiry (defaults to 15 seconds if not given).
+- `--anchor-wait-for-finalization-timeout [env: CREDENTIAL_VERIFICATION_ANCHOR_WAIT_FOR_FINALIZATION_TIMEOUT]`: Timeout in milliseconds when waiting for the anchor transaction to finalize when verifying the proof (defaults to 6 seconds if not given).
+- `--acquire-account-sequence-lock-timeout [env: CREDENTIAL_VERIFICATION_ACQUIRE_ACCOUNT_SEQUENCE_LOCK_TIMEOUT]`: Timeout in milliseconds for holding the lock on the account sequence number (defaults to 5 seconds if not given).
 
 ## API Documentation
 

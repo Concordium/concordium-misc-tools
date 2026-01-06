@@ -185,9 +185,9 @@ impl NodeClient for NodeClientMock {
             TransactionStatus::Committed(val) => {
                 // Enable locally to sleep for 5 seconds to simulate the process until the tx is finalized.
                 // Note: As this step would slow down testing in the CI pipeline it is disabled but can be used locally by removing the comment.
-                // use std::thread;
                 // use std::time::Duration;
-                // thread::sleep(Duration::from_secs(5));
+                // use tokio::time::sleep;
+                // sleep(Duration::from_secs(5)).await;
 
                 // We only inserted one block item at the `GENESIS_BLOCK_HASH` in the test cases.
                 val.get(&fixtures::chain::GENESIS_BLOCK_HASH.into())

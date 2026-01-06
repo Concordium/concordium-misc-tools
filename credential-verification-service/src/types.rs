@@ -9,6 +9,7 @@ use concordium_rust_sdk::id::types::IpIdentity;
 use concordium_rust_sdk::types::CredentialRegistrationID;
 use concordium_rust_sdk::types::hashes::TransactionHash;
 use concordium_rust_sdk::web3id::did::Network;
+use std::time::Duration;
 
 use crate::txn_submitter::TransactionSubmitter;
 
@@ -23,6 +24,8 @@ pub struct Service {
     pub network: Network,
     /// Submitter for transactions
     pub transaction_submitter: TransactionSubmitter,
+    /// Timeout for waiting for the anchor transaction to finalize when verifying a proof.
+    pub anchor_wait_for_finalization_timeout: Duration,
 }
 
 /// Extractor with build in error handling. Like [axum::Json](Json) but will use [`RejectionError`] for rejection errors
@@ -50,6 +53,8 @@ pub enum ServerError {
     AccountCredentialNotFound(Box<CredentialRegistrationID>),
     #[error("anchor public info too big: {0}")]
     AnchorPublicInfoTooBig(TooLargeError),
+    #[error("Timeout happened when waiting for request anchor transaction {0} to finalize")]
+    TimeoutWaitingForFinalization(TransactionHash),
 }
 
 /// Error for handling rejections of invalid requests.
@@ -75,6 +80,7 @@ impl IntoResponse for ServerError {
             | ServerError::RequestAnchorDecode(_, _)
             | ServerError::IdentityProviderNotFound(_)
             | ServerError::AccountCredentialNotFound(_)
+            | ServerError::TimeoutWaitingForFinalization(_)
             | ServerError::AnchorPublicInfoTooBig(_) => {
                 tracing::warn!("unprocessable entity: {self}");
                 (StatusCode::UNPROCESSABLE_ENTITY, self.to_string()).into_response()

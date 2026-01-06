@@ -21,6 +21,7 @@ fn config() -> ServiceConfigs {
         request_timeout: 5000,
         grpc_node_request_timeout: 1000,
         acquire_account_sequence_lock_timeout: 1000,
+        anchor_wait_for_finalization_timeout: 6000,
         api_address: SocketAddr::new("0.0.0.0".parse().unwrap(), REST_PORT),
         monitoring_address: SocketAddr::new("0.0.0.0".parse().unwrap(), MONITORING_PORT),
         account: "tests/dummyaccount.json".into(),

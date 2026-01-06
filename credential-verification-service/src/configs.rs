@@ -28,7 +28,13 @@ pub struct ServiceConfigs {
         env = "CREDENTIAL_VERIFICATION_ACQUIRE_ACCOUNT_SEQUENCE_LOCK_TIMEOUT"
     )]
     pub acquire_account_sequence_lock_timeout: u64,
-
+    #[arg(
+        long = "anchor-wait-for-finalization-timeout",
+        help = "Timeout for waiting for the request anchor transaction to finalize",
+        default_value = "6000",
+        env = "CREDENTIAL_VERIFICATION_ANCHOR_WAIT_FOR_FINALIZATION_TIMEOUT"
+    )]
+    pub anchor_wait_for_finalization_timeout: u64,
     #[arg(
         long,
         help = "The socket address where the service exposes its API.",

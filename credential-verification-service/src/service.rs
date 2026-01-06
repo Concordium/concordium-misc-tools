@@ -83,6 +83,9 @@ pub async fn run_with_dependencies(
         node_client,
         network,
         transaction_submitter,
+        anchor_wait_for_finalization_timeout: Duration::from_millis(
+            configs.anchor_wait_for_finalization_timeout,
+        ),
     });
 
     let cancel_token = CancellationToken::new();
