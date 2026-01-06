@@ -1,6 +1,5 @@
+use crate::api::middleware::metrics::MetricsLayer;
 use crate::node_client::{NodeClient, NodeClientImpl};
-use crate::rest::middleware::metrics::MetricsLayer;
-use crate::service::metrics::family::Family;
 use crate::txn_submitter::TransactionSubmitter;
 use crate::{api, configs::ServiceConfigs, types::Service};
 use anyhow::{Context, bail};
@@ -11,11 +10,8 @@ use concordium_rust_sdk::{
     web3id::did::Network,
 };
 use futures_util::TryFutureExt;
-use prometheus_client::encoding::EncodeLabelSet;
-use prometheus_client::metrics::gauge::Gauge;
 use prometheus_client::{metrics, registry::Registry};
 use std::sync::Arc;
-use std::sync::Mutex as StdMutex;
 use std::time::Duration;
 use tokio::net::TcpListener;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
@@ -44,38 +40,27 @@ pub async fn run(configs: ServiceConfigs) -> anyhow::Result<()> {
     run_with_dependencies(configs, node_client.boxed()).await
 }
 
-#[derive(Debug, Clone, EncodeLabelSet, PartialEq, Eq, Hash)]
-struct ServiceLabels {
-    version: String,
-}
-
 pub async fn run_with_dependencies(
     configs: ServiceConfigs,
     mut node_client: Box<dyn NodeClient>,
 ) -> anyhow::Result<()> {
-    //let service_info = metrics::info::Info::new([("version", clap::crate_version!().to_string())]);
-    let service_info: Family<ServiceLabels, Gauge> = Family::default();
-    // Add one metric with a label
-    service_info
-        .get_or_create(&ServiceLabels {
-            version: clap::crate_version!().to_string(),
-        })
-        .set(1);
+    //TODO: If using Info, locally Prometheus throws a scraping error, it is not happy with
+    // # TYPE service info
+    //service_info{version="0.2.0"} 1
+    // if i changed this to Family, it works ok
+    // or if i comment this out, it also works ok, we just don't get the service_info 
+    let service_info = metrics::info::Info::new([("version", clap::crate_version!().to_string())]);
 
-    let metrics_registry = Arc::new(StdMutex::new(Registry::default()));
-    let metrics_layer = MetricsLayer::new(Arc::clone(&metrics_registry));
+    let mut metrics_registry = Registry::default();
+    //metrics_registry.register("service", "Information about the software", service_info);
 
-    metrics_registry.lock().unwrap().register(
-        "service",
-        "Information about the software",
-        service_info.clone(),
-    );
-
-    metrics_registry.lock().unwrap().register(
+    metrics_registry.register(
         "service_startup_timestamp_millis",
         "Timestamp of starting up the API service (Unix time in milliseconds)",
         metrics::gauge::ConstGauge::new(chrono::Utc::now().timestamp_millis()),
     );
+
+    let metrics_layer = MetricsLayer::new(&mut metrics_registry);
 
     // Load account keys and sender address from a file
     let account_keys: WalletAccount =
@@ -122,7 +107,7 @@ pub async fn run_with_dependencies(
         );
         axum::serve(
             listener,
-            api::monitoring_router(Arc::clone(&metrics_registry), service.clone()),
+            api::monitoring_router(metrics_registry, service.clone()),
         )
         .with_graceful_shutdown(stop_signal.cancelled_owned())
         .into_future()

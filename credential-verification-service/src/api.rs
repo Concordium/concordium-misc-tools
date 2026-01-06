@@ -4,9 +4,11 @@ use axum::{
     routing::{get, post},
 };
 use prometheus_client::registry::Registry;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use std::sync::Mutex;
 
 mod create_verification_request;
+pub mod middleware;
 mod monitoring;
 mod util;
 mod verify;
@@ -30,15 +32,26 @@ pub fn router(service: Arc<Service>, request_timeout: u64) -> Router {
         .layer(tower_http::compression::CompressionLayer::new())
 }
 
+#[derive(Clone)]
+pub struct AppState {
+    pub registry: Arc<Mutex<Registry>>,
+    pub service: Arc<Service>,
+}
+
 /// Router exposing the Prometheus metrics and health endpoint.
-pub fn monitoring_router(metrics_registry: Arc<Mutex<Registry>>, service: Arc<Service>) -> Router {
+pub fn monitoring_router(metrics_registry: Registry, service: Arc<Service>) -> Router {
+    let state = AppState {
+        registry: Arc::new(Mutex::new(metrics_registry)),
+        service,
+    };
+
     let metric_routes = Router::new()
         .route("/", get(monitoring::metrics))
-        .with_state(Arc::clone(&metrics_registry));
+        .with_state(state.clone());
 
     let health_routes = Router::new()
         .route("/", get(monitoring::health))
-        .with_state(service);
+        .with_state(state.clone());
 
     Router::new()
         .nest("/metrics", metric_routes)

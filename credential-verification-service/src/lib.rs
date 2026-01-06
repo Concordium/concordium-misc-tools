@@ -5,7 +5,5 @@ pub mod node_client;
 pub mod service;
 pub mod types;
 
-pub mod rest;
-
-mod api;
+pub mod api;
 mod txn_submitter;
