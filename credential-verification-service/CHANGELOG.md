@@ -1,5 +1,7 @@
 ## Unreleased
 
+- Change to wait for the anchor transaction to be finalized when verifying a proof.
+
 ## 0.2.0
 
 - Refactored transaction submit logic

@@ -8,7 +8,9 @@ use concordium_rust_sdk::id::constants::{ArCurve, AttributeKind, IpPairing};
 use concordium_rust_sdk::id::types::{
     AccountCredentialWithoutProofs, ArInfo, GlobalContext, IpInfo,
 };
-use concordium_rust_sdk::types::{CredentialRegistrationID, Nonce, TransactionStatus};
+use concordium_rust_sdk::types::{
+    BlockItemSummary, CredentialRegistrationID, Nonce, TransactionStatus,
+};
 use concordium_rust_sdk::v2;
 use concordium_rust_sdk::v2::{AccountIdentifier, BlockIdentifier, QueryError, RPCResult, Upward};
 use futures_util::TryStreamExt;
@@ -18,6 +20,11 @@ use std::fmt::Debug;
 /// Node interface used by the verifier service. Used to stub out node in tests
 #[async_trait::async_trait]
 pub trait NodeClient: Send + Sync + 'static + Debug {
+    async fn wait_until_finalized(
+        &mut self,
+        hash: &TransactionHash,
+    ) -> QueryResult<(BlockHash, BlockItemSummary)>;
+
     async fn get_next_account_sequence_number(
         &mut self,
         address: &AccountAddress,
@@ -93,6 +100,13 @@ impl NodeClientImpl {
 
 #[async_trait::async_trait]
 impl NodeClient for NodeClientImpl {
+    async fn wait_until_finalized(
+        &mut self,
+        hash: &TransactionHash,
+    ) -> QueryResult<(BlockHash, BlockItemSummary)> {
+        Ok(self.client.wait_until_finalized(hash).await?)
+    }
+
     async fn get_next_account_sequence_number(
         &mut self,
         address: &AccountAddress,
