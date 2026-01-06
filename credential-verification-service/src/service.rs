@@ -49,7 +49,7 @@ pub async fn run_with_dependencies(
     //service_info{version="0.2.0"} 1
     // if i changed this to Family, it works ok
     // or if i comment this out, it also works ok, we just don't get the service_info 
-    let service_info = metrics::info::Info::new([("version", clap::crate_version!().to_string())]);
+    //let service_info = metrics::info::Info::new([("version", clap::crate_version!().to_string())]);
 
     let mut metrics_registry = Registry::default();
     //metrics_registry.register("service", "Information about the software", service_info);
