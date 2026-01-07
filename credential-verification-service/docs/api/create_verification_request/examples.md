@@ -53,6 +53,30 @@
 }
 ```
 
+## List of allowed attribute tags
+
+- Individual ID:
+  - firstName
+  -	lastName
+  -	dob (date of birth)
+  -	idDocType
+  -	sex
+  -	countryOfResidence
+  -	nationality
+  -	idDocNo (Identity Document number)
+  - idDocIssuer
+  - idDocIssuedAt (ID Valid from)
+  - idDocExpiresAt (ID Valid to)
+  - nationalIdNo (National ID number)
+  - taxIdNo
+		
+- Company ID:	
+  - legalName
+  - legalCountry
+  -	businessNumber
+  - lei (LEI-code)
+  - registrationAuth	
+
 ## Example curl command
 
 ```json
