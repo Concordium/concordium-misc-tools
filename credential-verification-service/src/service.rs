@@ -114,7 +114,7 @@ pub async fn run_with_dependencies(
         );
         axum::serve(
             listener,
-            api::monitoring_router(metrics_registry, service.clone()),
+            api::monitoring_router(metrics_registry),
         )
         .with_graceful_shutdown(stop_signal.cancelled_owned())
         .into_future()

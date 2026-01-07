@@ -33,10 +33,9 @@ pub fn router(service: Arc<Service>, request_timeout: u64) -> Router {
 }
 
 /// Router exposing the Prometheus metrics and health endpoint.
-pub fn monitoring_router(metrics_registry: Registry, service: Arc<Service>) -> Router {
+pub fn monitoring_router(metrics_registry: Registry) -> Router {
     let state = MonitoringState {
         registry: Arc::new(metrics_registry),
-        service,
     };
 
     let metric_routes = Router::new()

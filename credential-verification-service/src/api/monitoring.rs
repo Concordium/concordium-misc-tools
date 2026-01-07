@@ -1,5 +1,4 @@
 //! Handlers for the monitoring endpoints.
-use crate::types::Service;
 use axum::{Json, extract::State, http::StatusCode};
 use prometheus_client::registry::Registry;
 use serde_json::json;
@@ -8,7 +7,6 @@ use std::sync::Arc;
 #[derive(Clone)]
 pub struct MonitoringState {
     pub registry: Arc<Registry>,
-    pub service: Arc<Service>,
 }
 
 /// GET Handler for route `/metrics`.
