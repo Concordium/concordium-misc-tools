@@ -1,6 +1,6 @@
 [package]
 name = "credential-verification-service"
-version = "0.2.0"
+version = "0.2.1"
 description = "Credential verification service"
 edition = "2024"
 
