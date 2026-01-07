@@ -112,12 +112,9 @@ pub async fn run_with_dependencies(
             "Monitoring server is running at {:?}",
             configs.monitoring_address
         );
-        axum::serve(
-            listener,
-            api::monitoring_router(metrics_registry),
-        )
-        .with_graceful_shutdown(stop_signal.cancelled_owned())
-        .into_future()
+        axum::serve(listener, api::monitoring_router(metrics_registry))
+            .with_graceful_shutdown(stop_signal.cancelled_owned())
+            .into_future()
     };
 
     let api_task = {
