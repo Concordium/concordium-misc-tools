@@ -43,7 +43,7 @@ Make sure to check out git submodules
 git submodule update --init --recursive
 ```
 
-You can build the serive locally as follows:
+You can build the service locally as follows:
 
 ```
 cargo build
@@ -51,9 +51,9 @@ cargo build
 
 This will produce a single binary `../target/debug/credential-verification-service`.
 
-## Run the servie from the source code
+## Run the service from the source code
 
-You can run the serive locally as follows:
+You can run the service locally as follows:
 
 ```
 cargo run -- --node-endpoint https://grpc.testnet.concordium.com:20000 --account 4bbdAUCDK2D6cUvUeprGr4FaSaHXKuYmYVjyCa4bXSCu3NUXzA.export

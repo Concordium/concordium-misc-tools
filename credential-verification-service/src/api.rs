@@ -1,3 +1,4 @@
+use crate::api::monitoring::MonitoringState;
 use crate::types::Service;
 use axum::{
     Router,
@@ -7,6 +8,7 @@ use prometheus_client::registry::Registry;
 use std::sync::Arc;
 
 mod create_verification_request;
+pub mod middleware;
 mod monitoring;
 mod util;
 mod verify;
@@ -31,13 +33,18 @@ pub fn router(service: Arc<Service>, request_timeout: u64) -> Router {
 }
 
 /// Router exposing the Prometheus metrics and health endpoint.
-pub fn monitoring_router(metrics_registry: Registry, service: Arc<Service>) -> Router {
+pub fn monitoring_router(metrics_registry: Registry) -> Router {
+    let state = MonitoringState {
+        registry: Arc::new(metrics_registry),
+    };
+
     let metric_routes = Router::new()
         .route("/", get(monitoring::metrics))
-        .with_state(Arc::new(metrics_registry));
+        .with_state(state.clone());
+
     let health_routes = Router::new()
         .route("/", get(monitoring::health))
-        .with_state(service);
+        .with_state(state.clone());
 
     Router::new()
         .nest("/metrics", metric_routes)

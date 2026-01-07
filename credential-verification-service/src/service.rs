@@ -1,3 +1,4 @@
+use crate::api::middleware::metrics::MetricsLayer;
 use crate::node_client::{NodeClient, NodeClientImpl};
 use crate::txn_submitter::TransactionSubmitter;
 use crate::{api, configs::ServiceConfigs, types::Service};
@@ -9,6 +10,9 @@ use concordium_rust_sdk::{
     web3id::did::Network,
 };
 use futures_util::TryFutureExt;
+use prometheus_client::encoding::EncodeLabelSet;
+use prometheus_client::metrics::family::Family;
+use prometheus_client::metrics::gauge::Gauge;
 use prometheus_client::{metrics, registry::Registry};
 use std::sync::Arc;
 use std::time::Duration;
@@ -38,19 +42,32 @@ pub async fn run(configs: ServiceConfigs) -> anyhow::Result<()> {
 
     run_with_dependencies(configs, node_client.boxed()).await
 }
+#[derive(Debug, Clone, EncodeLabelSet, PartialEq, Eq, Hash)]
+pub struct VersionLabel {
+    pub version: String,
+}
 
 pub async fn run_with_dependencies(
     configs: ServiceConfigs,
     mut node_client: Box<dyn NodeClient>,
 ) -> anyhow::Result<()> {
-    let service_info = metrics::info::Info::new([("version", clap::crate_version!().to_string())]);
+    let service_info: Family<VersionLabel, Gauge> = Family::default();
+    service_info
+        .get_or_create(&VersionLabel {
+            version: clap::crate_version!().to_string(),
+        })
+        .set(1);
+
     let mut metrics_registry = Registry::default();
     metrics_registry.register("service", "Information about the software", service_info);
+
     metrics_registry.register(
         "service_startup_timestamp_millis",
         "Timestamp of starting up the API service (Unix time in milliseconds)",
         metrics::gauge::ConstGauge::new(chrono::Utc::now().timestamp_millis()),
     );
+
+    let metrics_layer = MetricsLayer::new(&mut metrics_registry);
 
     // Load account keys and sender address from a file
     let account_keys: WalletAccount =
@@ -98,12 +115,9 @@ pub async fn run_with_dependencies(
             "Monitoring server is running at {:?}",
             configs.monitoring_address
         );
-        axum::serve(
-            listener,
-            api::monitoring_router(metrics_registry, service.clone()),
-        )
-        .with_graceful_shutdown(stop_signal.cancelled_owned())
-        .into_future()
+        axum::serve(listener, api::monitoring_router(metrics_registry))
+            .with_graceful_shutdown(stop_signal.cancelled_owned())
+            .into_future()
     };
 
     let api_task = {
@@ -113,7 +127,9 @@ pub async fn run_with_dependencies(
         let stop_signal = cancel_token.child_token();
         info!("API server is running at {:?}", configs.api_address);
 
-        axum::serve(listener, api::router(service, configs.request_timeout))
+        let api_router = api::router(service, configs.request_timeout).layer(metrics_layer);
+
+        axum::serve(listener, api_router)
             .with_graceful_shutdown(stop_signal.cancelled_owned())
             .into_future()
     };
