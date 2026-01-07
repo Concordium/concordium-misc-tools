@@ -55,27 +55,46 @@
 
 ## List of allowed attribute tags
 
-- Individual ID:
-  - firstName
-  -	lastName
-  -	dob (date of birth)
-  -	idDocType
-  -	sex
-  -	countryOfResidence
-  -	nationality
-  -	idDocNo (Identity Document number)
-  - idDocIssuer
-  - idDocIssuedAt (ID Valid from)
-  - idDocExpiresAt (ID Valid to)
-  - nationalIdNo (National ID number)
-  - taxIdNo
-		
-- Company ID:	
-  - legalName
-  - legalCountry
-  -	businessNumber
-  - lei (LEI-code)
-  - registrationAuth	
+### Individual ID:
+
+| Attribute tag        | Description               |
+| -------------------- | ------------------------- |
+| `firstName`          | First name                |
+| `lastName`           | Last name                 |
+| `dob`                | Date of birth             |
+| `idDocType`          | Identity document type    |
+| `sex`                | Sex                       |
+| `countryOfResidence` | Country of residence      |
+| `nationality`        | Nationality               |
+| `idDocNo`            | Identity document number  |
+| `idDocIssuer`        | Issuing authority         |
+| `idDocIssuedAt`      | ID valid from             |
+| `idDocExpiresAt`     | ID valid to               |
+| `nationalIdNo`       | National ID number        |
+| `taxIdNo`            | Tax identification number |
+	
+### Company ID:	
+
+| Attribute tag      | Description                  |
+| ------------------ | ---------------------------- |
+| `legalName`        | Legal company name           |
+| `legalCountry`     | Country of registration      |
+| `businessNumber`   | Business registration number |
+| `lei`              | LEI code                     |
+| `registrationAuth` | Registration authority       |
+
+
+## List of allowed attribute value format
+
+| Attribute                                                                                    | Value format                                                                                                      |
+| -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `firstName`, `lastName`, `legalName`, `businessNumber`, `nationalIdNo`, `taxIdNo`, `idDocNo`, `registrationAuth` | `string`      |
+| `dob`,`idDocIssuedAt`, `idDocExpiresAt`                                                                                        | `ISO 8601 (YYYYMMDD)`               |
+| `idDocType`                                                                                  | `0 = n/a`, `1 = passport`, `2 = national ID card`, `3 = driving license`, `4 = immigration card`, or `eID string` |
+| `sex`                                                                                        | `ISO/IEC 5218`                       |
+| `countryOfResidence`, `nationality`, `legalCountry`                                          | `ISO 3166-1 alpha-2`              |
+| `idDocIssuer`                                                                                | `ISO 3166-1 alpha-2` or `ISO 3166-2` (if applicable)   |
+| `lei`                                                                                        | `ISO17442`         |
 
 ## Example curl command
 
