@@ -1,3 +1,4 @@
+use crate::api::monitoring::MonitoringState;
 use crate::types::Service;
 use axum::{
     Router,
@@ -5,7 +6,6 @@ use axum::{
 };
 use prometheus_client::registry::Registry;
 use std::sync::Arc;
-use crate::api::monitoring::MonitoringState;
 
 mod create_verification_request;
 pub mod middleware;

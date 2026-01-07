@@ -1,9 +1,9 @@
 //! Handlers for the monitoring endpoints.
-use axum::{Json, extract::State, http::StatusCode};
-use serde_json::json;
 use crate::types::Service;
-use std::sync::Arc;
+use axum::{Json, extract::State, http::StatusCode};
 use prometheus_client::registry::Registry;
+use serde_json::json;
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct MonitoringState {
@@ -25,7 +25,9 @@ pub async fn metrics(State(metrics_registry): State<MonitoringState>) -> Result<
 
 /// GET Handler for route `/health`.
 /// Verifying the API service state is as expected.
-pub async fn health(State(_service): State<MonitoringState>) -> (StatusCode, Json<serde_json::Value>) {
+pub async fn health(
+    State(_service): State<MonitoringState>,
+) -> (StatusCode, Json<serde_json::Value>) {
     let healthy = {
         // TODO: implement actual checks
         true

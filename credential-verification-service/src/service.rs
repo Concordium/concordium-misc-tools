@@ -10,7 +10,9 @@ use concordium_rust_sdk::{
     web3id::did::Network,
 };
 use futures_util::TryFutureExt;
+use prometheus_client::encoding::EncodeLabelSet;
 use prometheus_client::metrics::family::Family;
+use prometheus_client::metrics::gauge::Gauge;
 use prometheus_client::{metrics, registry::Registry};
 use std::sync::Arc;
 use std::time::Duration;
@@ -18,8 +20,6 @@ use tokio::net::TcpListener;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use tonic::transport::ClientTlsConfig;
 use tracing::{error, info};
-use prometheus_client::metrics::gauge::Gauge;
-use prometheus_client::encoding::EncodeLabelSet;
 
 pub async fn run(configs: ServiceConfigs) -> anyhow::Result<()> {
     let endpoint = configs
@@ -51,18 +51,15 @@ pub async fn run_with_dependencies(
     configs: ServiceConfigs,
     mut node_client: Box<dyn NodeClient>,
 ) -> anyhow::Result<()> {
-    
-    let service_info: Family<VersionLabel, Gauge> = Family::default();    
-    service_info.get_or_create(&VersionLabel {
-        version: clap::crate_version!().to_string(),
-    }).set(1);
+    let service_info: Family<VersionLabel, Gauge> = Family::default();
+    service_info
+        .get_or_create(&VersionLabel {
+            version: clap::crate_version!().to_string(),
+        })
+        .set(1);
 
     let mut metrics_registry = Registry::default();
-    metrics_registry.register(
-        "service",
-        "Information about the software",
-        service_info,
-    );
+    metrics_registry.register("service", "Information about the software", service_info);
 
     metrics_registry.register(
         "service_startup_timestamp_millis",
