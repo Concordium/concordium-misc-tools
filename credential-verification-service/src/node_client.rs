@@ -16,6 +16,9 @@ use concordium_rust_sdk::v2::{AccountIdentifier, BlockIdentifier, QueryError, RP
 use futures_util::TryStreamExt;
 use std::collections::BTreeMap;
 use std::fmt::Debug;
+use prometheus_client::metrics::family::Family;
+use prometheus_client::encoding::EncodeLabelSet;
+use prometheus_client::metrics::histogram;
 
 /// Node interface used by the verifier service. Used to stub out node in tests
 #[async_trait::async_trait]
@@ -198,3 +201,146 @@ impl NodeClient for NodeClientImpl {
         self.clone().boxed()
     }
 }
+
+#[derive(Debug, Clone, EncodeLabelSet, PartialEq, Eq, Hash)]
+struct NodeRequestLabels {
+    request_name: String,
+    request_status: String,
+}
+#[derive(Debug, Clone)]
+struct NodeClientMetricsDecorator {
+    inner: Box<dyn NodeClient>,
+    node_request_duration: Family<NodeRequestLabels, histogram::Histogram>,
+}
+
+impl NodeClientMetricsDecorator {
+    pub fn new(inner: Box<dyn NodeClient>,
+                node_request_duration: Family<NodeRequestLabels, histogram::Histogram>) -> Self {
+        Self { inner,
+                node_request_duration
+        }
+    }
+
+    pub fn record_metrics<T, E>(&self, name: &str, result: &Result<T, E>, start_timer: tokio::time::Instant) {
+       let status = if result.is_ok() { "success" } else { "error" };
+
+       self.node_request_duration.get_or_create(&NodeRequestLabels {
+           request_name: name.to_string(),
+           request_status: status.to_string(),
+       }).observe(start_timer.elapsed().as_secs_f64());
+    }
+}
+
+#[async_trait::async_trait]
+impl NodeClient for NodeClientMetricsDecorator {
+    
+    async fn wait_until_finalized( &mut self, hash: &TransactionHash,) -> QueryResult<(BlockHash, BlockItemSummary)> {
+        
+        let start_timer = tokio::time::Instant::now();
+
+        let result = self.inner.wait_until_finalized(hash).await;
+
+        self.record_metrics("wait_until_finalized", &result, start_timer);
+
+        result
+    }
+
+    async fn get_next_account_sequence_number( &mut self, address: &AccountAddress,) -> QueryResult<Nonce> {
+        let start_timer = tokio::time::Instant::now();
+
+        let result = self.inner.get_next_account_sequence_number(address).await;
+
+        self.record_metrics("get_next_account_sequence_number", &result, start_timer);
+
+        result
+    }
+
+    async fn get_genesis_block_hash(&mut self) -> QueryResult<BlockHash> {
+        let start_timer = tokio::time::Instant::now();
+
+        let result = self.inner.get_genesis_block_hash().await;
+
+        self.record_metrics("get_genesis_block_hash", &result, start_timer);
+
+        result
+    }
+
+
+    async fn send_block_item(&mut self, bi: &BlockItem<EncodedPayload>,) -> RPCResult<TransactionHash> {
+        let start_timer = tokio::time::Instant::now();
+
+        let result = self.inner.send_block_item(bi).await;
+
+        self.record_metrics("send_block_item", &result, start_timer);
+
+        result
+    }
+
+    async fn get_cryptographic_parameters(&mut self, bi: BlockIdentifier,) -> QueryResult<GlobalContext<ArCurve>> {
+        let start_timer = tokio::time::Instant::now();
+
+        let result = self.inner.get_cryptographic_parameters(bi).await;
+
+        self.record_metrics("get_cryptographic_parameters", &result, start_timer);
+
+        result
+    }
+
+    async fn get_block_slot_time(&mut self, bi: BlockIdentifier) -> QueryResult<DateTime<Utc>> {
+        let start_timer = tokio::time::Instant::now();
+
+        let result = self.inner.get_block_slot_time(bi).await;
+
+        self.record_metrics("get_block_slot_time", &result, start_timer);
+
+        result 
+    }
+
+    async fn get_block_item_status(&mut self,th: &TransactionHash,) -> QueryResult<TransactionStatus> {
+        let start_timer = tokio::time::Instant::now();
+
+        let result = self.inner.get_block_item_status(th).await;
+
+        self.record_metrics("get_block_item_status", &result, start_timer);
+
+        result
+    }
+
+    async fn get_account_credentials(&mut self, cred_id: CredentialRegistrationID, bi: BlockIdentifier,) -> QueryResult<AccountCredentials> {
+        let start_timer = tokio::time::Instant::now();
+
+        let result = self.inner.get_account_credentials(cred_id, bi).await;
+
+        self.record_metrics("get_account_credentials", &result, start_timer);
+
+        result
+    }
+
+    async fn get_identity_providers(&mut self, bi: BlockIdentifier,) -> QueryResult<Vec<IpInfo<IpPairing>>> {
+        let start_timer = tokio::time::Instant::now();
+
+        let result = self.inner.get_identity_providers(bi).await;
+
+        self.record_metrics("get_identity_providers", &result, start_timer);
+
+        result
+    }
+
+    async fn get_anonymity_revokers(&mut self, bi: BlockIdentifier,) -> QueryResult<Vec<ArInfo<ArCurve>>> {
+        let start_timer = tokio::time::Instant::now();
+
+        let result = self.inner.get_anonymity_revokers(bi).await;
+
+        self.record_metrics("get_anonymity_revokers", &result, start_timer);
+
+        result
+    }
+
+    fn box_clone(&self) -> Box<dyn NodeClient> {
+        Box::new(NodeClientMetricsDecorator {
+            inner: self.inner.box_clone(),
+            node_request_duration: self.node_request_duration.clone(),
+        })
+    }
+}
+
