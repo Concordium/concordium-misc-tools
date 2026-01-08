@@ -6,6 +6,7 @@ use concordium_rust_sdk::base::transactions::{BlockItem, send};
 use concordium_rust_sdk::common::types::TransactionTime;
 use concordium_rust_sdk::endpoints::RPCError;
 use concordium_rust_sdk::types::{Nonce, RegisteredData, WalletAccount};
+use prometheus_client::metrics::histogram;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time;
@@ -23,6 +24,8 @@ pub struct TransactionSubmitter {
     transaction_expiry_secs: u32,
     /// Timeout to acquire lock on account sequence number
     acquire_account_sequence_lock_timeout: Duration,
+    /// Histogram tracking the duration of the account locks
+    account_sequence_lock_wait_duration: histogram::Histogram,
 }
 
 impl TransactionSubmitter {
@@ -31,6 +34,7 @@ impl TransactionSubmitter {
         account_keys: WalletAccount,
         transaction_expiry_secs: u32,
         acquire_account_sequence_lock_timeout: Duration,
+        account_sequence_lock_wait_duration: histogram::Histogram,
     ) -> Result<Self, ServerError> {
         let nonce = node_client
             .get_next_account_sequence_number(&account_keys.address)
@@ -52,6 +56,7 @@ impl TransactionSubmitter {
             account: Arc::new(tokio::sync::Mutex::new(account)),
             transaction_expiry_secs,
             acquire_account_sequence_lock_timeout,
+            account_sequence_lock_wait_duration,
         })
     }
 
@@ -61,6 +66,8 @@ impl TransactionSubmitter {
         &self,
         register_data: RegisteredData,
     ) -> Result<TransactionHash, ServerError> {
+        let start_timer = tokio::time::Instant::now();
+
         // Lock local view on account sequence number. This is necessary
         // since requests to submit transaction are processed concurrently, but
         // "using" a sequence number and submitting the transaction must be done sequentially.
@@ -72,6 +79,9 @@ impl TransactionSubmitter {
         )
         .await
         .context("timeout waiting for local account sequence lock")?;
+
+        self.account_sequence_lock_wait_duration
+            .observe(start_timer.elapsed().as_secs_f64());
 
         let mut node_client = self.node_client.clone();
 
@@ -183,6 +193,8 @@ mod test {
         BlockItemSummary, CredentialRegistrationID, Nonce, TransactionStatus, WalletAccount,
     };
     use concordium_rust_sdk::v2::BlockIdentifier;
+    use prometheus_client::metrics::histogram;
+    use prometheus_client::metrics::histogram::Histogram;
     use std::collections::HashMap;
     use std::sync::Arc;
     use std::time::Duration;
@@ -192,6 +204,9 @@ mod test {
     const SUBMIT_FAIL_DATA: [u8; 10] = [0x0fu8; 10];
 
     async fn submitter(node_mock: NodeClientMock) -> TransactionSubmitter {
+        let account_sequence_lock_wait_duration =
+            Histogram::new(histogram::exponential_buckets(0.010, 2.0, 10));
+
         let wallet_keys =
             WalletAccount::from_json_file("tests/dummyaccount.json").expect("dummyaccount");
         TransactionSubmitter::init(
@@ -199,6 +214,7 @@ mod test {
             wallet_keys,
             10,
             Duration::from_millis(1000),
+            account_sequence_lock_wait_duration,
         )
         .await
         .expect("init submitter")

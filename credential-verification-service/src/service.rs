@@ -13,6 +13,9 @@ use futures_util::TryFutureExt;
 use prometheus_client::encoding::EncodeLabelSet;
 use prometheus_client::metrics::family::Family;
 use prometheus_client::metrics::gauge::Gauge;
+use prometheus_client::metrics::histogram;
+use prometheus_client::metrics::histogram::Histogram;
+use prometheus_client::registry::Unit;
 use prometheus_client::{metrics, registry::Registry};
 use std::sync::Arc;
 use std::time::Duration;
@@ -87,11 +90,22 @@ pub async fn run_with_dependencies(
         ),
     };
 
+    let account_sequence_lock_wait_duration =
+        Histogram::new(histogram::exponential_buckets(0.010, 2.0, 10));
+
+    metrics_registry.register_with_unit(
+        "account_sequence_lock",
+        "Duration in seconds for the locking of the account sequence number",
+        Unit::Seconds,
+        account_sequence_lock_wait_duration.clone(),
+    );
+
     let transaction_submitter = TransactionSubmitter::init(
         node_client.clone(),
         account_keys,
         configs.transaction_expiry_secs,
         Duration::from_millis(configs.acquire_account_sequence_lock_timeout),
+        account_sequence_lock_wait_duration,
     )
     .await
     .context("initialize transaction submitter")?;
