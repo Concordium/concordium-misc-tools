@@ -1,5 +1,7 @@
 use crate::api::middleware::metrics::MetricsLayer;
-use crate::node_client::{NodeClient, NodeClientImpl};
+use crate::node_client::{
+    NodeClient, NodeClientImpl, NodeClientMetricsDecorator, NodeRequestLabels,
+};
 use crate::txn_submitter::TransactionSubmitter;
 use crate::{api, configs::ServiceConfigs, types::Service};
 use anyhow::{Context, bail};
@@ -69,6 +71,27 @@ pub async fn run_with_dependencies(
         "Timestamp of starting up the API service (Unix time in milliseconds)",
         metrics::gauge::ConstGauge::new(chrono::Utc::now().timestamp_millis()),
     );
+
+    //create node client metrics and then register it,
+    //then create the decorated node client, supply this metrics to it
+    //and supply the original node_client
+    //replace the node_client with the decorated one from this point onwards
+    let node_client_metrics: Family<NodeRequestLabels, histogram::Histogram> =
+        Family::new_with_constructor(|| {
+            histogram::Histogram::new(histogram::exponential_buckets(0.010, 2.0, 10))
+        });
+
+    metrics_registry.register_with_unit(
+        "node_client_request_duration",
+        "Duration in seconds for requests to the Concordium node",
+        Unit::Seconds,
+        node_client_metrics.clone(),
+    );
+
+    let decorated_node_client = NodeClientMetricsDecorator::new(node_client, node_client_metrics);
+
+    node_client = Box::new(decorated_node_client);
+    //from this point onwards, use the decorated node client with metrics
 
     let metrics_layer = MetricsLayer::new(&mut metrics_registry);
 
