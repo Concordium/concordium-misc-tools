@@ -208,7 +208,7 @@ pub struct NodeRequestLabels {
     request_status: String,
 }
 
-/* Decorator for NodeClient that adds metrics collection 
+/* Decorator for NodeClient that adds metrics collection
     inner is the original node client
     node_request_duration is the prometheus metric family for tracking request durations
     NodeRequestLabels are labels with request_name filled with method name and request_status with "success" or "error"
