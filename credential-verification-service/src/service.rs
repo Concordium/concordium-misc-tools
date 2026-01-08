@@ -90,13 +90,14 @@ pub async fn run_with_dependencies(
         ),
     };
 
-    let account_sequence_lock = Histogram::new(histogram::exponential_buckets(0.010, 2.0, 10));
+    let account_sequence_lock_wait_duration =
+        Histogram::new(histogram::exponential_buckets(0.010, 2.0, 10));
 
     metrics_registry.register_with_unit(
         "account_sequence_lock",
         "Duration in seconds for the locking of the account sequence number",
         Unit::Seconds,
-        account_sequence_lock.clone(),
+        account_sequence_lock_wait_duration.clone(),
     );
 
     let transaction_submitter = TransactionSubmitter::init(
@@ -104,7 +105,7 @@ pub async fn run_with_dependencies(
         account_keys,
         configs.transaction_expiry_secs,
         Duration::from_millis(configs.acquire_account_sequence_lock_timeout),
-        account_sequence_lock,
+        account_sequence_lock_wait_duration,
     )
     .await
     .context("initialize transaction submitter")?;

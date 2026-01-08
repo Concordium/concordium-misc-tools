@@ -32,7 +32,7 @@ pub struct TransactionSubmitter {
     acquire_account_sequence_lock_timeout: Duration,
     #[allow(dead_code)]
     /// Histogram tracking the duration of the account locks
-    account_sequence_lock: histogram::Histogram,
+    account_sequence_lock_wait_duration: histogram::Histogram,
 }
 
 impl TransactionSubmitter {
@@ -41,7 +41,7 @@ impl TransactionSubmitter {
         account_keys: WalletAccount,
         transaction_expiry_secs: u32,
         acquire_account_sequence_lock_timeout: Duration,
-        account_sequence_lock: histogram::Histogram,
+        account_sequence_lock_wait_duration: histogram::Histogram,
     ) -> Result<Self, ServerError> {
         let nonce = node_client
             .get_next_account_sequence_number(&account_keys.address)
@@ -63,7 +63,7 @@ impl TransactionSubmitter {
             account: Arc::new(tokio::sync::Mutex::new(account)),
             transaction_expiry_secs,
             acquire_account_sequence_lock_timeout,
-            account_sequence_lock,
+            account_sequence_lock_wait_duration,
         })
     }
 
@@ -87,7 +87,7 @@ impl TransactionSubmitter {
         .await
         .context("timeout waiting for local account sequence lock")?;
 
-        self.account_sequence_lock
+        self.account_sequence_lock_wait_duration
             .observe(start_timer.elapsed().as_secs_f64());
 
         let mut node_client = self.node_client.clone();
@@ -211,7 +211,8 @@ mod test {
     const SUBMIT_FAIL_DATA: [u8; 10] = [0x0fu8; 10];
 
     async fn submitter(node_mock: NodeClientMock) -> TransactionSubmitter {
-        let io_call_duration= Histogram::new(histogram::exponential_buckets(0.010, 2.0, 10));
+        let account_sequence_lock_wait_duration =
+            Histogram::new(histogram::exponential_buckets(0.010, 2.0, 10));
 
         let wallet_keys =
             WalletAccount::from_json_file("tests/dummyaccount.json").expect("dummyaccount");
@@ -220,7 +221,7 @@ mod test {
             wallet_keys,
             10,
             Duration::from_millis(1000),
-            io_call_duration,
+            account_sequence_lock_wait_duration,
         )
         .await
         .expect("init submitter")
