@@ -1,6 +1,6 @@
 use crate::api::middleware::metrics::MetricsLayer;
 use crate::node_client::{NodeClient, NodeClientImpl};
-use crate::txn_submitter::{IoCallLabels, TransactionSubmitter};
+use crate::txn_submitter::TransactionSubmitter;
 use crate::{api, configs::ServiceConfigs, types::Service};
 use anyhow::{Context, bail};
 use concordium_rust_sdk::{
@@ -90,14 +90,13 @@ pub async fn run_with_dependencies(
         ),
     };
 
-    let io_call_duration: Family<IoCallLabels, Histogram> = Family::new_with_constructor(|| {
-        Histogram::new(histogram::exponential_buckets(0.010, 2.0, 10))
-    });
+    let account_sequence_lock = Histogram::new(histogram::exponential_buckets(0.010, 2.0, 10));
+
     metrics_registry.register_with_unit(
-        "io_call_duration",
-        "Duration in seconds for calls to the Concordium node",
+        "account_sequence_lock",
+        "Duration in seconds for the locking of the account sequence number",
         Unit::Seconds,
-        io_call_duration.clone(),
+        account_sequence_lock.clone(),
     );
 
     let transaction_submitter = TransactionSubmitter::init(
@@ -105,7 +104,7 @@ pub async fn run_with_dependencies(
         account_keys,
         configs.transaction_expiry_secs,
         Duration::from_millis(configs.acquire_account_sequence_lock_timeout),
-        io_call_duration,
+        account_sequence_lock,
     )
     .await
     .context("initialize transaction submitter")?;
