@@ -24,7 +24,6 @@ pub struct TransactionSubmitter {
     transaction_expiry_secs: u32,
     /// Timeout to acquire lock on account sequence number
     acquire_account_sequence_lock_timeout: Duration,
-    #[allow(dead_code)]
     /// Histogram tracking the duration of the account locks
     account_sequence_lock_wait_duration: histogram::Histogram,
 }
