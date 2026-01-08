@@ -6,7 +6,6 @@ use concordium_rust_sdk::base::transactions::{BlockItem, send};
 use concordium_rust_sdk::common::types::TransactionTime;
 use concordium_rust_sdk::endpoints::RPCError;
 use concordium_rust_sdk::types::{Nonce, RegisteredData, WalletAccount};
-use prometheus_client::encoding::EncodeLabelSet;
 use prometheus_client::metrics::histogram;
 use std::sync::Arc;
 use std::time::Duration;
