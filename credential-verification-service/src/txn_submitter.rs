@@ -13,11 +13,6 @@ use std::time::Duration;
 use tokio::time;
 use tracing::{info, warn};
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
-pub struct IoCallLabels {
-    pub call_type: String, // e.g., "get_next_sequence"
-}
-
 /// Submitter of transactions. Holds account keys and local view on account sequence number.
 /// And the configuration parameters for transaction metadata.
 #[derive(Debug, Clone)]
