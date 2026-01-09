@@ -204,14 +204,14 @@ impl NodeClient for NodeClientImpl {
 
 #[derive(Debug, Clone, EncodeLabelSet, PartialEq, Eq, Hash)]
 pub struct NodeRequestLabels {
-    request_name: String,
-    request_status: String,
+    method: String,
+    status: String,
 }
 
 /* Decorator for NodeClient that adds metrics collection
     inner is the original node client
     node_request_duration is the prometheus metric family for tracking request durations
-    NodeRequestLabels are labels with request_name filled with method name and request_status with "success" or "error"
+    NodeRequestLabels are labels with with method name and status of the call with values "success" or "error"
 */
 #[derive(Debug, Clone)]
 pub struct NodeClientMetricsDecorator {
@@ -240,8 +240,8 @@ impl NodeClientMetricsDecorator {
 
         self.node_request_duration
             .get_or_create(&NodeRequestLabels {
-                request_name: name.to_string(),
-                request_status: status.to_string(),
+                method: name.to_string(),
+                status: status.to_string(),
             })
             .observe(start_timer.elapsed().as_secs_f64());
     }
