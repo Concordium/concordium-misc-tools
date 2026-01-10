@@ -1,8 +1,7 @@
 use crate::api::monitoring::MonitoringState;
 use crate::types::Service;
 use axum::{
-    Router,
-    routing::{get, post},
+    Router, http, routing::{get, post}
 };
 use prometheus_client::registry::Registry;
 use std::sync::Arc;
@@ -29,6 +28,7 @@ pub fn router(service: Arc<Service>, request_timeout: u64) -> Router {
             std::time::Duration::from_millis(request_timeout),
         ))
         .layer(tower_http::limit::RequestBodyLimitLayer::new(1_000_000)) // at most 1000kB of data.
+        .layer(tower_http::cors::CorsLayer::permissive().allow_methods([http::Method::POST]))
         .layer(tower_http::compression::CompressionLayer::new())
 }
 
