@@ -1,5 +1,9 @@
 ## Unreleased
 
+## 0.2.2
+
+- Enabled CORS for POST requests
+
 ## 0.2.1
 
 - Change to wait for the anchor transaction to be finalized when verifying a proof.
