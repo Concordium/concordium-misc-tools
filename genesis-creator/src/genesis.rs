@@ -1011,6 +1011,7 @@ pub fn make_genesis_data_cpv0(
         ProtocolVersion::P7 => None,
         ProtocolVersion::P8 => None,
         ProtocolVersion::P9 => None,
+        ProtocolVersion::P10 => None,
     }
 }
 

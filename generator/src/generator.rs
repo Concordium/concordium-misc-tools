@@ -208,7 +208,7 @@ pub async fn generate_transactions(
             match item {
                 BlockItem::AccountTransaction(txn) => {
                     println!(
-                        "{}: Transaction {} submitted (nonce = {}, energy = {}).",
+                        "{}: Account transaction {} submitted (nonce = {}, energy = {}).",
                         chrono::Utc::now(),
                         transaction_hash,
                         txn.header.nonce,
@@ -230,6 +230,13 @@ pub async fn generate_transactions(
                         update.header.seq_number,
                     );
                 }
+                BlockItem::AccountTransactionV1(txn) => println!(
+                    "{}: Account transaction V1 {} submitted (nonce = {}, energy = {}).",
+                    chrono::Utc::now(),
+                    transaction_hash,
+                    txn.header.nonce,
+                    txn.header.energy_amount,
+                ),
             }
         } else {
             break Ok(());
