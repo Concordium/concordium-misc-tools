@@ -314,6 +314,7 @@ mod tests {
                 cost: amount,
                 effects,
                 sender: receiver_address,
+                sponsor: None,
             };
             let effects = vec![
                 AccountTransactionEffects::AccountTransfer {
@@ -382,6 +383,7 @@ mod tests {
                 cost: amount,
                 effects,
                 sender: receiver_address,
+                sponsor: None,
             };
 
             let silent_block_summaries = vec![
@@ -445,6 +447,7 @@ mod tests {
                 cost: amount,
                 effects,
                 sender: receiver_address,
+                sponsor: None,
             };
 
             let block_summaries = vec![
