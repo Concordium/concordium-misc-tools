@@ -1,7 +1,8 @@
 use crate::api::monitoring::MonitoringState;
 use crate::types::Service;
 use axum::{
-    Router, http, routing::{get, post}
+    Router, http,
+    routing::{get, post},
 };
 use prometheus_client::registry::Registry;
 use std::sync::Arc;
