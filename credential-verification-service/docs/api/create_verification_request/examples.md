@@ -20,7 +20,7 @@
         {
           "type": "AttributeInRange",
           "attributeTag": "dob",
-          "lower": "1800010",
+          "lower": "18000101",
           "upper": "20080106"
         },
         {
@@ -117,7 +117,7 @@
         {
           "type": "AttributeInRange",
           "attributeTag": "dob",
-          "lower": "1800010",
+          "lower": "18000101",
           "upper": "20080106"
         },
         {
@@ -187,7 +187,7 @@ Returned Verification Request Sample:
                 {
                     "type": "AttributeInRange",
                     "attributeTag": "dob",
-                    "lower": "1800010",
+                    "lower": "18000101",
                     "upper": "20080106"
                 },
                 {
