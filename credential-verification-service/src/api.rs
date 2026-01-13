@@ -11,6 +11,7 @@ mod create_verification_request;
 pub mod middleware;
 mod monitoring;
 mod util;
+mod validate_payload;
 mod verify;
 
 /// Router exposing the service's endpoints

@@ -1,6 +1,7 @@
 //! Handler for the verification endpoints.
 
 use crate::api::util;
+use crate::api::validate_payload::payload_validation;
 use crate::api_types::VerificationFailure;
 use crate::node_client::NodeClient;
 use crate::types::AppJson;
@@ -43,6 +44,17 @@ pub async fn verify_presentation(
     state: State<Arc<Service>>,
     AppJson(verify_presentation_request): AppJson<VerifyPresentationRequest>,
 ) -> Result<Json<VerifyPresentationResponse>, ServerError> {
+    // Validate the format of statements/claims in the payload request.
+    // Note: The statements/claims in the `proof` are verified
+    // to match the payload request during proof verification,
+    // so no additional validation is performed on the `proof` here.
+    payload_validation(
+        verify_presentation_request
+            .verification_request
+            .subject_claims
+            .clone(),
+    )?;
+
     let block_identifier = BlockIdentifier::LastFinal;
 
     let mut client = state.node_client.clone();
