@@ -1,0 +1,162 @@
+
+# Valid payload
+
+curl -POST "https://credential-verification-service.testnet.concordium.com/verifiable-presentations/create-verification-request" -H "Content-Type: application/json" --data '
+{
+  "connectionId": "conn_8291yuw",
+  "resourceId": "some string for resource",
+  "contextString": "optional context string here",
+  "publicInfo": {
+    "key1": "6676616C756531",
+    "key2": "6676616C756532"
+  },
+  "requestedClaims": [
+    {
+      "type": "identity",
+      "source": ["identityCredential","accountCredential"],
+      "issuers": ["did:ccd:testnet:idp:0","did:ccd:testnet:idp:1","did:ccd:testnet:idp:2"],
+      "statements": [
+        {
+          "type": "AttributeInRange",
+          "attributeTag": "dob",
+          "lower": "19000101",
+          "upper": "20240101"
+        },
+        {
+          "type": "AttributeInSet",
+          "attributeTag": "countryOfResidence",
+          "set": [
+            "IE",
+            "IN",
+            "US",
+            "UK"
+          ]
+        },
+        {
+          "type": "AttributeNotInSet",
+          "attributeTag": "countryOfResidence",
+          "set": [
+            "IE",
+            "IN",
+            "US",
+            "UK"
+          ]
+        },
+        {
+          "type": "RevealAttribute",
+          "attributeTag": "firstName"
+        }
+      ]
+    }
+  ]
+}' 
+
+
+
+
+## API testing
+
+
+### connectionId ommitted
+
+current response:
+
+	invalid json in request: Failed to deserialize the JSON body into the target type: missing field `connectionId` at line 48 column 1%
+
+Request:
+
+curl -POST "https://credential-verification-service.testnet.concordium.com/verifiable-presentations/create-verification-request" -H "Content-Type: application/json" --data '
+{
+  "resourceId": "some string for resource",
+  "contextString": "optional context string here",
+  "publicInfo": {
+    "key1": "6676616C756531",
+    "key2": "6676616C756532"
+  },
+  "requestedClaims": [
+    {
+      "type": "identity",
+      "source": ["identityCredential","accountCredential"],
+      "issuers": ["did:ccd:testnet:idp:0","did:ccd:testnet:idp:1","did:ccd:testnet:idp:2"],
+      "statements": [
+        {
+          "type": "AttributeInRange",
+          "attributeTag": "dob",
+          "lower": "19000101",
+          "upper": "20240101"
+        }
+      ]
+    }
+  ]
+}' 
+
+
+
+## Requested claims type not correct
+
+current response: 
+
+	invalid json in request: Failed to deserialize the JSON body into the target type: requestedClaims[0].type: unknown variant `identityzzzz`, expected `identity` at line 12 column 28%
+
+
+curl -POST "https://credential-verification-service.testnet.concordium.com/verifiable-presentations/create-verification-request" -H "Content-Type: application/json" --data '
+{
+  "connectionId": "conn_8291yuw",
+  "resourceId": "some string for resource",
+  "contextString": "optional context string here",
+  "publicInfo": {
+    "key1": "6676616C756531",
+    "key2": "6676616C756532"
+  },
+  "requestedClaims": [
+    {
+      "type": "identityzzzz",
+      "source": ["identityCredential","accountCredential"],
+      "issuers": ["did:ccd:testnet:idp:0","did:ccd:testnet:idp:1","did:ccd:testnet:idp:2"],
+      "statements": [
+        {
+          "type": "AttributeInRange",
+          "attributeTag": "dob",
+          "lower": "19000101",
+          "upper": "20240101"
+        }
+      ]
+    }
+  ]
+}' 
+
+
+
+## attribute tag not correct
+
+current response:
+
+	invalid json in request: Failed to deserialize the JSON body into the target type: requestedClaims[0]: Unrecognized attribute tag. at line 24 column 3%
+
+curl -POST "https://credential-verification-service.testnet.concordium.com/verifiable-presentations/create-verification-request" -H "Content-Type: application/json" --data '
+{
+  "connectionId": "conn_8291yuw",
+  "resourceId": "some string for resource",
+  "contextString": "optional context string here",
+  "publicInfo": {
+    "key1": "6676616C756531",
+    "key2": "6676616C756532"
+  },
+  "requestedClaims": [
+    {
+      "type": "identity",
+      "source": ["identityCredential","accountCredential"],
+      "issuers": ["did:ccd:testnet:idp:0","did:ccd:testnet:idp:1","did:ccd:testnet:idp:2"],
+      "statements": [
+        {
+          "type": "AttributeInRange",
+          "attributeTag": "dobbbbbbb",
+          "lower": "19000101",
+          "upper": "20240101"
+        }
+      ]
+    }
+  ]
+}' 
+
+
