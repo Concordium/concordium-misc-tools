@@ -13,12 +13,17 @@ use concordium_rust_sdk::{
     },
     contract_client::{ContractTransactionMetadata, MetadataUrl, SchemaRef},
     id::types::AccountAddress,
+    protocol_level_tokens::{
+        operations, ConversionRule, TokenAmount as OtherTokenAmount, TokenId as OtherTokenId,
+    },
     smart_contracts::common::{self as concordium_std, Timestamp},
     types::{
         smart_contracts::{OwnedContractName, OwnedParameter, WasmModule},
         transactions::{
+            construct,
             send::{self, GivenEnergy},
-            AccountTransaction, BlockItem, EncodedPayload, InitContractPayload,
+            AccountTransaction, AccountTransactionV1, BlockItem, EncodedPayload,
+            InitContractPayload,
         },
         Address, ContractAddress, Energy, NodeDetails, Nonce, RegisteredData, WalletAccount,
     },
@@ -27,6 +32,7 @@ use concordium_rust_sdk::{
 };
 use futures::TryStreamExt;
 use rand::{rngs::StdRng, Rng, SeedableRng};
+use rust_decimal::Decimal;
 use std::{
     collections, collections::BTreeMap, io::Cursor, path::PathBuf, str::FromStr, time::Duration,
 };
@@ -61,6 +67,21 @@ pub struct RegisterDataArgs {
     /// Size of the data to register in bytes. Max 256.
     #[arg(long, default_value = "32")]
     size: u16,
+}
+
+#[derive(Debug, Args)]
+pub struct SponsoredTransactionArgs {
+    #[arg(
+        long = "sponsor",
+        help = "Path to file containing sponsor account key."
+    )]
+    sponsor: PathBuf,
+    #[arg(long = "receiver", help = "Receiver adddress.")]
+    receiver: String,
+    #[arg(long = "token", help = "Token id.")]
+    token_id: String,
+    #[clap(long = "amount", help = "CCD amount to send", default_value = "100.0")]
+    amount: Decimal,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -170,16 +191,24 @@ pub struct CommonArgs {
     pub expiry: u32,
 }
 
+pub enum VersionedAccountTransaction {
+    V0(AccountTransaction<EncodedPayload>),
+    V1(AccountTransactionV1<EncodedPayload>),
+}
 /// A transaction generator.
 pub trait Generate {
     /// Generate a transaction. Will be called in a loop.
-    fn generate(&mut self) -> anyhow::Result<AccountTransaction<EncodedPayload>>;
+    fn generate(&mut self) -> anyhow::Result<VersionedAccountTransaction>;
 
     /// Generate a block item. Will be called in a loop.
     ///
     /// If this function is overridden, [`Self::generate`] will not be called.
     fn generate_block_item(&mut self) -> anyhow::Result<BlockItem<EncodedPayload>> {
-        self.generate().map(BlockItem::AccountTransaction)
+        match self.generate()? {
+            VersionedAccountTransaction::V0(tx) => Ok(BlockItem::AccountTransaction(tx)),
+
+            VersionedAccountTransaction::V1(tx_v1) => Ok(BlockItem::AccountTransactionV1(tx_v1)),
+        }
     }
 }
 
@@ -228,6 +257,16 @@ pub async fn generate_transactions(
                         chrono::Utc::now(),
                         transaction_hash,
                         update.header.seq_number,
+                    );
+                }
+                BlockItem::AccountTransactionV1(txn) => {
+                    println!(
+                        "{}: Transaction {} with sponsor = {:?} submitted (nonce = {}, energy = {}).",
+                        chrono::Utc::now(),
+                        transaction_hash,
+                        txn.header.sponsor,
+                        txn.header.nonce,
+                        txn.header.energy_amount,
                     );
                 }
             }
@@ -321,7 +360,7 @@ impl CcdGenerator {
 }
 
 impl Generate for CcdGenerator {
-    fn generate(&mut self) -> anyhow::Result<AccountTransaction<EncodedPayload>> {
+    fn generate(&mut self) -> anyhow::Result<VersionedAccountTransaction> {
         let next_account = if self.random {
             let n = self.rng.gen_range(0..self.accounts.len());
             self.accounts[n]
@@ -342,7 +381,7 @@ impl Generate for CcdGenerator {
         self.nonce.next_mut();
         self.count += 1;
 
-        Ok(tx)
+        Ok(VersionedAccountTransaction::V0(tx))
     }
 }
 
@@ -398,7 +437,7 @@ impl MintCis2Generator {
 }
 
 impl Generate for MintCis2Generator {
-    fn generate(&mut self) -> anyhow::Result<AccountTransaction<EncodedPayload>> {
+    fn generate(&mut self) -> anyhow::Result<VersionedAccountTransaction> {
         // We mint a single token for ourselves.
         let params = MintCis2NftParams {
             owner: Address::Account(self.args.keys.address),
@@ -423,7 +462,7 @@ impl Generate for MintCis2Generator {
         self.nonce.next_mut();
         self.next_id += 1;
 
-        Ok(tx)
+        Ok(VersionedAccountTransaction::V0(tx))
     }
 }
 
@@ -552,7 +591,7 @@ impl TransferCis2Generator {
 }
 
 impl Generate for TransferCis2Generator {
-    fn generate(&mut self) -> anyhow::Result<AccountTransaction<EncodedPayload>> {
+    fn generate(&mut self) -> anyhow::Result<VersionedAccountTransaction> {
         let next_account = self.accounts[self.count % self.accounts.len()];
         let transfer = Transfer {
             token_id: TokenId::new_u8(0),
@@ -577,7 +616,7 @@ impl Generate for TransferCis2Generator {
         self.nonce.next_mut();
         self.count += 1;
 
-        Ok(tx)
+        Ok(VersionedAccountTransaction::V0(tx))
     }
 }
 
@@ -661,7 +700,7 @@ impl WccdGenerator {
 }
 
 impl Generate for WccdGenerator {
-    fn generate(&mut self) -> anyhow::Result<AccountTransaction<EncodedPayload>> {
+    fn generate(&mut self) -> anyhow::Result<VersionedAccountTransaction> {
         let mut metadata = ContractTransactionMetadata {
             sender_address: self.args.keys.address,
             nonce: self.nonce,
@@ -691,7 +730,7 @@ impl Generate for WccdGenerator {
             self.nonce.next_mut();
             self.count += 1;
 
-            return Ok(tx);
+            return Ok(VersionedAccountTransaction::V0(tx));
         }
 
         // We modulate between wrapping, transferring, and unwrapping. All wCCD are
@@ -747,7 +786,7 @@ impl Generate for WccdGenerator {
         self.nonce.next_mut();
         self.count += 1;
 
-        Ok(tx)
+        Ok(VersionedAccountTransaction::V0(tx))
     }
 }
 
@@ -829,7 +868,7 @@ impl RegisterCredentialsGenerator {
 }
 
 impl Generate for RegisterCredentialsGenerator {
-    fn generate(&mut self) -> anyhow::Result<AccountTransaction<EncodedPayload>> {
+    fn generate(&mut self) -> anyhow::Result<VersionedAccountTransaction> {
         // Create 32 byte holder id.
         let public_key = KeyPair::generate(&mut self.rng).public();
 
@@ -855,7 +894,7 @@ impl Generate for RegisterCredentialsGenerator {
                 .make_register_credential(&self.args.keys, &metadata, &cred_info, &[])?;
         self.nonce.next_mut();
 
-        Ok(tx)
+        Ok(VersionedAccountTransaction::V0(tx))
     }
 }
 
@@ -895,7 +934,7 @@ impl RegisterDataGenerator {
 }
 
 impl Generate for RegisterDataGenerator {
-    fn generate(&mut self) -> anyhow::Result<AccountTransaction<EncodedPayload>> {
+    fn generate(&mut self) -> anyhow::Result<VersionedAccountTransaction> {
         let data_bytes: Vec<u8> = (0..self.size).map(|_| self.rng.gen()).collect();
         let data: RegisteredData = data_bytes.try_into()?;
         let expiry = TransactionTime::seconds_after(self.args.expiry);
@@ -909,6 +948,91 @@ impl Generate for RegisterDataGenerator {
         );
         self.nonce.next_mut();
 
-        Ok(tx)
+        Ok(VersionedAccountTransaction::V0(tx))
+    }
+}
+
+/// A generator that makes a sponsored transaction
+pub struct SponsoredTransactionGenerator {
+    sender: WalletAccount,
+    sponsor: WalletAccount,
+    receiver: AccountAddress,
+    token_id: OtherTokenId,
+    amount: OtherTokenAmount,
+    nonce: Nonce,
+    expiry: TransactionTime,
+}
+
+impl SponsoredTransactionGenerator {
+    pub async fn instantiate(
+        mut client: v2::Client,
+        args: CommonArgs,
+        sponsored_transaction_args: SponsoredTransactionArgs,
+    ) -> anyhow::Result<Self> {
+        //token id for the PLT token to be transferred
+        let token_id =
+            OtherTokenId::try_from(sponsored_transaction_args.token_id).expect("Invalid token Id");
+
+        let token_info = client
+            .get_token_info(token_id.clone(), BlockIdentifier::LastFinal)
+            .await?
+            .response;
+
+        let token_amount = OtherTokenAmount::try_from_rust_decimal(
+            sponsored_transaction_args.amount,
+            token_info.token_state.decimals,
+            ConversionRule::AllowRounding,
+        )?;
+
+        let receiver_address = AccountAddress::from_str(&sponsored_transaction_args.receiver)?;
+
+        let sender_keys = args.keys;
+
+        let sponsor_keys: WalletAccount =
+            WalletAccount::from_json_file(sponsored_transaction_args.sponsor)?;
+
+        let nonce = client
+            .get_next_account_sequence_number(&sender_keys.address)
+            .await?
+            .nonce;
+
+        let expiry = TransactionTime::seconds_after(args.expiry);
+
+        Ok(Self {
+            sender: sender_keys,
+            sponsor: sponsor_keys,
+            receiver: receiver_address,
+            token_id,
+            amount: token_amount,
+            nonce,
+            expiry,
+        })
+    }
+}
+
+impl Generate for SponsoredTransactionGenerator {
+    fn generate(&mut self) -> anyhow::Result<VersionedAccountTransaction> {
+        let operation = operations::transfer_tokens(self.receiver, self.amount);
+
+        let txn_to_be_submitted = construct::token_update_operations(
+            1,
+            self.sender.address,
+            self.nonce,
+            self.expiry,
+            self.token_id.clone(),
+            [operation].into_iter().collect(),
+        )?
+        .extend()
+        .add_sponsor(self.sponsor.address, 1)
+        .expect("Can add sponsor account")
+        .sign(&self.sender)
+        .sponsor(&self.sponsor)
+        .expect("Can sponsor the transaction")
+        .finalize()
+        .expect("Transaction is well-formed");
+
+        self.nonce.next_mut();
+
+        Ok(VersionedAccountTransaction::V1(txn_to_be_submitted))
     }
 }

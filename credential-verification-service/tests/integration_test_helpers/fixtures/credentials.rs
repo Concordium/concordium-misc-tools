@@ -272,7 +272,8 @@ fn pio_v1<'a>(
     let context = IpContext::new(ip_info, ars_infos, global_ctx);
 
     // Select all ARs except last one
-    let threshold = Threshold::try_from(NUM_ARS - 1).unwrap_or(Threshold(1));
+    let threshold = Threshold::try_from(NUM_ARS - 1)
+        .unwrap_or(Threshold::try_new(1).expect("Threshold of 1 will never fail"));
 
     // Create and return PIO
     let (pio, randomness) = generate_pio_v1_with_rng(&context, threshold, id_use_data, &mut csprng)

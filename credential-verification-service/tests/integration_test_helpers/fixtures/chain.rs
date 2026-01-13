@@ -69,6 +69,7 @@ pub fn get_dummy_block_item_summary(
                 cost: "10".parse().unwrap(),
                 sender: account_address(10),
                 effects: Upward::Known(AccountTransactionEffects::DataRegistered { data }),
+                sponsor: None,
             },
         )),
     }
@@ -87,7 +88,7 @@ pub fn account_credentials(
             },
             cred_id: *cred_id.as_ref(),
             ip_identity,
-            threshold: Threshold(1),
+            threshold: Threshold::try_new(1).expect("Threshold of 1 will never fail"),
             ar_data: Default::default(),
             policy: Policy {
                 created_at: YearMonth::new(2020, 5).unwrap(),
