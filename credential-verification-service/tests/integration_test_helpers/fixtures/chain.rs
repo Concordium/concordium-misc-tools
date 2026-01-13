@@ -88,7 +88,7 @@ pub fn account_credentials(
             },
             cred_id: *cred_id.as_ref(),
             ip_identity,
-            threshold: Threshold::try_new(1).unwrap(),
+            threshold: Threshold::try_new(1).expect("Threshold of 1 will never fail"),
             ar_data: Default::default(),
             policy: Policy {
                 created_at: YearMonth::new(2020, 5).unwrap(),

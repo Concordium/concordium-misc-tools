@@ -1082,6 +1082,29 @@ pub fn handle_assemble(config_path: &Path, verbose: bool) -> anyhow::Result<()> 
                 initial_state,
             }
         }
+        ProtocolConfig::P10 { parameters } => {
+            let update_keys: UpdateKeysCollectionSkeleton<AuthorizationsV1> =
+                read_json(&make_relative(config_path, &config.governance_keys)?)?;
+
+            if update_keys.level_2_keys.create_plt.is_none() {
+                bail!("P10 requires createPLT authorization.");
+            }
+
+            let initial_state = GenesisStateCPV3 {
+                cryptographic_parameters: global.value,
+                identity_providers: idps.value,
+                anonymity_revokers: ars.value,
+                update_keys,
+                chain_parameters: parameters.chain.chain_parameters(AccountIndex::from(idx))?,
+                leadership_election_nonce: parameters.leadership_election_nonce,
+                accounts,
+            };
+            let core = parameters.core.try_into()?;
+            GenesisData::P10 {
+                core,
+                initial_state,
+            }
+        }
     };
 
     write_genesis(
@@ -1340,6 +1363,24 @@ pub fn handle_generate(config_path: &Path, verbose: bool) -> anyhow::Result<()> 
             };
             let core = parameters.core.try_into()?;
             GenesisData::P9 {
+                core,
+                initial_state,
+            }
+        }
+        ProtocolConfig::P10 { parameters } => {
+            let update_keys = updates_v2(config.out.update_keys, &config.updates)?;
+
+            let initial_state = GenesisStateCPV3 {
+                cryptographic_parameters,
+                identity_providers,
+                anonymity_revokers,
+                update_keys,
+                chain_parameters: parameters.chain.chain_parameters(foundation_idx)?,
+                leadership_election_nonce: parameters.leadership_election_nonce,
+                accounts,
+            };
+            let core = parameters.core.try_into()?;
+            GenesisData::P10 {
                 core,
                 initial_state,
             }
