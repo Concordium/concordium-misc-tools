@@ -25,24 +25,14 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 
 /// Attribute tags
-pub const ATTRIBUTE_TAG_FIRST_NAME: AttributeTag = AttributeTag(0);
-pub const ATTRIBUTE_TAG_LAST_NAME: AttributeTag = AttributeTag(1);
-pub const ATTRIBUTE_TAG_SEX: AttributeTag = AttributeTag(2);
 pub const ATTRIBUTE_TAG_DOB: AttributeTag = AttributeTag(3);
 pub const ATTRIBUTE_TAG_COUNTRY_OF_RESIDENCE: AttributeTag = AttributeTag(4);
 pub const ATTRIBUTE_TAG_NATIONALITY: AttributeTag = AttributeTag(5);
 pub const ATTRIBUTE_TAG_ID_DOC_TYPE: AttributeTag = AttributeTag(6);
-pub const ATTRIBUTE_TAG_ID_DOC_NO: AttributeTag = AttributeTag(7);
 pub const ATTRIBUTE_TAG_ID_DOC_ISSUER: AttributeTag = AttributeTag(8);
 pub const ATTRIBUTE_TAG_ID_DOC_ISSUED_AT: AttributeTag = AttributeTag(9);
 pub const ATTRIBUTE_TAG_ID_DOC_EXPIRES_AT: AttributeTag = AttributeTag(10);
-pub const ATTRIBUTE_TAG_NATIONAL_ID_NO: AttributeTag = AttributeTag(11);
-pub const ATTRIBUTE_TAG_TAX_ID_NO: AttributeTag = AttributeTag(12);
-pub const ATTRIBUTE_TAG_LEI: AttributeTag = AttributeTag(13);
-pub const ATTRIBUTE_TAG_LEGAL_NAME: AttributeTag = AttributeTag(14);
 pub const ATTRIBUTE_TAG_LEGAL_COUNTRY: AttributeTag = AttributeTag(15);
-pub const ATTRIBUTE_TAG_BUSINESS_NUMBER: AttributeTag = AttributeTag(16);
-pub const ATTRIBUTE_TAG_REGIATRATION_AUTH: AttributeTag = AttributeTag(17);
 
 pub fn ensure_string(attr: &Web3IdAttribute) -> Result<&str, ServerError> {
     match attr {
@@ -102,10 +92,68 @@ pub fn is_iso8601(date: &str) -> Result<(), ServerError> {
     Ok(())
 }
 
+/// ISO3166_1_alpha2 codes consist of 2 upper case characters representing countries/region.
 pub fn is_iso3166_1_alpha2(code: &str) -> bool {
     rust_iso3166::from_alpha2(code).is_some()
         && code.len() == 2
         && code.chars().all(|c| c.is_ascii_uppercase())
+}
+
+/// ISO3166-2 codes consist of a ISO3166_1_alpha2 code, then a dash, and then 1-3 alphanumerical characters representing countries/region.
+pub fn is_iso3166_2(code: &str) -> bool {
+    if code.len() < 4 || code.len() > 6 {
+        // 2 letters + '-' + 1-3 characters
+        return false;
+    }
+
+    let (alpha2, rest) = code.split_at(2);
+    if !is_iso3166_1_alpha2(alpha2) {
+        return false;
+    }
+
+    let mut chars = rest.chars();
+    if chars.next() != Some('-') {
+        return false;
+    }
+
+    let tail: Vec<char> = chars.collect();
+    if tail.is_empty() || tail.len() > 3 {
+        return false;
+    }
+
+    for c in tail {
+        if !c.is_ascii_alphanumeric() {
+            return false;
+        }
+    }
+
+    true
+}
+
+#[derive(Debug)]
+pub enum IdDocType {
+    NA,
+    Passport,
+    NationalIdCard,
+    DriversLicense,
+    ImmigrationCard,
+}
+
+impl IdDocType {
+    /// Try to parse a string into an IdDocType
+    pub fn parse(code: &str) -> Result<IdDocType, ServerError> {
+        match code {
+            "0" => Ok(IdDocType::NA),
+            "1" => Ok(IdDocType::Passport),
+            "2" => Ok(IdDocType::NationalIdCard),
+            "3" => Ok(IdDocType::DriversLicense),
+            "4" => Ok(IdDocType::ImmigrationCard),
+            _ => Err(ServerError::PayloadValidation(format!(
+                "Invalid ID document type `{}`. Must be one of: 0 (N/A), 1 (Passport), 2 (NationalIdCard), 3 (DriversLicense), or 4 (ImmigrationCard).",
+                code
+            ))),
+        }
+    }
 }
 
 pub fn payload_validation(params: CreateVerificationRequest) -> Result<(), ServerError> {
@@ -114,8 +162,8 @@ pub fn payload_validation(params: CreateVerificationRequest) -> Result<(), Serve
             Identity(claim) => {
                 for statement in claim.statements {
                     match statement {
-                        RevealAttribute(sta) => {
-                            // TODO
+                        RevealAttribute(_) => {
+                            // Nothing to validate here.
                         }
                         AttributeInRange(sta) => verify_range_statement(sta)?,
                         AttributeInSet(sta) => verify_set_statement(&sta)?,
@@ -150,7 +198,7 @@ pub fn verify_range_statement(
             // 2. Validate the string is ISO8601 / YYYYMMDD
             is_iso8601(upper_str).map_err(|e| {
     ServerError::PayloadValidation(format!(
-        "Range statement with attribute tag `{0}`: Upper range value must be YYYYMMDD: {1}",
+        "Range statement with attribute tag `{0}`: Upper range value must be of format YYYYMMDD: {1}",
         statement.attribute_tag,
         e))
 })?;
@@ -166,7 +214,7 @@ pub fn verify_range_statement(
             // 4. Validate the string is ISO8601 / YYYYMMDD
             is_iso8601(lower_str).map_err(|e| {
     ServerError::PayloadValidation(format!(
-        "Range statement with attribute tag `{0}`: Lower range value must be YYYYMMDD: {1}",
+        "Range statement with attribute tag `{0}`: Lower range value must be of format YYYYMMDD: {1}",
         statement.attribute_tag,e ))
 })?;
         }
@@ -244,9 +292,43 @@ where
             }
         }
 
+        ATTRIBUTE_TAG_ID_DOC_ISSUER => {
+            // 1. Ensure all values are strings
+            let values: Vec<&str> = statement
+                .set()
+                .iter()
+                .map(|attr| ensure_string(attr))
+                .collect::<Result<_, _>>()?;
+
+            // 2. Validate ISO codes
+            for v in &values {
+                if !is_iso3166_1_alpha2(v) && !is_iso3166_2(v) {
+                    return Err(ServerError::PayloadValidation(format!(
+                        "Value `{0}` of attribute tag `{1}` must be ISO3166-1 Alpha-2 code in upper case or ISO3166-2 codes",
+                        v,
+                        statement.attribute_tag(),
+                    )));
+                }
+            }
+        }
+
+        ATTRIBUTE_TAG_ID_DOC_TYPE => {
+            // 1. Ensure all values are strings
+            let values: Vec<&str> = statement
+                .set()
+                .iter()
+                .map(|attr| ensure_string(attr))
+                .collect::<Result<_, _>>()?;
+
+            // 2. Validate ID doc type
+            for v in &values {
+                IdDocType::parse(v)?;
+            }
+        }
+
         _ => {
             return Err(ServerError::PayloadValidation(format!(
-                "{:?} is not allowed to be used in set statements",
+                "{0} is not allowed to be used in set statements",
                 statement.attribute_tag()
             )));
         }

@@ -237,7 +237,7 @@ pub async fn generate_transactions(
             match item {
                 BlockItem::AccountTransaction(txn) => {
                     println!(
-                        "{}: Account transaction {} submitted (nonce = {}, energy = {}).",
+                        "{}: Transaction {} submitted (nonce = {}, energy = {}).",
                         chrono::Utc::now(),
                         transaction_hash,
                         txn.header.nonce,
