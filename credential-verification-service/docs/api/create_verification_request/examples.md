@@ -30,7 +30,7 @@
             "IE",
             "IN",
             "US",
-            "UK"
+            "GB"
           ]
         },
         {
@@ -40,7 +40,7 @@
             "IE",
             "IN",
             "US",
-            "UK"
+            "GB"
           ]
         },
         {
@@ -127,7 +127,7 @@
             "IE",
             "IN",
             "US",
-            "UK"
+            "GB"
           ]
         },
         {
@@ -137,7 +137,7 @@
             "IE",
             "IN",
             "US",
-            "UK"
+            "GB"
           ]
         },
         {
@@ -196,7 +196,7 @@ Returned Verification Request Sample:
                     "set": [
                         "IE",
                         "IN",
-                        "UK",
+                        "GB",
                         "US"
                     ]
                 },
@@ -206,7 +206,7 @@ Returned Verification Request Sample:
                     "set": [
                         "IE",
                         "IN",
-                        "UK",
+                        "GB",
                         "US"
                     ]
                 },

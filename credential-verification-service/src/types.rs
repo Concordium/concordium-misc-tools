@@ -41,6 +41,8 @@ pub struct AppJson<T>(pub T);
 pub enum ServerError {
     #[error("{0:#}")]
     Anyhow(#[from] anyhow::Error),
+    #[error("Payload validation failed: {0}")]
+    PayloadValidation(String),
     #[error("request anchor transaction {0} not found")]
     RequestAnchorTransactionNotFound(TransactionHash),
     #[error("request anchor transaction {0} not a register data transaction")]
@@ -75,7 +77,8 @@ impl IntoResponse for ServerError {
                 tracing::error!("internal error: {self}");
                 (StatusCode::INTERNAL_SERVER_ERROR, "internal server error").into_response()
             }
-            ServerError::RequestAnchorTransactionNotRegisterData(_)
+            ServerError::PayloadValidation(_)
+            | ServerError::RequestAnchorTransactionNotRegisterData(_)
             | ServerError::RequestAnchorTransactionNotFound(_)
             | ServerError::RequestAnchorDecode(_, _)
             | ServerError::IdentityProviderNotFound(_)

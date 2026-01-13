@@ -27,6 +27,7 @@ tower-http = {workspace = true, features = [
   "compression-zstd",
 ] }
 tower.workspace = true
+rust_iso3166.workspace = true
 
 [dev-dependencies]
 parking_lot.workspace = true
