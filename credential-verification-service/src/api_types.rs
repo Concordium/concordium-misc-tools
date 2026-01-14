@@ -94,6 +94,36 @@ pub struct VerificationFailure {
     pub message: String,
 }
 
+/// Definition of Error Response structure to be sent back to the client.
+pub struct ErrorResponse {
+    /// The body of the error
+    pub error: ErrorBody,
+}
+
+pub struct ErrorBody {
+    /// http status code for the error
+    pub code: u8,
+    /// machine readable error type that has occurred. All uppercase wording separated by underscore.
+    /// eg: VALIDATION_ERROR
+    pub error_type: String,
+    /// high level error message descrbing the error
+    pub message: String,
+    /// request trace id for distributed logging
+    pub trace_id: String,
+    pub retryable: bool,
+    pub details: Vec<ErrorDetail>,
+}
+
+/// A specific Error detail that has occurred
+pub struct ErrorDetail {
+    /// machine readable error type about a specific error that has occurred
+    pub error_type: String,
+    /// path of the problem. This could be a request payload path to a specific field causing the issue.
+    pub path: String,
+    /// specific helpful error message defining what has happened for this error
+    pub message: String,
+}
+
 mod map_hex_cbor_values_option {
     use super::*;
     use hex::{FromHex, ToHex};
