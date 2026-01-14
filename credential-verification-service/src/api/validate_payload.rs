@@ -151,7 +151,7 @@ pub fn payload_validation(claims: Vec<RequestedSubjectClaims>) -> Result<(), Ser
 pub fn validate_range_statement(
     statement: AttributeInRangeStatement<ArCurve, AttributeTag, Web3IdAttribute>,
 ) -> Result<(), ServerError> {
-    let error_message = format!(
+    let error_prefix_message = format!(
         "Validation of range statement with attribute tag `{0}` failed. ",
         statement.attribute_tag
     );
@@ -159,45 +159,39 @@ pub fn validate_range_statement(
     if statement.upper < statement.lower {
         return Err(ServerError::PayloadValidation(format!(
             "{0}Provided `upper bound: {1}` must be greater than `lower bound: {2}`.",
-            error_message, statement.upper, statement.lower
+            error_prefix_message, statement.upper, statement.lower
         )));
     };
 
     match statement.attribute_tag {
         ATTRIBUTE_TAG_DOB | ATTRIBUTE_TAG_ID_DOC_ISSUED_AT | ATTRIBUTE_TAG_ID_DOC_EXPIRES_AT => {
-            // 1. Ensure statement.upper is string value
-            let upper_str = ensure_string(&statement.upper).map_err(|e| {ServerError::PayloadValidation(format!(
-        "Range statement with attribute tag `{0}`: Upper range value must be of format YYYYMMDD: {1}",
-        statement.attribute_tag,
-        e))
-})?;
-
-            // 2. Validate the string is ISO8601 / YYYYMMDD
-            is_iso8601(upper_str).map_err(|e| {
-    ServerError::PayloadValidation(format!(
-        "Range statement with attribute tag `{0}`: Upper range value must be of format YYYYMMDD: {1}",
-        statement.attribute_tag,
-        e))
-})?;
-
-            // 3. Ensure statement.lower is string value
+            // Ensure upper and lower bounds are strings
+            let upper_str = ensure_string(&statement.upper).map_err(|e| {
+                ServerError::PayloadValidation(format!(
+                    "{error_prefix_message}Upper bound value error: {e}"
+                ))
+            })?;
             let lower_str = ensure_string(&statement.lower).map_err(|e| {
-    ServerError::PayloadValidation(format!(
-        "Range statement with attribute tag `{0}`: Lower range value must be of format YYYYMMDD: {1}",
-        statement.attribute_tag,
-        e ))
-})?;
+                ServerError::PayloadValidation(format!(
+                    "{error_prefix_message}Lower bound value error: {e}"
+                ))
+            })?;
 
-            // 4. Validate the string is ISO8601 / YYYYMMDD
+            // Validate dates with ISO8601
+            is_iso8601(upper_str).map_err(|e| {
+                ServerError::PayloadValidation(format!(
+                    "{error_prefix_message}Upper bound value invalid format: {e}"
+                ))
+            })?;
             is_iso8601(lower_str).map_err(|e| {
-    ServerError::PayloadValidation(format!(
-        "Range statement with attribute tag `{0}`: Lower range value must be of format YYYYMMDD: {1}",
-        statement.attribute_tag,e ))
-})?;
+                ServerError::PayloadValidation(format!(
+                    "{error_prefix_message}Lower bound value invalid format: {e}"
+                ))
+            })?;
         }
         _ => {
             return Err(ServerError::PayloadValidation(format!(
-                "Attribute tag `{0}` is not allowed to be used in range statements. 
+                "{error_prefix_message}Attribute tag `{0}` is not allowed to be used in range statements. \
                 Only `ATTRIBUTE_TAG_DOB(3)`, `ATTRIBUTE_TAG_ID_DOC_ISSUED_AT(9)`, and `ATTRIBUTE_TAG_ID_DOC_EXPIRES_AT(10)` allowed in range statements.",
                 statement.attribute_tag
             )));
@@ -241,9 +235,14 @@ pub fn validate_set_statement<S>(statement: &S) -> Result<(), ServerError>
 where
     S: for<'a> HasSet<'a, Item = Web3IdAttribute>,
 {
+    let error_prefix_message = format!(
+        "Validation of in-set/not-in-set statement with attribute tag `{0}` failed. ",
+        statement.attribute_tag()
+    );
+
     if statement.set().is_empty() {
         return Err(ServerError::PayloadValidation(
-            "Set Statement should not be empty.".to_string(),
+            "{error_prefix_message}Set Statement should not be empty.".to_string(),
         ));
     }
 
@@ -255,15 +254,21 @@ where
             let values: Vec<&str> = statement
                 .set()
                 .iter()
-                .map(|attr| ensure_string(attr))
+                .map(|attr| {
+                    ensure_string(attr).map_err(|e| {
+                        ServerError::PayloadValidation(format!(
+                            "{error_prefix_message}Value in set statement must be a string: {e}"
+                        ))
+                    })
+                })
                 .collect::<Result<_, _>>()?;
 
             // 2. Validate ISO codes
-            for v in &values {
-                if !is_iso3166_1_alpha2(v) {
+            for code in &values {
+                if !is_iso3166_1_alpha2(code) {
                     return Err(ServerError::PayloadValidation(format!(
-                        "Value `{0}` of attribute tag `{1}` must be ISO3166-1 Alpha-2 code in upper case",
-                        v,
+                        "{error_prefix_message}Value `{0}` of attribute tag `{1}` must be ISO3166-1 Alpha-2 code in upper case (e.g. `DE`)",
+                        code,
                         statement.attribute_tag(),
                     )));
                 }
@@ -275,14 +280,20 @@ where
             let values: Vec<&str> = statement
                 .set()
                 .iter()
-                .map(|attr| ensure_string(attr))
+                .map(|attr| {
+                    ensure_string(attr).map_err(|e| {
+                        ServerError::PayloadValidation(format!(
+                            "{error_prefix_message}Value in set statement must be a string: {e}"
+                        ))
+                    })
+                })
                 .collect::<Result<_, _>>()?;
 
             // 2. Validate ISO codes
             for v in &values {
                 if !is_iso3166_1_alpha2(v) && !is_iso3166_2(v) {
                     return Err(ServerError::PayloadValidation(format!(
-                        "Value `{0}` of attribute tag `{1}` must be ISO3166-1 Alpha-2 code in upper case or ISO3166-2 codes",
+                        "{error_prefix_message}Value `{0}` of attribute tag `{1}` must be ISO3166-1 Alpha-2 code in upper case (e.g. `DE`) or ISO3166-2 codes (e.g. `ES-B`, `US-CA`)",
                         v,
                         statement.attribute_tag(),
                     )));
@@ -295,18 +306,28 @@ where
             let values: Vec<&str> = statement
                 .set()
                 .iter()
-                .map(|attr| ensure_string(attr))
+                .map(|attr| {
+                    ensure_string(attr).map_err(|e| {
+                        ServerError::PayloadValidation(format!(
+                            "{error_prefix_message}Value in set statement must be a string: {e}"
+                        ))
+                    })
+                })
                 .collect::<Result<_, _>>()?;
 
             // 2. Validate ID doc type
             for v in &values {
-                IdDocType::parse(v)?;
+                IdDocType::parse(v).map_err(|e| {
+                    ServerError::PayloadValidation(format!(
+                        "{error_prefix_message}ID doc type invalid format: {e}"
+                    ))
+                })?;
             }
         }
 
         _ => {
             return Err(ServerError::PayloadValidation(format!(
-                "{0} is not allowed to be used in-set/not-in-set statements.
+                "{error_prefix_message}Attribute tag `{0}` is not allowed to be used in-set/not-in-set statements.
                 Only `ATTRIBUTE_TAG_COUNTRY_OF_RESIDENCE(4)`, `ATTRIBUTE_TAG_NATIONALITY(5)`, `ATTRIBUTE_TAG_LEGAL_COUNTRY(15)`, `ATTRIBUTE_TAG_ID_DOC_ISSUER(8)`, and `ATTRIBUTE_TAG_ID_DOC_TYPE(6)` allowed in in-set/not-in-set statements.",
                 statement.attribute_tag()
             )));
@@ -541,7 +562,7 @@ mod tests {
         let stmt = make_range_statement("19900101", "2020ABCD");
         assert_error_contains(
             validate_range_statement(stmt),
-            "Upper range value must be of format YYYYMMDD",
+            "Upper bound value invalid format",
         );
     }
 
@@ -550,7 +571,7 @@ mod tests {
         let stmt = make_range_statement("1990ABCD", "20200101");
         assert_error_contains(
             validate_range_statement(stmt),
-            "Lower range value must be of format YYYYMMDD",
+            "Lower bound value invalid format:",
         );
     }
 
