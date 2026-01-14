@@ -1,5 +1,6 @@
 //! Helpers for validating the statements/claims in a request to this service.
 use crate::types::ServerError;
+use anyhow::{Result, anyhow};
 use concordium_rust_sdk::base::web3id::v1::anchor::{
     RequestedStatement::{AttributeInRange, AttributeInSet, AttributeNotInSet, RevealAttribute},
     RequestedSubjectClaims::{self, Identity},
@@ -33,10 +34,10 @@ pub fn ensure_string(attr: &Web3IdAttribute) -> Result<&str, ServerError> {
 }
 
 /// ISO8601 strings representing dates as `YYYYMMDD`.
-pub fn is_iso8601(date: &str) -> Result<(), ServerError> {
+pub fn is_iso8601(date: &str) -> Result<(), anyhow::Error> {
     // Must be exactly 8 characters
     if date.len() != 8 {
-        return Err(ServerError::PayloadValidation(format!(
+        return Err(anyhow!(format!(
             "The given date should be 8 characters of length (iso8601 `YYYYMMDD` format) but given date `{0}` is of length {1}.",
             date,
             date.len()
@@ -45,41 +46,41 @@ pub fn is_iso8601(date: &str) -> Result<(), ServerError> {
 
     // Must be all digits
     if !date.chars().all(|c| c.is_ascii_digit()) {
-        return Err(ServerError::PayloadValidation(
-            "Date characters must be digits (iso8601 `YYYYMMDD` format).".to_string(),
-        ));
+        return Err(anyhow!(format!(
+            "Date characters must be digits (iso8601 `YYYYMMDD` format)."
+        )));
     }
 
     // Parse month (chars 4-5, 0-indexed)
     let month: u32 = match date[4..6].parse() {
         Ok(m) => m,
         Err(e) => {
-            return Err(ServerError::PayloadValidation(format!(
+            return Err(anyhow!(format!(
                 "Month must be present (iso8601 `YYYYMMDD` format).: {0}",
                 e
             )));
         }
     };
     if !(1..=12).contains(&month) {
-        return Err(ServerError::PayloadValidation(
-            "Month must be between 1-12 (iso8601 `YYYYMMDD` format).".to_string(),
-        ));
+        return Err(anyhow!(format!(
+            "Month must be between 1-12 (iso8601 `YYYYMMDD` format)."
+        )));
     }
 
     // Parse day (chars 6-7)
     let day: u32 = match date[6..8].parse() {
         Ok(d) => d,
         Err(e) => {
-            return Err(ServerError::PayloadValidation(format!(
+            return Err(anyhow!(format!(
                 "Day must be present (iso8601 `YYYYMMDD` format).: {0}",
                 e
             )));
         }
     };
     if !(1..=31).contains(&day) {
-        return Err(ServerError::PayloadValidation(
-            "Day must be between 1-31 (iso8601 `YYYYMMDD` format).".to_string(),
-        ));
+        return Err(anyhow!(format!(
+            "Day must be between 1-31 (iso8601 `YYYYMMDD` format)."
+        )));
     }
     Ok(())
 }
@@ -355,6 +356,12 @@ mod tests {
         assert!(msg.contains(expected), "unexpected error message: {}", msg);
     }
 
+    fn assert_anyhow_error_contains(result: Result<(), anyhow::Error>, expected: &str) {
+        let err = result.expect_err("expected error but got Ok");
+        let msg = err.to_string();
+        assert!(msg.contains(expected), "unexpected error message: {}", msg);
+    }
+
     #[test]
     fn test_iso8601_valid() {
         assert!(is_iso8601("20240131").is_ok());
@@ -362,17 +369,17 @@ mod tests {
 
     #[test]
     fn test_iso8601_non_digits() {
-        assert_error_contains(is_iso8601("2024ABCD"), "Date characters must be digits");
+        assert_anyhow_error_contains(is_iso8601("2024ABCD"), "Date characters must be digits");
     }
 
     #[test]
     fn test_iso8601_invalid_month() {
-        assert_error_contains(is_iso8601("20241301"), "Month must be between 1-12");
+        assert_anyhow_error_contains(is_iso8601("20241301"), "Month must be between 1-12");
     }
 
     #[test]
     fn test_iso8601_invalid_day() {
-        assert_error_contains(is_iso8601("20240199"), "Day must be between 1-31");
+        assert_anyhow_error_contains(is_iso8601("20240199"), "Day must be between 1-31");
     }
 
     #[test]
@@ -570,9 +577,11 @@ mod tests {
     fn test_range_statement_invalid_lower_format() {
         let stmt = make_range_statement("1990ABCD", "20200101");
         assert_error_contains(
-            validate_range_statement(stmt),
+            validate_range_statement(stmt.clone()),
             "Lower bound value invalid format:",
         );
+        let test = validate_range_statement(stmt);
+        print!("{test:?}");
     }
 
     #[test]
@@ -580,7 +589,7 @@ mod tests {
         let mut stmt = make_range_statement("19900101", "20200101");
         stmt.attribute_tag = ATTRIBUTE_TAG_COUNTRY_OF_RESIDENCE; // Not allowed for range
         assert_error_contains(
-            validate_range_statement(stmt),
+            validate_range_statement(stmt.clone()),
             "is not allowed to be used in range statements",
         );
     }
