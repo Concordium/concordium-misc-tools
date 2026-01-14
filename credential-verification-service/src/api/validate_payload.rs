@@ -1,4 +1,4 @@
-//! Helpers for validating the statements in a request to this service.
+//! Helpers for validating the statements/claims in a request to this service.
 use crate::types::ServerError;
 use concordium_rust_sdk::base::web3id::v1::anchor::{
     RequestedStatement::{AttributeInRange, AttributeInSet, AttributeNotInSet, RevealAttribute},
@@ -32,6 +32,7 @@ pub fn ensure_string(attr: &Web3IdAttribute) -> Result<&str, ServerError> {
     }
 }
 
+/// ISO8601 strings representing dates as `YYYYMMDD`.
 pub fn is_iso8601(date: &str) -> Result<(), ServerError> {
     // Must be exactly 8 characters
     if date.len() != 8 {
@@ -154,9 +155,9 @@ pub fn payload_validation(claims: Vec<RequestedSubjectClaims>) -> Result<(), Ser
                         RevealAttribute(_) => {
                             // Nothing to validate here.
                         }
-                        AttributeInRange(sta) => verify_range_statement(sta)?,
-                        AttributeInSet(sta) => verify_set_statement(&sta)?,
-                        AttributeNotInSet(sta) => verify_set_statement(&sta)?,
+                        AttributeInRange(sta) => validate_range_statement(sta)?,
+                        AttributeInSet(sta) => validate_set_statement(&sta)?,
+                        AttributeNotInSet(sta) => validate_set_statement(&sta)?,
                     }
                 }
             }
@@ -165,7 +166,7 @@ pub fn payload_validation(claims: Vec<RequestedSubjectClaims>) -> Result<(), Ser
     Ok(())
 }
 
-pub fn verify_range_statement(
+pub fn validate_range_statement(
     statement: AttributeInRangeStatement<ArCurve, AttributeTag, Web3IdAttribute>,
 ) -> Result<(), ServerError> {
     if statement.upper < statement.lower {
@@ -247,7 +248,7 @@ impl<'a> HasSet<'a> for AttributeNotInSetStatement<ArCurve, AttributeTag, Web3Id
     }
 }
 
-pub fn verify_set_statement<S>(statement: &S) -> Result<(), ServerError>
+pub fn validate_set_statement<S>(statement: &S) -> Result<(), ServerError>
 where
     S: for<'a> HasSet<'a, Item = Web3IdAttribute>,
 {
