@@ -37,7 +37,7 @@ flowchart LR
     subgraph VerificationService["Credential Verification Service (Rust)"]
         API["REST API / HTTP Endpoint"]
         SDK["Rust SDK Integration 
-            (Lookup verifiable request anchor tx, cryptographic verification & verifying presentation)"
+            (Lookup anchor tx and verify presentation)"
         ]
     end
 

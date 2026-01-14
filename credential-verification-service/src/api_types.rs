@@ -101,11 +101,9 @@ pub struct ErrorResponse {
 }
 
 pub struct ErrorBody {
-    /// http status code for the error
-    pub code: u8,
-    /// machine readable error type that has occurred. All uppercase wording separated by underscore.
+    /// machine readable error code that has occurred. All uppercase wording separated by underscore.
     /// eg: VALIDATION_ERROR
-    pub error_type: String,
+    pub code: String,
     /// high level error message descrbing the error
     pub message: String,
     /// request trace id for distributed logging
@@ -116,8 +114,8 @@ pub struct ErrorBody {
 
 /// A specific Error detail that has occurred
 pub struct ErrorDetail {
-    /// machine readable error type about a specific error that has occurred
-    pub error_type: String,
+    /// machine readable error code about a specific error that has occurred
+    pub code: String,
     /// path of the problem. This could be a request payload path to a specific field causing the issue.
     pub path: String,
     /// specific helpful error message defining what has happened for this error
