@@ -1,7 +1,7 @@
 Architecture Overivew
 
 
-Create Verification Request API:
+Create Verification Request:
 
 ```mermaid
 flowchart LR
