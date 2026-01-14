@@ -27,7 +27,7 @@ pub fn ensure_string(attr: &Web3IdAttribute) -> Result<&str, ServerError> {
     match attr {
         Web3IdAttribute::String(v) => Ok(v.as_ref()),
         _ => Err(ServerError::PayloadValidation(
-            "Expected string value in statement".to_string(),
+            "Expected string value in attribute".to_string(),
         )),
     }
 }
@@ -36,15 +36,17 @@ pub fn ensure_string(attr: &Web3IdAttribute) -> Result<&str, ServerError> {
 pub fn is_iso8601(date: &str) -> Result<(), ServerError> {
     // Must be exactly 8 characters
     if date.len() != 8 {
-        return Err(ServerError::PayloadValidation(
-            "Date length should be 8 characters for format `YYYYMMDD`.".to_string(),
-        ));
+        return Err(ServerError::PayloadValidation(format!(
+            "The given date should be 8 characters of length (iso8601 `YYYYMMDD` format) but given date `{0}` is of length {1}.",
+            date,
+            date.len()
+        )));
     }
 
     // Must be all digits
     if !date.chars().all(|c| c.is_ascii_digit()) {
         return Err(ServerError::PayloadValidation(
-            "Date characters must be digits.".to_string(),
+            "Date characters must be digits (iso8601 `YYYYMMDD` format).".to_string(),
         ));
     }
 
@@ -53,14 +55,14 @@ pub fn is_iso8601(date: &str) -> Result<(), ServerError> {
         Ok(m) => m,
         Err(e) => {
             return Err(ServerError::PayloadValidation(format!(
-                "Month must be present in format `YYYYMMDD`: {0}",
+                "Month must be present (iso8601 `YYYYMMDD` format).: {0}",
                 e
             )));
         }
     };
     if !(1..=12).contains(&month) {
         return Err(ServerError::PayloadValidation(
-            "Month must be between 1-12 for format `YYYYMMDD`.".to_string(),
+            "Month must be between 1-12 (iso8601 `YYYYMMDD` format).".to_string(),
         ));
     }
 
@@ -69,55 +71,35 @@ pub fn is_iso8601(date: &str) -> Result<(), ServerError> {
         Ok(d) => d,
         Err(e) => {
             return Err(ServerError::PayloadValidation(format!(
-                "Day must be present in format `YYYYMMDD`: {0}",
+                "Day must be present (iso8601 `YYYYMMDD` format).: {0}",
                 e
             )));
         }
     };
     if !(1..=31).contains(&day) {
         return Err(ServerError::PayloadValidation(
-            "Day must be between 1-31 for format `YYYYMMDD`.".to_string(),
+            "Day must be between 1-31 (iso8601 `YYYYMMDD` format).".to_string(),
         ));
     }
     Ok(())
 }
 
-/// ISO3166_1_alpha2 codes consist of 2 upper case characters representing countries/region.
+/// ISO3166_1_alpha2 codes consist of 2 upper case characters representing countries/region (e.g. `GB, DE, DK`).
 pub fn is_iso3166_1_alpha2(code: &str) -> bool {
     rust_iso3166::from_alpha2(code).is_some()
         && code.len() == 2
         && code.chars().all(|c| c.is_ascii_uppercase())
 }
 
-/// ISO3166-2 codes consist of a ISO3166_1_alpha2 code, then a dash, and then 1-3 alphanumerical characters representing countries/region.
+/// ISO3166-2 codes consist of a ISO3166_1_alpha2 code, then a dash, and then 1-3 alphanumerical characters
+/// representing countries/region (e.g. `ES-B`, `US-CA`).
 pub fn is_iso3166_2(code: &str) -> bool {
     if code.len() < 4 || code.len() > 6 {
         // 2 letters + '-' + 1-3 characters
         return false;
     }
 
-    let (alpha2, rest) = code.split_at(2);
-    if !is_iso3166_1_alpha2(alpha2) {
-        return false;
-    }
-
-    let mut chars = rest.chars();
-    if chars.next() != Some('-') {
-        return false;
-    }
-
-    let tail: Vec<char> = chars.collect();
-    if tail.is_empty() || tail.len() > 3 {
-        return false;
-    }
-
-    for c in tail {
-        if !c.is_ascii_alphanumeric() {
-            return false;
-        }
-    }
-
-    true
+    rust_iso3166::iso3166_2::from_code(code).is_some()
 }
 
 #[derive(Debug)]
@@ -169,11 +151,17 @@ pub fn payload_validation(claims: Vec<RequestedSubjectClaims>) -> Result<(), Ser
 pub fn validate_range_statement(
     statement: AttributeInRangeStatement<ArCurve, AttributeTag, Web3IdAttribute>,
 ) -> Result<(), ServerError> {
+    let error_message = format!(
+        "Validation of range statement with attribute tag `{0}` failed. ",
+        statement.attribute_tag
+    );
+
     if statement.upper < statement.lower {
-        return Err(ServerError::PayloadValidation(
-            "Upper bound must be greater than lower bound".to_string(),
-        ));
-    }
+        return Err(ServerError::PayloadValidation(format!(
+            "{0}Provided `upper bound: {1}` must be greater than `lower bound: {2}`.",
+            error_message, statement.upper, statement.lower
+        )));
+    };
 
     match statement.attribute_tag {
         ATTRIBUTE_TAG_DOB | ATTRIBUTE_TAG_ID_DOC_ISSUED_AT | ATTRIBUTE_TAG_ID_DOC_EXPIRES_AT => {
@@ -209,7 +197,8 @@ pub fn validate_range_statement(
         }
         _ => {
             return Err(ServerError::PayloadValidation(format!(
-                "Attribute tag `{0}` is not allowed to be used in range statements",
+                "Attribute tag `{0}` is not allowed to be used in range statements. 
+                Only `ATTRIBUTE_TAG_DOB(3)`, `ATTRIBUTE_TAG_ID_DOC_ISSUED_AT(9)`, and `ATTRIBUTE_TAG_ID_DOC_EXPIRES_AT(10)` allowed in range statements.",
                 statement.attribute_tag
             )));
         }
@@ -317,7 +306,8 @@ where
 
         _ => {
             return Err(ServerError::PayloadValidation(format!(
-                "{0} is not allowed to be used in set statements",
+                "{0} is not allowed to be used in-set/not-in-set statements.
+                Only `ATTRIBUTE_TAG_COUNTRY_OF_RESIDENCE(4)`, `ATTRIBUTE_TAG_NATIONALITY(5)`, `ATTRIBUTE_TAG_LEGAL_COUNTRY(15)`, `ATTRIBUTE_TAG_ID_DOC_ISSUER(8)`, and `ATTRIBUTE_TAG_ID_DOC_TYPE(6)` allowed in in-set/not-in-set statements.",
                 statement.attribute_tag()
             )));
         }
@@ -385,6 +375,7 @@ mod tests {
         assert!(is_iso3166_2("DE-BE"));
         assert!(is_iso3166_2("US-CA"));
         assert!(is_iso3166_2("FR-75"));
+        //
     }
 
     #[test]
@@ -506,7 +497,7 @@ mod tests {
         stmt.attribute_tag = ATTRIBUTE_TAG_ID_DOC_ISSUED_AT; // Not allowed for set
         assert_error_contains(
             validate_set_statement(&stmt),
-            "is not allowed to be used in set statements",
+            "is not allowed to be used in-set/not-in-set statements",
         );
     }
 
@@ -541,7 +532,7 @@ mod tests {
         let stmt = make_range_statement("20200101", "19900101");
         assert_error_contains(
             validate_range_statement(stmt),
-            "Upper bound must be greater than lower bound",
+            "Provided `upper bound: 19900101` must be greater than `lower bound: 20200101`.",
         );
     }
 
