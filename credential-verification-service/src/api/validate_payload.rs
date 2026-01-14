@@ -325,3 +325,251 @@ where
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use concordium_rust_sdk::id::constants::AttributeKind;
+    use concordium_rust_sdk::id::id_proof_types::{
+        AttributeInRangeStatement, AttributeInSetStatement,
+    };
+    use concordium_rust_sdk::id::types::AttributeTag;
+    use concordium_rust_sdk::web3id::Web3IdAttribute;
+    use std::collections::BTreeSet;
+    use std::marker::PhantomData;
+
+    fn assert_error_contains(result: Result<(), ServerError>, expected: &str) {
+        let err = result.expect_err("expected error but got Ok");
+        let msg = err.to_string();
+        assert!(msg.contains(expected), "unexpected error message: {}", msg);
+    }
+
+    #[test]
+    fn test_iso8601_valid() {
+        assert!(is_iso8601("20240131").is_ok());
+    }
+
+    #[test]
+    fn test_iso8601_non_digits() {
+        assert_error_contains(is_iso8601("2024ABCD"), "Date characters must be digits");
+    }
+
+    #[test]
+    fn test_iso8601_invalid_month() {
+        assert_error_contains(is_iso8601("20241301"), "Month must be between 1-12");
+    }
+
+    #[test]
+    fn test_iso8601_invalid_day() {
+        assert_error_contains(is_iso8601("20240199"), "Day must be between 1-31");
+    }
+
+    #[test]
+    fn test_iso3166_1_alpha2_valid() {
+        assert!(is_iso3166_1_alpha2("DE"));
+        assert!(is_iso3166_1_alpha2("US"));
+    }
+
+    #[test]
+    fn test_iso3166_1_alpha2_lowercase_invalid() {
+        assert!(!is_iso3166_1_alpha2("de"));
+    }
+
+    #[test]
+    fn test_iso3166_1_alpha2_invalid_code() {
+        assert!(!is_iso3166_1_alpha2("ZZ"));
+    }
+
+    #[test]
+    fn test_iso3166_2_valid() {
+        assert!(is_iso3166_2("DE-BE"));
+        assert!(is_iso3166_2("US-CA"));
+        assert!(is_iso3166_2("FR-75"));
+    }
+
+    #[test]
+    fn test_iso3166_2_missing_dash() {
+        assert!(!is_iso3166_2("DEBE"));
+    }
+
+    #[test]
+    fn test_iso3166_2_invalid_country() {
+        assert!(!is_iso3166_2("ZZ-123"));
+    }
+
+    #[test]
+    fn test_iso3166_2_too_long_suffix() {
+        assert!(!is_iso3166_2("DE-ABCD"));
+    }
+
+    #[test]
+    fn test_id_doc_type_valid() {
+        assert!(IdDocType::parse("0").is_ok());
+        assert!(IdDocType::parse("1").is_ok());
+        assert!(IdDocType::parse("4").is_ok());
+    }
+
+    #[test]
+    fn test_id_doc_type_invalid() {
+        let err = IdDocType::parse("9").unwrap_err();
+        assert!(
+            err.to_string().contains("Invalid ID document type"),
+            "unexpected error: {}",
+            err
+        );
+
+        let err = IdDocType::parse("passport").unwrap_err();
+        assert!(
+            err.to_string().contains("Invalid ID document type"),
+            "unexpected error: {}",
+            err
+        );
+    }
+
+    // --------------------
+    // Helpers to create set statements
+    // --------------------
+
+    fn make_country_set_statement(
+        values: Vec<&str>,
+    ) -> AttributeInSetStatement<ArCurve, AttributeTag, Web3IdAttribute> {
+        let set: BTreeSet<Web3IdAttribute> = values
+            .into_iter()
+            .map(|v| Web3IdAttribute::String(AttributeKind::try_new(v.into()).unwrap()))
+            .collect();
+
+        AttributeInSetStatement {
+            attribute_tag: ATTRIBUTE_TAG_COUNTRY_OF_RESIDENCE,
+            set,
+            _phantom: PhantomData,
+        }
+    }
+
+    fn make_id_doc_type_set_statement(
+        values: Vec<&str>,
+    ) -> AttributeInSetStatement<ArCurve, AttributeTag, Web3IdAttribute> {
+        let set: BTreeSet<Web3IdAttribute> = values
+            .into_iter()
+            .map(|v| Web3IdAttribute::String(AttributeKind::try_new(v.into()).unwrap()))
+            .collect();
+
+        AttributeInSetStatement {
+            attribute_tag: ATTRIBUTE_TAG_ID_DOC_TYPE,
+            set,
+            _phantom: PhantomData,
+        }
+    }
+
+    // --------------------
+    // Set statement tests
+    // --------------------
+
+    #[test]
+    fn test_set_statement_valid_countries() {
+        let stmt = make_country_set_statement(vec!["DE", "US", "GB"]);
+        assert!(validate_set_statement(&stmt).is_ok());
+    }
+
+    #[test]
+    fn test_set_statement_invalid_country() {
+        let stmt = make_country_set_statement(vec!["DE", "ZZ"]);
+        assert_error_contains(
+            validate_set_statement(&stmt),
+            "must be ISO3166-1 Alpha-2 code",
+        );
+    }
+
+    #[test]
+    fn test_set_statement_empty() {
+        let stmt = make_country_set_statement(vec![]);
+        assert_error_contains(
+            validate_set_statement(&stmt),
+            "Set Statement should not be empty",
+        );
+    }
+
+    #[test]
+    fn test_set_statement_valid_id_doc_types() {
+        let stmt = make_id_doc_type_set_statement(vec!["0", "1", "3"]);
+        assert!(validate_set_statement(&stmt).is_ok());
+    }
+
+    #[test]
+    fn test_set_statement_invalid_id_doc_type() {
+        let stmt = make_id_doc_type_set_statement(vec!["0", "5"]);
+        assert_error_contains(validate_set_statement(&stmt), "Invalid ID document type");
+    }
+
+    #[test]
+    fn test_set_statement_disallowed_tag() {
+        let mut stmt = make_id_doc_type_set_statement(vec!["0", "5"]);
+        stmt.attribute_tag = ATTRIBUTE_TAG_ID_DOC_ISSUED_AT; // Not allowed for set
+        assert_error_contains(
+            validate_set_statement(&stmt),
+            "is not allowed to be used in set statements",
+        );
+    }
+
+    // --------------------
+    // Helpers to create range statements
+    // --------------------
+
+    fn make_range_statement(
+        lower: &str,
+        upper: &str,
+    ) -> AttributeInRangeStatement<ArCurve, AttributeTag, Web3IdAttribute> {
+        AttributeInRangeStatement {
+            attribute_tag: ATTRIBUTE_TAG_DOB,
+            lower: Web3IdAttribute::String(AttributeKind::try_new(lower.into()).unwrap()),
+            upper: Web3IdAttribute::String(AttributeKind::try_new(upper.into()).unwrap()),
+            _phantom: PhantomData,
+        }
+    }
+
+    // --------------------
+    // Range statement tests
+    // --------------------
+
+    #[test]
+    fn test_range_statement_valid_dates() {
+        let stmt = make_range_statement("19900101", "20200101");
+        assert!(validate_range_statement(stmt).is_ok());
+    }
+
+    #[test]
+    fn test_range_statement_upper_less_than_lower() {
+        let stmt = make_range_statement("20200101", "19900101");
+        assert_error_contains(
+            validate_range_statement(stmt),
+            "Upper bound must be greater than lower bound",
+        );
+    }
+
+    #[test]
+    fn test_range_statement_invalid_upper_format() {
+        let stmt = make_range_statement("19900101", "2020ABCD");
+        assert_error_contains(
+            validate_range_statement(stmt),
+            "Upper range value must be of format YYYYMMDD",
+        );
+    }
+
+    #[test]
+    fn test_range_statement_invalid_lower_format() {
+        let stmt = make_range_statement("1990ABCD", "20200101");
+        assert_error_contains(
+            validate_range_statement(stmt),
+            "Lower range value must be of format YYYYMMDD",
+        );
+    }
+
+    #[test]
+    fn test_range_statement_disallowed_tag() {
+        let mut stmt = make_range_statement("19900101", "20200101");
+        stmt.attribute_tag = ATTRIBUTE_TAG_COUNTRY_OF_RESIDENCE; // Not allowed for range
+        assert_error_contains(
+            validate_range_statement(stmt),
+            "is not allowed to be used in range statements",
+        );
+    }
+}
