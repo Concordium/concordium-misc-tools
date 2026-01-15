@@ -1,6 +1,7 @@
 //! Helpers for validating the statements/claims in a request to this service.
-use crate::types::ServerError;
-use anyhow::{Result, anyhow};
+use crate::types::ValidationError;
+use anyhow::Result;
+use chrono::NaiveDate;
 use concordium_rust_sdk::base::web3id::v1::anchor::{
     RequestedStatement::{AttributeInRange, AttributeInSet, AttributeNotInSet, RevealAttribute},
     RequestedSubjectClaims::{self, Identity},
@@ -15,78 +16,47 @@ use rust_iso3166;
 use std::collections::BTreeSet;
 
 /// Attribute tags
-pub const ATTRIBUTE_TAG_DOB: AttributeTag = AttributeTag(3);
-pub const ATTRIBUTE_TAG_COUNTRY_OF_RESIDENCE: AttributeTag = AttributeTag(4);
-pub const ATTRIBUTE_TAG_NATIONALITY: AttributeTag = AttributeTag(5);
-pub const ATTRIBUTE_TAG_ID_DOC_TYPE: AttributeTag = AttributeTag(6);
-pub const ATTRIBUTE_TAG_ID_DOC_ISSUER: AttributeTag = AttributeTag(8);
-pub const ATTRIBUTE_TAG_ID_DOC_ISSUED_AT: AttributeTag = AttributeTag(9);
-pub const ATTRIBUTE_TAG_ID_DOC_EXPIRES_AT: AttributeTag = AttributeTag(10);
-pub const ATTRIBUTE_TAG_LEGAL_COUNTRY: AttributeTag = AttributeTag(15);
+const ATTRIBUTE_TAG_DOB: AttributeTag = AttributeTag(3);
+const ATTRIBUTE_TAG_COUNTRY_OF_RESIDENCE: AttributeTag = AttributeTag(4);
+const ATTRIBUTE_TAG_NATIONALITY: AttributeTag = AttributeTag(5);
+const ATTRIBUTE_TAG_ID_DOC_TYPE: AttributeTag = AttributeTag(6);
+const ATTRIBUTE_TAG_ID_DOC_ISSUER: AttributeTag = AttributeTag(8);
+const ATTRIBUTE_TAG_ID_DOC_ISSUED_AT: AttributeTag = AttributeTag(9);
+const ATTRIBUTE_TAG_ID_DOC_EXPIRES_AT: AttributeTag = AttributeTag(10);
+const ATTRIBUTE_TAG_LEGAL_COUNTRY: AttributeTag = AttributeTag(15);
 
-pub fn ensure_string(attr: &Web3IdAttribute) -> Result<&str, ServerError> {
+fn ensure_string(attr: &Web3IdAttribute) -> Result<&str, ValidationError> {
     match attr {
         Web3IdAttribute::String(v) => Ok(v.as_ref()),
-        _ => Err(ServerError::PayloadValidation(
+        _ => Err(ValidationError(
             "Expected string value in attribute".to_string(),
         )),
     }
 }
 
 /// ISO8601 strings representing dates as `YYYYMMDD`.
-pub fn is_iso8601(date: &str) -> Result<(), anyhow::Error> {
+fn is_iso8601(date: &str) -> Result<(), ValidationError> {
     // Must be exactly 8 characters
     if date.len() != 8 {
-        return Err(anyhow!(format!(
-            "The given date should be 8 characters of length (iso8601 `YYYYMMDD` format) but given date `{0}` is of length {1}.",
+        return Err(ValidationError(format!(
+            "The given date should be 8 characters long (ISO8601 `YYYYMMDD` format) but given date `{}` is {} characters long.",
             date,
             date.len()
         )));
     }
 
-    // Must be all digits
-    if !date.chars().all(|c| c.is_ascii_digit()) {
-        return Err(anyhow!(format!(
-            "Date characters must be digits (iso8601 `YYYYMMDD` format)."
-        )));
-    }
-
-    // Parse month (chars 4-5, 0-indexed)
-    let month: u32 = match date[4..6].parse() {
-        Ok(m) => m,
-        Err(e) => {
-            return Err(anyhow!(format!(
-                "Month must be present (iso8601 `YYYYMMDD` format).: {0}",
-                e
-            )));
-        }
-    };
-    if !(1..=12).contains(&month) {
-        return Err(anyhow!(format!(
-            "Month must be between 1-12 (iso8601 `YYYYMMDD` format)."
-        )));
-    }
-
-    // Parse day (chars 6-7)
-    let day: u32 = match date[6..8].parse() {
-        Ok(d) => d,
-        Err(e) => {
-            return Err(anyhow!(format!(
-                "Day must be present (iso8601 `YYYYMMDD` format).: {0}",
-                e
-            )));
-        }
-    };
-    if !(1..=31).contains(&day) {
-        return Err(anyhow!(format!(
-            "Day must be between 1-31 (iso8601 `YYYYMMDD` format)."
-        )));
-    }
-    Ok(())
+    NaiveDate::parse_from_str(date, "%Y%m%d")
+        .map(|_| ())
+        .map_err(|e| {
+            ValidationError(format!(
+                "Failed to parse `{}` as ISO8601 `YYYYMMDD` format: {}",
+                date, e
+            ))
+        })
 }
 
 /// ISO3166_1_alpha2 codes consist of 2 upper case characters representing countries/region (e.g. `GB, DE, DK`).
-pub fn is_iso3166_1_alpha2(code: &str) -> bool {
+fn is_iso3166_1_alpha2(code: &str) -> bool {
     rust_iso3166::from_alpha2(code).is_some()
         && code.len() == 2
         && code.chars().all(|c| c.is_ascii_uppercase())
@@ -94,7 +64,7 @@ pub fn is_iso3166_1_alpha2(code: &str) -> bool {
 
 /// ISO3166-2 codes consist of a ISO3166_1_alpha2 code, then a dash, and then 1-3 alphanumerical characters
 /// representing countries/region (e.g. `ES-B`, `US-CA`).
-pub fn is_iso3166_2(code: &str) -> bool {
+fn is_iso3166_2(code: &str) -> bool {
     if code.len() < 4 || code.len() > 6 {
         // 2 letters + '-' + 1-3 characters
         return false;
@@ -104,7 +74,7 @@ pub fn is_iso3166_2(code: &str) -> bool {
 }
 
 #[derive(Debug)]
-pub enum IdDocType {
+enum IdDocType {
     NA,
     Passport,
     NationalIdCard,
@@ -114,14 +84,14 @@ pub enum IdDocType {
 
 impl IdDocType {
     /// Try to parse a string into an IdDocType
-    pub fn parse(code: &str) -> Result<IdDocType, ServerError> {
+    fn parse(code: &str) -> Result<IdDocType, ValidationError> {
         match code {
             "0" => Ok(IdDocType::NA),
             "1" => Ok(IdDocType::Passport),
             "2" => Ok(IdDocType::NationalIdCard),
             "3" => Ok(IdDocType::DriversLicense),
             "4" => Ok(IdDocType::ImmigrationCard),
-            _ => Err(ServerError::PayloadValidation(format!(
+            _ => Err(ValidationError(format!(
                 "Invalid ID document type `{}`. Must be one of: 0 (N/A), 1 (Passport), 2 (NationalIdCard), 3 (DriversLicense), or 4 (ImmigrationCard).",
                 code
             ))),
@@ -129,7 +99,7 @@ impl IdDocType {
     }
 }
 
-pub fn payload_validation(claims: Vec<RequestedSubjectClaims>) -> Result<(), ServerError> {
+pub fn payload_validation(claims: Vec<RequestedSubjectClaims>) -> Result<(), ValidationError> {
     for claim in claims {
         match claim {
             Identity(id_claim) => {
@@ -149,16 +119,16 @@ pub fn payload_validation(claims: Vec<RequestedSubjectClaims>) -> Result<(), Ser
     Ok(())
 }
 
-pub fn validate_range_statement(
+fn validate_range_statement(
     statement: AttributeInRangeStatement<ArCurve, AttributeTag, Web3IdAttribute>,
-) -> Result<(), ServerError> {
+) -> Result<(), ValidationError> {
     let error_prefix_message = format!(
         "Validation of range statement with attribute tag `{0}` failed. ",
         statement.attribute_tag
     );
 
     if statement.upper < statement.lower {
-        return Err(ServerError::PayloadValidation(format!(
+        return Err(ValidationError(format!(
             "{0}Provided `upper bound: {1}` must be greater than `lower bound: {2}`.",
             error_prefix_message, statement.upper, statement.lower
         )));
@@ -168,30 +138,30 @@ pub fn validate_range_statement(
         ATTRIBUTE_TAG_DOB | ATTRIBUTE_TAG_ID_DOC_ISSUED_AT | ATTRIBUTE_TAG_ID_DOC_EXPIRES_AT => {
             // Ensure upper and lower bounds are strings
             let upper_str = ensure_string(&statement.upper).map_err(|e| {
-                ServerError::PayloadValidation(format!(
+                ValidationError(format!(
                     "{error_prefix_message}Upper bound value error: {e}"
                 ))
             })?;
             let lower_str = ensure_string(&statement.lower).map_err(|e| {
-                ServerError::PayloadValidation(format!(
+                ValidationError(format!(
                     "{error_prefix_message}Lower bound value error: {e}"
                 ))
             })?;
 
             // Validate dates with ISO8601
             is_iso8601(upper_str).map_err(|e| {
-                ServerError::PayloadValidation(format!(
+                ValidationError(format!(
                     "{error_prefix_message}Upper bound value invalid format: {e}"
                 ))
             })?;
             is_iso8601(lower_str).map_err(|e| {
-                ServerError::PayloadValidation(format!(
+                ValidationError(format!(
                     "{error_prefix_message}Lower bound value invalid format: {e}"
                 ))
             })?;
         }
         _ => {
-            return Err(ServerError::PayloadValidation(format!(
+            return Err(ValidationError(format!(
                 "{error_prefix_message}Attribute tag `{0}` is not allowed to be used in range statements. \
                 Only `ATTRIBUTE_TAG_DOB(3)`, `ATTRIBUTE_TAG_ID_DOC_ISSUED_AT(9)`, and `ATTRIBUTE_TAG_ID_DOC_EXPIRES_AT(10)` allowed in range statements.",
                 statement.attribute_tag
@@ -202,16 +172,16 @@ pub fn validate_range_statement(
     Ok(())
 }
 
-pub trait HasSet<'a> {
+trait HasSet {
     type Item;
-    fn set(&'a self) -> &'a BTreeSet<Web3IdAttribute>;
+    fn set(&self) -> &BTreeSet<Web3IdAttribute>;
     fn attribute_tag(&self) -> AttributeTag;
 }
 
-impl<'a> HasSet<'a> for AttributeInSetStatement<ArCurve, AttributeTag, Web3IdAttribute> {
+impl HasSet for AttributeInSetStatement<ArCurve, AttributeTag, Web3IdAttribute> {
     type Item = Web3IdAttribute;
 
-    fn set(&'a self) -> &'a BTreeSet<Web3IdAttribute> {
+    fn set(&self) -> &BTreeSet<Web3IdAttribute> {
         &self.set
     }
 
@@ -220,10 +190,10 @@ impl<'a> HasSet<'a> for AttributeInSetStatement<ArCurve, AttributeTag, Web3IdAtt
     }
 }
 
-impl<'a> HasSet<'a> for AttributeNotInSetStatement<ArCurve, AttributeTag, Web3IdAttribute> {
+impl HasSet for AttributeNotInSetStatement<ArCurve, AttributeTag, Web3IdAttribute> {
     type Item = Web3IdAttribute;
 
-    fn set(&'a self) -> &'a BTreeSet<Web3IdAttribute> {
+    fn set(&self) -> &BTreeSet<Web3IdAttribute> {
         &self.set
     }
 
@@ -232,22 +202,23 @@ impl<'a> HasSet<'a> for AttributeNotInSetStatement<ArCurve, AttributeTag, Web3Id
     }
 }
 
-pub fn validate_set_statement<S>(statement: &S) -> Result<(), ServerError>
+fn validate_set_statement<S>(statement: &S) -> Result<(), ValidationError>
 where
-    S: for<'a> HasSet<'a, Item = Web3IdAttribute>,
+    S: HasSet<Item = Web3IdAttribute>,
 {
+    let attribute_tag = statement.attribute_tag();
     let error_prefix_message = format!(
         "Validation of in-set/not-in-set statement with attribute tag `{0}` failed. ",
-        statement.attribute_tag()
+        attribute_tag
     );
 
     if statement.set().is_empty() {
-        return Err(ServerError::PayloadValidation(
+        return Err(ValidationError(
             "{error_prefix_message}Set Statement should not be empty.".to_string(),
         ));
     }
 
-    match statement.attribute_tag() {
+    match attribute_tag {
         ATTRIBUTE_TAG_COUNTRY_OF_RESIDENCE
         | ATTRIBUTE_TAG_NATIONALITY
         | ATTRIBUTE_TAG_LEGAL_COUNTRY => {
@@ -257,7 +228,7 @@ where
                 .iter()
                 .map(|attr| {
                     ensure_string(attr).map_err(|e| {
-                        ServerError::PayloadValidation(format!(
+                        ValidationError(format!(
                             "{error_prefix_message}Value in set statement must be a string: {e}"
                         ))
                     })
@@ -267,10 +238,9 @@ where
             // 2. Validate ISO codes
             for code in &values {
                 if !is_iso3166_1_alpha2(code) {
-                    return Err(ServerError::PayloadValidation(format!(
+                    return Err(ValidationError(format!(
                         "{error_prefix_message}Value `{0}` of attribute tag `{1}` must be ISO3166-1 Alpha-2 code in upper case (e.g. `DE`)",
-                        code,
-                        statement.attribute_tag(),
+                        code, attribute_tag,
                     )));
                 }
             }
@@ -283,7 +253,7 @@ where
                 .iter()
                 .map(|attr| {
                     ensure_string(attr).map_err(|e| {
-                        ServerError::PayloadValidation(format!(
+                        ValidationError(format!(
                             "{error_prefix_message}Value in set statement must be a string: {e}"
                         ))
                     })
@@ -293,10 +263,9 @@ where
             // 2. Validate ISO codes
             for v in &values {
                 if !is_iso3166_1_alpha2(v) && !is_iso3166_2(v) {
-                    return Err(ServerError::PayloadValidation(format!(
+                    return Err(ValidationError(format!(
                         "{error_prefix_message}Value `{0}` of attribute tag `{1}` must be ISO3166-1 Alpha-2 code in upper case (e.g. `DE`) or ISO3166-2 codes (e.g. `ES-B`, `US-CA`)",
-                        v,
-                        statement.attribute_tag(),
+                        v, attribute_tag,
                     )));
                 }
             }
@@ -309,7 +278,7 @@ where
                 .iter()
                 .map(|attr| {
                     ensure_string(attr).map_err(|e| {
-                        ServerError::PayloadValidation(format!(
+                        ValidationError(format!(
                             "{error_prefix_message}Value in set statement must be a string: {e}"
                         ))
                     })
@@ -319,7 +288,7 @@ where
             // 2. Validate ID doc type
             for v in &values {
                 IdDocType::parse(v).map_err(|e| {
-                    ServerError::PayloadValidation(format!(
+                    ValidationError(format!(
                         "{error_prefix_message}ID doc type invalid format: {e}"
                     ))
                 })?;
@@ -327,10 +296,10 @@ where
         }
 
         _ => {
-            return Err(ServerError::PayloadValidation(format!(
+            return Err(ValidationError(format!(
                 "{error_prefix_message}Attribute tag `{0}` is not allowed to be used in-set/not-in-set statements.
                 Only `ATTRIBUTE_TAG_COUNTRY_OF_RESIDENCE(4)`, `ATTRIBUTE_TAG_NATIONALITY(5)`, `ATTRIBUTE_TAG_LEGAL_COUNTRY(15)`, `ATTRIBUTE_TAG_ID_DOC_ISSUER(8)`, and `ATTRIBUTE_TAG_ID_DOC_TYPE(6)` allowed in in-set/not-in-set statements.",
-                statement.attribute_tag()
+             attribute_tag
             )));
         }
     }
@@ -350,36 +319,30 @@ mod tests {
     use std::collections::BTreeSet;
     use std::marker::PhantomData;
 
-    fn assert_error_contains(result: Result<(), ServerError>, expected: &str) {
+    fn assert_error_contains(result: Result<(), ValidationError>, expected: &str) {
         let err = result.expect_err("expected error but got Ok");
-        let msg = err.to_string();
-        assert!(msg.contains(expected), "unexpected error message: {}", msg);
-    }
-
-    fn assert_anyhow_error_contains(result: Result<(), anyhow::Error>, expected: &str) {
-        let err = result.expect_err("expected error but got Ok");
-        let msg = err.to_string();
+        let msg = err.0.to_string();
         assert!(msg.contains(expected), "unexpected error message: {}", msg);
     }
 
     #[test]
     fn test_iso8601_valid() {
-        assert!(is_iso8601("20240131").is_ok());
+        assert!(is_iso8601("20240131").is_ok(), "Date should be valid");
     }
 
     #[test]
     fn test_iso8601_non_digits() {
-        assert_anyhow_error_contains(is_iso8601("2024ABCD"), "Date characters must be digits");
+        assert_error_contains(is_iso8601("2024ABCD"), "input contains invalid characters");
     }
 
     #[test]
     fn test_iso8601_invalid_month() {
-        assert_anyhow_error_contains(is_iso8601("20241301"), "Month must be between 1-12");
+        assert_error_contains(is_iso8601("20241301"), "input is out of range");
     }
 
     #[test]
     fn test_iso8601_invalid_day() {
-        assert_anyhow_error_contains(is_iso8601("20240199"), "Day must be between 1-31");
+        assert_error_contains(is_iso8601("20240199"), "input is out of range");
     }
 
     #[test]
@@ -578,10 +541,8 @@ mod tests {
         let stmt = make_range_statement("1990ABCD", "20200101");
         assert_error_contains(
             validate_range_statement(stmt.clone()),
-            "Lower bound value invalid format:",
+            "Lower bound value invalid format",
         );
-        let test = validate_range_statement(stmt);
-        print!("{test:?}");
     }
 
     #[test]
