@@ -55,7 +55,7 @@ fn is_iso8601(date: &str) -> Result<(), ValidationError> {
         })
 }
 
-/// ISO3166_1_alpha2 codes consist of 2 upper case characters representing countries/region (e.g. `GB, DE, DK`).
+/// ISO3166_1_alpha2 codes consist of 2 upper case characters representing countries/regions (e.g. `GB, DE, DK`).
 fn is_iso3166_1_alpha2(code: &str) -> bool {
     rust_iso3166::from_alpha2(code).is_some()
         && code.len() == 2
@@ -63,7 +63,7 @@ fn is_iso3166_1_alpha2(code: &str) -> bool {
 }
 
 /// ISO3166-2 codes consist of a ISO3166_1_alpha2 code, then a dash, and then 1-3 alphanumerical characters
-/// representing countries/region (e.g. `ES-B`, `US-CA`).
+/// representing countries/regions (e.g. `ES-B`, `US-CA`).
 fn is_iso3166_2(code: &str) -> bool {
     if code.len() < 4 || code.len() > 6 {
         // 2 letters + '-' + 1-3 characters
@@ -122,47 +122,39 @@ pub fn payload_validation(claims: Vec<RequestedSubjectClaims>) -> Result<(), Val
 fn validate_range_statement(
     statement: AttributeInRangeStatement<ArCurve, AttributeTag, Web3IdAttribute>,
 ) -> Result<(), ValidationError> {
-    let error_prefix_message = format!(
-        "Validation of range statement with attribute tag `{0}` failed. ",
-        statement.attribute_tag
-    );
+    let construct_error_msg = |msg: &str| {
+        ValidationError(format!(
+            "Validation of range statement with attribute tag `{0}` failed. {1}",
+            statement.attribute_tag, msg
+        ))
+    };
 
-    if statement.upper < statement.lower {
-        return Err(ValidationError(format!(
-            "{0}Provided `upper bound: {1}` must be greater than `lower bound: {2}`.",
-            error_prefix_message, statement.upper, statement.lower
+    if statement.upper <= statement.lower {
+        return Err(construct_error_msg(&format!(
+            "Provided `upper bound: {0}` must be greater than `lower bound: {1}`.",
+            statement.upper, statement.lower
         )));
     };
 
     match statement.attribute_tag {
         ATTRIBUTE_TAG_DOB | ATTRIBUTE_TAG_ID_DOC_ISSUED_AT | ATTRIBUTE_TAG_ID_DOC_EXPIRES_AT => {
             // Ensure upper and lower bounds are strings
-            let upper_str = ensure_string(&statement.upper).map_err(|e| {
-                ValidationError(format!(
-                    "{error_prefix_message}Upper bound value error: {e}"
-                ))
-            })?;
-            let lower_str = ensure_string(&statement.lower).map_err(|e| {
-                ValidationError(format!(
-                    "{error_prefix_message}Lower bound value error: {e}"
-                ))
-            })?;
+            let upper_str = ensure_string(&statement.upper)
+                .map_err(|e| construct_error_msg(&format!("Upper bound value error: {e}")))?;
+            let lower_str = ensure_string(&statement.lower)
+                .map_err(|e| construct_error_msg(&format!("Lower bound value error: {e}")))?;
 
             // Validate dates with ISO8601
             is_iso8601(upper_str).map_err(|e| {
-                ValidationError(format!(
-                    "{error_prefix_message}Upper bound value invalid format: {e}"
-                ))
+                construct_error_msg(&format!("Upper bound value invalid format: {e}"))
             })?;
             is_iso8601(lower_str).map_err(|e| {
-                ValidationError(format!(
-                    "{error_prefix_message}Lower bound value invalid format: {e}"
-                ))
+                construct_error_msg(&format!("Lower bound value invalid format: {e}"))
             })?;
         }
         _ => {
-            return Err(ValidationError(format!(
-                "{error_prefix_message}Attribute tag `{0}` is not allowed to be used in range statements. \
+            return Err(construct_error_msg(&format!(
+                "Attribute tag `{0}` is not allowed to be used in range statements. \
                 Only `ATTRIBUTE_TAG_DOB(3)`, `ATTRIBUTE_TAG_ID_DOC_ISSUED_AT(9)`, and `ATTRIBUTE_TAG_ID_DOC_EXPIRES_AT(10)` allowed in range statements.",
                 statement.attribute_tag
             )));
@@ -206,19 +198,19 @@ fn validate_set_statement<S>(statement: &S) -> Result<(), ValidationError>
 where
     S: HasSet<Item = Web3IdAttribute>,
 {
-    let attribute_tag = statement.attribute_tag();
-    let error_prefix_message = format!(
-        "Validation of in-set/not-in-set statement with attribute tag `{0}` failed. ",
-        attribute_tag
-    );
+    let construct_error_msg = |msg: &str| {
+        ValidationError(format!(
+            "Validation of in-set/not-in-set statement with attribute tag `{0}` failed. {1}",
+            statement.attribute_tag(),
+            msg
+        ))
+    };
 
     if statement.set().is_empty() {
-        return Err(ValidationError(
-            "{error_prefix_message}Set Statement should not be empty.".to_string(),
-        ));
+        return Err(construct_error_msg("Set statement should not be empty."));
     }
 
-    match attribute_tag {
+    match statement.attribute_tag() {
         ATTRIBUTE_TAG_COUNTRY_OF_RESIDENCE
         | ATTRIBUTE_TAG_NATIONALITY
         | ATTRIBUTE_TAG_LEGAL_COUNTRY => {
@@ -228,8 +220,8 @@ where
                 .iter()
                 .map(|attr| {
                     ensure_string(attr).map_err(|e| {
-                        ValidationError(format!(
-                            "{error_prefix_message}Value in set statement must be a string: {e}"
+                        construct_error_msg(&format!(
+                            "Value in set statement must be a string: {e}"
                         ))
                     })
                 })
@@ -238,9 +230,10 @@ where
             // 2. Validate ISO codes
             for code in &values {
                 if !is_iso3166_1_alpha2(code) {
-                    return Err(ValidationError(format!(
-                        "{error_prefix_message}Value `{0}` of attribute tag `{1}` must be ISO3166-1 Alpha-2 code in upper case (e.g. `DE`)",
-                        code, attribute_tag,
+                    return Err(construct_error_msg(&format!(
+                        "Value `{0}` of attribute tag `{1}` must be ISO3166-1 Alpha-2 code in upper case (e.g. `DE`)",
+                        code,
+                        statement.attribute_tag(),
                     )));
                 }
             }
@@ -253,8 +246,8 @@ where
                 .iter()
                 .map(|attr| {
                     ensure_string(attr).map_err(|e| {
-                        ValidationError(format!(
-                            "{error_prefix_message}Value in set statement must be a string: {e}"
+                        construct_error_msg(&format!(
+                            "Value in set statement must be a string: {e}"
                         ))
                     })
                 })
@@ -263,9 +256,10 @@ where
             // 2. Validate ISO codes
             for v in &values {
                 if !is_iso3166_1_alpha2(v) && !is_iso3166_2(v) {
-                    return Err(ValidationError(format!(
-                        "{error_prefix_message}Value `{0}` of attribute tag `{1}` must be ISO3166-1 Alpha-2 code in upper case (e.g. `DE`) or ISO3166-2 codes (e.g. `ES-B`, `US-CA`)",
-                        v, attribute_tag,
+                    return Err(construct_error_msg(&format!(
+                        "Value `{0}` of attribute tag `{1}` must be ISO3166-1 Alpha-2 code in upper case (e.g. `DE`) or ISO3166-2 code (e.g. `ES-B`, `US-CA`)",
+                        v,
+                        statement.attribute_tag(),
                     )));
                 }
             }
@@ -278,8 +272,8 @@ where
                 .iter()
                 .map(|attr| {
                     ensure_string(attr).map_err(|e| {
-                        ValidationError(format!(
-                            "{error_prefix_message}Value in set statement must be a string: {e}"
+                        construct_error_msg(&format!(
+                            "Value in set statement must be a string: {e}"
                         ))
                     })
                 })
@@ -288,18 +282,16 @@ where
             // 2. Validate ID doc type
             for v in &values {
                 IdDocType::parse(v).map_err(|e| {
-                    ValidationError(format!(
-                        "{error_prefix_message}ID doc type invalid format: {e}"
-                    ))
+                    construct_error_msg(&format!("ID doc type invalid format: {e}"))
                 })?;
             }
         }
 
         _ => {
-            return Err(ValidationError(format!(
-                "{error_prefix_message}Attribute tag `{0}` is not allowed to be used in-set/not-in-set statements.
+            return Err(construct_error_msg(&format!(
+                "Attribute tag `{0}` is not allowed to be used in in-set/not-in-set statements.
                 Only `ATTRIBUTE_TAG_COUNTRY_OF_RESIDENCE(4)`, `ATTRIBUTE_TAG_NATIONALITY(5)`, `ATTRIBUTE_TAG_LEGAL_COUNTRY(15)`, `ATTRIBUTE_TAG_ID_DOC_ISSUER(8)`, and `ATTRIBUTE_TAG_ID_DOC_TYPE(6)` allowed in in-set/not-in-set statements.",
-             attribute_tag
+             statement.attribute_tag()
             )));
         }
     }
@@ -466,7 +458,7 @@ mod tests {
         let stmt = make_country_set_statement(vec![]);
         assert_error_contains(
             validate_set_statement(&stmt),
-            "Set Statement should not be empty",
+            "Set statement should not be empty",
         );
     }
 
@@ -488,7 +480,7 @@ mod tests {
         stmt.attribute_tag = ATTRIBUTE_TAG_ID_DOC_ISSUED_AT; // Not allowed for set
         assert_error_contains(
             validate_set_statement(&stmt),
-            "is not allowed to be used in-set/not-in-set statements",
+            "is not allowed to be used in in-set/not-in-set statements",
         );
     }
 
