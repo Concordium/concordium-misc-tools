@@ -1,3 +1,8 @@
+use axum::{
+    response::{IntoResponse, Response},
+    http::StatusCode,
+    Json,
+};
 use concordium_rust_sdk::base::web3id::v1::anchor::PresentationVerifyFailure;
 use concordium_rust_sdk::common::cbor;
 use concordium_rust_sdk::{
@@ -123,6 +128,17 @@ pub struct ErrorDetail {
     pub path: String,
     /// specific helpful error message defining what has happened for this error
     pub message: String,
+}
+
+impl IntoResponse for ErrorResponse {
+    fn into_response(self) -> Response {
+        let status = match self.error.code.as_str() {
+            "VALIDATION_ERROR" => StatusCode::BAD_REQUEST,
+            _ => StatusCode::INTERNAL_SERVER_ERROR,
+        };
+
+        (status, Json(self)).into_response()
+    }
 }
 
 mod map_hex_cbor_values_option {

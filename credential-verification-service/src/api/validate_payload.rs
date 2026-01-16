@@ -99,6 +99,7 @@ impl IdDocType {
     }
 }
 
+/* 
 pub fn payload_validation(claims: Vec<RequestedSubjectClaims>) -> Result<(), ValidationError> {
     for claim in claims {
         match claim {
@@ -118,6 +119,7 @@ pub fn payload_validation(claims: Vec<RequestedSubjectClaims>) -> Result<(), Val
     }
     Ok(())
 }
+*/
 
 fn validate_range_statement(
     statement: AttributeInRangeStatement<ArCurve, AttributeTag, Web3IdAttribute>,

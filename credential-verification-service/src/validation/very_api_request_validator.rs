@@ -1,19 +1,17 @@
-use crate::{api_types::{CreateVerificationRequest, ErrorResponse}, validation::{requested_subject_claims_validator, validation_context::ValidationContext}};
+use crate::{api_types::{ErrorResponse, VerifyPresentationRequest}, validation::{requested_subject_claims_validator, validation_context::ValidationContext}};
 
 
-/// Validator entry point for validating the Create Verification API Request.
+/// Validator entry point for validating the Verify Presentation API Request
 pub fn validate(
-    request: &CreateVerificationRequest
+    request: &VerifyPresentationRequest
 ) -> Result<(), ErrorResponse>{
 
     // create validation context for this api request.
     let mut validation_context = ValidationContext::new();
 
     // validate function will push new error details into the validator context
-
-    println!("**** Calling validator now");
     requested_subject_claims_validator::validate(
-        &request.requested_claims, 
+        &request.verification_request.subject_claims, 
         &mut validation_context, 
         "TODO: dummy path"
     );
@@ -21,20 +19,15 @@ pub fn validate(
     // finally if the validator context contains any error, we will then build 
     // and return the ErrorResponse which us a client friendly error response.
     if validation_context.has_errors() {
-        println!("Validation context contains errors here");
-        println!("context: {:?}", &validation_context);
+
         let error_response = validation_context.create_error_response(
             "VALIDATION_ERROR".to_string(), 
             "Validation errors have occurred. Please check the details below for more information.".to_string(), 
             "dummy".to_string(), // TODO - there should be the option to receive the traceid from the request or to generate a fresh one
             false
         );
-        return Err(error_response)
-    }
 
-    else {
-        // no errors
-        println!("No errors here...");
+        return Err(error_response)
     }
 
     Ok(())

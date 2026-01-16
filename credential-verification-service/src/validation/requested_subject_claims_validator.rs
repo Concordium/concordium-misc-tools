@@ -28,7 +28,7 @@ const ATTRIBUTE_TAG_ID_DOC_EXPIRES_AT: AttributeTag = AttributeTag(10);
 const ATTRIBUTE_TAG_LEGAL_COUNTRY: AttributeTag = AttributeTag(15);
 
 pub fn validate(
-    requested_subject_claims: Vec<RequestedSubjectClaims>,
+    requested_subject_claims: &Vec<RequestedSubjectClaims>,
     ctx: &mut ValidationContext,
     path: &str, // requested subject claims path on the request
 ) {
