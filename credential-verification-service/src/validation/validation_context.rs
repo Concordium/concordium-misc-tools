@@ -1,0 +1,41 @@
+use crate::api_types::{ErrorBody, ErrorDetail, ErrorResponse};
+
+/// Context representing validation error details
+#[derive(Debug, Default)]
+pub struct ValidationContext {
+    error_details: Vec<ErrorDetail>
+}
+
+impl ValidationContext {
+    
+    pub fn new() -> Self {
+        Self {
+            error_details: Vec::new()
+        }
+    }
+
+    /// push a new error detail into the vec for tracking
+    pub fn add_error_detail(&mut self, error_detail: ErrorDetail) {
+        self.error_details.push(error_detail);
+    }
+
+    /// check if we have collected errors, return true if not empty.
+    pub fn has_errors(&self) -> bool {
+        !self.error_details.is_empty()
+    }
+
+    /// Create the error response from the error details in the validation
+    /// context and the additional parameters provided
+    pub fn create_error_response(self, code: String, message: String, trace_id: String, retryable: bool) -> ErrorResponse {
+        ErrorResponse { 
+            error: ErrorBody {
+                code,
+                details: self.error_details,
+                message: message,
+                trace_id,
+                retryable
+            }
+        }
+    }
+}
+
