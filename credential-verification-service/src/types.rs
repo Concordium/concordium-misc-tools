@@ -41,6 +41,8 @@ pub struct AppJson<T>(pub T);
 pub enum ServerError {
     #[error("{0:#}")]
     Anyhow(#[from] anyhow::Error),
+    #[error("Payload validation failed: {0}")]
+    PayloadValidation(#[from] ValidationError),
     #[error("request anchor transaction {0} not found")]
     RequestAnchorTransactionNotFound(TransactionHash),
     #[error("request anchor transaction {0} not a register data transaction")]
@@ -56,6 +58,11 @@ pub enum ServerError {
     #[error("Timeout happened when waiting for request anchor transaction {0} to finalize")]
     TimeoutWaitingForFinalization(TransactionHash),
 }
+
+/// Error for validating the statements/claims in a request to this service.
+#[derive(Debug, thiserror::Error)]
+#[error("{0}")]
+pub struct ValidationError(pub String);
 
 /// Error for handling rejections of invalid requests.
 /// Will be mapped to the right HTTP response (HTTP code and custom
@@ -75,7 +82,8 @@ impl IntoResponse for ServerError {
                 tracing::error!("internal error: {self}");
                 (StatusCode::INTERNAL_SERVER_ERROR, "internal server error").into_response()
             }
-            ServerError::RequestAnchorTransactionNotRegisterData(_)
+            ServerError::PayloadValidation(_)
+            | ServerError::RequestAnchorTransactionNotRegisterData(_)
             | ServerError::RequestAnchorTransactionNotFound(_)
             | ServerError::RequestAnchorDecode(_, _)
             | ServerError::IdentityProviderNotFound(_)

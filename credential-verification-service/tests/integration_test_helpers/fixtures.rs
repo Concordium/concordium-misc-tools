@@ -34,6 +34,8 @@ use std::str::FromStr;
 pub mod chain;
 pub mod credentials;
 
+pub const ATTRIBUTE_TAG_COUNTRY_OF_RESIDENCE: AttributeTag = AttributeTag(4);
+
 pub fn public_info() -> HashMap<String, cbor::value::Value> {
     [(
         "key1".to_string(),
@@ -57,7 +59,6 @@ pub fn generate_presentation_identity(
             now,
         )
         .expect("prove");
-
     presentation
 }
 
@@ -121,11 +122,14 @@ where
 {
     let statements = vec![RequestedStatement::AttributeInSet(
         AttributeInSetStatement {
-            attribute_tag: AttributeTag(1).to_string().parse().unwrap(),
+            attribute_tag: ATTRIBUTE_TAG_COUNTRY_OF_RESIDENCE
+                .to_string()
+                .parse()
+                .unwrap(),
             set: [
-                Web3IdAttribute::String(AttributeKind::try_new("ff".into()).unwrap()),
-                Web3IdAttribute::String(AttributeKind::try_new("aa".into()).unwrap()),
-                Web3IdAttribute::String(AttributeKind::try_new("zz".into()).unwrap()),
+                Web3IdAttribute::String(AttributeKind::try_new("DE".into()).unwrap()),
+                Web3IdAttribute::String(AttributeKind::try_new("GB".into()).unwrap()),
+                Web3IdAttribute::String(AttributeKind::try_new("DK".into()).unwrap()),
             ]
             .into_iter()
             .collect(),
@@ -134,8 +138,11 @@ where
     )];
 
     let attributes = [(
-        AttributeTag(1).to_string().parse().unwrap(),
-        Web3IdAttribute::String(AttributeKind::try_new("aa".into()).unwrap()),
+        ATTRIBUTE_TAG_COUNTRY_OF_RESIDENCE
+            .to_string()
+            .parse()
+            .unwrap(),
+        Web3IdAttribute::String(AttributeKind::try_new("DE".into()).unwrap()),
     )]
     .into_iter()
     .collect();

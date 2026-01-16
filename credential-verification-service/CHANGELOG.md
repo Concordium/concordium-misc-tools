@@ -1,5 +1,9 @@
 ## Unreleased
 
+- Update submodule link so pre memory allocation is bounded when cbor decoding.
+- Set default node timeout from 1 to 5 seconds.
+- Validate format of statements/claims in the payload request.
+
 ## 0.2.2
 
 - Enabled CORS for POST requests

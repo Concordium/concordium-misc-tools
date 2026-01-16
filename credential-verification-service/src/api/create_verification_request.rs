@@ -1,6 +1,7 @@
 //! Handler for create-verification-request endpoint.
 
 use crate::api::util;
+use crate::api::validate_payload::payload_validation;
 use crate::types::AppJson;
 use crate::{
     api_types::CreateVerificationRequest,
@@ -18,6 +19,9 @@ pub async fn create_verification_request(
     State(state): State<Arc<Service>>,
     AppJson(params): AppJson<CreateVerificationRequest>,
 ) -> Result<Json<VerificationRequest>, ServerError> {
+    // Validate format of statements/claims in the payload request.
+    payload_validation(params.requested_claims.clone())?;
+
     let context_nonce = Nonce(rand::random());
     let context_builder = UnfilledContextInformationBuilder::new()
         .given(LabeledContextProperty::Nonce(context_nonce))

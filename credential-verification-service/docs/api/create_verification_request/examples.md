@@ -20,7 +20,7 @@
         {
           "type": "AttributeInRange",
           "attributeTag": "dob",
-          "lower": "1800010",
+          "lower": "18000101",
           "upper": "20080106"
         },
         {
@@ -30,7 +30,7 @@
             "IE",
             "IN",
             "US",
-            "UK"
+            "GB"
           ]
         },
         {
@@ -40,7 +40,7 @@
             "IE",
             "IN",
             "US",
-            "UK"
+            "GB"
           ]
         },
         {
@@ -117,7 +117,7 @@
         {
           "type": "AttributeInRange",
           "attributeTag": "dob",
-          "lower": "1800010",
+          "lower": "18000101",
           "upper": "20080106"
         },
         {
@@ -127,7 +127,7 @@
             "IE",
             "IN",
             "US",
-            "UK"
+            "GB"
           ]
         },
         {
@@ -137,7 +137,7 @@
             "IE",
             "IN",
             "US",
-            "UK"
+            "GB"
           ]
         },
         {
@@ -187,7 +187,7 @@ Returned Verification Request Sample:
                 {
                     "type": "AttributeInRange",
                     "attributeTag": "dob",
-                    "lower": "1800010",
+                    "lower": "18000101",
                     "upper": "20080106"
                 },
                 {
@@ -196,7 +196,7 @@ Returned Verification Request Sample:
                     "set": [
                         "IE",
                         "IN",
-                        "UK",
+                        "GB",
                         "US"
                     ]
                 },
@@ -206,7 +206,7 @@ Returned Verification Request Sample:
                     "set": [
                         "IE",
                         "IN",
-                        "UK",
+                        "GB",
                         "US"
                     ]
                 },
