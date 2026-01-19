@@ -353,3 +353,71 @@ impl HasSet for AttributeNotInSetStatement<ArCurve, AttributeTag, Web3IdAttribut
         self.attribute_tag
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::marker::PhantomData;
+
+    use concordium_rust_sdk::{base::web3id::v1::anchor::RequestedIdentitySubjectClaims, id::constants::AttributeKind};
+
+    use super::*;
+
+    #[test]
+    fn validate_requested_subject_claims_passes(){
+        let mut ctx = ValidationContext::new();
+        let path = "dummy";
+        
+        let identity_claims = RequestedIdentitySubjectClaims {
+            statements: vec![],
+            issuers: vec![],
+            source: vec![],
+        };
+
+        let requested_subject_claims = RequestedSubjectClaims::Identity(identity_claims);
+        let vec_requested_subject_claims = vec![requested_subject_claims];
+
+        validate(&vec_requested_subject_claims, &mut ctx, path);
+
+        assert_eq!(ctx.has_errors(), false);
+    }
+
+    #[test]
+    fn validate_requested_subject_claims_attribute_in_range_statement_bound_not_valid(){
+        let mut ctx = ValidationContext::new();
+        let path = "dummy";
+
+        let att = AttributeInRange(
+            AttributeInRangeStatement {
+                lower: Web3IdAttribute::String(AttributeKind::try_new("19910101".to_string()).unwrap()),
+                upper: Web3IdAttribute::String(AttributeKind::try_new("19901201".to_string()).unwrap()),
+                _phantom: PhantomData::default(),
+                attribute_tag: ATTRIBUTE_TAG_DOB
+            }
+        );
+
+        let identity_claims = RequestedIdentitySubjectClaims {
+            statements: vec![att],
+            issuers: vec![],
+            source: vec![],
+        };
+
+        let requested_subject_claims = RequestedSubjectClaims::Identity(identity_claims);
+        let vec_requested_subject_claims = vec![requested_subject_claims];
+
+        // invoke the validate function
+        validate(&vec_requested_subject_claims, &mut ctx, path);
+
+        // assertions - ensure context has just one error related to the bounds issue
+        assert_eq!(ctx.has_errors(), true);
+
+        let error_details = ctx.error_details;
+        assert_eq!(1, error_details.len());
+        
+        let expected_code = "ATTRIBUTE_IN_RANGE_STATEMENT_BOUNDS_INVALID".to_string();
+        let expected_message = "Provided `upper bound: 19901201` must be greater than `lower bound: 19910101`.".to_string();
+        let error_detail = &error_details[0];
+        assert_eq!(error_detail.code, expected_code);
+        assert_eq!(error_detail.message, expected_message);
+        assert_eq!(error_detail.path, path);
+    }
+}

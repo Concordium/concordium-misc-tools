@@ -6,7 +6,7 @@ use crate::api_types::{ErrorBody, ErrorDetail, ErrorResponse};
 /// response structure as seen below in the function `create_error_response`.
 #[derive(Debug, Default)]
 pub struct ValidationContext {
-    error_details: Vec<ErrorDetail>,
+    pub error_details: Vec<ErrorDetail>,
 }
 
 impl ValidationContext {
