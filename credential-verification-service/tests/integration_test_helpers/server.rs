@@ -100,7 +100,7 @@ pub fn start_server() -> ServerHandle {
 }
 
 fn start_server_impl() -> ServerHandleShared {
-    logging::init_logging(filter::LevelFilter::INFO).unwrap();
+    logging::init_logging(filter::LevelFilter::DEBUG).unwrap();
 
     // Create runtime that persists between tests
     let runtime = tokio::runtime::Builder::new_multi_thread()

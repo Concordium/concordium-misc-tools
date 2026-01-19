@@ -2,7 +2,7 @@
 
 use crate::api::util;
 //use crate::api::validate_payload::payload_validation;
-use crate::api_types::VerificationFailure;
+use crate::api_types::{ErrorBody, ErrorResponse, VerificationFailure};
 use crate::node_client::NodeClient;
 use crate::types::AppJson;
 use crate::{
@@ -30,11 +30,14 @@ use concordium_rust_sdk::types::{
     AccountTransactionDetails, AccountTransactionEffects, BlockItemSummaryDetails,
 };
 use concordium_rust_sdk::v2::{BlockIdentifier, Upward};
-use futures_util::future;
+use futures_util::{TryFutureExt, future};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time;
+use tracing::debug;
+
+use crate::validation::verify_api_request_validator;
 
 /// Verify Presentation endpoint handler.
 /// Accepts a VerifyPresentationRequest payload and calls the Rust SDK function `verify_presentation_with_request_anchor`
@@ -43,21 +46,25 @@ use tokio::time;
 pub async fn verify_presentation(
     state: State<Arc<Service>>,
     AppJson(verify_presentation_request): AppJson<VerifyPresentationRequest>,
-) -> Result<Json<VerifyPresentationResponse>, ServerError> {
+) -> Result<Json<VerifyPresentationResponse>, ErrorResponse> {
     // Validate the format of statements/claims in the payload request.
     // Note: The statements/claims in the `proof` are verified
     // to match the payload request during proof verification,
     // so no additional validation is performed on the `proof` here.
 
+    let internal_error = ErrorResponse {
+        error: ErrorBody {
+            code: "INTERNAL_ERROR".to_string(),
+            message: "An error has occurred while processing the request. Please try again later"
+                .to_string(),
+            details: vec![],
+            retryable: true,
+            trace_id: "Dummy".to_string(),
+        },
+    };
 
-/* TODO - add validator here 
-    payload_validation(
-        verify_presentation_request
-            .verification_request
-            .subject_claims
-            .clone(),
-    )?;
-*/
+    // call the verify api request validator
+    verify_api_request_validator::validate(&verify_presentation_request)?;
 
     let block_identifier = BlockIdentifier::LastFinal;
 
@@ -69,7 +76,10 @@ pub async fn verify_presentation(
         block_identifier,
         &verify_presentation_request,
         &state,
-    )
+    ).map_err(|e| {
+        debug!("An error occurred while calling to verify the presentation with the request anchor. Verify presentation request audit record id: {:?}. Error: {:?}", &verify_presentation_request.audit_record_id, e);
+        internal_error.clone()
+    })
     .await?;
 
     // Create the audit record
@@ -83,11 +93,19 @@ pub async fn verify_presentation(
     let anchor_transaction_hash = if presentation_verification_result.is_success() {
         let audit_record_anchor =
             verification_audit_record.to_anchor(verify_presentation_request.public_info);
-        let anchor_data = util::anchor_to_registered_data(&audit_record_anchor)?;
+        let anchor_data = util::anchor_to_registered_data(&audit_record_anchor)
+            .map_err(|e| {
+                debug!("An error occurred during verify presentation api call for converting the anchor to the registered data transaction. Error is: {:?}",e);
+                internal_error.clone()
+            })?;
 
         let txn_hash = state
             .transaction_submitter
             .submit_register_data_txn(anchor_data)
+            .map_err(|e| {
+                debug!("An error occurred during verify presentation api call, while attempting to submit the register data transaction. Error is: {:?}", e);
+                internal_error.clone()
+            })
             .await?;
 
         Some(txn_hash)

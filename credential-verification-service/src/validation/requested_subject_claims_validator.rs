@@ -2,11 +2,10 @@ use concordium_rust_sdk::base::web3id::v1::anchor::RequestedSubjectClaims;
 
 use crate::{api_types::ErrorDetail, validation::validation_context::ValidationContext};
 
-use anyhow::Result;
 use chrono::NaiveDate;
 use concordium_rust_sdk::base::web3id::v1::anchor::{
     RequestedStatement::{AttributeInRange, AttributeInSet, AttributeNotInSet, RevealAttribute},
-    RequestedSubjectClaims::{Identity},
+    RequestedSubjectClaims::Identity,
 };
 use concordium_rust_sdk::id::constants::ArCurve;
 use concordium_rust_sdk::id::id_proof_types::{
@@ -27,31 +26,33 @@ const ATTRIBUTE_TAG_ID_DOC_ISSUED_AT: AttributeTag = AttributeTag(9);
 const ATTRIBUTE_TAG_ID_DOC_EXPIRES_AT: AttributeTag = AttributeTag(10);
 const ATTRIBUTE_TAG_LEGAL_COUNTRY: AttributeTag = AttributeTag(15);
 
+/// The entry point to validate a Vector of Requested Subject claims.
+/// Both the create verification request and the verify presentation api's
+/// have structures that contain a vector of requested subject claims.
+/// This function handles the enumeration and validation of that structure
+/// and appends new error details into the provided Validation Context.
 pub fn validate(
     requested_subject_claims: &Vec<RequestedSubjectClaims>,
     ctx: &mut ValidationContext,
     path: &str, // requested subject claims path on the request
 ) {
-
     for claim in requested_subject_claims {
         match claim {
             Identity(id_claim) => {
-
                 for (idx, statement) in id_claim.statements.iter().enumerate() {
-
                     match statement {
                         RevealAttribute(_) => {
                             // Nothing to validate here.
                         }
                         AttributeInRange(statement) => {
                             validate_range_statement(statement, path, ctx);
-                        },
+                        }
                         AttributeInSet(statement) => {
                             validate_set_statement(statement, ctx, path);
-                        },
+                        }
                         AttributeNotInSet(statement) => {
                             validate_set_statement(statement, ctx, path);
-                        },
+                        }
                     }
                 }
             }
@@ -70,19 +71,15 @@ fn ensure_string<'a>(
             ctx.add_error_detail(ErrorDetail {
                 code: "ATTRIBUTE_NOT_STRING".to_string(),
                 path: path.to_string(),
-                message: "Expected string value in attribute".to_string()
+                message: "Expected string value in attribute".to_string(),
             });
             None
-        },
+        }
     }
 }
 
 /// ISO8601 strings representing dates as `YYYYMMDD`.
-fn validate_date_is_iso8601(
-    date: &str,
-    path: &str,
-    ctx: &mut ValidationContext,
-) -> bool {
+fn validate_date_is_iso8601(date: &str, path: &str, ctx: &mut ValidationContext) -> bool {
     let mut is_valid = false;
     // Must be exactly 8 characters
     if date.len() != 8 {
@@ -92,41 +89,38 @@ fn validate_date_is_iso8601(
             date.len()
         );
 
-        ctx.add_error_detail(
-            ErrorDetail { 
-                code: "INVALID_DATE_FORMAT".to_string(), 
-                path: path.to_string(), 
-                message
-            }
-        );
+        ctx.add_error_detail(ErrorDetail {
+            code: "INVALID_DATE_FORMAT".to_string(),
+            path: path.to_string(),
+            message,
+        });
         // no need to continue to further validations. client has enough info in above.
         return is_valid;
     }
 
-    NaiveDate::parse_from_str(date, "%Y%m%d")
-        .map(|_| {
+    match NaiveDate::parse_from_str(date, "%Y%m%d") {
+        Ok(_) => {
             is_valid = true;
-        })
-        .map_err(|e| {
+        }
+        Err(e) => {
             let message = format!(
                 "Failed to parse `{}` as ISO8601 `YYYYMMDD` format: {}",
                 date, e
             );
-            
-            ctx.add_error_detail(ErrorDetail { 
-                code: "INVALID_DATE_FORMAT".to_string(), 
-                path: path.to_string(), 
-                message
+
+            ctx.add_error_detail(ErrorDetail {
+                code: "INVALID_DATE_FORMAT".to_string(),
+                path: path.to_string(),
+                message,
             });
-        });
-    
+        }
+    }
+
     is_valid
 }
 
 /// ISO3166_1_alpha2 codes consist of 2 upper case characters representing countries/regions (e.g. `GB, DE, DK`).
-fn validate_is_country_code_valid_iso3166_1_alpha2(
-    code: &str,
-) -> bool {
+fn validate_is_country_code_valid_iso3166_1_alpha2(code: &str) -> bool {
     rust_iso3166::from_alpha2(code).is_some()
         && code.len() == 2
         && code.chars().all(|c| c.is_ascii_uppercase())
@@ -134,9 +128,7 @@ fn validate_is_country_code_valid_iso3166_1_alpha2(
 
 /// ISO3166-2 codes consist of a ISO3166_1_alpha2 code, then a dash, and then 1-3 alphanumerical characters
 /// representing countries/regions (e.g. `ES-B`, `US-CA`).
-fn validate_is_country_code_valid_iso3166_2(
-    code: &str,
-) -> bool {
+fn validate_is_country_code_valid_iso3166_2(code: &str) -> bool {
     if code.len() < 4 || code.len() > 6 {
         // 2 letters + '-' + 1-3 characters
         return false;
@@ -156,11 +148,7 @@ enum IdDocType {
 
 impl IdDocType {
     /// Try to parse a string into an IdDocType
-    fn validate_doc_type_string(
-        code: &str, 
-        path: &str,
-        ctx: &mut ValidationContext
-    ) -> bool {
+    fn validate_doc_type_string(code: &str, path: &str, ctx: &mut ValidationContext) -> bool {
         match code {
             "0" => true,
             "1" => true,
@@ -168,27 +156,26 @@ impl IdDocType {
             "3" => true,
             "4" => true,
             _ => {
-                let message = format!("Invalid ID document type `{}`. Must be one of: 0 (N/A), 1 (Passport), 2 (NationalIdCard), 3 (DriversLicense), or 4 (ImmigrationCard).", code);
-                ctx.add_error_detail(
-                    ErrorDetail { 
-                        code: "INVALID_ID_DOC_TYPE".to_string(), 
-                        path: path.to_string(), 
-                        message 
-                    }
+                let message = format!(
+                    "Invalid ID document type `{}`. Must be one of: 0 (N/A), 1 (Passport), 2 (NationalIdCard), 3 (DriversLicense), or 4 (ImmigrationCard).",
+                    code
                 );
-                return false
-            },
+                ctx.add_error_detail(ErrorDetail {
+                    code: "INVALID_ID_DOC_TYPE".to_string(),
+                    path: path.to_string(),
+                    message,
+                });
+                return false;
+            }
         }
     }
 }
 
-
 fn validate_range_statement(
     statement: &AttributeInRangeStatement<ArCurve, AttributeTag, Web3IdAttribute>,
     path: &str,
-    ctx: &mut ValidationContext
+    ctx: &mut ValidationContext,
 ) -> bool {
-
     let mut is_valid = true;
 
     if statement.upper <= statement.lower {
@@ -198,25 +185,25 @@ fn validate_range_statement(
             statement.upper, statement.lower
         );
 
-        ctx.add_error_detail(
-            ErrorDetail { 
-                code: "ATTRIBUTE_IN_RANGE_STATEMENT_BOUNDS_INVALID".to_string(), 
-                path: path.to_string(), 
-                message
-            }
-        );
+        ctx.add_error_detail(ErrorDetail {
+            code: "ATTRIBUTE_IN_RANGE_STATEMENT_BOUNDS_INVALID".to_string(),
+            path: path.to_string(),
+            message,
+        });
     };
 
     match statement.attribute_tag {
         ATTRIBUTE_TAG_DOB | ATTRIBUTE_TAG_ID_DOC_ISSUED_AT | ATTRIBUTE_TAG_ID_DOC_EXPIRES_AT => {
             // check that upper bound contains a string, and is a valid date
-            let is_valid_upper_bound = ensure_string(&statement.upper, ctx, path)
-                .map_or_else(|| false, |upper_bound| validate_date_is_iso8601(upper_bound, path, ctx)
+            let is_valid_upper_bound = ensure_string(&statement.upper, ctx, path).map_or_else(
+                || false,
+                |upper_bound| validate_date_is_iso8601(upper_bound, path, ctx),
             );
 
             // check that lower bound contains a string, and is a valid date
-            let is_valid_lower_bound = ensure_string(&statement.lower, ctx, path)
-                .map_or_else(|| false, |lower_bound| validate_date_is_iso8601(lower_bound, path, ctx)
+            let is_valid_lower_bound = ensure_string(&statement.lower, ctx, path).map_or_else(
+                || false,
+                |lower_bound| validate_date_is_iso8601(lower_bound, path, ctx),
             );
 
             // if upper or lower is invalid, then we have an invalid statement
@@ -234,10 +221,10 @@ fn validate_range_statement(
                 statement.attribute_tag
             );
 
-            ctx.add_error_detail(ErrorDetail { 
-                code: "ATTRIBUTE_IN_RANGE_STATEMENT_INVALID_ATTRIBUTE_TAG".to_string(), 
-                path: path.to_string(), 
-                message 
+            ctx.add_error_detail(ErrorDetail {
+                code: "ATTRIBUTE_IN_RANGE_STATEMENT_INVALID_ATTRIBUTE_TAG".to_string(),
+                path: path.to_string(),
+                message,
             });
         }
     }
@@ -249,29 +236,33 @@ fn validate_set_statement<S>(
     statement: &S,
     ctx: &mut ValidationContext,
     path: &str, // e.g. "claims[0].identity.statements[5]"
-) -> bool where
+) -> bool
+where
     S: HasSet<Item = Web3IdAttribute>,
 {
     let mut is_valid = true;
 
     if statement.set().is_empty() {
         is_valid = false;
-        ctx.add_error_detail(
-            ErrorDetail { 
-                code: "INVALID_SET_CANNNOT_BE_EMPTY".to_string(), 
-                path: "dummy path".to_string(), 
-                message: "Set statement should not be empty.".to_string()
-            }
-        );
+        ctx.add_error_detail(ErrorDetail {
+            code: "INVALID_SET_CANNNOT_BE_EMPTY".to_string(),
+            path: "dummy path".to_string(),
+            message: "Set statement should not be empty.".to_string(),
+        });
         return is_valid;
     }
 
     // helper for iterating with index and path
     let mut get_values = || {
-        statement.set().iter().enumerate().filter_map(|(i, attr)| {
-            let p = format!("{path}.set[{i}]");
-            ensure_string(attr, ctx, &p).map(|s| (i, s.to_string()))
-        }).collect::<Vec<_>>()
+        statement
+            .set()
+            .iter()
+            .enumerate()
+            .filter_map(|(i, attr)| {
+                let p = format!("{path}.set[{i}]");
+                ensure_string(attr, ctx, &p).map(|s| (i, s.to_string()))
+            })
+            .collect::<Vec<_>>()
     };
 
     match statement.attribute_tag() {
@@ -292,11 +283,12 @@ fn validate_set_statement<S>(
             }
         }
         ATTRIBUTE_TAG_ID_DOC_ISSUER => {
-
             let attribute_tag = statement.attribute_tag().0.to_string();
 
             for (i, v) in get_values() {
-                if !validate_is_country_code_valid_iso3166_1_alpha2(&v) && !validate_is_country_code_valid_iso3166_2(&v) {
+                if !validate_is_country_code_valid_iso3166_1_alpha2(&v)
+                    && !validate_is_country_code_valid_iso3166_2(&v)
+                {
                     let path = format!("{path}.set[{i}]");
                     ctx.add_error_detail(
                         ErrorDetail { 
@@ -321,19 +313,16 @@ fn validate_set_statement<S>(
                 statement.attribute_tag()
             );
 
-            ctx.add_error_detail(    
-                ErrorDetail { 
-                    code: "UNSUPPORTED_ATTRIBUTE_TAG".to_string(), 
-                    path: path.to_string(), 
-                    message
-                }
-            );
+            ctx.add_error_detail(ErrorDetail {
+                code: "UNSUPPORTED_ATTRIBUTE_TAG".to_string(),
+                path: path.to_string(),
+                message,
+            });
         }
     }
 
     is_valid
 }
-
 
 trait HasSet {
     type Item;

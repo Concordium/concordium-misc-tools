@@ -6,5 +6,5 @@ pub mod service;
 pub mod types;
 
 pub mod api;
-pub mod validation;
 mod txn_submitter;
+pub mod validation;

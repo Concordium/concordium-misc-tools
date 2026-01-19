@@ -3,7 +3,7 @@ use assert_matches::assert_matches;
 use concordium_rust_sdk::base::web3id::v1::CredentialVerificationMaterial;
 use concordium_rust_sdk::base::web3id::v1::anchor::PresentationVerifyFailure;
 use concordium_rust_sdk::common::cbor;
-use credential_verification_service::api_types::{VerificationResult, VerifyPresentationResponse};
+use credential_verification_service::api_types::{ErrorResponse, VerificationResult, VerifyPresentationResponse};
 use reqwest::StatusCode;
 
 /// Test verify account based presentation
@@ -249,13 +249,7 @@ async fn test_verify_anchor_not_decodable() {
         .await
         .unwrap();
 
-    assert_eq!(resp.status(), StatusCode::UNPROCESSABLE_ENTITY);
-    let resp_text = resp.text().await.unwrap();
-    assert!(
-        resp_text.contains("error decoding registered data"),
-        "response: {}",
-        resp_text
-    );
+    assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
 }
 
 /// Test request anchor not found
@@ -275,13 +269,7 @@ async fn test_verify_anchor_not_found() {
         .await
         .unwrap();
 
-    assert_eq!(resp.status(), StatusCode::UNPROCESSABLE_ENTITY);
-    let resp_text = resp.text().await.unwrap();
-    assert!(
-        resp_text.contains("request anchor transaction") && resp_text.contains("not found"),
-        "response: {}",
-        resp_text
-    );
+    assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
 }
 
 /// Test account credential not found
@@ -312,11 +300,12 @@ async fn test_verify_account_credential_not_found() {
         .await
         .unwrap();
 
-    assert_eq!(resp.status(), StatusCode::UNPROCESSABLE_ENTITY);
-    let resp_text = resp.text().await.unwrap();
-    assert!(
-        resp_text.contains("account credential") && resp_text.contains("not found"),
-        "response: {}",
-        resp_text
-    );
+    assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
+
+    // Map to client friendly error structure
+    let body = resp.text().await.unwrap();
+    let error_response_body: ErrorResponse = serde_json::from_str(&body).unwrap();
+
+    assert_eq!(error_response_body.error.code, "INTERNAL_ERROR");
+
 }

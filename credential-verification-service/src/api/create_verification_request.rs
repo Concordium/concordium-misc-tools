@@ -5,10 +5,7 @@ use crate::api_types::{ErrorBody, ErrorResponse};
 //use crate::api::validate_payload::payload_validation;
 use crate::types::AppJson;
 use crate::validation::create_verification_api_request_validator;
-use crate::{
-    api_types::CreateVerificationRequest,
-    types::{ServerError, Service},
-};
+use crate::{api_types::CreateVerificationRequest, types::Service};
 use axum::{Json, extract::State};
 use concordium_rust_sdk::base::web3id::v1::anchor::{ContextLabel, Nonce};
 use concordium_rust_sdk::base::web3id::v1::anchor::{
@@ -16,6 +13,7 @@ use concordium_rust_sdk::base::web3id::v1::anchor::{
     VerificationRequestDataBuilder,
 };
 use std::sync::Arc;
+use tracing::debug;
 
 pub async fn create_verification_request(
     State(state): State<Arc<Service>>,
@@ -50,6 +48,7 @@ pub async fn create_verification_request(
     let verification_request_anchor = verification_request_data.to_anchor(params.public_info);
     let anchor_data = util::anchor_to_registered_data(&verification_request_anchor)
         .map_err(|e| {
+                debug!("A server error has occurred while converting the verification request to anchor. Verification request: {:?}. Error: {:?}", &verification_request_data, e);
                 ErrorResponse {
                     error: ErrorBody {
                         code: "INTERNAL_ERROR".to_string(),
@@ -61,13 +60,13 @@ pub async fn create_verification_request(
                 }
             })?;
 
-
     // Submit the anchor
     let anchor_transaction_hash = state
         .transaction_submitter
         .submit_register_data_txn(anchor_data)
         .await
         .map_err(|e| {
+            debug!("A server error has occurred while submitting the register data transaction. Error: {:?}", e);
             ErrorResponse {
                 error: ErrorBody {
                     code: "INTERNAL_ERROR".to_string(),
