@@ -3,7 +3,9 @@ use assert_matches::assert_matches;
 use concordium_rust_sdk::base::web3id::v1::CredentialVerificationMaterial;
 use concordium_rust_sdk::base::web3id::v1::anchor::PresentationVerifyFailure;
 use concordium_rust_sdk::common::cbor;
-use credential_verification_service::api_types::{ErrorResponse, VerificationResult, VerifyPresentationResponse};
+use credential_verification_service::api_types::{
+    ErrorResponse, VerificationResult, VerifyPresentationResponse,
+};
 use reqwest::StatusCode;
 
 /// Test verify account based presentation
@@ -307,5 +309,4 @@ async fn test_verify_account_credential_not_found() {
     let error_response_body: ErrorResponse = serde_json::from_str(&body).unwrap();
 
     assert_eq!(error_response_body.error.code, "INTERNAL_ERROR");
-
 }

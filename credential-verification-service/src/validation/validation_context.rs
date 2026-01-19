@@ -26,6 +26,16 @@ impl ValidationContext {
         !self.error_details.is_empty()
     }
 
+    /// get an error from the context by its code.
+    pub fn get_error_by_code(&self, code: &str) -> Option<&ErrorDetail> {
+        for error_detail in &self.error_details {
+            if error_detail.code == code {
+                return Some(error_detail);
+            }
+        }
+        None
+    }
+
     /// Create the error response from the error details in the validation
     /// context and the additional parameters provided
     pub fn create_error_response(

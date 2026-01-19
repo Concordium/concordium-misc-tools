@@ -40,18 +40,19 @@ pub fn validate(
         match claim {
             Identity(id_claim) => {
                 for (idx, statement) in id_claim.statements.iter().enumerate() {
+                    let statement_path = format!("{path}[{idx}]");
                     match statement {
                         RevealAttribute(_) => {
                             // Nothing to validate here.
                         }
                         AttributeInRange(statement) => {
-                            validate_range_statement(statement, path, ctx);
+                            validate_range_statement(statement, &statement_path, ctx);
                         }
                         AttributeInSet(statement) => {
-                            validate_set_statement(statement, ctx, path);
+                            validate_set_statement(statement, ctx, &statement_path);
                         }
                         AttributeNotInSet(statement) => {
-                            validate_set_statement(statement, ctx, path);
+                            validate_set_statement(statement, ctx, &statement_path);
                         }
                     }
                 }
@@ -171,6 +172,23 @@ impl IdDocType {
     }
 }
 
+/// Helper to determine if string provided is numeric
+fn parse_u64_or_provide_error(
+    attr: &Web3IdAttribute,
+    path: &str,
+    ctx: &mut ValidationContext,
+    error: &ErrorDetail,
+) -> Option<u64> {
+    let s = ensure_string(attr, ctx, path)?;
+    match s.parse::<u64>() {
+        Ok(n) => Some(n),
+        Err(_) => {
+            ctx.add_error_detail(error.clone());
+            None
+        }
+    }
+}
+
 fn validate_range_statement(
     statement: &AttributeInRangeStatement<ArCurve, AttributeTag, Web3IdAttribute>,
     path: &str,
@@ -178,54 +196,77 @@ fn validate_range_statement(
 ) -> bool {
     let mut is_valid = true;
 
-    if statement.upper <= statement.lower {
-        is_valid = false;
-        let message = format!(
-            "Provided `upper bound: {0}` must be greater than `lower bound: {1}`.",
-            statement.upper, statement.lower
-        );
-
-        ctx.add_error_detail(ErrorDetail {
-            code: "ATTRIBUTE_IN_RANGE_STATEMENT_BOUNDS_INVALID".to_string(),
-            path: path.to_string(),
-            message,
-        });
+    let not_numeric_error = ErrorDetail {
+        code: "ATTRIBUTE_IN_RANGE_STATEMENT_NOT_NUMERIC".to_string(),
+        path: path.to_string(),
+        message: "Attribute in range statement, is a numeric range check between a lower and upper bound. These must be numeric values.".to_string(),
     };
 
-    match statement.attribute_tag {
-        ATTRIBUTE_TAG_DOB | ATTRIBUTE_TAG_ID_DOC_ISSUED_AT | ATTRIBUTE_TAG_ID_DOC_EXPIRES_AT => {
-            // check that upper bound contains a string, and is a valid date
-            let is_valid_upper_bound = ensure_string(&statement.upper, ctx, path).map_or_else(
-                || false,
-                |upper_bound| validate_date_is_iso8601(upper_bound, path, ctx),
-            );
+    // parse lower and upper bounds to make sure they are numeric
+    let upper_bound = parse_u64_or_provide_error(&statement.upper, path, ctx, &not_numeric_error);
+    let lower_bound = parse_u64_or_provide_error(&statement.lower, path, ctx, &not_numeric_error);
 
-            // check that lower bound contains a string, and is a valid date
-            let is_valid_lower_bound = ensure_string(&statement.lower, ctx, path).map_or_else(
-                || false,
-                |lower_bound| validate_date_is_iso8601(lower_bound, path, ctx),
-            );
-
-            // if upper or lower is invalid, then we have an invalid statement
-            if !is_valid_upper_bound || !is_valid_lower_bound {
+    match (upper_bound, lower_bound) {
+        (Some(upper), Some(lower)) => {
+            if upper < lower {
                 is_valid = false;
+                ctx.add_error_detail(ErrorDetail {
+                    code: "ATTRIBUTE_IN_RANGE_STATEMENT_BOUNDS_INVALID".to_string(),
+                    path: path.to_string(),
+                    message: format!(
+                        "Provided `upper bound: {}` must be greater than `lower bound: {}`.",
+                        &statement.upper, &statement.lower
+                    ),
+                });
             }
         }
+        // parse_u64_or_provide_error provides errors if a value
+        // was not parseable so here is empty
         _ => {
-            // If we enter this block, the attribute tag specified is invalid
             is_valid = false;
+        }
+    }
 
-            let message = format!(
-                "Attribute tag `{0}` is not allowed to be used in range statements. \
-                Only `ATTRIBUTE_TAG_DOB(3)`, `ATTRIBUTE_TAG_ID_DOC_ISSUED_AT(9)`, and `ATTRIBUTE_TAG_ID_DOC_EXPIRES_AT(10)` allowed in range statements.",
-                statement.attribute_tag
-            );
+    // if the above is numerically valid until now, then we can proceed to assess
+    // the statement for specific tags
+    if is_valid {
+        match statement.attribute_tag {
+            ATTRIBUTE_TAG_DOB
+            | ATTRIBUTE_TAG_ID_DOC_ISSUED_AT
+            | ATTRIBUTE_TAG_ID_DOC_EXPIRES_AT => {
+                // check that upper bound contains a string, and is a valid date
+                let is_valid_upper_bound = ensure_string(&statement.upper, ctx, path).map_or_else(
+                    || false,
+                    |upper_bound| validate_date_is_iso8601(upper_bound, path, ctx),
+                );
 
-            ctx.add_error_detail(ErrorDetail {
-                code: "ATTRIBUTE_IN_RANGE_STATEMENT_INVALID_ATTRIBUTE_TAG".to_string(),
-                path: path.to_string(),
-                message,
-            });
+                // check that lower bound contains a string, and is a valid date
+                let is_valid_lower_bound = ensure_string(&statement.lower, ctx, path).map_or_else(
+                    || false,
+                    |lower_bound| validate_date_is_iso8601(lower_bound, path, ctx),
+                );
+
+                // if upper or lower is invalid, then we have an invalid statement
+                if !is_valid_upper_bound || !is_valid_lower_bound {
+                    is_valid = false;
+                }
+            }
+            _ => {
+                // If we enter this block, the attribute tag specified is invalid
+                is_valid = false;
+
+                let message = format!(
+                    "Attribute tag `{0}` is not allowed to be used in range statements. \
+                    Only `ATTRIBUTE_TAG_DOB(3)`, `ATTRIBUTE_TAG_ID_DOC_ISSUED_AT(9)`, and `ATTRIBUTE_TAG_ID_DOC_EXPIRES_AT(10)` allowed in range statements.",
+                    statement.attribute_tag
+                );
+
+                ctx.add_error_detail(ErrorDetail {
+                    code: "ATTRIBUTE_IN_RANGE_STATEMENT_INVALID_ATTRIBUTE_TAG".to_string(),
+                    path: path.to_string(),
+                    message,
+                });
+            }
         }
     }
 
@@ -271,11 +312,12 @@ where
         | ATTRIBUTE_TAG_LEGAL_COUNTRY => {
             for (i, v) in get_values() {
                 if !validate_is_country_code_valid_iso3166_1_alpha2(&v) {
+                    is_valid = false;
                     let path = format!("{path}.set[{i}]");
                     ctx.add_error_detail(
-                        ErrorDetail { 
+                        ErrorDetail {
                             code: "COUNTRY_CODE_INVALID".to_string(), 
-                            path, 
+                            path,
                             message: "Country code must be 2 letter and both uppercase following the ISO3166-1 alpha-2 uppercase standard. (e.g `DE`)".to_string() 
                         }
                     );
@@ -283,17 +325,16 @@ where
             }
         }
         ATTRIBUTE_TAG_ID_DOC_ISSUER => {
-            let attribute_tag = statement.attribute_tag().0.to_string();
-
             for (i, v) in get_values() {
                 if !validate_is_country_code_valid_iso3166_1_alpha2(&v)
                     && !validate_is_country_code_valid_iso3166_2(&v)
                 {
+                    is_valid = false;
                     let path = format!("{path}.set[{i}]");
                     ctx.add_error_detail(
-                        ErrorDetail { 
+                        ErrorDetail {
                             code: "INVALID_ISSUER_CODE".to_string(), 
-                            path, 
+                            path,
                             message: "Must be ISO3166-1 alpha-2 uppercase (e.g. `DE`) or ISO3166-2 (e.g. `US-CA`)".to_string()
                         }
                     );
@@ -302,7 +343,8 @@ where
         }
         ATTRIBUTE_TAG_ID_DOC_TYPE => {
             for (i, v) in get_values() {
-                IdDocType::validate_doc_type_string(&v, path, ctx);
+                let path = format!("{path}.set[{i}]");
+                IdDocType::validate_doc_type_string(&v, &path, ctx);
             }
         }
         _ => {
@@ -358,15 +400,331 @@ impl HasSet for AttributeNotInSetStatement<ArCurve, AttributeTag, Web3IdAttribut
 mod tests {
     use std::marker::PhantomData;
 
-    use concordium_rust_sdk::{base::web3id::v1::anchor::RequestedIdentitySubjectClaims, id::constants::AttributeKind};
+    use concordium_rust_sdk::{
+        base::web3id::v1::anchor::{RequestedIdentitySubjectClaims, RequestedStatement},
+        id::constants::AttributeKind,
+    };
 
     use super::*;
 
+    // --------------------
+    // Helpers to create set statements
+    // --------------------
+    fn make_range_statement(
+        lower: &str,
+        upper: &str,
+    ) -> AttributeInRangeStatement<ArCurve, AttributeTag, Web3IdAttribute> {
+        AttributeInRangeStatement {
+            attribute_tag: ATTRIBUTE_TAG_DOB,
+            lower: Web3IdAttribute::String(AttributeKind::try_new(lower.into()).unwrap()),
+            upper: Web3IdAttribute::String(AttributeKind::try_new(upper.into()).unwrap()),
+            _phantom: PhantomData,
+        }
+    }
+
+    fn make_country_set_statement(
+        values: Vec<&str>,
+    ) -> AttributeInSetStatement<ArCurve, AttributeTag, Web3IdAttribute> {
+        let set: BTreeSet<Web3IdAttribute> = values
+            .into_iter()
+            .map(|v| Web3IdAttribute::String(AttributeKind::try_new(v.into()).unwrap()))
+            .collect();
+
+        AttributeInSetStatement {
+            attribute_tag: ATTRIBUTE_TAG_COUNTRY_OF_RESIDENCE,
+            set,
+            _phantom: PhantomData,
+        }
+    }
+
+    fn make_id_doc_type_set_statement(
+        values: Vec<&str>,
+    ) -> AttributeInSetStatement<ArCurve, AttributeTag, Web3IdAttribute> {
+        let set: BTreeSet<Web3IdAttribute> = values
+            .into_iter()
+            .map(|v| Web3IdAttribute::String(AttributeKind::try_new(v.into()).unwrap()))
+            .collect();
+
+        AttributeInSetStatement {
+            attribute_tag: ATTRIBUTE_TAG_ID_DOC_TYPE,
+            set,
+            _phantom: PhantomData,
+        }
+    }
+
     #[test]
-    fn validate_requested_subject_claims_passes(){
+    fn test_iso8601_valid() {
+        let mut ctx = ValidationContext::new();
+        let result = validate_date_is_iso8601("20240131", "dummy", &mut ctx);
+        assert!(result == true);
+        assert!(ctx.error_details.len() == 0);
+    }
+
+    #[test]
+    fn test_iso8601_invalid_characters() {
+        let mut ctx = ValidationContext::new();
+        let result = validate_date_is_iso8601("2024ABCD", "dummy", &mut ctx);
+        assert!(result == false);
+        assert!(ctx.error_details.len() == 1);
+
+        let detail = &ctx.error_details[0];
+
+        assert_eq!(detail.code, "INVALID_DATE_FORMAT".to_string());
+        assert_eq!(detail.message, "Failed to parse `2024ABCD` as ISO8601 `YYYYMMDD` format: input contains invalid characters".to_string())
+    }
+
+    #[test]
+    fn test_iso8601_invalid_month() {
+        let mut ctx = ValidationContext::new();
+        let result = validate_date_is_iso8601("20241301", "dummy", &mut ctx);
+        assert!(result == false);
+        assert!(ctx.error_details.len() == 1);
+        let detail = &ctx.error_details[0];
+
+        assert_eq!(detail.code, "INVALID_DATE_FORMAT".to_string());
+        assert_eq!(
+            detail.message,
+            "Failed to parse `20241301` as ISO8601 `YYYYMMDD` format: input is out of range"
+                .to_string()
+        )
+    }
+
+    #[test]
+    fn test_iso8601_invalid_day() {
+        let mut ctx = ValidationContext::new();
+        let result = validate_date_is_iso8601("20241232", "dummy", &mut ctx);
+        assert!(result == false);
+        assert!(ctx.error_details.len() == 1);
+        let detail = &ctx.error_details[0];
+
+        assert_eq!(detail.code, "INVALID_DATE_FORMAT".to_string());
+        assert_eq!(
+            detail.message,
+            "Failed to parse `20241232` as ISO8601 `YYYYMMDD` format: input is out of range"
+                .to_string()
+        )
+    }
+
+    #[test]
+    fn test_iso3166_1_alpha2_valid() {
+        assert!(validate_is_country_code_valid_iso3166_1_alpha2("DE"));
+        assert!(validate_is_country_code_valid_iso3166_1_alpha2("US"));
+    }
+
+    #[test]
+    fn test_iso3166_1_alpha2_lowercase_invalid() {
+        assert!(!validate_is_country_code_valid_iso3166_1_alpha2("de"));
+    }
+
+    #[test]
+    fn test_iso3166_1_alpha2_invalid_code() {
+        assert!(!validate_is_country_code_valid_iso3166_1_alpha2("ZZ"));
+    }
+
+    #[test]
+    fn test_iso3166_2_valid() {
+        assert!(validate_is_country_code_valid_iso3166_2("DE-BE"));
+        assert!(validate_is_country_code_valid_iso3166_2("US-CA"));
+        assert!(validate_is_country_code_valid_iso3166_2("FR-75"));
+    }
+
+    #[test]
+    fn test_iso3166_2_missing_dash() {
+        assert!(!validate_is_country_code_valid_iso3166_2("DEBE"));
+    }
+
+    #[test]
+    fn test_iso3166_2_invalid_country() {
+        assert!(!validate_is_country_code_valid_iso3166_2("ZZ-123"));
+    }
+
+    #[test]
+    fn test_iso3166_2_too_long_suffix() {
+        assert!(!validate_is_country_code_valid_iso3166_2("DE-ABCD"));
+    }
+
+    #[test]
+    fn test_id_doc_type_valid() {
+        let mut ctx = ValidationContext::new();
+        assert!(IdDocType::validate_doc_type_string("0", "dummy", &mut ctx));
+        assert!(IdDocType::validate_doc_type_string("1", "dummy", &mut ctx));
+        assert!(IdDocType::validate_doc_type_string("4", "dummy", &mut ctx));
+    }
+
+    #[test]
+    fn test_id_doc_type_invalid() {
+        let mut ctx = ValidationContext::new();
+        let result = IdDocType::validate_doc_type_string("5", "dummy", &mut ctx);
+        assert!(result == false);
+        assert!(ctx.error_details.len() == 1);
+        let detail = &ctx.error_details[0];
+
+        assert_eq!(detail.code, "INVALID_ID_DOC_TYPE".to_string());
+        assert_eq!(detail.message, "Invalid ID document type `5`. Must be one of: 0 (N/A), 1 (Passport), 2 (NationalIdCard), 3 (DriversLicense), or 4 (ImmigrationCard).".to_string())
+    }
+
+    #[test]
+    fn test_range_statement_valid_dates() {
+        let mut ctx = ValidationContext::new();
+        let stmt = make_range_statement("19900101", "20200101");
+
+        validate_range_statement(&stmt, "some.path", &mut ctx);
+
+        assert_eq!(ctx.has_errors(), false);
+    }
+
+    #[test]
+    fn test_range_statement_upper_bound_less_than_lower() {
+        let mut ctx = ValidationContext::new();
+        let stmt = make_range_statement("20200101", "19900101");
+        let path = "dummy".to_string();
+
+        validate_range_statement(&stmt, &path, &mut ctx);
+        println!("context: {:?}", &ctx);
+
+        // assertions - ensure context has just one error related to the bounds issue
+        assert_eq!(ctx.has_errors(), true);
+
+        let error_details = ctx.error_details;
+        assert_eq!(1, error_details.len());
+
+        let expected_code = "ATTRIBUTE_IN_RANGE_STATEMENT_BOUNDS_INVALID".to_string();
+        let expected_message =
+            "Provided `upper bound: 19900101` must be greater than `lower bound: 20200101`."
+                .to_string();
+        let error_detail = &error_details[0];
+        assert_eq!(error_detail.code, expected_code);
+        assert_eq!(error_detail.message, expected_message);
+        assert_eq!(error_detail.path, path);
+    }
+
+    #[test]
+    fn test_range_statement_upper_bound_date_not_valid() {
+        let mut ctx = ValidationContext::new();
+        let stmt = make_range_statement("20200101", "1ascas");
+        let path = "dummy".to_string();
+
+        validate_range_statement(&stmt, &path, &mut ctx);
+        println!("context: {:?}", ctx);
+
+        // assertions - ensure context has just one error related to the bounds issue
+        assert_eq!(ctx.has_errors(), true);
+
+        let error_details = ctx.error_details;
+        assert_eq!(1, error_details.len());
+
+        let expected_code = "ATTRIBUTE_IN_RANGE_STATEMENT_NOT_NUMERIC".to_string();
+        let expected_message = "Attribute in range statement, is a numeric range check between a lower and upper bound. These must be numeric values.".to_string();
+        let error_detail = &error_details[0];
+        assert_eq!(error_detail.code, expected_code);
+        assert_eq!(error_detail.message, expected_message);
+        assert_eq!(error_detail.path, path);
+    }
+
+    #[test]
+    fn validate_requested_subject_claims_attribute_in_range_statement_dob_invalid() {
+        let mut ctx = ValidationContext::new();
+        let stmt = make_range_statement("19900101", "100000000000");
+        let path = "dummy".to_string();
+
+        validate_range_statement(&stmt, &path, &mut ctx);
+        println!("context: {:?}", ctx);
+
+        // assertions - ensure context has just one error related to the bounds issue
+        assert_eq!(ctx.has_errors(), true);
+
+        let error_details = ctx.error_details;
+        assert_eq!(1, error_details.len());
+
+        let expected_code = "INVALID_DATE_FORMAT".to_string();
+        let expected_message = "The given date should be 8 characters long (ISO8601 `YYYYMMDD` format) but given date `100000000000` is 12 characters long.".to_string();
+        let error_detail = &error_details[0];
+        assert_eq!(error_detail.code, expected_code);
+        assert_eq!(error_detail.message, expected_message);
+        assert_eq!(error_detail.path, path);
+    }
+
+    #[test]
+    fn validate_requested_subject_claims_attribute_in_range_statement_lower_and_upper_date_invalid()
+    {
+        let mut ctx = ValidationContext::new();
+        let stmt = make_range_statement("1990010101", "2020010101");
+        let path = "dummy".to_string();
+
+        validate_range_statement(&stmt, &path, &mut ctx);
+        println!("context: {:?}", ctx);
+
+        // assertions - ensure context has just one error related to the bounds issue
+        assert_eq!(ctx.has_errors(), true);
+
+        let error_details = ctx.error_details;
+        assert_eq!(2, error_details.len());
+
+        let expected_code = "INVALID_DATE_FORMAT".to_string();
+        let expected_message =
+            "The given date should be 8 characters long (ISO8601 `YYYYMMDD` format) but given date";
+
+        for error_detail in error_details {
+            assert_eq!(error_detail.code, expected_code);
+            assert!(error_detail.message.starts_with(expected_message));
+            assert_eq!(error_detail.path, path);
+        }
+    }
+
+    #[test]
+    fn test_set_statement_valid_countries() {
+        let stmt = make_country_set_statement(vec!["DE", "US", "GB"]);
         let mut ctx = ValidationContext::new();
         let path = "dummy";
-        
+
+        let result = validate_set_statement(&stmt, &mut ctx, path);
+        assert!(result);
+    }
+
+    #[test]
+    fn test_set_statement_invalid_country() {
+        let stmt = make_country_set_statement(vec!["DE", "ZZ", "GB"]);
+        let mut ctx = ValidationContext::new();
+        let path = "dummy";
+
+        let result = validate_set_statement(&stmt, &mut ctx, path);
+        println!("*** ctx: {:?}", ctx);
+        assert!(result == false);
+
+        assert_eq!(1, ctx.error_details.len());
+        let detail = &ctx.error_details[0];
+        assert_eq!(detail.code, "COUNTRY_CODE_INVALID".to_string());
+        assert_eq!(detail.message, "Country code must be 2 letter and both uppercase following the ISO3166-1 alpha-2 uppercase standard. (e.g `DE`)".to_string())
+    }
+
+    #[test]
+    fn test_set_statement_empty() {
+        let stmt = make_country_set_statement(vec![]);
+        let mut ctx = ValidationContext::new();
+        let path = "dummy";
+
+        let result = validate_set_statement(&stmt, &mut ctx, path);
+        println!("*** ctx: {:?}", ctx);
+        assert!(result == false);
+
+        assert_eq!(1, ctx.error_details.len());
+        let detail = &ctx.error_details[0];
+        assert_eq!(detail.code, "INVALID_SET_CANNNOT_BE_EMPTY".to_string());
+        assert_eq!(
+            detail.message,
+            "Set statement should not be empty.".to_string()
+        )
+    }
+
+    // --------------------
+    // Requested Subject Level Claims Checks
+    // --------------------
+
+    #[test]
+    fn validate_requested_subject_claims_passes() {
+        let mut ctx = ValidationContext::new();
+        let path = "requestedClaims";
+
         let identity_claims = RequestedIdentitySubjectClaims {
             statements: vec![],
             issuers: vec![],
@@ -382,21 +740,18 @@ mod tests {
     }
 
     #[test]
-    fn validate_requested_subject_claims_attribute_in_range_statement_bound_not_valid(){
+    fn validate_requested_subject_claims_invalid_range_and_invalid_set() {
         let mut ctx = ValidationContext::new();
-        let path = "dummy";
+        let path = "requestedClaims";
 
-        let att = AttributeInRange(
-            AttributeInRangeStatement {
-                lower: Web3IdAttribute::String(AttributeKind::try_new("19910101".to_string()).unwrap()),
-                upper: Web3IdAttribute::String(AttributeKind::try_new("19901201".to_string()).unwrap()),
-                _phantom: PhantomData::default(),
-                attribute_tag: ATTRIBUTE_TAG_DOB
-            }
-        );
+        // valid date of birth range statement
+        let range_statement =
+            RequestedStatement::AttributeInRange(make_range_statement("19880101", "19780101"));
+        let country_statement =
+            RequestedStatement::AttributeInSet(make_country_set_statement(vec!["AAA"]));
 
         let identity_claims = RequestedIdentitySubjectClaims {
-            statements: vec![att],
+            statements: vec![range_statement, country_statement],
             issuers: vec![],
             source: vec![],
         };
@@ -404,20 +759,109 @@ mod tests {
         let requested_subject_claims = RequestedSubjectClaims::Identity(identity_claims);
         let vec_requested_subject_claims = vec![requested_subject_claims];
 
-        // invoke the validate function
+        // call validate now
+        validate(&vec_requested_subject_claims, &mut ctx, path);
+        println!("*** ctx: {:?}", &ctx);
+
+        // assertions for expected errors
+        assert_eq!(ctx.has_errors(), true);
+        assert_eq!(ctx.error_details.len(), 2);
+
+        let bounds_invalid = &ctx.get_error_by_code("ATTRIBUTE_IN_RANGE_STATEMENT_BOUNDS_INVALID");
+        assert!(bounds_invalid.is_some());
+        assert_eq!(
+            bounds_invalid.unwrap().message,
+            "Provided `upper bound: 19780101` must be greater than `lower bound: 19880101`."
+        );
+
+        let country_code_invalid_invalid = ctx.get_error_by_code("COUNTRY_CODE_INVALID");
+        assert!(country_code_invalid_invalid.is_some());
+        assert_eq!(
+            country_code_invalid_invalid.unwrap().message,
+            "Country code must be 2 letter and both uppercase following the ISO3166-1 alpha-2 uppercase standard. (e.g `DE`)"
+        );
+    }
+
+    #[test]
+    fn validate_requested_subject_claims_valid_doc_id_set_statement() {
+        let mut ctx = ValidationContext::new();
+        let path = "requestedClaims";
+
+        let statement =
+            RequestedStatement::AttributeInSet(make_id_doc_type_set_statement(vec!["0", "1", "3"]));
+
+        let identity_claims = RequestedIdentitySubjectClaims {
+            statements: vec![statement],
+            issuers: vec![],
+            source: vec![],
+        };
+
+        let requested_subject_claims = RequestedSubjectClaims::Identity(identity_claims);
+        let vec_requested_subject_claims = vec![requested_subject_claims];
+
         validate(&vec_requested_subject_claims, &mut ctx, path);
 
-        // assertions - ensure context has just one error related to the bounds issue
-        assert_eq!(ctx.has_errors(), true);
+        assert_eq!(ctx.has_errors(), false);
+    }
 
-        let error_details = ctx.error_details;
-        assert_eq!(1, error_details.len());
-        
-        let expected_code = "ATTRIBUTE_IN_RANGE_STATEMENT_BOUNDS_INVALID".to_string();
-        let expected_message = "Provided `upper bound: 19901201` must be greater than `lower bound: 19910101`.".to_string();
-        let error_detail = &error_details[0];
-        assert_eq!(error_detail.code, expected_code);
-        assert_eq!(error_detail.message, expected_message);
-        assert_eq!(error_detail.path, path);
+    #[test]
+    fn validate_requested_subject_claims_invalid_id_doc_type() {
+        let mut ctx = ValidationContext::new();
+        let path = "requestedClaims";
+
+        let statement =
+            RequestedStatement::AttributeInSet(make_id_doc_type_set_statement(vec!["0", "1", "5"]));
+
+        let identity_claims = RequestedIdentitySubjectClaims {
+            statements: vec![statement],
+            issuers: vec![],
+            source: vec![],
+        };
+
+        let requested_subject_claims = RequestedSubjectClaims::Identity(identity_claims);
+        let vec_requested_subject_claims = vec![requested_subject_claims];
+
+        validate(&vec_requested_subject_claims, &mut ctx, path);
+        println!("***** ctx: {:?} ", ctx);
+
+        assert_eq!(ctx.has_errors(), true);
+        assert!(ctx.error_details.len() == 1);
+        let detail = &ctx.error_details[0];
+        assert_eq!(detail.code, "INVALID_ID_DOC_TYPE".to_string());
+        assert_eq!(detail.message, "Invalid ID document type `5`. Must be one of: 0 (N/A), 1 (Passport), 2 (NationalIdCard), 3 (DriversLicense), or 4 (ImmigrationCard).".to_string());
+    }
+
+    #[test]
+    fn validate_requested_subject_claims_invalid_tag_for_id_doc_type_statement() {
+        let mut ctx = ValidationContext::new();
+        let path = "requestedClaims";
+
+        let statement = RequestedStatement::AttributeInSet({
+            let mut s = make_id_doc_type_set_statement(vec!["0", "1", "3"]);
+            s.attribute_tag = ATTRIBUTE_TAG_ID_DOC_ISSUED_AT;
+            s
+        });
+
+        let identity_claims = RequestedIdentitySubjectClaims {
+            statements: vec![statement],
+            issuers: vec![],
+            source: vec![],
+        };
+
+        let requested_subject_claims = RequestedSubjectClaims::Identity(identity_claims);
+        let vec_requested_subject_claims = vec![requested_subject_claims];
+
+        validate(&vec_requested_subject_claims, &mut ctx, path);
+        println!("***** ctx: {:?} ", ctx);
+
+        assert_eq!(ctx.has_errors(), true);
+        assert!(ctx.error_details.len() == 1);
+        let detail = &ctx.error_details[0];
+        assert_eq!(detail.code, "UNSUPPORTED_ATTRIBUTE_TAG".to_string());
+        assert_eq!(
+            detail.message,
+            "Attribute tag idDocIssuedAt not allowed for set statements (allowed: 4, 5, 15, 8, 6)"
+                .to_string()
+        );
     }
 }
