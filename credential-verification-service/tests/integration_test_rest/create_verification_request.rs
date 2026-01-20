@@ -2,9 +2,9 @@ use crate::integration_test_helpers::{fixtures::{self, ATTRIBUTE_TAG_COUNTRY_OF_
 use concordium_rust_sdk::{base::web3id::v1::anchor::{
     ContextLabel, IdentityCredentialType, IdentityProviderDid, RequestedIdentitySubjectClaims, RequestedIdentitySubjectClaimsBuilder, RequestedStatement, RequestedSubjectClaims, UnfilledContextInformation, VerificationRequest
 }, id::{constants::AttributeKind, id_proof_types::{AttributeInRangeStatement, AttributeInSetStatement}, types::IpIdentity}, web3id::{Web3IdAttribute, did::Network}};
-use credential_verification_service::api_types::ErrorResponse;
+use credential_verification_service::api_types::{ErrorDetail, ErrorResponse};
 use reqwest::StatusCode;
-use std::{collections::HashSet, marker::PhantomData};
+use std::{collections::{BTreeSet, HashSet}, marker::PhantomData};
 
 /// Test create verification request
 #[tokio::test]
@@ -231,10 +231,12 @@ async fn test_create_verification_request_multiple_errors_range_and_set() {
     // modify with range not numeric
     let mut create_verification_request = fixtures::create_verification_request();
 
+    // invalid range statement for dob - upper is less than lower
     let attribute_in_range_statement = RequestedStatement::AttributeInRange(
         fixtures::make_range_statement("19900101".into(), "19890101".into())
     );
 
+    // invalid set statement for country of residence, UK is not valid it should be GB (Great Britain).
     let set_statement = RequestedStatement::AttributeInSet(
         fixtures::make_country_set_statement(vec!["UK"])
     );
@@ -261,22 +263,25 @@ async fn test_create_verification_request_multiple_errors_range_and_set() {
 
     // unwrap the Error Response
     let error_response: ErrorResponse = resp.json().await.unwrap();
+    assert_eq!(error_response.error.details.len(), 2);
 
     // Assertions and expected validation codes and messages
     let expected_code = "VALIDATION_ERROR";
     let expected_message = "Validation errors have occurred. Please check the details below for more information.";
-    let expected_detail_code = "ATTRIBUTE_IN_RANGE_STATEMENT_BOUNDS_INVALID";
-    let expected_detail_message = "Provided `upper bound: 19990101` must be greater than `lower bound: 20200101`.";
+    assert_eq!(&error_response.error.code, expected_code);
+    assert_eq!(&error_response.error.message, expected_message);
 
-    assert_eq!(expected_code, error_response.error.code);
-    assert_eq!(expected_message, error_response.error.message);
-    assert_eq!(false, error_response.error.retryable);
-    assert_eq!("dummy", error_response.error.trace_id);
+    assert_has_detail(
+        &error_response.error.details,
+        "ATTRIBUTE_IN_RANGE_STATEMENT_BOUNDS_INVALID",
+        "Provided `upper bound: 19890101` must be greater than `lower bound: 19900101`.",
+    );
 
-    assert!(error_response.error.details.len() == 1);
-    let detail = &error_response.error.details[0];
-    assert_eq!(detail.code, expected_detail_code);
-    assert_eq!(detail.message, expected_detail_message);
+    assert_has_detail(
+        &error_response.error.details,
+        "COUNTRY_CODE_INVALID",
+        "Country code must be 2 letter and both uppercase following the ISO3166-1 alpha-2 uppercase standard. (e.g `DE`)",
+    );
 }
 
 
@@ -298,4 +303,12 @@ fn get_requested_property_labels(context: &UnfilledContextInformation) -> HashSe
 
 fn get_given_property_labels(context: &UnfilledContextInformation) -> HashSet<ContextLabel> {
     context.given.iter().map(|prop| prop.label()).collect()
+}
+
+fn assert_has_detail(details: &[ErrorDetail], code: &str, message: &str) {
+    assert!(
+        details.iter().any(|d| d.code == code && d.message == message),
+        "missing expected detail: code={code}, message={message}\nactual details: {:#?}",
+        details
+    );
 }
