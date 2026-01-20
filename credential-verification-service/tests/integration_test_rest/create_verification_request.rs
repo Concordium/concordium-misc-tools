@@ -286,8 +286,6 @@ async fn test_create_verification_request_multiple_errors_range_and_set() {
     assert_eq!(&error_response.error.code, expected_code);
     assert_eq!(&error_response.error.message, expected_message);
 
-    println!("**** details: {:?}", error_response);
-
     fixtures::assert_has_detail(
         &error_response.error.details,
         "ATTRIBUTE_IN_RANGE_STATEMENT_BOUNDS_INVALID",

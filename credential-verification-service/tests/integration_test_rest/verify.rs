@@ -297,7 +297,6 @@ async fn test_verify_anchor_not_found() {
 
     // unwrap the Error Response
     let error_response: ErrorResponse = resp.json().await.unwrap();
-    println!("**** resp : {:?}", error_response);
 
     // Assertions and expected validation codes and messages
     let expected_code = "INTERNAL_ERROR";
@@ -341,7 +340,6 @@ async fn test_verify_account_credential_not_found() {
 
     // unwrap the Error Response
     let error_response: ErrorResponse = resp.json().await.unwrap();
-    println!("**** resp : {:?}", error_response);
 
     // Assertions and expected validation codes and messages
     let expected_code = "INTERNAL_ERROR";
@@ -465,7 +463,6 @@ async fn test_verify_identity_based_range_statement_invalid_not_valid_date() {
 
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     let error_response: ErrorResponse = resp.json().await.unwrap();
-    println!("*** Error: {:?}", error_response);
 
     // Validation Error response assertions.
     // There should be 1 detail, not retryable (as its a validation error)
@@ -533,7 +530,6 @@ async fn test_verify_identity_based_range_statement_invalid_upper_less_than_lowe
 
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     let error_response: ErrorResponse = resp.json().await.unwrap();
-    println!("*** Error: {:?}", error_response);
 
     // Validation Error response assertions.
     // There should be 1 detail, not retryable (as its a validation error)
@@ -606,7 +602,6 @@ async fn test_verify_identity_based_multistatement_range_valid_set_invalid() {
 
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     let error_response: ErrorResponse = resp.json().await.unwrap();
-    println!("*** Error: {:?}", error_response);
 
     // Validation Error response assertions.
     // There should be 1 detail, not retryable (as its a validation error)
@@ -677,7 +672,6 @@ async fn test_verify_identity_based_multistatement_both_invalid() {
 
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     let error_response: ErrorResponse = resp.json().await.unwrap();
-    println!("*** Error: {:?}", error_response);
 
     // Validation Error response assertions.
     // There should be 1 detail, not retryable (as its a validation error)
