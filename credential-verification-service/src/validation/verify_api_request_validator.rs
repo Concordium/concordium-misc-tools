@@ -2,8 +2,15 @@ use tracing::debug;
 
 use crate::{
     api_types::{ErrorResponse, VerifyPresentationRequest},
-    validation::{requested_subject_claims_validator, validation_context::ValidationContext},
+    validation::{
+        requested_subject_claims_validator,
+        validation_context::{
+            VALIDATION_GENERAL_ERROR_CODE, VALIDATION_GENERAL_MESSAGE, ValidationContext,
+        },
+    },
 };
+
+pub const VERIFY_SUBJECT_CLAIMS_VALIDATION_PATH: &str = "verificationRequest.subjectClaims";
 
 /// Validator entry point for validating the Verify Presentation API Request
 pub fn validate(request: &VerifyPresentationRequest) -> Result<(), ErrorResponse> {
@@ -19,7 +26,7 @@ pub fn validate(request: &VerifyPresentationRequest) -> Result<(), ErrorResponse
     requested_subject_claims_validator::validate(
         &request.verification_request.subject_claims,
         &mut validation_context,
-        "TODO: dummy path",
+        VERIFY_SUBJECT_CLAIMS_VALIDATION_PATH,
     );
 
     // finally if the validator context contains any error, we will then build
@@ -30,9 +37,8 @@ pub fn validate(request: &VerifyPresentationRequest) -> Result<(), ErrorResponse
             &validation_context
         );
         let error_response = validation_context.create_error_response(
-            "VALIDATION_ERROR".to_string(),
-            "Validation errors have occurred. Please check the details below for more information."
-                .to_string(),
+            VALIDATION_GENERAL_ERROR_CODE.to_string(),
+            VALIDATION_GENERAL_MESSAGE.to_string(),
             "dummy".to_string(), // TODO - there should be the option to receive the traceid from the request or to generate a fresh one
             false,
         );

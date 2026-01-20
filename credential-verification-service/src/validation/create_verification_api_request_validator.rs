@@ -2,8 +2,15 @@ use tracing::debug;
 
 use crate::{
     api_types::{CreateVerificationRequest, ErrorResponse},
-    validation::{requested_subject_claims_validator, validation_context::ValidationContext},
+    validation::{
+        requested_subject_claims_validator,
+        validation_context::{
+            VALIDATION_GENERAL_ERROR_CODE, VALIDATION_GENERAL_MESSAGE, ValidationContext,
+        },
+    },
 };
+
+pub const REQUESTED_CLAIMS_VERIFICATION_REQUEST_PATH: &str = "requestedClaims";
 
 /// Validator entry point for validating the Create Verification API Request.
 pub fn validate(request: &CreateVerificationRequest) -> Result<(), ErrorResponse> {
@@ -14,7 +21,7 @@ pub fn validate(request: &CreateVerificationRequest) -> Result<(), ErrorResponse
     requested_subject_claims_validator::validate(
         &request.requested_claims,
         &mut validation_context,
-        "TODO: dummy path",
+        REQUESTED_CLAIMS_VERIFICATION_REQUEST_PATH,
     );
 
     // finally if the validator context contains any error, we will then build
@@ -25,10 +32,9 @@ pub fn validate(request: &CreateVerificationRequest) -> Result<(), ErrorResponse
             &validation_context
         );
         let error_response = validation_context.create_error_response(
-            "VALIDATION_ERROR".to_string(),
-            "Validation errors have occurred. Please check the details below for more information."
-                .to_string(),
-            "dummy".to_string(), // TODO - there should be the option to receive the traceid from the request or to generate a fresh one
+            VALIDATION_GENERAL_ERROR_CODE.to_string(),
+            VALIDATION_GENERAL_MESSAGE.to_string(),
+            "dummy".to_string(), // TODO - later trace id will be handled. Should be optionally provided by the client or if not provided, generated here.
             false,
         );
         return Err(error_response);

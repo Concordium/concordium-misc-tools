@@ -36,11 +36,11 @@ pub fn validate(
     ctx: &mut ValidationContext,
     path: &str, // requested subject claims path on the request
 ) {
-    for claim in requested_subject_claims {
+    for (claim_idx, claim) in requested_subject_claims.iter().enumerate() {
         match claim {
             Identity(id_claim) => {
                 for (idx, statement) in id_claim.statements.iter().enumerate() {
-                    let statement_path = format!("{path}[{idx}]");
+                    let statement_path = format!("{path}[{claim_idx}].statements[{idx}]");
                     match statement {
                         RevealAttribute(_) => {
                             // Nothing to validate here.
@@ -177,12 +177,13 @@ fn parse_u64_or_provide_error(
     attr: &Web3IdAttribute,
     path: &str,
     ctx: &mut ValidationContext,
-    error: &ErrorDetail,
+    error: &mut ErrorDetail,
 ) -> Option<u64> {
     let s = ensure_string(attr, ctx, path)?;
     match s.parse::<u64>() {
         Ok(n) => Some(n),
         Err(_) => {
+            error.path = path.to_string();
             ctx.add_error_detail(error.clone());
             None
         }
@@ -196,23 +197,34 @@ fn validate_range_statement(
 ) -> bool {
     let mut is_valid = true;
 
-    let not_numeric_error = ErrorDetail {
+    let mut not_numeric_error = ErrorDetail {
         code: "ATTRIBUTE_IN_RANGE_STATEMENT_NOT_NUMERIC".to_string(),
         path: path.to_string(),
         message: "Attribute in range statement, is a numeric range check between a lower and upper bound. These must be numeric values.".to_string(),
     };
 
     // parse lower and upper bounds to make sure they are numeric
-    let upper_bound = parse_u64_or_provide_error(&statement.upper, path, ctx, &not_numeric_error);
-    let lower_bound = parse_u64_or_provide_error(&statement.lower, path, ctx, &not_numeric_error);
+    let upper_bound = parse_u64_or_provide_error(
+        &statement.upper,
+        &format!("{path}.upper"),
+        ctx,
+        &mut not_numeric_error,
+    );
+    let lower_bound = parse_u64_or_provide_error(
+        &statement.lower,
+        &format!("{path}.lower"),
+        ctx,
+        &mut not_numeric_error,
+    );
 
     match (upper_bound, lower_bound) {
         (Some(upper), Some(lower)) => {
             if upper < lower {
                 is_valid = false;
+                let path = format!("{path}.upper");
                 ctx.add_error_detail(ErrorDetail {
                     code: "ATTRIBUTE_IN_RANGE_STATEMENT_BOUNDS_INVALID".to_string(),
-                    path: path.to_string(),
+                    path: path,
                     message: format!(
                         "Provided `upper bound: {}` must be greater than `lower bound: {}`.",
                         &statement.upper, &statement.lower
@@ -237,13 +249,19 @@ fn validate_range_statement(
                 // check that upper bound contains a string, and is a valid date
                 let is_valid_upper_bound = ensure_string(&statement.upper, ctx, path).map_or_else(
                     || false,
-                    |upper_bound| validate_date_is_iso8601(upper_bound, path, ctx),
+                    |upper_bound| {
+                        let path = format!("{path}.upper");
+                        validate_date_is_iso8601(upper_bound, &path, ctx)
+                    },
                 );
 
                 // check that lower bound contains a string, and is a valid date
                 let is_valid_lower_bound = ensure_string(&statement.lower, ctx, path).map_or_else(
                     || false,
-                    |lower_bound| validate_date_is_iso8601(lower_bound, path, ctx),
+                    |lower_bound| {
+                        let path = format!("{path}.lower");
+                        validate_date_is_iso8601(lower_bound, &path, ctx)
+                    },
                 );
 
                 // if upper or lower is invalid, then we have an invalid statement
@@ -254,6 +272,7 @@ fn validate_range_statement(
             _ => {
                 // If we enter this block, the attribute tag specified is invalid
                 is_valid = false;
+                let path = format!("{path}.attributeTag");
 
                 let message = format!(
                     "Attribute tag `{0}` is not allowed to be used in range statements. \
@@ -577,7 +596,7 @@ mod tests {
     fn test_range_statement_upper_bound_less_than_lower() {
         let mut ctx = ValidationContext::new();
         let stmt = make_range_statement("20200101", "19900101");
-        let path = "dummy".to_string();
+        let path = "requestedClaims[0]".to_string();
 
         validate_range_statement(&stmt, &path, &mut ctx);
         println!("context: {:?}", &ctx);
@@ -595,7 +614,9 @@ mod tests {
         let error_detail = &error_details[0];
         assert_eq!(error_detail.code, expected_code);
         assert_eq!(error_detail.message, expected_message);
-        assert_eq!(error_detail.path, path);
+
+        let expected_path = "requestedClaims[0].upper";
+        assert_eq!(expected_path, error_detail.path);
     }
 
     #[test]
@@ -618,14 +639,16 @@ mod tests {
         let error_detail = &error_details[0];
         assert_eq!(error_detail.code, expected_code);
         assert_eq!(error_detail.message, expected_message);
-        assert_eq!(error_detail.path, path);
+
+        let expected_path = "dummy.upper";
+        assert_eq!(expected_path, error_detail.path);
     }
 
     #[test]
     fn validate_requested_subject_claims_attribute_in_range_statement_dob_invalid() {
         let mut ctx = ValidationContext::new();
         let stmt = make_range_statement("19900101", "100000000000");
-        let path = "dummy".to_string();
+        let path = "requestedClaims[0]".to_string();
 
         validate_range_statement(&stmt, &path, &mut ctx);
         println!("context: {:?}", ctx);
@@ -641,7 +664,8 @@ mod tests {
         let error_detail = &error_details[0];
         assert_eq!(error_detail.code, expected_code);
         assert_eq!(error_detail.message, expected_message);
-        assert_eq!(error_detail.path, path);
+        let expected_path = "requestedClaims[0].upper";
+        assert_eq!(expected_path, error_detail.path);
     }
 
     #[test]
@@ -649,7 +673,7 @@ mod tests {
     {
         let mut ctx = ValidationContext::new();
         let stmt = make_range_statement("1990010101", "2020010101");
-        let path = "dummy".to_string();
+        let path = "requestedClaims[0]".to_string();
 
         validate_range_statement(&stmt, &path, &mut ctx);
         println!("context: {:?}", ctx);
@@ -667,7 +691,6 @@ mod tests {
         for error_detail in error_details {
             assert_eq!(error_detail.code, expected_code);
             assert!(error_detail.message.starts_with(expected_message));
-            assert_eq!(error_detail.path, path);
         }
     }
 

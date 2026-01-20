@@ -1,5 +1,9 @@
 use crate::api_types::{ErrorBody, ErrorDetail, ErrorResponse};
 
+pub const VALIDATION_GENERAL_ERROR_CODE: &str = "VALIDATION_ERROR";
+pub const VALIDATION_GENERAL_MESSAGE: &str =
+    "Validation errors have occurred. Please check the details below for more information.";
+
 /// Context representing validation error details. This is used to accumulate
 /// errors during the validation of payloads and also provide an implementation
 /// for mapping the errors that were found into a client friendly error

@@ -43,8 +43,6 @@ fn make_invalid_range_statement() -> RequestedStatement<AttributeTag> {
     })
 }
 
-
-
 /// Test internal server error
 #[tokio::test]
 async fn test_internal_error() {
@@ -68,14 +66,15 @@ async fn test_internal_error() {
         .unwrap();
 
     assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
-    
+
     // unwrap the Error Response
     let body_text = resp.text().await.unwrap();
     let error_response_body: ErrorResponse = serde_json::from_str(&body_text).unwrap();
     println!("**** Error Response: {:?}", error_response_body);
 
     let expected_code = "INTERNAL_ERROR";
-    let expected_message = "An error has occurred while processing the request. Please try again later";
+    let expected_message =
+        "An error has occurred while processing the request. Please try again later";
 
     assert_eq!(expected_code, error_response_body.error.code);
     assert_eq!(expected_message, error_response_body.error.message);

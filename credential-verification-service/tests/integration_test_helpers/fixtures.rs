@@ -11,7 +11,9 @@ use concordium_rust_sdk::base::web3id::v1::anchor::{
     VerificationRequestData,
 };
 use concordium_rust_sdk::common::cbor;
-use concordium_rust_sdk::id::id_proof_types::{AttributeInRangeStatement, AttributeInSetStatement, AttributeValueStatement};
+use concordium_rust_sdk::id::id_proof_types::{
+    AttributeInRangeStatement, AttributeInSetStatement, AttributeValueStatement,
+};
 use concordium_rust_sdk::id::types::{AttributeTag, GlobalContext, IpIdentity};
 use concordium_rust_sdk::web3id::Web3IdAttribute;
 use concordium_rust_sdk::web3id::did::Network;
@@ -43,7 +45,6 @@ pub const ATTRIBUTE_TAG_ID_DOC_ISSUER: AttributeTag = AttributeTag(8);
 pub const ATTRIBUTE_TAG_ID_DOC_ISSUED_AT: AttributeTag = AttributeTag(9);
 pub const ATTRIBUTE_TAG_ID_DOC_EXPIRES_AT: AttributeTag = AttributeTag(10);
 pub const ATTRIBUTE_TAG_LEGAL_COUNTRY: AttributeTag = AttributeTag(15);
-
 
 pub fn public_info() -> HashMap<String, cbor::value::Value> {
     [(
@@ -158,7 +159,6 @@ where
 
     (statements, attributes)
 }
-
 
 pub fn make_country_set_statement(
     values: Vec<&str>,

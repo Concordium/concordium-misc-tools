@@ -1,10 +1,25 @@
-use crate::integration_test_helpers::{fixtures::{self, ATTRIBUTE_TAG_COUNTRY_OF_RESIDENCE, make_country_set_statement}, server};
-use concordium_rust_sdk::{base::web3id::v1::anchor::{
-    ContextLabel, IdentityCredentialType, IdentityProviderDid, RequestedIdentitySubjectClaims, RequestedIdentitySubjectClaimsBuilder, RequestedStatement, RequestedSubjectClaims, UnfilledContextInformation, VerificationRequest
-}, id::{constants::AttributeKind, id_proof_types::{AttributeInRangeStatement, AttributeInSetStatement}, types::IpIdentity}, web3id::{Web3IdAttribute, did::Network}};
-use credential_verification_service::api_types::{ErrorDetail, ErrorResponse};
+use crate::integration_test_helpers::{
+    fixtures::{self},
+    server,
+};
+use concordium_rust_sdk::{
+    base::web3id::v1::anchor::{
+        ContextLabel, IdentityCredentialType, IdentityProviderDid, RequestedIdentitySubjectClaims,
+        RequestedStatement, RequestedSubjectClaims, UnfilledContextInformation,
+        VerificationRequest,
+    },
+    id::{constants::AttributeKind, id_proof_types::AttributeInRangeStatement, types::IpIdentity},
+    web3id::{Web3IdAttribute, did::Network},
+};
+use credential_verification_service::{
+    api_types::{ErrorDetail, ErrorResponse},
+    validation::{
+        create_verification_api_request_validator::REQUESTED_CLAIMS_VERIFICATION_REQUEST_PATH,
+        validation_context::{VALIDATION_GENERAL_ERROR_CODE, VALIDATION_GENERAL_MESSAGE},
+    },
+};
 use reqwest::StatusCode;
-use std::{collections::{BTreeSet, HashSet}, marker::PhantomData};
+use std::collections::HashSet;
 
 /// Test create verification request
 #[tokio::test]
@@ -101,7 +116,6 @@ async fn test_create_verification_request_with_context_string() {
     );
 }
 
-
 // ----------------------------------
 // Error Response Structure Scenarios
 // ----------------------------------
@@ -115,21 +129,19 @@ async fn test_create_verification_request_attribute_in_range_bound_not_numeric()
 
     // create invalid attribute in range statement
     let attribute_in_range_statement = RequestedStatement::AttributeInRange(
-        AttributeInRangeStatement {
-            attribute_tag: fixtures::ATTRIBUTE_TAG_DOB,
-            lower: Web3IdAttribute::String(AttributeKind::try_new("abcdef".into()).unwrap()),
-            upper: Web3IdAttribute::String(AttributeKind::try_new("20240101".into()).unwrap()),
-            _phantom: PhantomData,
-        }
+        fixtures::make_range_statement("abcdef".into(), "20240101".into()),
     );
 
     // modify create verification request now with the invalid statement
     create_verification_request.requested_claims = vec![RequestedSubjectClaims::Identity(
-        RequestedIdentitySubjectClaims { 
-            statements: vec![attribute_in_range_statement], 
-            issuers: vec![IdentityProviderDid { identity_provider: IpIdentity(0u32), network: Network::Testnet}], 
-            source: vec![IdentityCredentialType::IdentityCredential]
-        }
+        RequestedIdentitySubjectClaims {
+            statements: vec![attribute_in_range_statement],
+            issuers: vec![IdentityProviderDid {
+                identity_provider: IpIdentity(0u32),
+                network: Network::Testnet,
+            }],
+            source: vec![IdentityCredentialType::IdentityCredential],
+        },
     )];
 
     // Call the API with the invalid request
@@ -148,7 +160,8 @@ async fn test_create_verification_request_attribute_in_range_bound_not_numeric()
 
     // Assertions and expected validation codes and messages
     let expected_code = "VALIDATION_ERROR";
-    let expected_message = "Validation errors have occurred. Please check the details below for more information.";
+    let expected_message =
+        "Validation errors have occurred. Please check the details below for more information.";
     let expected_detail_code = "ATTRIBUTE_IN_RANGE_STATEMENT_NOT_NUMERIC";
     let expected_detail_message = "Attribute in range statement, is a numeric range check between a lower and upper bound. These must be numeric values.";
 
@@ -161,8 +174,10 @@ async fn test_create_verification_request_attribute_in_range_bound_not_numeric()
     let detail = &error_response.error.details[0];
     assert_eq!(detail.code, expected_detail_code);
     assert_eq!(detail.message, expected_detail_message);
-}
 
+    let expected_path = "requestedClaims[0].statements[0].lower";
+    assert_eq!(expected_path, detail.path);
+}
 
 #[tokio::test]
 async fn test_create_verification_request_attribute_in_range_upper_should_be_greater_than_lower() {
@@ -174,21 +189,19 @@ async fn test_create_verification_request_attribute_in_range_upper_should_be_gre
 
     // create invalid attribute in range statement
     let attribute_in_range_statement = RequestedStatement::AttributeInRange(
-        AttributeInRangeStatement {
-            attribute_tag: fixtures::ATTRIBUTE_TAG_DOB,
-            lower: Web3IdAttribute::String(AttributeKind::try_new("20200101".into()).unwrap()),
-            upper: Web3IdAttribute::String(AttributeKind::try_new("19990101".into()).unwrap()),
-            _phantom: PhantomData,
-        }
+        fixtures::make_range_statement("20200101".into(), "19990101".into()),
     );
 
     // modify create verification request now with the invalid statement
     create_verification_request.requested_claims = vec![RequestedSubjectClaims::Identity(
-        RequestedIdentitySubjectClaims { 
-            statements: vec![attribute_in_range_statement], 
-            issuers: vec![IdentityProviderDid { identity_provider: IpIdentity(0u32), network: Network::Testnet}], 
-            source: vec![IdentityCredentialType::IdentityCredential]
-        }
+        RequestedIdentitySubjectClaims {
+            statements: vec![attribute_in_range_statement],
+            issuers: vec![IdentityProviderDid {
+                identity_provider: IpIdentity(0u32),
+                network: Network::Testnet,
+            }],
+            source: vec![IdentityCredentialType::IdentityCredential],
+        },
     )];
 
     // Call the API with the invalid request
@@ -206,10 +219,11 @@ async fn test_create_verification_request_attribute_in_range_upper_should_be_gre
     let error_response: ErrorResponse = resp.json().await.unwrap();
 
     // Assertions and expected validation codes and messages
-    let expected_code = "VALIDATION_ERROR";
-    let expected_message = "Validation errors have occurred. Please check the details below for more information.";
+    let expected_code = VALIDATION_GENERAL_ERROR_CODE;
+    let expected_message = VALIDATION_GENERAL_MESSAGE;
     let expected_detail_code = "ATTRIBUTE_IN_RANGE_STATEMENT_BOUNDS_INVALID";
-    let expected_detail_message = "Provided `upper bound: 19990101` must be greater than `lower bound: 20200101`.";
+    let expected_detail_message =
+        "Provided `upper bound: 19990101` must be greater than `lower bound: 20200101`.";
 
     assert_eq!(expected_code, error_response.error.code);
     assert_eq!(expected_message, error_response.error.message);
@@ -220,8 +234,10 @@ async fn test_create_verification_request_attribute_in_range_upper_should_be_gre
     let detail = &error_response.error.details[0];
     assert_eq!(detail.code, expected_detail_code);
     assert_eq!(detail.message, expected_detail_message);
-}
 
+    let expected_path = "requestedClaims[0].statements[0].upper";
+    assert_eq!(expected_path, detail.path);
+}
 
 #[tokio::test]
 async fn test_create_verification_request_multiple_errors_range_and_set() {
@@ -233,21 +249,23 @@ async fn test_create_verification_request_multiple_errors_range_and_set() {
 
     // invalid range statement for dob - upper is less than lower
     let attribute_in_range_statement = RequestedStatement::AttributeInRange(
-        fixtures::make_range_statement("19900101".into(), "19890101".into())
+        fixtures::make_range_statement("19900101".into(), "19890101".into()),
     );
 
     // invalid set statement for country of residence, UK is not valid it should be GB (Great Britain).
-    let set_statement = RequestedStatement::AttributeInSet(
-        fixtures::make_country_set_statement(vec!["UK"])
-    );
+    let set_statement =
+        RequestedStatement::AttributeInSet(fixtures::make_country_set_statement(vec!["UK"]));
 
     // modify create verification request now with the invalid statement
     create_verification_request.requested_claims = vec![RequestedSubjectClaims::Identity(
-        RequestedIdentitySubjectClaims { 
-            statements: vec![attribute_in_range_statement, set_statement], 
-            issuers: vec![IdentityProviderDid { identity_provider: IpIdentity(0u32), network: Network::Testnet}], 
-            source: vec![IdentityCredentialType::IdentityCredential]
-        }
+        RequestedIdentitySubjectClaims {
+            statements: vec![attribute_in_range_statement, set_statement],
+            issuers: vec![IdentityProviderDid {
+                identity_provider: IpIdentity(0u32),
+                network: Network::Testnet,
+            }],
+            source: vec![IdentityCredentialType::IdentityCredential],
+        },
     )];
 
     // Call the API with the invalid request
@@ -267,7 +285,8 @@ async fn test_create_verification_request_multiple_errors_range_and_set() {
 
     // Assertions and expected validation codes and messages
     let expected_code = "VALIDATION_ERROR";
-    let expected_message = "Validation errors have occurred. Please check the details below for more information.";
+    let expected_message =
+        "Validation errors have occurred. Please check the details below for more information.";
     assert_eq!(&error_response.error.code, expected_code);
     assert_eq!(&error_response.error.message, expected_message);
 
@@ -283,7 +302,6 @@ async fn test_create_verification_request_multiple_errors_range_and_set() {
         "Country code must be 2 letter and both uppercase following the ISO3166-1 alpha-2 uppercase standard. (e.g `DE`)",
     );
 }
-
 
 fn get_given_property_value(
     context: &UnfilledContextInformation,
@@ -307,7 +325,9 @@ fn get_given_property_labels(context: &UnfilledContextInformation) -> HashSet<Co
 
 fn assert_has_detail(details: &[ErrorDetail], code: &str, message: &str) {
     assert!(
-        details.iter().any(|d| d.code == code && d.message == message),
+        details
+            .iter()
+            .any(|d| d.code == code && d.message == message),
         "missing expected detail: code={code}, message={message}\nactual details: {:#?}",
         details
     );
