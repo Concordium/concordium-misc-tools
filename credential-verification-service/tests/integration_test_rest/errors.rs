@@ -1,19 +1,7 @@
 use crate::integration_test_helpers::{fixtures, node_client_mock, server};
-use concordium_rust_sdk::{
-    base::{
-        hashes::TransactionHash,
-        web3id::v1::anchor::{RequestedStatement, RequestedSubjectClaims},
-    },
-    id::{
-        constants::AttributeKind, id_proof_types::AttributeInRangeStatement, types::AttributeTag,
-    },
-    web3id::Web3IdAttribute,
-};
+use concordium_rust_sdk::base::hashes::TransactionHash;
 use credential_verification_service::api_types::ErrorResponse;
 use reqwest::StatusCode;
-use std::marker::PhantomData;
-
-pub const ATTRIBUTE_TAG_NATIONALITY: AttributeTag = AttributeTag(5);
 
 /// Test where JSON send in request is not valid.
 #[tokio::test]
@@ -32,15 +20,6 @@ async fn test_invalid_json_in_request() {
 
     let text = resp.text().await.unwrap();
     assert!(text.contains("invalid json"), "test: {}", text);
-}
-
-fn make_invalid_range_statement() -> RequestedStatement<AttributeTag> {
-    RequestedStatement::AttributeInRange(AttributeInRangeStatement {
-        attribute_tag: ATTRIBUTE_TAG_NATIONALITY,
-        lower: Web3IdAttribute::String(AttributeKind::try_new("1".into()).unwrap()),
-        upper: Web3IdAttribute::String(AttributeKind::try_new("2".into()).unwrap()),
-        _phantom: PhantomData,
-    })
 }
 
 /// Test internal server error
@@ -78,6 +57,6 @@ async fn test_internal_error() {
 
     assert_eq!(expected_code, error_response_body.error.code);
     assert_eq!(expected_message, error_response_body.error.message);
-    assert_eq!(true, error_response_body.error.retryable);
+    assert!(error_response_body.error.retryable);
     assert_eq!("Dummy", error_response_body.error.trace_id);
 }

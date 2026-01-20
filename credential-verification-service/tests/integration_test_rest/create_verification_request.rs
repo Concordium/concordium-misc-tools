@@ -8,15 +8,12 @@ use concordium_rust_sdk::{
         RequestedStatement, RequestedSubjectClaims, UnfilledContextInformation,
         VerificationRequest,
     },
-    id::{constants::AttributeKind, id_proof_types::AttributeInRangeStatement, types::IpIdentity},
-    web3id::{Web3IdAttribute, did::Network},
+    id::types::IpIdentity,
+    web3id::did::Network,
 };
 use credential_verification_service::{
     api_types::{ErrorDetail, ErrorResponse},
-    validation::{
-        create_verification_api_request_validator::REQUESTED_CLAIMS_VERIFICATION_REQUEST_PATH,
-        validation_context::{VALIDATION_GENERAL_ERROR_CODE, VALIDATION_GENERAL_MESSAGE},
-    },
+    validation::validation_context::{VALIDATION_GENERAL_ERROR_CODE, VALIDATION_GENERAL_MESSAGE},
 };
 use reqwest::StatusCode;
 use std::collections::HashSet;
@@ -128,9 +125,8 @@ async fn test_create_verification_request_attribute_in_range_bound_not_numeric()
     let mut create_verification_request = fixtures::create_verification_request();
 
     // create invalid attribute in range statement
-    let attribute_in_range_statement = RequestedStatement::AttributeInRange(
-        fixtures::make_range_statement("abcdef".into(), "20240101".into()),
-    );
+    let attribute_in_range_statement =
+        RequestedStatement::AttributeInRange(fixtures::make_range_statement("abcdef", "20240101"));
 
     // modify create verification request now with the invalid statement
     create_verification_request.requested_claims = vec![RequestedSubjectClaims::Identity(
@@ -167,7 +163,7 @@ async fn test_create_verification_request_attribute_in_range_bound_not_numeric()
 
     assert_eq!(expected_code, error_response.error.code);
     assert_eq!(expected_message, error_response.error.message);
-    assert_eq!(false, error_response.error.retryable);
+    assert!(!error_response.error.retryable);
     assert_eq!("dummy", error_response.error.trace_id);
 
     assert!(error_response.error.details.len() == 1);
@@ -189,7 +185,7 @@ async fn test_create_verification_request_attribute_in_range_upper_should_be_gre
 
     // create invalid attribute in range statement
     let attribute_in_range_statement = RequestedStatement::AttributeInRange(
-        fixtures::make_range_statement("20200101".into(), "19990101".into()),
+        fixtures::make_range_statement("20200101", "19990101"),
     );
 
     // modify create verification request now with the invalid statement
@@ -227,7 +223,7 @@ async fn test_create_verification_request_attribute_in_range_upper_should_be_gre
 
     assert_eq!(expected_code, error_response.error.code);
     assert_eq!(expected_message, error_response.error.message);
-    assert_eq!(false, error_response.error.retryable);
+    assert!(!error_response.error.retryable);
     assert_eq!("dummy", error_response.error.trace_id);
 
     assert!(error_response.error.details.len() == 1);
@@ -249,7 +245,7 @@ async fn test_create_verification_request_multiple_errors_range_and_set() {
 
     // invalid range statement for dob - upper is less than lower
     let attribute_in_range_statement = RequestedStatement::AttributeInRange(
-        fixtures::make_range_statement("19900101".into(), "19890101".into()),
+        fixtures::make_range_statement("19900101", "19890101"),
     );
 
     // invalid set statement for country of residence, UK is not valid it should be GB (Great Britain).

@@ -32,7 +32,7 @@ const ATTRIBUTE_TAG_LEGAL_COUNTRY: AttributeTag = AttributeTag(15);
 /// This function handles the enumeration and validation of that structure
 /// and appends new error details into the provided Validation Context.
 pub fn validate(
-    requested_subject_claims: &Vec<RequestedSubjectClaims>,
+    requested_subject_claims: &[RequestedSubjectClaims],
     ctx: &mut ValidationContext,
     path: &str, // requested subject claims path on the request
 ) {
@@ -139,6 +139,7 @@ fn validate_is_country_code_valid_iso3166_2(code: &str) -> bool {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 enum IdDocType {
     NA,
     Passport,
@@ -166,7 +167,7 @@ impl IdDocType {
                     path: path.to_string(),
                     message,
                 });
-                return false;
+                false
             }
         }
     }
@@ -224,7 +225,7 @@ fn validate_range_statement(
                 let path = format!("{path}.upper");
                 ctx.add_error_detail(ErrorDetail {
                     code: "ATTRIBUTE_IN_RANGE_STATEMENT_BOUNDS_INVALID".to_string(),
-                    path: path,
+                    path,
                     message: format!(
                         "Provided `upper bound: {}` must be greater than `lower bound: {}`.",
                         &statement.upper, &statement.lower
@@ -474,16 +475,16 @@ mod tests {
     #[test]
     fn test_iso8601_valid() {
         let mut ctx = ValidationContext::new();
-        let result = validate_date_is_iso8601("20240131", "dummy", &mut ctx);
-        assert!(result == true);
-        assert!(ctx.error_details.len() == 0);
+        let is_valid = validate_date_is_iso8601("20240131", "dummy", &mut ctx);
+        assert!(is_valid);
+        assert!(ctx.error_details.is_empty());
     }
 
     #[test]
     fn test_iso8601_invalid_characters() {
         let mut ctx = ValidationContext::new();
-        let result = validate_date_is_iso8601("2024ABCD", "dummy", &mut ctx);
-        assert!(result == false);
+        let is_valid = validate_date_is_iso8601("2024ABCD", "dummy", &mut ctx);
+        assert!(!is_valid);
         assert!(ctx.error_details.len() == 1);
 
         let detail = &ctx.error_details[0];
@@ -495,8 +496,8 @@ mod tests {
     #[test]
     fn test_iso8601_invalid_month() {
         let mut ctx = ValidationContext::new();
-        let result = validate_date_is_iso8601("20241301", "dummy", &mut ctx);
-        assert!(result == false);
+        let is_valid = validate_date_is_iso8601("20241301", "dummy", &mut ctx);
+        assert!(!is_valid);
         assert!(ctx.error_details.len() == 1);
         let detail = &ctx.error_details[0];
 
@@ -511,8 +512,8 @@ mod tests {
     #[test]
     fn test_iso8601_invalid_day() {
         let mut ctx = ValidationContext::new();
-        let result = validate_date_is_iso8601("20241232", "dummy", &mut ctx);
-        assert!(result == false);
+        let is_valid = validate_date_is_iso8601("20241232", "dummy", &mut ctx);
+        assert!(!is_valid);
         assert!(ctx.error_details.len() == 1);
         let detail = &ctx.error_details[0];
 
@@ -573,8 +574,8 @@ mod tests {
     #[test]
     fn test_id_doc_type_invalid() {
         let mut ctx = ValidationContext::new();
-        let result = IdDocType::validate_doc_type_string("5", "dummy", &mut ctx);
-        assert!(result == false);
+        let is_valid = IdDocType::validate_doc_type_string("5", "dummy", &mut ctx);
+        assert!(!is_valid);
         assert!(ctx.error_details.len() == 1);
         let detail = &ctx.error_details[0];
 
@@ -589,7 +590,7 @@ mod tests {
 
         validate_range_statement(&stmt, "some.path", &mut ctx);
 
-        assert_eq!(ctx.has_errors(), false);
+        assert!(!ctx.has_errors());
     }
 
     #[test]
@@ -602,7 +603,7 @@ mod tests {
         println!("context: {:?}", &ctx);
 
         // assertions - ensure context has just one error related to the bounds issue
-        assert_eq!(ctx.has_errors(), true);
+        assert!(ctx.has_errors());
 
         let error_details = ctx.error_details;
         assert_eq!(1, error_details.len());
@@ -629,7 +630,7 @@ mod tests {
         println!("context: {:?}", ctx);
 
         // assertions - ensure context has just one error related to the bounds issue
-        assert_eq!(ctx.has_errors(), true);
+        assert!(ctx.has_errors());
 
         let error_details = ctx.error_details;
         assert_eq!(1, error_details.len());
@@ -654,7 +655,7 @@ mod tests {
         println!("context: {:?}", ctx);
 
         // assertions - ensure context has just one error related to the bounds issue
-        assert_eq!(ctx.has_errors(), true);
+        assert!(ctx.has_errors());
 
         let error_details = ctx.error_details;
         assert_eq!(1, error_details.len());
@@ -679,7 +680,7 @@ mod tests {
         println!("context: {:?}", ctx);
 
         // assertions - ensure context has just one error related to the bounds issue
-        assert_eq!(ctx.has_errors(), true);
+        assert!(ctx.has_errors());
 
         let error_details = ctx.error_details;
         assert_eq!(2, error_details.len());
@@ -710,9 +711,8 @@ mod tests {
         let mut ctx = ValidationContext::new();
         let path = "dummy";
 
-        let result = validate_set_statement(&stmt, &mut ctx, path);
-        println!("*** ctx: {:?}", ctx);
-        assert!(result == false);
+        let is_valid_set_statement = validate_set_statement(&stmt, &mut ctx, path);
+        assert!(!is_valid_set_statement);
 
         assert_eq!(1, ctx.error_details.len());
         let detail = &ctx.error_details[0];
@@ -726,9 +726,8 @@ mod tests {
         let mut ctx = ValidationContext::new();
         let path = "dummy";
 
-        let result = validate_set_statement(&stmt, &mut ctx, path);
-        println!("*** ctx: {:?}", ctx);
-        assert!(result == false);
+        let is_valid = validate_set_statement(&stmt, &mut ctx, path);
+        assert!(!is_valid);
 
         assert_eq!(1, ctx.error_details.len());
         let detail = &ctx.error_details[0];
@@ -759,7 +758,7 @@ mod tests {
 
         validate(&vec_requested_subject_claims, &mut ctx, path);
 
-        assert_eq!(ctx.has_errors(), false);
+        assert!(ctx.has_errors());
     }
 
     #[test]
@@ -787,7 +786,7 @@ mod tests {
         println!("*** ctx: {:?}", &ctx);
 
         // assertions for expected errors
-        assert_eq!(ctx.has_errors(), true);
+        assert!(ctx.has_errors());
         assert_eq!(ctx.error_details.len(), 2);
 
         let bounds_invalid = &ctx.get_error_by_code("ATTRIBUTE_IN_RANGE_STATEMENT_BOUNDS_INVALID");
@@ -824,7 +823,7 @@ mod tests {
 
         validate(&vec_requested_subject_claims, &mut ctx, path);
 
-        assert_eq!(ctx.has_errors(), false);
+        assert!(!ctx.has_errors());
     }
 
     #[test]
@@ -845,9 +844,8 @@ mod tests {
         let vec_requested_subject_claims = vec![requested_subject_claims];
 
         validate(&vec_requested_subject_claims, &mut ctx, path);
-        println!("***** ctx: {:?} ", ctx);
 
-        assert_eq!(ctx.has_errors(), true);
+        assert!(ctx.has_errors());
         assert!(ctx.error_details.len() == 1);
         let detail = &ctx.error_details[0];
         assert_eq!(detail.code, "INVALID_ID_DOC_TYPE".to_string());
@@ -875,9 +873,8 @@ mod tests {
         let vec_requested_subject_claims = vec![requested_subject_claims];
 
         validate(&vec_requested_subject_claims, &mut ctx, path);
-        println!("***** ctx: {:?} ", ctx);
 
-        assert_eq!(ctx.has_errors(), true);
+        assert!(ctx.has_errors());
         assert!(ctx.error_details.len() == 1);
         let detail = &ctx.error_details[0];
         assert_eq!(detail.code, "UNSUPPORTED_ATTRIBUTE_TAG".to_string());

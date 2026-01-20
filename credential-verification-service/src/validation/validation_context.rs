@@ -32,12 +32,9 @@ impl ValidationContext {
 
     /// get an error from the context by its code.
     pub fn get_error_by_code(&self, code: &str) -> Option<&ErrorDetail> {
-        for error_detail in &self.error_details {
-            if error_detail.code == code {
-                return Some(error_detail);
-            }
-        }
-        None
+        self.error_details
+            .iter()
+            .find(|&error_detail| error_detail.code == code)
     }
 
     /// Create the error response from the error details in the validation
@@ -53,7 +50,7 @@ impl ValidationContext {
             error: ErrorBody {
                 code,
                 details: self.error_details,
-                message: message,
+                message,
                 trace_id,
                 retryable,
             },

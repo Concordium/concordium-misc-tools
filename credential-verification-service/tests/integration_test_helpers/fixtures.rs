@@ -39,12 +39,6 @@ pub mod credentials;
 /// Attribute tags
 pub const ATTRIBUTE_TAG_DOB: AttributeTag = AttributeTag(3);
 pub const ATTRIBUTE_TAG_COUNTRY_OF_RESIDENCE: AttributeTag = AttributeTag(4);
-pub const ATTRIBUTE_TAG_NATIONALITY: AttributeTag = AttributeTag(5);
-pub const ATTRIBUTE_TAG_ID_DOC_TYPE: AttributeTag = AttributeTag(6);
-pub const ATTRIBUTE_TAG_ID_DOC_ISSUER: AttributeTag = AttributeTag(8);
-pub const ATTRIBUTE_TAG_ID_DOC_ISSUED_AT: AttributeTag = AttributeTag(9);
-pub const ATTRIBUTE_TAG_ID_DOC_EXPIRES_AT: AttributeTag = AttributeTag(10);
-pub const ATTRIBUTE_TAG_LEGAL_COUNTRY: AttributeTag = AttributeTag(15);
 
 pub fn public_info() -> HashMap<String, cbor::value::Value> {
     [(
