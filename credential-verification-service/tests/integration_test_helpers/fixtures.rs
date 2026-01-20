@@ -18,7 +18,7 @@ use concordium_rust_sdk::id::types::{AttributeTag, GlobalContext, IpIdentity};
 use concordium_rust_sdk::web3id::Web3IdAttribute;
 use concordium_rust_sdk::web3id::did::Network;
 use credential_verification_service::api_types::{
-    CreateVerificationRequest, VerifyPresentationRequest,
+    CreateVerificationRequest, ErrorDetail, VerifyPresentationRequest,
 };
 
 use crate::integration_test_helpers::fixtures;
@@ -400,4 +400,15 @@ pub fn verify_request_identity(
         request,
         anchor,
     }
+}
+
+/// helper assertion for checking that the details array provided has the code and message combination in it
+pub fn assert_has_detail(details: &[ErrorDetail], code: &str, message: &str, path: &str) {
+    assert!(
+        details
+            .iter()
+            .any(|detail| detail.code == code && detail.message == message && detail.path == path),
+        "missing expected detail: code={code}, message={message}, path={path}\nactual details: {:#?}",
+        details
+    );
 }

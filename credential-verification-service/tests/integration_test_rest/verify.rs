@@ -1,10 +1,20 @@
 use crate::integration_test_helpers::{fixtures, server};
 use assert_matches::assert_matches;
-use concordium_rust_sdk::base::web3id::v1::CredentialVerificationMaterial;
-use concordium_rust_sdk::base::web3id::v1::anchor::PresentationVerifyFailure;
+use concordium_rust_sdk::base::web3id::v1::anchor::{
+    IdentityCredentialType, IdentityProviderDid, PresentationVerifyFailure,
+    RequestedIdentitySubjectClaims, RequestedStatement,
+};
+use concordium_rust_sdk::base::web3id::v1::{
+    CredentialVerificationMaterial, anchor::RequestedSubjectClaims,
+};
 use concordium_rust_sdk::common::cbor;
+use concordium_rust_sdk::id::types::IpIdentity;
+use concordium_rust_sdk::web3id::did::Network;
 use credential_verification_service::api_types::{
     ErrorResponse, VerificationResult, VerifyPresentationResponse,
+};
+use credential_verification_service::validation::validation_context::{
+    VALIDATION_GENERAL_ERROR_CODE, VALIDATION_GENERAL_MESSAGE,
 };
 use reqwest::StatusCode;
 
@@ -69,7 +79,7 @@ async fn test_verify_account_based() {
     );
 }
 
-/// Test verify account based presentation
+/// Test verify identity based presentation
 #[tokio::test]
 async fn test_verify_identity_based() {
     let handle = server::start_server();
@@ -252,6 +262,18 @@ async fn test_verify_anchor_not_decodable() {
         .unwrap();
 
     assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
+
+    // unwrap the Error Response
+    let error_response: ErrorResponse = resp.json().await.unwrap();
+
+    // Assertions and expected validation codes and messages
+    let expected_code = "INTERNAL_ERROR";
+    let expected_message =
+        "An error has occurred while processing the request. Please try again later";
+
+    assert_eq!(expected_code, error_response.error.code);
+    assert_eq!(expected_message, error_response.error.message);
+    assert!(error_response.error.retryable);
 }
 
 /// Test request anchor not found
@@ -272,6 +294,19 @@ async fn test_verify_anchor_not_found() {
         .unwrap();
 
     assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
+
+    // unwrap the Error Response
+    let error_response: ErrorResponse = resp.json().await.unwrap();
+    println!("**** resp : {:?}", error_response);
+
+    // Assertions and expected validation codes and messages
+    let expected_code = "INTERNAL_ERROR";
+    let expected_message =
+        "An error has occurred while processing the request. Please try again later";
+
+    assert_eq!(expected_code, error_response.error.code);
+    assert_eq!(expected_message, error_response.error.message);
+    assert!(error_response.error.retryable);
 }
 
 /// Test account credential not found
@@ -304,9 +339,364 @@ async fn test_verify_account_credential_not_found() {
 
     assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
 
-    // Map to client friendly error structure
-    let body = resp.text().await.unwrap();
-    let error_response_body: ErrorResponse = serde_json::from_str(&body).unwrap();
+    // unwrap the Error Response
+    let error_response: ErrorResponse = resp.json().await.unwrap();
+    println!("**** resp : {:?}", error_response);
 
-    assert_eq!(error_response_body.error.code, "INTERNAL_ERROR");
+    // Assertions and expected validation codes and messages
+    let expected_code = "INTERNAL_ERROR";
+    let expected_message =
+        "An error has occurred while processing the request. Please try again later";
+
+    assert_eq!(expected_code, error_response.error.code);
+    assert_eq!(expected_message, error_response.error.message);
+    assert!(error_response.error.retryable);
+}
+
+/// Validation Error Testing
+#[tokio::test]
+async fn test_verify_identity_based_range_statement_invalid_not_numeric() {
+    let handle = server::start_server();
+    let global_context = fixtures::credentials::global_context();
+    let id_cred = fixtures::credentials::identity_credentials_fixture(&global_context);
+
+    let mut verify_fixture = fixtures::verify_request_identity(&global_context, &id_cred);
+
+    handle.node_client_stub().stub_block_item_status(
+        verify_fixture.anchor_txn_hash,
+        fixtures::chain::transaction_status_finalized(
+            verify_fixture.anchor_txn_hash,
+            cbor::cbor_encode(&verify_fixture.anchor)
+                .unwrap()
+                .try_into()
+                .unwrap(),
+        ),
+    );
+
+    // modify the verify fixture with invalid statements - not numeric for lower
+    let attribute_in_range_statement =
+        RequestedStatement::AttributeInRange(fixtures::make_range_statement("abcdef", "20240101"));
+
+    verify_fixture.request.verification_request.subject_claims =
+        vec![RequestedSubjectClaims::Identity(
+            RequestedIdentitySubjectClaims {
+                statements: vec![attribute_in_range_statement],
+                issuers: vec![IdentityProviderDid {
+                    identity_provider: IpIdentity(0u32),
+                    network: Network::Testnet,
+                }],
+                source: vec![IdentityCredentialType::IdentityCredential],
+            },
+        )];
+
+    let resp = handle
+        .rest_client()
+        .post("verifiable-presentations/verify")
+        .json(&verify_fixture.request)
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    let error_response: ErrorResponse = resp.json().await.unwrap();
+
+    // Validation Error response assertions.
+    // There should be 1 detail, not retryable (as its a validation error)
+    assert_eq!(error_response.error.code, VALIDATION_GENERAL_ERROR_CODE);
+    assert_eq!(error_response.error.message, VALIDATION_GENERAL_MESSAGE);
+    assert!(!error_response.error.retryable);
+    assert_eq!(error_response.error.details.len(), 1);
+
+    let detail = &error_response.error.details[0];
+    assert_eq!(detail.code, "ATTRIBUTE_IN_RANGE_STATEMENT_NOT_NUMERIC");
+    assert_eq!(
+        detail.message,
+        "Attribute in range statement, is a numeric range check between a lower and upper bound. These must be numeric values."
+    );
+    assert_eq!(
+        detail.path,
+        "verificationRequest.subjectClaims[0].statements[0].lower"
+    );
+}
+
+#[tokio::test]
+async fn test_verify_identity_based_range_statement_invalid_not_valid_date() {
+    let handle = server::start_server();
+    let global_context = fixtures::credentials::global_context();
+    let id_cred = fixtures::credentials::identity_credentials_fixture(&global_context);
+
+    let mut verify_fixture = fixtures::verify_request_identity(&global_context, &id_cred);
+
+    handle.node_client_stub().stub_block_item_status(
+        verify_fixture.anchor_txn_hash,
+        fixtures::chain::transaction_status_finalized(
+            verify_fixture.anchor_txn_hash,
+            cbor::cbor_encode(&verify_fixture.anchor)
+                .unwrap()
+                .try_into()
+                .unwrap(),
+        ),
+    );
+
+    // modify the verify fixture with invalid statements - invalid upper date
+    let attribute_in_range_statement = RequestedStatement::AttributeInRange(
+        fixtures::make_range_statement("19900101", "20240132"),
+    );
+
+    verify_fixture.request.verification_request.subject_claims =
+        vec![RequestedSubjectClaims::Identity(
+            RequestedIdentitySubjectClaims {
+                statements: vec![attribute_in_range_statement],
+                issuers: vec![IdentityProviderDid {
+                    identity_provider: IpIdentity(0u32),
+                    network: Network::Testnet,
+                }],
+                source: vec![IdentityCredentialType::IdentityCredential],
+            },
+        )];
+
+    let resp = handle
+        .rest_client()
+        .post("verifiable-presentations/verify")
+        .json(&verify_fixture.request)
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    let error_response: ErrorResponse = resp.json().await.unwrap();
+    println!("*** Error: {:?}", error_response);
+
+    // Validation Error response assertions.
+    // There should be 1 detail, not retryable (as its a validation error)
+    assert_eq!(error_response.error.code, VALIDATION_GENERAL_ERROR_CODE);
+    assert_eq!(error_response.error.message, VALIDATION_GENERAL_MESSAGE);
+    assert!(!error_response.error.retryable);
+    assert_eq!(error_response.error.details.len(), 1);
+
+    let detail = &error_response.error.details[0];
+    assert_eq!(detail.code, "INVALID_DATE_FORMAT");
+    assert_eq!(
+        detail.message,
+        "Failed to parse `20240132` as ISO8601 `YYYYMMDD` format: input is out of range"
+    );
+    assert_eq!(
+        detail.path,
+        "verificationRequest.subjectClaims[0].statements[0].upper"
+    );
+}
+
+// upper bound less than lower bound
+#[tokio::test]
+async fn test_verify_identity_based_range_statement_invalid_upper_less_than_lower() {
+    let handle = server::start_server();
+    let global_context = fixtures::credentials::global_context();
+    let id_cred = fixtures::credentials::identity_credentials_fixture(&global_context);
+
+    let mut verify_fixture = fixtures::verify_request_identity(&global_context, &id_cred);
+
+    handle.node_client_stub().stub_block_item_status(
+        verify_fixture.anchor_txn_hash,
+        fixtures::chain::transaction_status_finalized(
+            verify_fixture.anchor_txn_hash,
+            cbor::cbor_encode(&verify_fixture.anchor)
+                .unwrap()
+                .try_into()
+                .unwrap(),
+        ),
+    );
+
+    // modify the verify fixture with invalid statements - invalid upper date
+    let attribute_in_range_statement = RequestedStatement::AttributeInRange(
+        fixtures::make_range_statement("19900101", "19890101"),
+    );
+
+    verify_fixture.request.verification_request.subject_claims =
+        vec![RequestedSubjectClaims::Identity(
+            RequestedIdentitySubjectClaims {
+                statements: vec![attribute_in_range_statement],
+                issuers: vec![IdentityProviderDid {
+                    identity_provider: IpIdentity(0u32),
+                    network: Network::Testnet,
+                }],
+                source: vec![IdentityCredentialType::IdentityCredential],
+            },
+        )];
+
+    let resp = handle
+        .rest_client()
+        .post("verifiable-presentations/verify")
+        .json(&verify_fixture.request)
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    let error_response: ErrorResponse = resp.json().await.unwrap();
+    println!("*** Error: {:?}", error_response);
+
+    // Validation Error response assertions.
+    // There should be 1 detail, not retryable (as its a validation error)
+    assert_eq!(error_response.error.code, VALIDATION_GENERAL_ERROR_CODE);
+    assert_eq!(error_response.error.message, VALIDATION_GENERAL_MESSAGE);
+    assert!(!error_response.error.retryable);
+    assert_eq!(error_response.error.details.len(), 1);
+
+    let detail = &error_response.error.details[0];
+    assert_eq!(detail.code, "ATTRIBUTE_IN_RANGE_STATEMENT_BOUNDS_INVALID");
+    assert_eq!(
+        detail.message,
+        "Provided `upper bound: 19890101` must be greater than `lower bound: 19900101`."
+    );
+    assert_eq!(
+        detail.path,
+        "verificationRequest.subjectClaims[0].statements[0].upper"
+    );
+}
+
+/// Multiple statements provided, range and set. Range is valid - set is invalid, therefore error path should
+/// be for the second indexed statement.
+#[tokio::test]
+async fn test_verify_identity_based_multistatement_range_valid_set_invalid() {
+    let handle = server::start_server();
+    let global_context = fixtures::credentials::global_context();
+    let id_cred = fixtures::credentials::identity_credentials_fixture(&global_context);
+
+    let mut verify_fixture = fixtures::verify_request_identity(&global_context, &id_cred);
+
+    handle.node_client_stub().stub_block_item_status(
+        verify_fixture.anchor_txn_hash,
+        fixtures::chain::transaction_status_finalized(
+            verify_fixture.anchor_txn_hash,
+            cbor::cbor_encode(&verify_fixture.anchor)
+                .unwrap()
+                .try_into()
+                .unwrap(),
+        ),
+    );
+
+    // valid range statement
+    let attribute_in_range_statement = RequestedStatement::AttributeInRange(
+        fixtures::make_range_statement("19900101", "20250101"),
+    );
+
+    // invalid set statement. UK is not valid it has to be GB
+    let set_statement =
+        RequestedStatement::AttributeInSet(fixtures::make_country_set_statement(vec!["UK"]));
+
+    verify_fixture.request.verification_request.subject_claims =
+        vec![RequestedSubjectClaims::Identity(
+            RequestedIdentitySubjectClaims {
+                statements: vec![attribute_in_range_statement, set_statement],
+                issuers: vec![IdentityProviderDid {
+                    identity_provider: IpIdentity(0u32),
+                    network: Network::Testnet,
+                }],
+                source: vec![IdentityCredentialType::IdentityCredential],
+            },
+        )];
+
+    let resp = handle
+        .rest_client()
+        .post("verifiable-presentations/verify")
+        .json(&verify_fixture.request)
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    let error_response: ErrorResponse = resp.json().await.unwrap();
+    println!("*** Error: {:?}", error_response);
+
+    // Validation Error response assertions.
+    // There should be 1 detail, not retryable (as its a validation error)
+    assert_eq!(error_response.error.code, VALIDATION_GENERAL_ERROR_CODE);
+    assert_eq!(error_response.error.message, VALIDATION_GENERAL_MESSAGE);
+    assert!(!error_response.error.retryable);
+    assert_eq!(error_response.error.details.len(), 1);
+
+    let detail = &error_response.error.details[0];
+    assert_eq!(detail.code, "COUNTRY_CODE_INVALID");
+    assert_eq!(
+        detail.message,
+        "Country code must be 2 letter and both uppercase following the ISO3166-1 alpha-2 uppercase standard. (e.g `DE`)"
+    );
+    assert_eq!(
+        detail.path,
+        "verificationRequest.subjectClaims[0].statements[1].set[0]"
+    );
+}
+
+/// Multiple statements provided, range and set. both invalid
+#[tokio::test]
+async fn test_verify_identity_based_multistatement_both_invalid() {
+    let handle = server::start_server();
+    let global_context = fixtures::credentials::global_context();
+    let id_cred = fixtures::credentials::identity_credentials_fixture(&global_context);
+
+    let mut verify_fixture = fixtures::verify_request_identity(&global_context, &id_cred);
+
+    handle.node_client_stub().stub_block_item_status(
+        verify_fixture.anchor_txn_hash,
+        fixtures::chain::transaction_status_finalized(
+            verify_fixture.anchor_txn_hash,
+            cbor::cbor_encode(&verify_fixture.anchor)
+                .unwrap()
+                .try_into()
+                .unwrap(),
+        ),
+    );
+
+    // valid range statement
+    let attribute_in_range_statement =
+        RequestedStatement::AttributeInRange(fixtures::make_range_statement("19900101", "abcd"));
+
+    // invalid set statement. UK is not valid it has to be GB
+    let set_statement =
+        RequestedStatement::AttributeInSet(fixtures::make_country_set_statement(vec!["UK"]));
+
+    verify_fixture.request.verification_request.subject_claims =
+        vec![RequestedSubjectClaims::Identity(
+            RequestedIdentitySubjectClaims {
+                statements: vec![attribute_in_range_statement, set_statement],
+                issuers: vec![IdentityProviderDid {
+                    identity_provider: IpIdentity(0u32),
+                    network: Network::Testnet,
+                }],
+                source: vec![IdentityCredentialType::IdentityCredential],
+            },
+        )];
+
+    let resp = handle
+        .rest_client()
+        .post("verifiable-presentations/verify")
+        .json(&verify_fixture.request)
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    let error_response: ErrorResponse = resp.json().await.unwrap();
+    println!("*** Error: {:?}", error_response);
+
+    // Validation Error response assertions.
+    // There should be 1 detail, not retryable (as its a validation error)
+    assert_eq!(error_response.error.code, VALIDATION_GENERAL_ERROR_CODE);
+    assert_eq!(error_response.error.message, VALIDATION_GENERAL_MESSAGE);
+    assert!(!error_response.error.retryable);
+    assert_eq!(error_response.error.details.len(), 2);
+
+    fixtures::assert_has_detail(
+        &error_response.error.details,
+        "COUNTRY_CODE_INVALID",
+        "Country code must be 2 letter and both uppercase following the ISO3166-1 alpha-2 uppercase standard. (e.g `DE`)",
+        "verificationRequest.subjectClaims[0].statements[1].set[0]",
+    );
+
+    fixtures::assert_has_detail(
+        &error_response.error.details,
+        "ATTRIBUTE_IN_RANGE_STATEMENT_NOT_NUMERIC",
+        "Attribute in range statement, is a numeric range check between a lower and upper bound. These must be numeric values.",
+        "verificationRequest.subjectClaims[0].statements[0].upper",
+    );
 }

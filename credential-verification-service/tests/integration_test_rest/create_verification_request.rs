@@ -12,7 +12,7 @@ use concordium_rust_sdk::{
     web3id::did::Network,
 };
 use credential_verification_service::{
-    api_types::{ErrorDetail, ErrorResponse},
+    api_types::ErrorResponse,
     validation::validation_context::{VALIDATION_GENERAL_ERROR_CODE, VALIDATION_GENERAL_MESSAGE},
 };
 use reqwest::StatusCode;
@@ -286,16 +286,20 @@ async fn test_create_verification_request_multiple_errors_range_and_set() {
     assert_eq!(&error_response.error.code, expected_code);
     assert_eq!(&error_response.error.message, expected_message);
 
-    assert_has_detail(
+    println!("**** details: {:?}", error_response);
+
+    fixtures::assert_has_detail(
         &error_response.error.details,
         "ATTRIBUTE_IN_RANGE_STATEMENT_BOUNDS_INVALID",
         "Provided `upper bound: 19890101` must be greater than `lower bound: 19900101`.",
+        "requestedClaims[0].statements[0].upper",
     );
 
-    assert_has_detail(
+    fixtures::assert_has_detail(
         &error_response.error.details,
         "COUNTRY_CODE_INVALID",
         "Country code must be 2 letter and both uppercase following the ISO3166-1 alpha-2 uppercase standard. (e.g `DE`)",
+        "requestedClaims[0].statements[1].set[0]",
     );
 }
 
@@ -317,14 +321,4 @@ fn get_requested_property_labels(context: &UnfilledContextInformation) -> HashSe
 
 fn get_given_property_labels(context: &UnfilledContextInformation) -> HashSet<ContextLabel> {
     context.given.iter().map(|prop| prop.label()).collect()
-}
-
-fn assert_has_detail(details: &[ErrorDetail], code: &str, message: &str) {
-    assert!(
-        details
-            .iter()
-            .any(|d| d.code == code && d.message == message),
-        "missing expected detail: code={code}, message={message}\nactual details: {:#?}",
-        details
-    );
 }
