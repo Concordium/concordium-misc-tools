@@ -2,7 +2,6 @@
 
 use crate::api::util;
 use crate::api_types::{ErrorBody, ErrorResponse};
-//use crate::api::validate_payload::payload_validation;
 use crate::types::AppJson;
 use crate::validation::create_verification_api_request_validator;
 use crate::{api_types::CreateVerificationRequest, types::Service};
@@ -19,8 +18,7 @@ pub async fn create_verification_request(
     State(state): State<Arc<Service>>,
     AppJson(params): AppJson<CreateVerificationRequest>,
 ) -> Result<Json<VerificationRequest>, ErrorResponse> {
-    // Validate format of statements/claims in the payload request.
-    //payload_validation(params.requested_claims.clone())?;
+    // validator for create verification request api payload
     create_verification_api_request_validator::validate(&params)?;
 
     let context_nonce = Nonce(rand::random());

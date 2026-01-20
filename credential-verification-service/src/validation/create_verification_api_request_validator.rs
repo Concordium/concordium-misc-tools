@@ -14,6 +14,11 @@ pub const REQUESTED_CLAIMS_VERIFICATION_REQUEST_PATH: &str = "requestedClaims";
 
 /// Validator entry point for validating the Create Verification API Request.
 pub fn validate(request: &CreateVerificationRequest) -> Result<(), ErrorResponse> {
+    debug!(
+        "Starting validation for create verification request, with connection id: {:?}",
+        &request.connection_id
+    );
+
     // create validation context for this api request.
     let mut validation_context = ValidationContext::new();
 

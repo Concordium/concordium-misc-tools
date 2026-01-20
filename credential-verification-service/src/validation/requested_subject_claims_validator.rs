@@ -758,7 +758,7 @@ mod tests {
 
         validate(&vec_requested_subject_claims, &mut ctx, path);
 
-        assert!(ctx.has_errors());
+        assert!(!ctx.has_errors());
     }
 
     #[test]

@@ -1,7 +1,6 @@
 //! Handler for the verification endpoints.
 
 use crate::api::util;
-//use crate::api::validate_payload::payload_validation;
 use crate::api_types::{ErrorBody, ErrorResponse, VerificationFailure};
 use crate::node_client::NodeClient;
 use crate::types::AppJson;
@@ -47,11 +46,6 @@ pub async fn verify_presentation(
     state: State<Arc<Service>>,
     AppJson(verify_presentation_request): AppJson<VerifyPresentationRequest>,
 ) -> Result<Json<VerifyPresentationResponse>, ErrorResponse> {
-    // Validate the format of statements/claims in the payload request.
-    // Note: The statements/claims in the `proof` are verified
-    // to match the payload request during proof verification,
-    // so no additional validation is performed on the `proof` here.
-
     let internal_error = ErrorResponse {
         error: ErrorBody {
             code: "INTERNAL_ERROR".to_string(),
@@ -63,7 +57,11 @@ pub async fn verify_presentation(
         },
     };
 
-    // call the verify api request validator
+    // verify api request payload validator call here.
+    // Validate the format of statements/claims in the payload request.
+    // Note: The statements/claims in the `proof` are verified
+    // to match the payload request during proof verification,
+    // so no additional validation is performed on the `proof` here.
     verify_api_request_validator::validate(&verify_presentation_request)?;
 
     let block_identifier = BlockIdentifier::LastFinal;
