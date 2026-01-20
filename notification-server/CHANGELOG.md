@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## 0.5.0
+
 - Update `concordium-rust-sdk` dependency and adjust project to be forward-compatible. Block items with unknown details or unknown contract trace elements are skipped when indexing.
 
 ## 0.4.0
