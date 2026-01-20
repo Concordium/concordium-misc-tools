@@ -43,58 +43,7 @@ fn make_invalid_range_statement() -> RequestedStatement<AttributeTag> {
     })
 }
 
-/// Test request payload validation error
-#[tokio::test]
-async fn test_request_payload_validation_error() {
-    let handle = server::start_server();
-    let global_context = fixtures::credentials::global_context();
-    let id_cred = fixtures::credentials::identity_credentials_fixture(&global_context);
 
-    let mut verify_fixture = fixtures::verify_request_identity(&global_context, &id_cred);
-
-    for claim in &mut verify_fixture.request.verification_request.subject_claims {
-        let RequestedSubjectClaims::Identity(id_claim) = claim;
-        id_claim.statements = vec![make_invalid_range_statement()];
-    }
-
-    let resp = handle
-        .rest_client()
-        .post("verifiable-presentations/verify")
-        .json(&verify_fixture.request)
-        .send()
-        .await
-        .unwrap();
-
-    let status = resp.status();
-    let body_text = resp.text().await.unwrap();
-    assert_eq!(status, StatusCode::BAD_REQUEST);
-
-    // Map to client friendly error structure
-    let error_response_body: ErrorResponse = serde_json::from_str(&body_text).unwrap();
-
-    // expected field values in error response
-    let expected_error_code = "VALIDATION_ERROR".to_string();
-    let expected_top_level_error_message =
-        "Validation errors have occurred. Please check the details below for more information."
-            .to_string();
-    let expected_error_detail_code =
-        "ATTRIBUTE_IN_RANGE_STATEMENT_INVALID_ATTRIBUTE_TAG".to_string();
-    let expected_error_detail_message = "Attribute tag `nationality` is not allowed to be used in range statements. Only `ATTRIBUTE_TAG_DOB(3)`, `ATTRIBUTE_TAG_ID_DOC_ISSUED_AT(9)`, and `ATTRIBUTE_TAG_ID_DOC_EXPIRES_AT(10)` allowed in range statements.".to_string();
-
-    // assertions
-    assert_eq!(error_response_body.error.code, expected_error_code);
-    assert_eq!(
-        error_response_body.error.message,
-        expected_top_level_error_message
-    );
-    assert_eq!(error_response_body.error.retryable, false);
-
-    // ensure we have one corresponding error detail
-    assert_eq!(1, error_response_body.error.details.len());
-    let error_detail = &error_response_body.error.details[0];
-    assert_eq!(error_detail.code, expected_error_detail_code);
-    assert_eq!(error_detail.message, expected_error_detail_message);
-}
 
 /// Test internal server error
 #[tokio::test]
@@ -119,4 +68,17 @@ async fn test_internal_error() {
         .unwrap();
 
     assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    
+    // unwrap the Error Response
+    let body_text = resp.text().await.unwrap();
+    let error_response_body: ErrorResponse = serde_json::from_str(&body_text).unwrap();
+    println!("**** Error Response: {:?}", error_response_body);
+
+    let expected_code = "INTERNAL_ERROR";
+    let expected_message = "An error has occurred while processing the request. Please try again later";
+
+    assert_eq!(expected_code, error_response_body.error.code);
+    assert_eq!(expected_message, error_response_body.error.message);
+    assert_eq!(true, error_response_body.error.retryable);
+    assert_eq!("Dummy", error_response_body.error.trace_id);
 }

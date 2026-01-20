@@ -1,9 +1,10 @@
-use crate::integration_test_helpers::{fixtures, server};
-use concordium_rust_sdk::base::web3id::v1::anchor::{
-    ContextLabel, UnfilledContextInformation, VerificationRequest,
-};
+use crate::integration_test_helpers::{fixtures::{self, ATTRIBUTE_TAG_COUNTRY_OF_RESIDENCE, make_country_set_statement}, server};
+use concordium_rust_sdk::{base::web3id::v1::anchor::{
+    ContextLabel, IdentityCredentialType, IdentityProviderDid, RequestedIdentitySubjectClaims, RequestedIdentitySubjectClaimsBuilder, RequestedStatement, RequestedSubjectClaims, UnfilledContextInformation, VerificationRequest
+}, id::{constants::AttributeKind, id_proof_types::{AttributeInRangeStatement, AttributeInSetStatement}, types::IpIdentity}, web3id::{Web3IdAttribute, did::Network}};
+use credential_verification_service::api_types::ErrorResponse;
 use reqwest::StatusCode;
-use std::collections::HashSet;
+use std::{collections::HashSet, marker::PhantomData};
 
 /// Test create verification request
 #[tokio::test]
@@ -99,6 +100,185 @@ async fn test_create_verification_request_with_context_string() {
         "contextstring1"
     );
 }
+
+
+// ----------------------------------
+// Error Response Structure Scenarios
+// ----------------------------------
+#[tokio::test]
+async fn test_create_verification_request_attribute_in_range_bound_not_numeric() {
+    let handle = server::start_server();
+
+    // create the verification request api payload
+    // modify with range not numeric
+    let mut create_verification_request = fixtures::create_verification_request();
+
+    // create invalid attribute in range statement
+    let attribute_in_range_statement = RequestedStatement::AttributeInRange(
+        AttributeInRangeStatement {
+            attribute_tag: fixtures::ATTRIBUTE_TAG_DOB,
+            lower: Web3IdAttribute::String(AttributeKind::try_new("abcdef".into()).unwrap()),
+            upper: Web3IdAttribute::String(AttributeKind::try_new("20240101".into()).unwrap()),
+            _phantom: PhantomData,
+        }
+    );
+
+    // modify create verification request now with the invalid statement
+    create_verification_request.requested_claims = vec![RequestedSubjectClaims::Identity(
+        RequestedIdentitySubjectClaims { 
+            statements: vec![attribute_in_range_statement], 
+            issuers: vec![IdentityProviderDid { identity_provider: IpIdentity(0u32), network: Network::Testnet}], 
+            source: vec![IdentityCredentialType::IdentityCredential]
+        }
+    )];
+
+    // Call the API with the invalid request
+    let resp = handle
+        .rest_client()
+        .post("verifiable-presentations/create-verification-request")
+        .json(&create_verification_request)
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+    // unwrap the Error Response
+    let error_response: ErrorResponse = resp.json().await.unwrap();
+
+    // Assertions and expected validation codes and messages
+    let expected_code = "VALIDATION_ERROR";
+    let expected_message = "Validation errors have occurred. Please check the details below for more information.";
+    let expected_detail_code = "ATTRIBUTE_IN_RANGE_STATEMENT_NOT_NUMERIC";
+    let expected_detail_message = "Attribute in range statement, is a numeric range check between a lower and upper bound. These must be numeric values.";
+
+    assert_eq!(expected_code, error_response.error.code);
+    assert_eq!(expected_message, error_response.error.message);
+    assert_eq!(false, error_response.error.retryable);
+    assert_eq!("dummy", error_response.error.trace_id);
+
+    assert!(error_response.error.details.len() == 1);
+    let detail = &error_response.error.details[0];
+    assert_eq!(detail.code, expected_detail_code);
+    assert_eq!(detail.message, expected_detail_message);
+}
+
+
+#[tokio::test]
+async fn test_create_verification_request_attribute_in_range_upper_should_be_greater_than_lower() {
+    let handle = server::start_server();
+
+    // create the verification request api payload
+    // modify with range not numeric
+    let mut create_verification_request = fixtures::create_verification_request();
+
+    // create invalid attribute in range statement
+    let attribute_in_range_statement = RequestedStatement::AttributeInRange(
+        AttributeInRangeStatement {
+            attribute_tag: fixtures::ATTRIBUTE_TAG_DOB,
+            lower: Web3IdAttribute::String(AttributeKind::try_new("20200101".into()).unwrap()),
+            upper: Web3IdAttribute::String(AttributeKind::try_new("19990101".into()).unwrap()),
+            _phantom: PhantomData,
+        }
+    );
+
+    // modify create verification request now with the invalid statement
+    create_verification_request.requested_claims = vec![RequestedSubjectClaims::Identity(
+        RequestedIdentitySubjectClaims { 
+            statements: vec![attribute_in_range_statement], 
+            issuers: vec![IdentityProviderDid { identity_provider: IpIdentity(0u32), network: Network::Testnet}], 
+            source: vec![IdentityCredentialType::IdentityCredential]
+        }
+    )];
+
+    // Call the API with the invalid request
+    let resp = handle
+        .rest_client()
+        .post("verifiable-presentations/create-verification-request")
+        .json(&create_verification_request)
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+    // unwrap the Error Response
+    let error_response: ErrorResponse = resp.json().await.unwrap();
+
+    // Assertions and expected validation codes and messages
+    let expected_code = "VALIDATION_ERROR";
+    let expected_message = "Validation errors have occurred. Please check the details below for more information.";
+    let expected_detail_code = "ATTRIBUTE_IN_RANGE_STATEMENT_BOUNDS_INVALID";
+    let expected_detail_message = "Provided `upper bound: 19990101` must be greater than `lower bound: 20200101`.";
+
+    assert_eq!(expected_code, error_response.error.code);
+    assert_eq!(expected_message, error_response.error.message);
+    assert_eq!(false, error_response.error.retryable);
+    assert_eq!("dummy", error_response.error.trace_id);
+
+    assert!(error_response.error.details.len() == 1);
+    let detail = &error_response.error.details[0];
+    assert_eq!(detail.code, expected_detail_code);
+    assert_eq!(detail.message, expected_detail_message);
+}
+
+
+#[tokio::test]
+async fn test_create_verification_request_multiple_errors_range_and_set() {
+    let handle = server::start_server();
+
+    // create the verification request api payload
+    // modify with range not numeric
+    let mut create_verification_request = fixtures::create_verification_request();
+
+    let attribute_in_range_statement = RequestedStatement::AttributeInRange(
+        fixtures::make_range_statement("19900101".into(), "19890101".into())
+    );
+
+    let set_statement = RequestedStatement::AttributeInSet(
+        fixtures::make_country_set_statement(vec!["UK"])
+    );
+
+    // modify create verification request now with the invalid statement
+    create_verification_request.requested_claims = vec![RequestedSubjectClaims::Identity(
+        RequestedIdentitySubjectClaims { 
+            statements: vec![attribute_in_range_statement, set_statement], 
+            issuers: vec![IdentityProviderDid { identity_provider: IpIdentity(0u32), network: Network::Testnet}], 
+            source: vec![IdentityCredentialType::IdentityCredential]
+        }
+    )];
+
+    // Call the API with the invalid request
+    let resp = handle
+        .rest_client()
+        .post("verifiable-presentations/create-verification-request")
+        .json(&create_verification_request)
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+    // unwrap the Error Response
+    let error_response: ErrorResponse = resp.json().await.unwrap();
+
+    // Assertions and expected validation codes and messages
+    let expected_code = "VALIDATION_ERROR";
+    let expected_message = "Validation errors have occurred. Please check the details below for more information.";
+    let expected_detail_code = "ATTRIBUTE_IN_RANGE_STATEMENT_BOUNDS_INVALID";
+    let expected_detail_message = "Provided `upper bound: 19990101` must be greater than `lower bound: 20200101`.";
+
+    assert_eq!(expected_code, error_response.error.code);
+    assert_eq!(expected_message, error_response.error.message);
+    assert_eq!(false, error_response.error.retryable);
+    assert_eq!("dummy", error_response.error.trace_id);
+
+    assert!(error_response.error.details.len() == 1);
+    let detail = &error_response.error.details[0];
+    assert_eq!(detail.code, expected_detail_code);
+    assert_eq!(detail.message, expected_detail_message);
+}
+
 
 fn get_given_property_value(
     context: &UnfilledContextInformation,

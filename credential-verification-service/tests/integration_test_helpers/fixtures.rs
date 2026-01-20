@@ -11,7 +11,7 @@ use concordium_rust_sdk::base::web3id::v1::anchor::{
     VerificationRequestData,
 };
 use concordium_rust_sdk::common::cbor;
-use concordium_rust_sdk::id::id_proof_types::{AttributeInSetStatement, AttributeValueStatement};
+use concordium_rust_sdk::id::id_proof_types::{AttributeInRangeStatement, AttributeInSetStatement, AttributeValueStatement};
 use concordium_rust_sdk::id::types::{AttributeTag, GlobalContext, IpIdentity};
 use concordium_rust_sdk::web3id::Web3IdAttribute;
 use concordium_rust_sdk::web3id::did::Network;
@@ -26,7 +26,7 @@ use concordium_rust_sdk::base::web3id::v1::{
 };
 use concordium_rust_sdk::common;
 use concordium_rust_sdk::id::constants::{ArCurve, AttributeKind};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::str::FromStr;
@@ -34,7 +34,16 @@ use std::str::FromStr;
 pub mod chain;
 pub mod credentials;
 
+/// Attribute tags
+pub const ATTRIBUTE_TAG_DOB: AttributeTag = AttributeTag(3);
 pub const ATTRIBUTE_TAG_COUNTRY_OF_RESIDENCE: AttributeTag = AttributeTag(4);
+pub const ATTRIBUTE_TAG_NATIONALITY: AttributeTag = AttributeTag(5);
+pub const ATTRIBUTE_TAG_ID_DOC_TYPE: AttributeTag = AttributeTag(6);
+pub const ATTRIBUTE_TAG_ID_DOC_ISSUER: AttributeTag = AttributeTag(8);
+pub const ATTRIBUTE_TAG_ID_DOC_ISSUED_AT: AttributeTag = AttributeTag(9);
+pub const ATTRIBUTE_TAG_ID_DOC_EXPIRES_AT: AttributeTag = AttributeTag(10);
+pub const ATTRIBUTE_TAG_LEGAL_COUNTRY: AttributeTag = AttributeTag(15);
+
 
 pub fn public_info() -> HashMap<String, cbor::value::Value> {
     [(
@@ -148,6 +157,34 @@ where
     .collect();
 
     (statements, attributes)
+}
+
+
+pub fn make_country_set_statement(
+    values: Vec<&str>,
+) -> AttributeInSetStatement<ArCurve, AttributeTag, Web3IdAttribute> {
+    let set: BTreeSet<Web3IdAttribute> = values
+        .into_iter()
+        .map(|v| Web3IdAttribute::String(AttributeKind::try_new(v.into()).unwrap()))
+        .collect();
+
+    AttributeInSetStatement {
+        attribute_tag: ATTRIBUTE_TAG_COUNTRY_OF_RESIDENCE,
+        set,
+        _phantom: PhantomData,
+    }
+}
+
+pub fn make_range_statement(
+    lower: &str,
+    upper: &str,
+) -> AttributeInRangeStatement<ArCurve, AttributeTag, Web3IdAttribute> {
+    AttributeInRangeStatement {
+        attribute_tag: ATTRIBUTE_TAG_DOB,
+        lower: Web3IdAttribute::String(AttributeKind::try_new(lower.into()).unwrap()),
+        upper: Web3IdAttribute::String(AttributeKind::try_new(upper.into()).unwrap()),
+        _phantom: PhantomData,
+    }
 }
 
 pub fn verification_request_to_verifiable_presentation_request_identity(
