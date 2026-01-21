@@ -11,10 +11,7 @@ use concordium_rust_sdk::{
     id::types::IpIdentity,
     web3id::did::Network,
 };
-use credential_verification_service::{
-    api_types::ErrorResponse,
-    validation::validation_context::{VALIDATION_GENERAL_ERROR_CODE, VALIDATION_GENERAL_MESSAGE},
-};
+use credential_verification_service::api_types::ErrorResponse;
 use reqwest::StatusCode;
 use std::collections::HashSet;
 
