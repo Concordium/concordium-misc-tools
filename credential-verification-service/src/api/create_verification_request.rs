@@ -44,9 +44,8 @@ pub async fn create_verification_request(
     // Create the request anchor
     let verification_request_anchor = verification_request_data.to_anchor(params.public_info);
     let anchor_data = util::anchor_to_registered_data(&verification_request_anchor)
-        .map_err(|e| {
+        .inspect_err(|e| {
             debug!("A server error has occurred while converting the verification request to anchor. Verification request: {:?}. Error: {:?}", &verification_request_data, e);
-            e
         })?;
 
     // Submit the anchor
@@ -54,9 +53,8 @@ pub async fn create_verification_request(
         .transaction_submitter
         .submit_register_data_txn(anchor_data)
         .await
-        .map_err(|e| {
+        .inspect_err(|e| {
             debug!("A server error has occurred while submitting the register data transaction. Error: {:?}", e);
-            e
         })?;
 
     let verification_request = VerificationRequest {
