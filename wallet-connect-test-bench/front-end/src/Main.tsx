@@ -33,6 +33,7 @@ import {
   deploy,
   simpleCCDTransfer,
   simpleCCDTransferToNonExistingAccountAddress,
+  simplePltTransfer,
 } from "./writing_to_blockchain";
 
 import {
@@ -129,6 +130,9 @@ export default function Main(props: WalletConnectionProps) {
   const [input, setInput] = useState("");
   const [maxEnergy, setMaxEnergy] = useState("30000");
 
+  const [pltAmount, setPltAmount] = useState("");
+  const [pltId, setPltId] = useState("");
+
   const [useModuleSchema, setUseModuleSchema] = useState(true);
   const [isPayable, setIsPayable] = useState(true);
   const [readDropDown, setReadDropDown] = useState("u8");
@@ -153,6 +157,16 @@ export default function Main(props: WalletConnectionProps) {
   const changeCCDAmountHandler = (event: ChangeEvent) => {
     const target = event.target as HTMLTextAreaElement;
     setCCDAmount(target.value);
+  };
+
+  const changePltAmountHandler = (event: ChangeEvent) => {
+    const target = event.target as HTMLTextAreaElement;
+    setPltAmount(target.value);
+  };
+
+  const changePltIdHandler = (event: ChangeEvent) => {
+    const target = event.target as HTMLTextAreaElement;
+    setPltId(target.value);
   };
 
   const changeMessageHandler = (event: ChangeEvent) => {
@@ -1002,6 +1016,62 @@ export default function Main(props: WalletConnectionProps) {
                   >
                     Send simple CCD transfer to non existing account address
                     (reverts)
+                  </button>
+                </TestBox>
+                                <TestBox
+                  header="(PLT) Testing single protocol-level token transfer"
+                  note="Expected the wallet to have a special, simple screen for this case, without stringified JSONs, etc.">
+<label className="field">
+                    <p>Token ID (symbol)</p>
+                    <input
+                      className="inputFieldStyle"
+                      id="pltId"
+                      type="text"
+                      placeholder="USDR"
+                      onChange={changePltIdHandler}
+                    />
+                  </label>
+                   <label className="field">
+                    <p>Amount (decimal):</p>
+                    <input
+                      className="inputFieldStyle"
+                      id="pltAmount"
+                      type="number"
+                      placeholder="100"
+                      onChange={changePltAmountHandler}
+                    />
+                  </label>
+                  <label className="field">
+                    <p>To account:</p>
+                    <input
+                      className="inputFieldStyle"
+                      id="toAccount"
+                      type="text"
+                      placeholder="4fUk1a1rjBzoPCCy6p92u5LT5vSw9o8GpjMiRHBbJUfmx51uvt"
+                      onChange={changeToAccountHandler}
+                    />
+                  </label>
+                  <br />
+                  <button
+                    className="btn btn-primary"
+                    type="button"
+                    onClick={() => {
+                      setTxHash("");
+                      setTransactionError("");
+                      const tx = simplePltTransfer(
+                        connection,
+                        grpcClient!!,
+                        account,
+                        toAccount,
+                        pltId,
+                        pltAmount
+                      );
+                      tx.then(setTxHash).catch((err: Error) =>
+                        setTransactionError((err as Error).message)
+                      );
+                    }}
+                  >
+                    Send PLT transfer
                   </button>
                 </TestBox>
                 <TestBox
