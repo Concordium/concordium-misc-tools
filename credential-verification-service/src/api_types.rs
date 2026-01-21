@@ -130,17 +130,6 @@ pub struct ErrorDetail {
     pub message: String,
 }
 
-impl IntoResponse for ErrorResponse {
-    fn into_response(self) -> Response {
-        let status = match self.error.code.as_str() {
-            "VALIDATION_ERROR" => StatusCode::BAD_REQUEST,
-            _ => StatusCode::INTERNAL_SERVER_ERROR,
-        };
-
-        (status, Json(self)).into_response()
-    }
-}
-
 mod map_hex_cbor_values_option {
     use super::*;
     use hex::{FromHex, ToHex};
