@@ -94,12 +94,14 @@ pub struct VerificationFailure {
     pub message: String,
 }
 
+#[derive(serde::Deserialize, serde::Serialize, Debug, Clone, Eq, PartialEq)]
 /// Definition of Error Response structure to be sent back to the client.
 pub struct ErrorResponse {
     /// The body of the error
     pub error: ErrorBody,
 }
 
+#[derive(serde::Deserialize, serde::Serialize, Debug, Clone, Eq, PartialEq)]
 pub struct ErrorBody {
     /// machine readable error code that has occurred. All uppercase wording separated by underscore.
     /// eg: VALIDATION_ERROR
@@ -112,6 +114,7 @@ pub struct ErrorBody {
     pub details: Vec<ErrorDetail>,
 }
 
+#[derive(serde::Deserialize, serde::Serialize, Debug, Clone, Eq, PartialEq)]
 /// A specific Error detail that has occurred
 pub struct ErrorDetail {
     /// machine readable error code about a specific error that has occurred

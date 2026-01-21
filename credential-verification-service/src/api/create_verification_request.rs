@@ -1,12 +1,9 @@
 //! Handler for create-verification-request endpoint.
 
 use crate::api::util;
-use crate::api::validate_payload::payload_validation;
-use crate::types::AppJson;
-use crate::{
-    api_types::CreateVerificationRequest,
-    types::{ServerError, Service},
-};
+use crate::types::{AppJson, ServerError};
+use crate::validation::create_verification_api_request_validator;
+use crate::{api_types::CreateVerificationRequest, types::Service};
 use axum::{Json, extract::State};
 use concordium_rust_sdk::base::web3id::v1::anchor::{ContextLabel, Nonce};
 use concordium_rust_sdk::base::web3id::v1::anchor::{
@@ -14,13 +11,14 @@ use concordium_rust_sdk::base::web3id::v1::anchor::{
     VerificationRequestDataBuilder,
 };
 use std::sync::Arc;
+use tracing::debug;
 
 pub async fn create_verification_request(
     State(state): State<Arc<Service>>,
     AppJson(params): AppJson<CreateVerificationRequest>,
 ) -> Result<Json<VerificationRequest>, ServerError> {
-    // Validate format of statements/claims in the payload request.
-    payload_validation(params.requested_claims.clone())?;
+    // validator for create verification request api payload
+    create_verification_api_request_validator::validate(&params)?;
 
     let context_nonce = Nonce(rand::random());
     let context_builder = UnfilledContextInformationBuilder::new()
@@ -45,13 +43,19 @@ pub async fn create_verification_request(
 
     // Create the request anchor
     let verification_request_anchor = verification_request_data.to_anchor(params.public_info);
-    let anchor_data = util::anchor_to_registered_data(&verification_request_anchor)?;
+    let anchor_data = util::anchor_to_registered_data(&verification_request_anchor)
+        .inspect_err(|e| {
+            debug!("A server error has occurred while converting the verification request to anchor. Verification request: {:?}. Error: {:?}", &verification_request_data, e);
+        })?;
 
     // Submit the anchor
     let anchor_transaction_hash = state
         .transaction_submitter
         .submit_register_data_txn(anchor_data)
-        .await?;
+        .await
+        .inspect_err(|e| {
+            debug!("A server error has occurred while submitting the register data transaction. Error: {:?}", e);
+        })?;
 
     let verification_request = VerificationRequest {
         context: verification_request_data.context,

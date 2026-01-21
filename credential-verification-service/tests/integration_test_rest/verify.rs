@@ -1,9 +1,21 @@
 use crate::integration_test_helpers::{fixtures, server};
 use assert_matches::assert_matches;
-use concordium_rust_sdk::base::web3id::v1::CredentialVerificationMaterial;
-use concordium_rust_sdk::base::web3id::v1::anchor::PresentationVerifyFailure;
+use concordium_rust_sdk::base::web3id::v1::anchor::{
+    IdentityCredentialType, IdentityProviderDid, PresentationVerifyFailure,
+    RequestedIdentitySubjectClaims, RequestedStatement,
+};
+use concordium_rust_sdk::base::web3id::v1::{
+    CredentialVerificationMaterial, anchor::RequestedSubjectClaims,
+};
 use concordium_rust_sdk::common::cbor;
-use credential_verification_service::api_types::{VerificationResult, VerifyPresentationResponse};
+use concordium_rust_sdk::id::types::IpIdentity;
+use concordium_rust_sdk::web3id::did::Network;
+use credential_verification_service::api_types::{
+    ErrorResponse, VerificationResult, VerifyPresentationResponse,
+};
+use credential_verification_service::validation::validation_context::{
+    VALIDATION_GENERAL_ERROR_CODE, VALIDATION_GENERAL_MESSAGE,
+};
 use reqwest::StatusCode;
 
 /// Test verify account based presentation
@@ -67,7 +79,7 @@ async fn test_verify_account_based() {
     );
 }
 
-/// Test verify account based presentation
+/// Test verify identity based presentation
 #[tokio::test]
 async fn test_verify_identity_based() {
     let handle = server::start_server();
@@ -250,12 +262,23 @@ async fn test_verify_anchor_not_decodable() {
         .unwrap();
 
     assert_eq!(resp.status(), StatusCode::UNPROCESSABLE_ENTITY);
-    let resp_text = resp.text().await.unwrap();
-    assert!(
-        resp_text.contains("error decoding registered data"),
-        "response: {}",
-        resp_text
+
+    // unwrap the Error Response
+    let error_response: ErrorResponse = resp.json().await.unwrap();
+
+    // Assertions and expected validation codes and messages
+    let expected_code = "REQUEST_ANCHOR_DECODE_ISSUE";
+    let expected_message = format!(
+        "request anchor transaction {} encountered a decoding issue.",
+        verify_fixture
+            .request
+            .verification_request
+            .anchor_transaction_hash
     );
+
+    assert_eq!(expected_code, error_response.error.code);
+    assert_eq!(expected_message, error_response.error.message);
+    assert!(!error_response.error.retryable);
 }
 
 /// Test request anchor not found
@@ -276,12 +299,23 @@ async fn test_verify_anchor_not_found() {
         .unwrap();
 
     assert_eq!(resp.status(), StatusCode::UNPROCESSABLE_ENTITY);
-    let resp_text = resp.text().await.unwrap();
-    assert!(
-        resp_text.contains("request anchor transaction") && resp_text.contains("not found"),
-        "response: {}",
-        resp_text
+
+    // unwrap the Error Response
+    let error_response: ErrorResponse = resp.json().await.unwrap();
+
+    // Assertions and expected validation codes and messages
+    let expected_code = "REQUEST_ANCHOR_NOT_FOUND";
+    let expected_message = format!(
+        "request anchor transaction {} not found",
+        verify_fixture
+            .request
+            .verification_request
+            .anchor_transaction_hash
     );
+
+    assert_eq!(expected_code, error_response.error.code);
+    assert_eq!(expected_message, error_response.error.message);
+    assert!(!error_response.error.retryable);
 }
 
 /// Test account credential not found
@@ -313,10 +347,88 @@ async fn test_verify_account_credential_not_found() {
         .unwrap();
 
     assert_eq!(resp.status(), StatusCode::UNPROCESSABLE_ENTITY);
-    let resp_text = resp.text().await.unwrap();
-    assert!(
-        resp_text.contains("account credential") && resp_text.contains("not found"),
-        "response: {}",
-        resp_text
+
+    // unwrap the Error Response
+    let error_response: ErrorResponse = resp.json().await.unwrap();
+
+    // Assertions and expected validation codes and messages
+    let expected_code = "ACCOUNT_CREDENTIAL_NOT_FOUND";
+    let expected_message = "Account credential could not be found: a64b6991952b448c57dc1d04c78bd255a2387b49eda3e493e7935d9203cda3a321ae80bd00165915491ac4e157b88b1d";
+
+    assert_eq!(expected_code, error_response.error.code);
+    assert_eq!(expected_message, error_response.error.message);
+    assert!(!error_response.error.retryable);
+}
+
+/// Multiple statements provided, range and set. both invalid
+#[tokio::test]
+async fn test_verify_identity_based_multistatement_both_invalid() {
+    let handle = server::start_server();
+    let global_context = fixtures::credentials::global_context();
+    let id_cred = fixtures::credentials::identity_credentials_fixture(&global_context);
+
+    let mut verify_fixture = fixtures::verify_request_identity(&global_context, &id_cred);
+
+    handle.node_client_stub().stub_block_item_status(
+        verify_fixture.anchor_txn_hash,
+        fixtures::chain::transaction_status_finalized(
+            verify_fixture.anchor_txn_hash,
+            cbor::cbor_encode(&verify_fixture.anchor)
+                .unwrap()
+                .try_into()
+                .unwrap(),
+        ),
+    );
+
+    // valid range statement
+    let attribute_in_range_statement =
+        RequestedStatement::AttributeInRange(fixtures::make_range_statement("19900101", "abcd"));
+
+    // invalid set statement. UK is not valid it has to be GB
+    let set_statement =
+        RequestedStatement::AttributeInSet(fixtures::make_country_set_statement(vec!["UK"]));
+
+    verify_fixture.request.verification_request.subject_claims =
+        vec![RequestedSubjectClaims::Identity(
+            RequestedIdentitySubjectClaims {
+                statements: vec![attribute_in_range_statement, set_statement],
+                issuers: vec![IdentityProviderDid {
+                    identity_provider: IpIdentity(0u32),
+                    network: Network::Testnet,
+                }],
+                source: vec![IdentityCredentialType::IdentityCredential],
+            },
+        )];
+
+    let resp = handle
+        .rest_client()
+        .post("verifiable-presentations/verify")
+        .json(&verify_fixture.request)
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    let error_response: ErrorResponse = resp.json().await.unwrap();
+
+    // Validation Error response assertions.
+    // There should be 1 detail, not retryable (as its a validation error)
+    assert_eq!(error_response.error.code, VALIDATION_GENERAL_ERROR_CODE);
+    assert_eq!(error_response.error.message, VALIDATION_GENERAL_MESSAGE);
+    assert!(!error_response.error.retryable);
+    assert_eq!(error_response.error.details.len(), 2);
+
+    fixtures::assert_has_detail(
+        &error_response.error.details,
+        "COUNTRY_CODE_INVALID",
+        "Country code must be 2 letter and both uppercase following the ISO3166-1 alpha-2 uppercase standard. (e.g `DE`)",
+        "verificationRequest.subjectClaims[0].statements[1].set[0]",
+    );
+
+    fixtures::assert_has_detail(
+        &error_response.error.details,
+        "ATTRIBUTE_IN_RANGE_STATEMENT_NOT_NUMERIC",
+        "Attribute in range statement, is a numeric range check between a lower and upper bound. These must be numeric values.",
+        "verificationRequest.subjectClaims[0].statements[0].upper",
     );
 }

@@ -1,7 +1,17 @@
-use crate::integration_test_helpers::{fixtures, server};
-use concordium_rust_sdk::base::web3id::v1::anchor::{
-    ContextLabel, UnfilledContextInformation, VerificationRequest,
+use crate::integration_test_helpers::{
+    fixtures::{self},
+    server,
 };
+use concordium_rust_sdk::{
+    base::web3id::v1::anchor::{
+        ContextLabel, IdentityCredentialType, IdentityProviderDid, RequestedIdentitySubjectClaims,
+        RequestedStatement, RequestedSubjectClaims, UnfilledContextInformation,
+        VerificationRequest,
+    },
+    id::types::IpIdentity,
+    web3id::did::Network,
+};
+use credential_verification_service::api_types::ErrorResponse;
 use reqwest::StatusCode;
 use std::collections::HashSet;
 
@@ -97,6 +107,75 @@ async fn test_create_verification_request_with_context_string() {
         get_given_property_value(&verification_request.context, ContextLabel::ContextString)
             .expect("context string property"),
         "contextstring1"
+    );
+}
+
+// ----------------------------------
+// Error Response Structure Scenarios
+// ----------------------------------
+#[tokio::test]
+async fn test_create_verification_request_multiple_errors_range_and_set() {
+    let handle = server::start_server();
+
+    // create the verification request api payload
+    // modify with range not numeric
+    let mut create_verification_request = fixtures::create_verification_request();
+
+    // invalid range statement for dob - upper is less than lower
+    let attribute_in_range_statement = RequestedStatement::AttributeInRange(
+        fixtures::make_range_statement("19900101", "19890101"),
+    );
+
+    // invalid set statement for country of residence, UK is not valid it should be GB (Great Britain).
+    let set_statement =
+        RequestedStatement::AttributeInSet(fixtures::make_country_set_statement(vec!["UK"]));
+
+    // modify create verification request now with the invalid statement
+    create_verification_request.requested_claims = vec![RequestedSubjectClaims::Identity(
+        RequestedIdentitySubjectClaims {
+            statements: vec![attribute_in_range_statement, set_statement],
+            issuers: vec![IdentityProviderDid {
+                identity_provider: IpIdentity(0u32),
+                network: Network::Testnet,
+            }],
+            source: vec![IdentityCredentialType::IdentityCredential],
+        },
+    )];
+
+    // Call the API with the invalid request
+    let resp = handle
+        .rest_client()
+        .post("verifiable-presentations/create-verification-request")
+        .json(&create_verification_request)
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+    // unwrap the Error Response
+    let error_response: ErrorResponse = resp.json().await.unwrap();
+    assert_eq!(error_response.error.details.len(), 2);
+
+    // Assertions and expected validation codes and messages
+    let expected_code = "VALIDATION_ERROR";
+    let expected_message =
+        "Validation errors have occurred. Please check the details below for more information.";
+    assert_eq!(&error_response.error.code, expected_code);
+    assert_eq!(&error_response.error.message, expected_message);
+
+    fixtures::assert_has_detail(
+        &error_response.error.details,
+        "ATTRIBUTE_IN_RANGE_STATEMENT_BOUNDS_INVALID",
+        "Provided `upper bound: 19890101` must be greater than `lower bound: 19900101`.",
+        "requestedClaims[0].statements[0].upper",
+    );
+
+    fixtures::assert_has_detail(
+        &error_response.error.details,
+        "COUNTRY_CODE_INVALID",
+        "Country code must be 2 letter and both uppercase following the ISO3166-1 alpha-2 uppercase standard. (e.g `DE`)",
+        "requestedClaims[0].statements[1].set[0]",
     );
 }
 
