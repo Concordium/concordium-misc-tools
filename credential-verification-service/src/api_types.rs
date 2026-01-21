@@ -1,8 +1,3 @@
-use axum::{
-    Json,
-    http::StatusCode,
-    response::{IntoResponse, Response},
-};
 use concordium_rust_sdk::base::web3id::v1::anchor::PresentationVerifyFailure;
 use concordium_rust_sdk::common::cbor;
 use concordium_rust_sdk::{
