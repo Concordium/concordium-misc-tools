@@ -1,4 +1,7 @@
-use crate::api_types::{ErrorBody, ErrorDetail, ErrorResponse};
+use crate::{
+    api_types::{ErrorBody, ErrorDetail, ErrorResponse},
+    types::ValidationError,
+};
 
 pub const VALIDATION_GENERAL_ERROR_CODE: &str = "VALIDATION_ERROR";
 pub const VALIDATION_GENERAL_MESSAGE: &str =
@@ -54,6 +57,13 @@ impl ValidationContext {
                 trace_id,
                 retryable,
             },
+        }
+    }
+
+    // convert to server error - Validation Error
+    pub fn into_validation_error(self) -> ValidationError {
+        ValidationError {
+            details: self.error_details,
         }
     }
 }

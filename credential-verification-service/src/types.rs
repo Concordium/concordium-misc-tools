@@ -1,3 +1,4 @@
+use crate::api_types::{ErrorBody, ErrorDetail, ErrorResponse};
 use crate::node_client::NodeClient;
 use axum::extract::FromRequest;
 use axum::extract::rejection::JsonRejection;
@@ -61,8 +62,10 @@ pub enum ServerError {
 
 /// Error for validating the statements/claims in a request to this service.
 #[derive(Debug, thiserror::Error)]
-#[error("{0}")]
-pub struct ValidationError(pub String);
+#[error("validation failed")]
+pub struct ValidationError {
+    pub details: Vec<ErrorDetail>,
+}
 
 /// Error for handling rejections of invalid requests.
 /// Will be mapped to the right HTTP response (HTTP code and custom
@@ -75,33 +78,186 @@ pub enum RejectionError {
     JsonRejection(#[from] JsonRejection),
 }
 
-impl IntoResponse for ServerError {
+impl IntoResponse for RejectionError {
     fn into_response(self) -> Response {
-        match self {
-            ServerError::Anyhow(_) => {
-                tracing::error!("internal error: {self}");
-                (StatusCode::INTERNAL_SERVER_ERROR, "internal server error").into_response()
-            }
-            ServerError::PayloadValidation(_)
-            | ServerError::RequestAnchorTransactionNotRegisterData(_)
-            | ServerError::RequestAnchorTransactionNotFound(_)
-            | ServerError::RequestAnchorDecode(_, _)
-            | ServerError::IdentityProviderNotFound(_)
-            | ServerError::AccountCredentialNotFound(_)
-            | ServerError::TimeoutWaitingForFinalization(_)
-            | ServerError::AnchorPublicInfoTooBig(_) => {
-                tracing::warn!("unprocessable entity: {self}");
-                (StatusCode::UNPROCESSABLE_ENTITY, self.to_string()).into_response()
-            }
-        }
+        // TODO - this should be replaced in future with trace id that is
+        // generated from some utility, or logic that parses it from a
+        // request header for example.
+        let trace_id = "dummy".to_string();
+
+        tracing::error!("Invalid json in the request: {self}");
+
+        let json_message = self.to_string();
+
+        let body = ErrorResponse {
+            error: ErrorBody {
+                code: "INVALID_JSON".to_string(),
+                message: json_message,
+                trace_id,
+                retryable: false,
+                details: vec![],
+            },
+        };
+
+        (StatusCode::BAD_REQUEST, axum::Json(body)).into_response()
     }
 }
 
-impl IntoResponse for RejectionError {
+impl IntoResponse for ServerError {
     fn into_response(self) -> Response {
-        let status = match self {
-            RejectionError::JsonRejection(_) => StatusCode::BAD_REQUEST,
-        };
-        (status, self.to_string()).into_response()
+        // TODO - this should be replaced in future with trace id that is
+        // generated from some utility, or logic that parses it from a
+        // request header for example.
+        let trace_id = "dummy".to_string();
+
+        match self {
+            ServerError::Anyhow(_) => {
+                tracing::error!("internal error: {self}");
+
+                let body = ErrorResponse {
+                    error: ErrorBody {
+                        code: "INTERNAL_ERROR".to_string(),
+                        message: "internal server error".to_string(),
+                        trace_id,
+                        retryable: true,
+                        details: vec![],
+                    },
+                };
+                (StatusCode::INTERNAL_SERVER_ERROR, axum::Json(body)).into_response()
+            }
+
+            ServerError::PayloadValidation(validation_error) => {
+                let body = ErrorResponse {
+                    error: ErrorBody {
+                        code: "VALIDATION_ERROR".to_string(),
+                        message: "Validation errors have occurred. Please check the details below for more information.".to_string(),
+                        trace_id,
+                        retryable: false,
+                        details: validation_error.details,
+                    }
+                };
+
+                (StatusCode::BAD_REQUEST, axum::Json(body)).into_response()
+            }
+
+            ServerError::RequestAnchorTransactionNotRegisterData(hash) => {
+                tracing::warn!("request anchor transaction not registered. Error: {self}");
+
+                let body = ErrorResponse {
+                    error: ErrorBody {
+                        code: "REQUEST_ANCHOR_NOT_REGISTERED".to_string(),
+                        message: format!("request anchor transaction {hash} not found"),
+                        trace_id,
+                        retryable: false,
+                        details: vec![],
+                    },
+                };
+                (StatusCode::UNPROCESSABLE_ENTITY, axum::Json(body)).into_response()
+            }
+
+            ServerError::RequestAnchorTransactionNotFound(hash) => {
+                tracing::warn!("request anchor transaction not found. Error: {self}");
+
+                let body = ErrorResponse {
+                    error: ErrorBody {
+                        code: "REQUEST_ANCHOR_NOT_FOUND".to_string(),
+                        message: format!("request anchor transaction {hash} not found"),
+                        trace_id,
+                        retryable: false,
+                        details: vec![],
+                    },
+                };
+                (StatusCode::UNPROCESSABLE_ENTITY, axum::Json(body)).into_response()
+            }
+
+            ServerError::RequestAnchorDecode(hash, error) => {
+                tracing::warn!(
+                    "request anchor decode issue for transaction hash: {hash}. Error: {error}"
+                );
+
+                let body = ErrorResponse {
+                    error: ErrorBody {
+                        code: "REQUEST_ANCHOR_DECODE_ISSUE".to_string(),
+                        message: format!(
+                            "request anchor transaction {hash} encountered a decoding issue."
+                        ),
+                        trace_id,
+                        retryable: false,
+                        details: vec![],
+                    },
+                };
+                (StatusCode::UNPROCESSABLE_ENTITY, axum::Json(body)).into_response()
+            }
+
+            ServerError::IdentityProviderNotFound(ip_identity) => {
+                tracing::warn!("identity provider could not be found. {self}");
+
+                let body = ErrorResponse {
+                    error: ErrorBody {
+                        code: "IDENTITY_PROVIDER_NOT_FOUND".to_string(),
+                        message: format!("Identity provider could not be found {ip_identity}"),
+                        trace_id,
+                        retryable: false,
+                        details: vec![],
+                    },
+                };
+                (StatusCode::UNPROCESSABLE_ENTITY, axum::Json(body)).into_response()
+            }
+
+            ServerError::AccountCredentialNotFound(credential_registration_id) => {
+                tracing::warn!(
+                    "Account credential could not be found: {credential_registration_id}."
+                );
+
+                let body = ErrorResponse {
+                    error: ErrorBody {
+                        code: "ACCOUNT_CREDENTIAL_NOT_FOUND".to_string(),
+                        message: format!(
+                            "Account credential could not be found: {credential_registration_id}"
+                        ),
+                        trace_id,
+                        retryable: false,
+                        details: vec![],
+                    },
+                };
+                (StatusCode::UNPROCESSABLE_ENTITY, axum::Json(body)).into_response()
+            }
+
+            ServerError::TimeoutWaitingForFinalization(hash) => {
+                tracing::warn!(
+                    "Timeout waiting for finalization for transaction hash: {hash}. Error: {self}"
+                );
+
+                let body = ErrorResponse {
+                    error: ErrorBody {
+                        code: "TIMEOUT_WAITING_FOR_FINALIZATION".to_string(),
+                        message: format!(
+                            "Timeout waiting for transaction hash: {hash} to finalize."
+                        ),
+                        trace_id,
+                        retryable: false,
+                        details: vec![],
+                    },
+                };
+                (StatusCode::UNPROCESSABLE_ENTITY, axum::Json(body)).into_response()
+            }
+
+            ServerError::AnchorPublicInfoTooBig(error) => {
+                tracing::warn!("Anchor public info provided was too big: {error}.");
+
+                let body = ErrorResponse {
+                    error: ErrorBody {
+                        code: "ANCHOR_PUBLIC_INFO_TOO_BIG".to_string(),
+                        message: format!(
+                            "provided anchor public info provided was too big. {self}"
+                        ),
+                        trace_id,
+                        retryable: false,
+                        details: vec![],
+                    },
+                };
+                (StatusCode::UNPROCESSABLE_ENTITY, axum::Json(body)).into_response()
+            }
+        }
     }
 }

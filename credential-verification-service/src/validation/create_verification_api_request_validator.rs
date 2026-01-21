@@ -1,19 +1,15 @@
 use tracing::debug;
 
 use crate::{
-    api_types::{CreateVerificationRequest, ErrorResponse},
-    validation::{
-        requested_subject_claims_validator,
-        validation_context::{
-            VALIDATION_GENERAL_ERROR_CODE, VALIDATION_GENERAL_MESSAGE, ValidationContext,
-        },
-    },
+    api_types::CreateVerificationRequest,
+    types::ValidationError,
+    validation::{requested_subject_claims_validator, validation_context::ValidationContext},
 };
 
 pub const REQUESTED_CLAIMS_VERIFICATION_REQUEST_PATH: &str = "requestedClaims";
 
 /// Validator entry point for validating the Create Verification API Request.
-pub fn validate(request: &CreateVerificationRequest) -> Result<(), ErrorResponse> {
+pub fn validate(request: &CreateVerificationRequest) -> Result<(), ValidationError> {
     debug!(
         "Starting validation for create verification request, with connection id: {:?}",
         &request.connection_id
@@ -36,13 +32,7 @@ pub fn validate(request: &CreateVerificationRequest) -> Result<(), ErrorResponse
             "Validation errors found for create verification request api call. errors: {:?}",
             &validation_context
         );
-        let error_response = validation_context.create_error_response(
-            VALIDATION_GENERAL_ERROR_CODE.to_string(),
-            VALIDATION_GENERAL_MESSAGE.to_string(),
-            "dummy".to_string(), // TODO - later trace id will be handled. Should be optionally provided by the client or if not provided, generated here.
-            false,
-        );
-        return Err(error_response);
+        return Err(validation_context.into_validation_error());
     } else {
         // no errors
         debug!("Request level validation Passed for create verification request API call.");

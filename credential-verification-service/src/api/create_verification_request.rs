@@ -1,8 +1,7 @@
 //! Handler for create-verification-request endpoint.
 
 use crate::api::util;
-use crate::api_types::{ErrorBody, ErrorResponse};
-use crate::types::AppJson;
+use crate::types::{AppJson, ServerError};
 use crate::validation::create_verification_api_request_validator;
 use crate::{api_types::CreateVerificationRequest, types::Service};
 use axum::{Json, extract::State};
@@ -17,7 +16,7 @@ use tracing::debug;
 pub async fn create_verification_request(
     State(state): State<Arc<Service>>,
     AppJson(params): AppJson<CreateVerificationRequest>,
-) -> Result<Json<VerificationRequest>, ErrorResponse> {
+) -> Result<Json<VerificationRequest>, ServerError> {
     // validator for create verification request api payload
     create_verification_api_request_validator::validate(&params)?;
 
@@ -46,17 +45,9 @@ pub async fn create_verification_request(
     let verification_request_anchor = verification_request_data.to_anchor(params.public_info);
     let anchor_data = util::anchor_to_registered_data(&verification_request_anchor)
         .map_err(|e| {
-                debug!("A server error has occurred while converting the verification request to anchor. Verification request: {:?}. Error: {:?}", &verification_request_data, e);
-                ErrorResponse {
-                    error: ErrorBody {
-                        code: "INTERNAL_ERROR".to_string(),
-                        message: "An Error has occurred processing this request. Please try again later.".to_string(),
-                        retryable: true,
-                        trace_id: "DUMMY TODO".to_string(),
-                        details: vec![]
-                    }
-                }
-            })?;
+            debug!("A server error has occurred while converting the verification request to anchor. Verification request: {:?}. Error: {:?}", &verification_request_data, e);
+            e
+        })?;
 
     // Submit the anchor
     let anchor_transaction_hash = state
@@ -65,15 +56,7 @@ pub async fn create_verification_request(
         .await
         .map_err(|e| {
             debug!("A server error has occurred while submitting the register data transaction. Error: {:?}", e);
-            ErrorResponse {
-                error: ErrorBody {
-                    code: "INTERNAL_ERROR".to_string(),
-                    message: "An Error has occurred processing this request. Please try again later.".to_string(),
-                    retryable: true,
-                    trace_id: "DUMMY TODO".to_string(),
-                    details: vec![]
-                }
-            }
+            e
         })?;
 
     let verification_request = VerificationRequest {

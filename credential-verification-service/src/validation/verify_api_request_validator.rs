@@ -1,19 +1,15 @@
 use tracing::debug;
 
 use crate::{
-    api_types::{ErrorResponse, VerifyPresentationRequest},
-    validation::{
-        requested_subject_claims_validator,
-        validation_context::{
-            VALIDATION_GENERAL_ERROR_CODE, VALIDATION_GENERAL_MESSAGE, ValidationContext,
-        },
-    },
+    api_types::VerifyPresentationRequest,
+    types::ValidationError,
+    validation::{requested_subject_claims_validator, validation_context::ValidationContext},
 };
 
 pub const VERIFY_SUBJECT_CLAIMS_VALIDATION_PATH: &str = "verificationRequest.subjectClaims";
 
 /// Validator entry point for validating the Verify Presentation API Request
-pub fn validate(request: &VerifyPresentationRequest) -> Result<(), ErrorResponse> {
+pub fn validate(request: &VerifyPresentationRequest) -> Result<(), ValidationError> {
     debug!(
         "Starting validation for verify api request, with audit record: {:?}",
         &request.audit_record_id
@@ -36,14 +32,7 @@ pub fn validate(request: &VerifyPresentationRequest) -> Result<(), ErrorResponse
             "Validation errors found for verify presentation api call. errors: {:?}",
             &validation_context
         );
-        let error_response = validation_context.create_error_response(
-            VALIDATION_GENERAL_ERROR_CODE.to_string(),
-            VALIDATION_GENERAL_MESSAGE.to_string(),
-            "dummy".to_string(), // TODO - there should be the option to receive the traceid from the request or to generate a fresh one
-            false,
-        );
-
-        return Err(error_response);
+        return Err(validation_context.into_validation_error());
     } else {
         debug!(
             "No errors found for verify presentation request with audit record id: {:?}",
