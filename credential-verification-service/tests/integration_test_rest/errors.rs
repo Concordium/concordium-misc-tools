@@ -58,5 +58,5 @@ async fn test_internal_error() {
     assert_eq!(expected_code, error_response_body.error.code);
     assert_eq!(expected_message, error_response_body.error.message);
     assert!(error_response_body.error.retryable);
-    assert_eq!("Dummy", error_response_body.error.trace_id);
+    assert_eq!("dummy", error_response_body.error.trace_id);
 }

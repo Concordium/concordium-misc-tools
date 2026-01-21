@@ -117,7 +117,7 @@ impl IntoResponse for ServerError {
                 let body = ErrorResponse {
                     error: ErrorBody {
                         code: "INTERNAL_ERROR".to_string(),
-                        message: "internal server error".to_string(),
+                        message: "An error has occurred while processing the request. Please try again later".to_string(),
                         trace_id,
                         retryable: true,
                         details: vec![],

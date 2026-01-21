@@ -261,19 +261,24 @@ async fn test_verify_anchor_not_decodable() {
         .await
         .unwrap();
 
-    assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(resp.status(), StatusCode::UNPROCESSABLE_ENTITY);
 
     // unwrap the Error Response
     let error_response: ErrorResponse = resp.json().await.unwrap();
 
     // Assertions and expected validation codes and messages
-    let expected_code = "INTERNAL_ERROR";
-    let expected_message =
-        "An error has occurred while processing the request. Please try again later";
+    let expected_code = "REQUEST_ANCHOR_DECODE_ISSUE";
+    let expected_message = format!(
+        "request anchor transaction {} encountered a decoding issue.",
+        verify_fixture
+            .request
+            .verification_request
+            .anchor_transaction_hash
+    );
 
     assert_eq!(expected_code, error_response.error.code);
     assert_eq!(expected_message, error_response.error.message);
-    assert!(error_response.error.retryable);
+    assert!(!error_response.error.retryable);
 }
 
 /// Test request anchor not found
@@ -293,19 +298,24 @@ async fn test_verify_anchor_not_found() {
         .await
         .unwrap();
 
-    assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(resp.status(), StatusCode::UNPROCESSABLE_ENTITY);
 
     // unwrap the Error Response
     let error_response: ErrorResponse = resp.json().await.unwrap();
 
     // Assertions and expected validation codes and messages
-    let expected_code = "INTERNAL_ERROR";
-    let expected_message =
-        "An error has occurred while processing the request. Please try again later";
+    let expected_code = "REQUEST_ANCHOR_NOT_FOUND";
+    let expected_message = format!(
+        "request anchor transaction {} not found",
+        verify_fixture
+            .request
+            .verification_request
+            .anchor_transaction_hash
+    );
 
     assert_eq!(expected_code, error_response.error.code);
     assert_eq!(expected_message, error_response.error.message);
-    assert!(error_response.error.retryable);
+    assert!(!error_response.error.retryable);
 }
 
 /// Test account credential not found
@@ -336,19 +346,18 @@ async fn test_verify_account_credential_not_found() {
         .await
         .unwrap();
 
-    assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(resp.status(), StatusCode::UNPROCESSABLE_ENTITY);
 
     // unwrap the Error Response
     let error_response: ErrorResponse = resp.json().await.unwrap();
 
     // Assertions and expected validation codes and messages
-    let expected_code = "INTERNAL_ERROR";
-    let expected_message =
-        "An error has occurred while processing the request. Please try again later";
+    let expected_code = "ACCOUNT_CREDENTIAL_NOT_FOUND";
+    let expected_message = "Account credential could not be found: a64b6991952b448c57dc1d04c78bd255a2387b49eda3e493e7935d9203cda3a321ae80bd00165915491ac4e157b88b1d";
 
     assert_eq!(expected_code, error_response.error.code);
     assert_eq!(expected_message, error_response.error.message);
-    assert!(error_response.error.retryable);
+    assert!(!error_response.error.retryable);
 }
 
 /// Validation Error Testing
