@@ -1105,6 +1105,30 @@ pub fn handle_assemble(config_path: &Path, verbose: bool) -> anyhow::Result<()> 
                 initial_state,
             }
         }
+        ProtocolConfig::P11 { parameters } => {
+            let update_keys: UpdateKeysCollectionSkeleton<AuthorizationsV1> =
+                read_json(&make_relative(config_path, &config.governance_keys)?)?;
+
+            if update_keys.level_2_keys.create_plt.is_none() {
+                bail!("P10 requires createPLT authorization.");
+            }
+            let initial_state = GenesisStateCPV3 {
+                cryptographic_parameters: global.value,
+                identity_providers: idps.value,
+                anonymity_revokers: ars.value,
+                update_keys,
+                chain_parameters: parameters
+                    .chain
+                    .chain_parameters(AccountIndex { index: idx })?,
+                leadership_election_nonce: parameters.leadership_election_nonce,
+                accounts,
+            };
+            let core = parameters.core.try_into()?;
+            GenesisData::P11 {
+                core,
+                initial_state,
+            }
+        }
     };
 
     write_genesis(
@@ -1245,8 +1269,7 @@ pub fn handle_generate(config_path: &Path, verbose: bool) -> anyhow::Result<()> 
                         GenesisChainParameters::V0(params) => params,
                         GenesisChainParameters::V1(_) => {
                             bail!(format!(
-                                "Protocol version {} supports only chain
-    parameters version 0.",
+                                "Protocol version {} supports only chain parameters version 0.",
                                 protocol_version
                             ))
                         }
@@ -1261,10 +1284,9 @@ pub fn handle_generate(config_path: &Path, verbose: bool) -> anyhow::Result<()> 
                         leadership_election_nonce: parameters.leadership_election_nonce,
                         accounts,
                     };
-                    make_genesis_data_cpv0(protocol_version, core, initial_state).context(
-                        "Chain parameters version 0 should not be used
-    in P4",
-                    )? // Should go well since we know we are not in
+                    make_genesis_data_cpv0(protocol_version, core, initial_state)
+                        .context("Chain parameters version 0 should not be used in P4")?
+                    // Should go well since we know we are not in
                 }
 
                 ProtocolVersion::P4 | ProtocolVersion::P5 => {
@@ -1272,8 +1294,7 @@ pub fn handle_generate(config_path: &Path, verbose: bool) -> anyhow::Result<()> 
                         GenesisChainParameters::V1(params) => params,
                         GenesisChainParameters::V0(_) => {
                             bail!(format!(
-                                "Protocol version P4 supports only chain
-    parameters version 1."
+                                "Protocol version P4 supports only chain parameters version 1."
                             ))
                         }
                     };
@@ -1381,6 +1402,24 @@ pub fn handle_generate(config_path: &Path, verbose: bool) -> anyhow::Result<()> 
             };
             let core = parameters.core.try_into()?;
             GenesisData::P10 {
+                core,
+                initial_state,
+            }
+        }
+        ProtocolConfig::P11 { parameters } => {
+            let update_keys = updates_v2(config.out.update_keys, &config.updates)?;
+
+            let initial_state = GenesisStateCPV3 {
+                cryptographic_parameters,
+                identity_providers,
+                anonymity_revokers,
+                update_keys,
+                chain_parameters: parameters.chain.chain_parameters(foundation_idx)?,
+                leadership_election_nonce: parameters.leadership_election_nonce,
+                accounts,
+            };
+            let core = parameters.core.try_into()?;
+            GenesisData::P11 {
                 core,
                 initial_state,
             }
