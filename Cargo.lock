@@ -838,7 +838,7 @@ dependencies = [
 
 [[package]]
 name = "concordium-rust-sdk"
-version = "9.0.0"
+version = "9.0.1"
 dependencies = [
  "aes-gcm",
  "anyhow",
