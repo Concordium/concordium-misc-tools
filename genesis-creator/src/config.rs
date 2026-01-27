@@ -286,7 +286,7 @@ impl ProtocolConfig {
             ProtocolConfig::P8 { .. } => ProtocolVersion::P8,
             ProtocolConfig::P9 { .. } => ProtocolVersion::P9,
             ProtocolConfig::P10 { .. } => ProtocolVersion::P10,
-            ProtocolConfig::P11 { .. } => ProtocolVersion::P11, // Fix after sdk update
+            ProtocolConfig::P11 { .. } => ProtocolVersion::P11,
         }
     }
 }

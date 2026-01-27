@@ -1110,7 +1110,7 @@ pub fn handle_assemble(config_path: &Path, verbose: bool) -> anyhow::Result<()> 
                 read_json(&make_relative(config_path, &config.governance_keys)?)?;
 
             if update_keys.level_2_keys.create_plt.is_none() {
-                bail!("P10 requires createPLT authorization.");
+                bail!("P11 requires createPLT authorization.");
             }
             let initial_state = GenesisStateCPV3 {
                 cryptographic_parameters: global.value,
