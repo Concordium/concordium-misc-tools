@@ -1039,7 +1039,7 @@ pub fn make_genesis_data_cpv0(
         ProtocolVersion::P8 => None,
         ProtocolVersion::P9 => None,
         ProtocolVersion::P10 => None,
-        // TODO: add after protocol version 11 is added in sdk
+        ProtocolVersion::P11 => None,
     }
 }
 
