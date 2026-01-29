@@ -3,7 +3,8 @@ use concordium_rust_sdk::{
     base as concordium_base,
     common::{
         types::{Amount, CredentialIndex, Ratio, Timestamp},
-        Buffer, SerdeDeserialize, SerdeSerialize, Serial, Serialize, Versioned,
+        Buffer, Deserial, Get, ParseResult, ReadBytesExt, SerdeDeserialize, SerdeSerialize, Serial,
+        Serialize, Versioned,
     },
     id::{
         self,
@@ -16,18 +17,200 @@ use concordium_rust_sdk::{
     smart_contracts::common::Duration,
     types::{
         hashes::{BlockHash, LeadershipElectionNonce},
-        AccountIndex, AccountThreshold, BakerAggregationVerifyKey, BakerElectionVerifyKey, BakerId,
-        BakerSignatureVerifyKey, BlockHeight, ChainParameterVersion0, ChainParameterVersion1,
-        ChainParameterVersion2, ChainParameterVersion3, ChainParameters, ChainParametersV0,
-        ChainParametersV1, ChainParametersV2, ChainParametersV3, CooldownParameters,
-        ElectionDifficulty, Energy, Epoch, ExchangeRate, PartsPerHundredThousands, PoolParameters,
-        ProtocolVersion, RewardParameters, Slot, SlotDuration, TimeParameters, TimeoutParameters,
-        UpdateKeysCollection, ValidatorScoreParameters,
+        AccountIndex, AccountThreshold, AuthorizationsV0, AuthorizationsV1,
+        BakerAggregationVerifyKey, BakerElectionVerifyKey, BakerId, BakerSignatureVerifyKey,
+        BlockHeight, CooldownParameters, CredentialsPerBlockLimit, ElectionDifficulty, Energy,
+        Epoch, ExchangeRate, FinalizationCommitteeParameters, GASRewards, GASRewardsV1,
+        HigherLevelAccessStructure, Level1KeysKind, MintDistributionV0, MintDistributionV1,
+        PartsPerHundredThousands, PoolParameters, ProtocolVersion, RootKeysKind, Slot,
+        SlotDuration, TimeParameters, TimeoutParameters, TransactionFeeDistribution,
+        ValidatorScoreParameters,
     },
 };
 use serde::de;
 use sha2::Digest;
 use std::collections::BTreeMap;
+
+#[derive(Debug, SerdeSerialize, SerdeDeserialize)]
+#[serde(rename_all = "camelCase")]
+/// Values of reward parameters.
+///
+/// The concrete types for some of the fields depends on the version of chain
+/// parameters, thus the generics. See [`RewardParameters`] for the connections
+/// to the concrete types.
+pub struct RewardParametersSkeleton<MintDistribution, GasRewards> {
+    pub mint_distribution: MintDistribution,
+    pub transaction_fee_distribution: TransactionFeeDistribution,
+    #[serde(rename = "gASRewards")]
+    pub gas_rewards: GasRewards,
+}
+
+impl<MD: Serial, GR: Serial> Serial for RewardParametersSkeleton<MD, GR> {
+    fn serial<B: Buffer>(&self, out: &mut B) {
+        self.mint_distribution.serial(out);
+        self.transaction_fee_distribution.serial(out);
+        self.gas_rewards.serial(out)
+    }
+}
+
+impl<MD: Deserial, GR: Deserial> Deserial for RewardParametersSkeleton<MD, GR> {
+    fn deserial<R: ReadBytesExt>(source: &mut R) -> ParseResult<Self> {
+        let mint_distribution = source.get()?;
+        let transaction_fee_distribution = source.get()?;
+        let gas_rewards = source.get()?;
+        Ok(Self {
+            mint_distribution,
+            transaction_fee_distribution,
+            gas_rewards,
+        })
+    }
+}
+
+pub type RewardParametersCPV0 = RewardParametersSkeleton<MintDistributionV0, GASRewards>;
+pub type RewardParametersCPV1 = RewardParametersSkeleton<MintDistributionV1, GASRewards>;
+pub type RewardParametersCPV2 = RewardParametersSkeleton<MintDistributionV1, GASRewardsV1>;
+
+#[derive(Serialize, Debug, SerdeSerialize, SerdeDeserialize)]
+#[serde(rename_all = "camelCase")]
+/// Values of chain parameters that can be updated via chain updates.
+pub struct ChainParametersV0 {
+    /// Election difficulty for consensus lottery.
+    pub election_difficulty: ElectionDifficulty,
+    /// Euro per energy exchange rate.
+    pub euro_per_energy: ExchangeRate,
+    #[serde(rename = "microGTUPerEuro")]
+    /// Micro ccd per euro exchange rate.
+    pub micro_gtu_per_euro: ExchangeRate,
+    /// Extra number of epochs before reduction in stake, or baker
+    /// deregistration is completed.
+    pub baker_cooldown_epochs: Epoch,
+    /// The limit for the number of account creations in a block.
+    pub account_creation_limit: CredentialsPerBlockLimit,
+    /// Current reward parameters.
+    pub reward_parameters: RewardParametersCPV0,
+    /// Index of the foundation account.
+    pub foundation_account_index: AccountIndex,
+    /// Minimum threshold for becoming a baker.
+    pub minimum_threshold_for_baking: Amount,
+}
+
+#[derive(Serialize, Debug, SerdeSerialize, SerdeDeserialize)]
+#[serde(rename_all = "camelCase")]
+/// Values of chain parameters that can be updated via chain updates.
+pub struct ChainParametersV1 {
+    /// Election difficulty for consensus lottery.
+    pub election_difficulty: ElectionDifficulty,
+    /// Euro per energy exchange rate.
+    pub euro_per_energy: ExchangeRate,
+    #[serde(rename = "microGTUPerEuro")]
+    /// Micro ccd per euro exchange rate.
+    pub micro_gtu_per_euro: ExchangeRate,
+    #[serde(flatten)]
+    pub cooldown_parameters: CooldownParameters,
+    #[serde(flatten)]
+    pub time_parameters: TimeParameters,
+    /// The limit for the number of account creations in a block.
+    pub account_creation_limit: CredentialsPerBlockLimit,
+    /// Current reward parameters.
+    pub reward_parameters: RewardParametersCPV1,
+    /// Index of the foundation account.
+    pub foundation_account_index: AccountIndex,
+    #[serde(flatten)]
+    /// Parameters for baker pools.
+    pub pool_parameters: PoolParameters,
+}
+
+#[derive(Serialize, Debug)]
+/// Values of chain parameters that can be updated via chain updates.
+pub struct ChainParametersV2 {
+    /// Consensus protocol version 2 timeout parameters.
+    pub timeout_parameters: TimeoutParameters,
+    /// Minimum time interval between blocks.
+    pub min_block_time: Duration,
+    /// Maximum energy allowed per block.
+    pub block_energy_limit: Energy,
+    /// Euro per energy exchange rate.
+    pub euro_per_energy: ExchangeRate,
+    /// Micro ccd per euro exchange rate.
+    pub micro_ccd_per_euro: ExchangeRate,
+    pub cooldown_parameters: CooldownParameters,
+    pub time_parameters: TimeParameters,
+    /// The limit for the number of account creations in a block.
+    pub account_creation_limit: CredentialsPerBlockLimit,
+    /// Current reward parameters.
+    pub reward_parameters: RewardParametersCPV2,
+    /// Index of the foundation account.
+    pub foundation_account_index: AccountIndex,
+    /// Parameters for baker pools.
+    pub pool_parameters: PoolParameters,
+    /// The finalization committee parameters.
+    pub finalization_committee_parameters: FinalizationCommitteeParameters,
+}
+
+#[derive(Serialize, Debug)]
+/// Values of chain parameters that can be updated via chain updates.
+pub struct ChainParametersV3 {
+    /// Consensus protocol version 2 timeout parameters.
+    pub timeout_parameters: TimeoutParameters,
+    /// Minimum time interval between blocks.
+    pub min_block_time: Duration,
+    /// Maximum energy allowed per block.
+    pub block_energy_limit: Energy,
+    /// Euro per energy exchange rate.
+    pub euro_per_energy: ExchangeRate,
+    /// Micro ccd per euro exchange rate.
+    pub micro_ccd_per_euro: ExchangeRate,
+    pub cooldown_parameters: CooldownParameters,
+    pub time_parameters: TimeParameters,
+    /// The limit for the number of account creations in a block.
+    pub account_creation_limit: CredentialsPerBlockLimit,
+    /// Current reward parameters.
+    pub reward_parameters: RewardParametersCPV2,
+    /// Index of the foundation account.
+    pub foundation_account_index: AccountIndex,
+    /// Parameters for baker pools.
+    pub pool_parameters: PoolParameters,
+    /// The finalization committee parameters.
+    pub finalization_committee_parameters: FinalizationCommitteeParameters,
+    /// Parameter for determining when a validator is considered inactive.
+    pub validator_score_parameters: ValidatorScoreParameters,
+}
+
+#[derive(Debug, SerdeSerialize, SerdeDeserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+/// The current collection of keys allowed to do updates.
+/// Parametrized by the chain parameter version.
+pub struct UpdateKeysCollectionSkeleton<Auths> {
+    pub root_keys: HigherLevelAccessStructure<RootKeysKind>,
+    #[serde(rename = "level1Keys")]
+    pub level_1_keys: HigherLevelAccessStructure<Level1KeysKind>,
+    #[serde(rename = "level2Keys")]
+    pub level_2_keys: Auths,
+}
+
+impl<Auths: Serial> Serial for UpdateKeysCollectionSkeleton<Auths> {
+    fn serial<B: Buffer>(&self, out: &mut B) {
+        self.root_keys.serial(out);
+        self.level_1_keys.serial(out);
+        self.level_2_keys.serial(out);
+    }
+}
+
+impl<Auths: Deserial> Deserial for UpdateKeysCollectionSkeleton<Auths> {
+    fn deserial<R: ReadBytesExt>(source: &mut R) -> ParseResult<Self> {
+        let root_keys = source.get()?;
+        let level_1_keys = source.get()?;
+        let level_2_keys = source.get()?;
+        Ok(Self {
+            root_keys,
+            level_1_keys,
+            level_2_keys,
+        })
+    }
+}
+
+pub type UpdateKeysCollectionCPV0 = UpdateKeysCollectionSkeleton<AuthorizationsV0>;
+pub type UpdateKeysCollectionCPV1 = UpdateKeysCollectionSkeleton<AuthorizationsV1>;
 
 /// A type alias for credentials in a format suitable for genesis. Genesis
 /// credentials do not have any associated proofs.
@@ -131,7 +314,7 @@ pub struct GenesisChainParametersV0 {
     micro_ccd_per_euro: ExchangeRate,
     account_creation_limit: u16,
     baker_cooldown_epochs: Epoch,
-    reward_parameters: RewardParameters<ChainParameterVersion0>,
+    reward_parameters: RewardParametersCPV0,
     minimum_threshold_for_baking: Amount,
 }
 
@@ -169,7 +352,7 @@ pub struct GenesisChainParametersV1 {
     #[serde(rename = "microCCDPerEuro")]
     micro_ccd_per_euro: ExchangeRate,
     account_creation_limit: u16,
-    reward_parameters: RewardParameters<ChainParameterVersion1>,
+    reward_parameters: RewardParametersCPV1,
     time_parameters: TimeParameters,
     pool_parameters: PoolParameters,
     cooldown_parameters: CooldownParameters,
@@ -215,7 +398,7 @@ pub struct GenesisChainParametersV2 {
     #[serde(rename = "microCCDPerEuro")]
     pub micro_ccd_per_euro: ExchangeRate,
     pub account_creation_limit: u16,
-    pub reward_parameters: RewardParameters<ChainParameterVersion2>,
+    pub reward_parameters: RewardParametersCPV2,
     pub time_parameters: TimeParameters,
     pub pool_parameters: PoolParameters,
     pub cooldown_parameters: CooldownParameters,
@@ -258,7 +441,7 @@ pub struct GenesisChainParametersV3 {
     #[serde(rename = "microCCDPerEuro")]
     pub micro_ccd_per_euro: ExchangeRate,
     pub account_creation_limit: u16,
-    pub reward_parameters: RewardParameters<ChainParameterVersion2>,
+    pub reward_parameters: RewardParametersCPV2,
     pub time_parameters: TimeParameters,
     pub pool_parameters: PoolParameters,
     pub cooldown_parameters: CooldownParameters,
@@ -521,8 +704,8 @@ pub struct GenesisStateCPV0 {
     pub cryptographic_parameters: GlobalContext<ArCurve>,
     pub identity_providers: BTreeMap<IpIdentity, IpInfo<IpPairing>>,
     pub anonymity_revokers: BTreeMap<ArIdentity, ArInfo<ArCurve>>,
-    pub update_keys: UpdateKeysCollection<ChainParameterVersion0>,
-    pub chain_parameters: ChainParameters<ChainParameterVersion0>,
+    pub update_keys: UpdateKeysCollectionCPV0,
+    pub chain_parameters: ChainParametersV0,
     pub leadership_election_nonce: LeadershipElectionNonce,
     pub accounts: Vec<GenesisAccountPublic>,
 }
@@ -564,8 +747,8 @@ pub struct GenesisStateCPV1 {
     pub cryptographic_parameters: GlobalContext<ArCurve>,
     pub identity_providers: BTreeMap<IpIdentity, IpInfo<IpPairing>>,
     pub anonymity_revokers: BTreeMap<ArIdentity, ArInfo<ArCurve>>,
-    pub update_keys: UpdateKeysCollection<ChainParameterVersion1>,
-    pub chain_parameters: ChainParameters<ChainParameterVersion1>,
+    pub update_keys: UpdateKeysCollectionCPV1,
+    pub chain_parameters: ChainParametersV1,
     pub leadership_election_nonce: LeadershipElectionNonce,
     pub accounts: Vec<GenesisAccountPublic>,
 }
@@ -600,8 +783,8 @@ pub struct GenesisStateCPV2 {
     pub cryptographic_parameters: GlobalContext<ArCurve>,
     pub identity_providers: BTreeMap<IpIdentity, IpInfo<IpPairing>>,
     pub anonymity_revokers: BTreeMap<ArIdentity, ArInfo<ArCurve>>,
-    pub update_keys: UpdateKeysCollection<ChainParameterVersion2>,
-    pub chain_parameters: ChainParameters<ChainParameterVersion2>,
+    pub update_keys: UpdateKeysCollectionCPV1,
+    pub chain_parameters: ChainParametersV2,
     pub leadership_election_nonce: LeadershipElectionNonce,
     pub accounts: Vec<GenesisAccountPublic>,
 }
@@ -635,8 +818,8 @@ pub struct GenesisStateCPV3 {
     pub cryptographic_parameters: GlobalContext<ArCurve>,
     pub identity_providers: BTreeMap<IpIdentity, IpInfo<IpPairing>>,
     pub anonymity_revokers: BTreeMap<ArIdentity, ArInfo<ArCurve>>,
-    pub update_keys: UpdateKeysCollection<ChainParameterVersion3>,
-    pub chain_parameters: ChainParameters<ChainParameterVersion3>,
+    pub update_keys: UpdateKeysCollectionCPV1,
+    pub chain_parameters: ChainParametersV3,
     pub leadership_election_nonce: LeadershipElectionNonce,
     pub accounts: Vec<GenesisAccountPublic>,
 }
@@ -698,6 +881,14 @@ pub enum GenesisData {
         initial_state: GenesisStateCPV3,
     },
     P9 {
+        core: CoreGenesisParametersV1,
+        initial_state: GenesisStateCPV3,
+    },
+    P10 {
+        core: CoreGenesisParametersV1,
+        initial_state: GenesisStateCPV3,
+    },
+    P11 {
         core: CoreGenesisParametersV1,
         initial_state: GenesisStateCPV3,
     },
@@ -798,6 +989,25 @@ impl GenesisData {
                 core.serial(&mut hasher);
                 initial_state.serial(&mut hasher);
             }
+            GenesisData::P10 {
+                core,
+                initial_state,
+            } => {
+                ProtocolVersion::P10.serial(&mut hasher);
+                // tag of initial genesis
+                0u8.serial(&mut hasher);
+                core.serial(&mut hasher);
+                initial_state.serial(&mut hasher);
+            }
+            GenesisData::P11 {
+                core,
+                initial_state,
+            } => {
+                // tag of initial genesis
+                0u8.serial(&mut hasher);
+                core.serial(&mut hasher);
+                initial_state.serial(&mut hasher);
+            }
         }
         let bytes: [u8; 32] = hasher.finalize().into();
         bytes.into()
@@ -828,6 +1038,8 @@ pub fn make_genesis_data_cpv0(
         ProtocolVersion::P7 => None,
         ProtocolVersion::P8 => None,
         ProtocolVersion::P9 => None,
+        ProtocolVersion::P10 => None,
+        ProtocolVersion::P11 => None,
     }
 }
 
@@ -920,6 +1132,26 @@ impl Serial for GenesisData {
                 initial_state,
             } => {
                 11u8.serial(out);
+                // tag of initial genesis
+                0u8.serial(out);
+                core.serial(out);
+                initial_state.serial(out)
+            }
+            GenesisData::P10 {
+                core,
+                initial_state,
+            } => {
+                12u8.serial(out);
+                // tag of initial genesis
+                0u8.serial(out);
+                core.serial(out);
+                initial_state.serial(out)
+            }
+            GenesisData::P11 {
+                core,
+                initial_state,
+            } => {
+                13u8.serial(out);
                 // tag of initial genesis
                 0u8.serial(out);
                 core.serial(out);

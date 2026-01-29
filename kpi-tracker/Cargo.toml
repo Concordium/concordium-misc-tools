@@ -1,18 +1,19 @@
 [package]
 name = "concordium-kpi-tracker"
-version = "2.1.5"
+version = "2.1.6"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1.0"
-chrono = "0.4"
-clap = { version = "4.0", features = ["derive", "env"] }
+anyhow.workspace = true
+chrono.workspace = true
+clap = { workspace = true, features = ["derive", "env"] }
 concordium-rust-sdk.workspace = true
-env_logger = "0.10"
-futures = "0.3"
-log = "0.4"
-tokio = { version = "1.23", features = ["rt-multi-thread", "signal"] }
-tokio-postgres = "0.7"
-tonic = {version = "0.12", features = ["tls", "tls-roots"]} # Use system trust roots.
+env_logger.workspace = true
+futures.workspace = true
+log.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "signal"] }
+tokio-postgres.workspace = true
+
+tonic = {workspace = true, features = ["tls", "tls-roots"]} # Use system trust roots.
