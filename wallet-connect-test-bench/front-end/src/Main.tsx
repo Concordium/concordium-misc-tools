@@ -1,14 +1,29 @@
-import { useEffect, useState, ChangeEvent, PropsWithChildren } from "react";
+import { Dispatch, SetStateAction, useEffect, useState, ChangeEvent, PropsWithChildren } from "react";
 import Switch from "react-switch";
 import JSONbig from "json-bigint";
 import { Buffer } from "buffer/";
-import { toBuffer, serializeTypeValue } from "@concordium/web-sdk";
+import {
+  toBuffer,
+  serializeTypeValue,
+  AccountAddress,
+  Transaction,
+  TransactionExpiry,
+  buildBasicAccountSigner,
+  TokenId,
+  TokenOperationType,
+  TokenAmount,
+  CborMemo,
+  Cbor,
+  CborAccountAddress,
+  CcdAmount,
+} from "@concordium/web-sdk";
 import {
   useGrpcClient,
   WalletConnectionProps,
   useConnection,
   useConnect,
   TESTNET,
+  Network,
 } from "@concordium/react-components";
 import { version } from "../package.json";
 import { WalletConnectionTypeButton } from "./WalletConnectorTypeButton";
@@ -42,6 +57,8 @@ import {
   SET_OBJECT_PARAMETER_SCHEMA,
   REFRESH_INTERVAL,
 } from "./constants";
+import { STAGENET } from "@concordium/wallet-connectors";
+const isStagenet = (n: Network) => n.name === STAGENET.name;
 
 type TestBoxProps = PropsWithChildren<{
   header: string;
@@ -94,13 +111,20 @@ function SwitchBox({
   );
 }
 
-export default function Main(props: WalletConnectionProps) {
+type MainProps = WalletConnectionProps & {
+  network: Network;
+  setNetwork: Dispatch<SetStateAction<Network>>;
+};
+
+export default function Main(props: MainProps) {
   const {
     activeConnectorType,
     activeConnector,
     activeConnectorError,
     connectedAccounts,
     genesisHashes,
+    network,
+    setNetwork,
   } = props;
 
   const { connection, setConnection, account } = useConnection(
@@ -111,7 +135,7 @@ export default function Main(props: WalletConnectionProps) {
     activeConnector,
     setConnection
   );
-  const grpcClient = useGrpcClient(TESTNET);
+  const grpcClient = useGrpcClient(isStagenet(network) ? STAGENET : TESTNET);
 
   const [viewError, setViewError] = useState("");
   const [returnValueError, setReturnValueError] = useState("");
@@ -139,6 +163,15 @@ export default function Main(props: WalletConnectionProps) {
 
   const [txHash, setTxHash] = useState("");
   const [message, setMessage] = useState("");
+
+  const [sponsorAccount, setSponsorAccount] = useState("");
+  const [sponsorPrivateKey, setSponsorPrivateKey] = useState("");
+  const [sponsoredRecipient, setSponsoredRecipient] = useState("");
+  const [sponsoredPltAmount, setSponsoredPltAmount] = useState("");
+  const [sponsoredCcdAmount, setSponsoredCcdAmount] = useState("");
+  const [ccdSponsorAccount, setCcdSponsorAccount] = useState("");
+  const [ccdSponsorPrivateKey, setCcdSponsorPrivateKey] = useState("");
+  const [ccdSponsoredRecipient, setCcdSponsoredRecipient] = useState("");
 
   const changeInputHandler = (event: ChangeEvent) => {
     const target = event.target as HTMLTextAreaElement;
@@ -293,6 +326,115 @@ export default function Main(props: WalletConnectionProps) {
     }
   }, [grpcClient]);
 
+  async function submitPayloadToSponsor(
+    sender: AccountAddress.Type,
+    transaction: any,
+    sponsorAccountAddress: string,
+    sponsorKey: string
+  ) {
+    if (!grpcClient) {
+      throw new Error("`grpcClient` is undefined");
+    }
+    const builder = Transaction.builderFromJSON(transaction);
+    const sponsorSigner = buildBasicAccountSigner(sponsorKey);
+    const sponsorSignerAccount =
+      AccountAddress.fromBase58(sponsorAccountAddress);
+
+    const nonce = await grpcClient.getNextAccountNonce(sender);
+    const sponsorableTransaction = builder
+      .addMetadata({
+        sender,
+        nonce: nonce.nonce,
+        expiry: TransactionExpiry.futureMinutes(5),
+      })
+      .addSponsor(sponsorSignerAccount)
+      .build();
+
+    return await Transaction.sponsor(
+      sponsorableTransaction,
+      sponsorSigner
+    );
+  }
+
+  async function submitSponsoredCCD_Transfer() {
+    if (connection && account) {
+      const payload = {
+        amount: CcdAmount.fromCcd(parseFloat(sponsoredCcdAmount || "0")),
+        toAddress: AccountAddress.fromBase58(ccdSponsoredRecipient),
+      };
+
+      const transaction = Transaction.transfer(payload);
+
+      const sponsorResponse = await submitPayloadToSponsor(
+        AccountAddress.fromBase58(account),
+        Transaction.toJSON(transaction),
+        ccdSponsorAccount,
+        ccdSponsorPrivateKey
+      );
+
+      const sponsored = Transaction.signableFromJSON(
+        Transaction.toJSON(sponsorResponse)
+      );
+
+      connection
+        .signAndSendSponsoredTransaction(
+          AccountAddress.fromBase58(account),
+          sponsored
+        )
+        .then((txHashResult) => setTxHash(JSON.stringify(txHashResult)))
+        .catch((err: Error) =>
+          setTransactionError((err as Error).message)
+        );
+    }
+  }
+
+  async function submitSponsoredPLT_Transfer() {
+    if (connection && account) {
+      const tokenAmount = TokenAmount.fromDecimal(
+        parseFloat(sponsoredPltAmount || "0"),
+        2
+      );
+
+      const ops = [
+        {
+          [TokenOperationType.Transfer]: {
+            amount: tokenAmount,
+            recipient: CborAccountAddress.fromAccountAddress(
+              AccountAddress.fromBase58(sponsoredRecipient)
+            ),
+            memo: CborMemo.fromString("Sponsored PLT transfer"),
+          },
+        },
+      ];
+
+      const transaction = Transaction.tokenUpdate({
+        tokenId: TokenId.fromString("PLTLEVEL"),
+        operations: Cbor.encode(ops),
+      });
+
+      const sponsorResponse = await submitPayloadToSponsor(
+        AccountAddress.fromBase58(account),
+        Transaction.toJSON(transaction),
+        sponsorAccount,
+        sponsorPrivateKey
+      );
+
+      const sponsored = Transaction.signableFromJSON(
+        Transaction.toJSON(sponsorResponse)
+      );
+
+      connection
+        .signAndSendSponsoredTransaction(
+          AccountAddress.fromBase58(account),
+          sponsored
+        )
+        .then((txHashResult) => setTxHash(JSON.stringify(txHashResult)))
+        .catch((err: Error) =>
+          setTransactionError((err as Error).message)
+        );
+    }
+  }
+
   return (
     <main className="container">
       <div className="textCenter">
@@ -312,6 +454,22 @@ export default function Main(props: WalletConnectionProps) {
           connection={connection}
           {...props}
         />
+        <div className="network-selector">
+          <button
+            className={`btn ${isStagenet(network) ? "btn-primary" : "btn-outline-secondary"}`}
+            type="button"
+            onClick={() => setNetwork(STAGENET)}
+          >
+            Stagenet
+          </button>
+          <button
+            className={`btn ${!isStagenet(network) ? "btn-primary" : "btn-outline-secondary"}`}
+            type="button"
+            onClick={() => setNetwork(TESTNET)}
+          >
+            Testnet
+          </button>
+        </div>
         {activeConnectorError && (
           <p className="alert alert-danger" role="alert">
             Connector Error: {activeConnectorError}.
@@ -369,6 +527,7 @@ export default function Main(props: WalletConnectionProps) {
                     <li>(DI) deploying and initializing tests</li>
                     <li>(ST) simple CCD transfer tests</li>
                     <li>(SG) signature tests</li>
+                    <li>(SPT) sponsored transaction tests</li>
                   </ul>
                   <div className="inputFormatBox">
                     <h3>Expected input parameter format:</h3>
@@ -1146,6 +1305,152 @@ export default function Main(props: WalletConnectionProps) {
                       <div>{byteSignature}</div>
                     </div>
                   )}
+                </TestBox>
+                <TestBox
+                  header="(SPT) Testing sponsored PLT transfer (PLTLEVEL)"
+                  note="
+                                        Expected result after pressing button and confirming in wallet: A transaction hash or
+                                        an error message should appear in the right column.
+                                        "
+                >
+                  <label className="field">
+                    <p>Sponsor Account:</p>
+                    <input
+                      className="inputFieldStyle"
+                      id="sponsorAccount"
+                      type="text"
+                      placeholder="Sponsor account address"
+                      value={sponsorAccount}
+                      onChange={(e) => setSponsorAccount(e.target.value)}
+                    />
+                  </label>
+                  <br />
+                  <label className="field">
+                    <p>Sponsor Private Key:</p>
+                    <input
+                      className="inputFieldStyle"
+                      id="sponsorPrivateKey"
+                      type="text"
+                      placeholder="Sponsor private key"
+                      value={sponsorPrivateKey}
+                      onChange={(e) =>
+                        setSponsorPrivateKey(e.target.value)
+                      }
+                    />
+                  </label>
+                  <br />
+                  <label className="field">
+                    <p>Recipient Address:</p>
+                    <input
+                      className="inputFieldStyle"
+                      id="sponsoredRecipient"
+                      type="text"
+                      placeholder="Recipient account address"
+                      value={sponsoredRecipient}
+                      onChange={(e) =>
+                        setSponsoredRecipient(e.target.value)
+                      }
+                    />
+                  </label>
+                  <br />
+                  <label className="field">
+                    <p>PLT Amount:</p>
+                    <input
+                      className="inputFieldStyle"
+                      id="sponsoredPltAmount"
+                      type="text"
+                      placeholder="0"
+                      value={sponsoredPltAmount}
+                      onChange={(e) =>
+                        setSponsoredPltAmount(e.target.value)
+                      }
+                    />
+                  </label>
+                  <br />
+                  <button
+                    className="btn btn-primary"
+                    type="button"
+                    onClick={() => {
+                      setTxHash("");
+                      setTransactionError("");
+                      submitSponsoredPLT_Transfer();
+                    }}
+                  >
+                    Sign And Submit Sponsored PLT Transfer
+                  </button>
+                </TestBox>
+                <TestBox
+                  header="(SPT) Testing sponsored CCD transfer"
+                  note="
+                                        Expected result after pressing button and confirming in wallet: A transaction hash or
+                                        an error message should appear in the right column.
+                                        "
+                >
+                  <label className="field">
+                    <p>Sponsor Account:</p>
+                    <input
+                      className="inputFieldStyle"
+                      id="sponsorAccountCcd"
+                      type="text"
+                      placeholder="Sponsor account address"
+                      value={ccdSponsorAccount}
+                      onChange={(e) => setCcdSponsorAccount(e.target.value)}
+                    />
+                  </label>
+                  <br />
+                  <label className="field">
+                    <p>Sponsor Private Key:</p>
+                    <input
+                      className="inputFieldStyle"
+                      id="sponsorPrivateKeyCcd"
+                      type="text"
+                      placeholder="Sponsor private key"
+                      value={ccdSponsorPrivateKey}
+                      onChange={(e) =>
+                        setCcdSponsorPrivateKey(e.target.value)
+                      }
+                    />
+                  </label>
+                  <br />
+                  <label className="field">
+                    <p>Recipient Address:</p>
+                    <input
+                      className="inputFieldStyle"
+                      id="sponsoredRecipientCcd"
+                      type="text"
+                      placeholder="Recipient account address"
+                      value={ccdSponsoredRecipient}
+                      onChange={(e) =>
+                        setCcdSponsoredRecipient(e.target.value)
+                      }
+                    />
+                  </label>
+                  <br />
+                  <label className="field">
+                    <p>CCD Amount:</p>
+                    <input
+                      className="inputFieldStyle"
+                      id="sponsoredCcdAmount"
+                      type="text"
+                      placeholder="0"
+                      value={sponsoredCcdAmount}
+                      onChange={(e) =>
+                        setSponsoredCcdAmount(e.target.value)
+                      }
+                    />
+                  </label>
+                  <br />
+                  <button
+                    className="btn btn-primary"
+                    type="button"
+                    onClick={() => {
+                      setTxHash("");
+                      setTransactionError("");
+                      submitSponsoredCCD_Transfer();
+                    }}
+                  >
+                    Sign And Submit Sponsored CCD Transfer
+                  </button>
                 </TestBox>
                 <br />
                 <br />
