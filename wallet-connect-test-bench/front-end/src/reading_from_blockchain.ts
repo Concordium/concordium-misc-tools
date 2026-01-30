@@ -158,8 +158,8 @@ export async function getValue(
   if (useModuleSchema) {
     try {
       returnValue = deserializeReceiveReturnValue(
-        res.returnValue.buffer,
-        toBuffer(schema, "base64"),
+        Uint8Array.from(res.returnValue.buffer).buffer,
+        Uint8Array.from(toBuffer(schema, "base64")).buffer,
         ContractName.fromString(`${CONTRACT_NAME}`),
         // If dropDown === 'wrong_schema', we called the `get_u8` function but now use the `timestamp` schema trying to deserialize the return value.
         EntrypointName.fromString(
@@ -172,8 +172,8 @@ export async function getValue(
   } else {
     try {
       returnValue = deserializeTypeValue(
-        res.returnValue.buffer,
-        toBuffer(schema, "base64")
+        Uint8Array.from(res.returnValue.buffer).buffer,
+        Uint8Array.from(toBuffer(schema, "base64")).buffer
       );
     } catch (err) {
       throw new Error(err as string);
@@ -202,8 +202,8 @@ export async function view(rpcClient: ConcordiumGRPCClient) {
   }
 
   const state = deserializeTypeValue(
-    res.returnValue.buffer,
-    toBuffer(VIEW_RETURN_VALUE_SCHEMA, "base64")
+    Uint8Array.from(res.returnValue.buffer).buffer,
+    Uint8Array.from(toBuffer(VIEW_RETURN_VALUE_SCHEMA, "base64")).buffer
   );
 
   if (state === undefined) {
