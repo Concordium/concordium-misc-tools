@@ -16,6 +16,7 @@ import {
   Cbor,
   CborAccountAddress,
   CcdAmount,
+  Token,
 } from "@concordium/web-sdk";
 import {
   useGrpcClient,
@@ -24,6 +25,7 @@ import {
   useConnect,
   TESTNET,
   Network,
+  STAGENET
 } from "@concordium/react-components";
 import { version } from "../package.json";
 import { WalletConnectionTypeButton } from "./WalletConnectorTypeButton";
@@ -57,7 +59,6 @@ import {
   SET_OBJECT_PARAMETER_SCHEMA,
   REFRESH_INTERVAL,
 } from "./constants";
-import { STAGENET } from "@concordium/wallet-connectors";
 const isStagenet = (n: Network) => n.name === STAGENET.name;
 
 type TestBoxProps = PropsWithChildren<{
@@ -164,6 +165,9 @@ export default function Main(props: MainProps) {
   const [txHash, setTxHash] = useState("");
   const [message, setMessage] = useState("");
 
+  const [tokenList, setTokenList] = useState<string[]>([]);
+  const [selectedTokenId, setSelectedTokenId] = useState("");
+
   const [sponsorAccount, setSponsorAccount] = useState("");
   const [sponsorPrivateKey, setSponsorPrivateKey] = useState("");
   const [sponsoredRecipient, setSponsoredRecipient] = useState("");
@@ -255,6 +259,29 @@ export default function Main(props: MainProps) {
       return () => clearInterval(interval);
     }
   }, [grpcClient, account]);
+
+  // Fetch token list when network/grpcClient changes.
+
+  useEffect(() => {
+    if (grpcClient) {
+      (async () => {
+        try {
+          const tokens: string[] = [];
+          for await (const token of await (grpcClient as any).getTokenList()) {
+            tokens.push(token.toString());
+          }
+          setTokenList(tokens);
+          if (tokens.length > 0) {
+            setSelectedTokenId(tokens[0]);
+          }
+        } catch (e) {
+          console.error("Failed to fetch token list:", e);
+          setTokenList([]);
+          setSelectedTokenId("");
+        }
+      })();
+    }
+  }, [grpcClient]);
 
   // Refresh view periodically.
 
@@ -389,10 +416,12 @@ export default function Main(props: MainProps) {
   }
 
   async function submitSponsoredPLT_Transfer() {
-    if (connection && account) {
+    if (connection && account && grpcClient) {
+      const tokenId = TokenId.fromString(selectedTokenId);
+      const token = await Token.fromId(grpcClient as any, tokenId);
       const tokenAmount = TokenAmount.fromDecimal(
         parseFloat(sponsoredPltAmount || "0"),
-        2
+        token.info.state.decimals
       );
 
       const ops = [
@@ -408,7 +437,7 @@ export default function Main(props: MainProps) {
       ];
 
       const transaction = Transaction.tokenUpdate({
-        tokenId: TokenId.fromString("PLTLEVEL"),
+        tokenId,
         operations: Cbor.encode(ops),
       });
 
@@ -527,7 +556,7 @@ export default function Main(props: MainProps) {
                     <li>(DI) deploying and initializing tests</li>
                     <li>(ST) simple CCD transfer tests</li>
                     <li>(SG) signature tests</li>
-                    <li>(SPT) sponsored transaction tests</li>
+                    <li>sponsored transaction tests</li>
                   </ul>
                   <div className="inputFormatBox">
                     <h3>Expected input parameter format:</h3>
@@ -1307,12 +1336,28 @@ export default function Main(props: MainProps) {
                   )}
                 </TestBox>
                 <TestBox
-                  header="(SPT) Testing sponsored PLT transfer (PLTLEVEL)"
+                  header="Testing sponsored PLT transfer"
                   note="
                                         Expected result after pressing button and confirming in wallet: A transaction hash or
                                         an error message should appear in the right column.
                                         "
                 >
+                  <label className="field">
+                    <p>Token:</p>
+                    <select
+                      className="inputFieldStyle"
+                      id="selectedTokenId"
+                      value={selectedTokenId}
+                      onChange={(e) => setSelectedTokenId(e.target.value)}
+                    >
+                      {tokenList.map((t) => (
+                        <option key={t} value={t}>
+                          {t}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <br />
                   <label className="field">
                     <p>Sponsor Account:</p>
                     <input
@@ -1380,7 +1425,7 @@ export default function Main(props: MainProps) {
                   </button>
                 </TestBox>
                 <TestBox
-                  header="(SPT) Testing sponsored CCD transfer"
+                  header="Testing sponsored CCD transfer"
                   note="
                                         Expected result after pressing button and confirming in wallet: A transaction hash or
                                         an error message should appear in the right column.
@@ -1478,7 +1523,7 @@ export default function Main(props: MainProps) {
               <div>
                 <a
                   className="link"
-                  href={`https://testnet.ccdscan.io/?dcount=1&dentity=account&daddress=${account}`}
+                  href={`https://${isStagenet(network) ? "stagenet" : "testnet"}.ccdscan.io/?dcount=1&dentity=account&daddress=${account}`}
                   target="_blank"
                   rel="noreferrer"
                 >
@@ -1535,7 +1580,7 @@ export default function Main(props: MainProps) {
                   className="link"
                   target="_blank"
                   rel="noreferrer"
-                  href={`https://testnet.ccdscan.io/?dcount=1&dentity=transaction&dhash=${txHash}`}
+                  href={`https://${isStagenet(network) ? "stagenet" : "testnet"}.ccdscan.io/?dcount=1&dentity=transaction&dhash=${txHash}`}
                 >
                   {txHash}
                 </a>
