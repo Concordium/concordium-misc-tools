@@ -1,4 +1,12 @@
-## Unreleased changes
+## 1.5.5
+
+- Add network switcher (Stagenet/Testnet) to the top of the page.
+- Add sponsored PLT transfer (uses `PLTLEVEL` at the moment, stagenet only) test box.
+- Add sponsored CCD transfer test box.
+- Update `@concordium/web-sdk` dependency to version 12.0.2.
+- Update `@concordium/browser-wallet-api-helpers` dependency to version 3.1.0-alpha.0.
+- Update `@concordium/react-components` and `@concordium/wallet-connectors` dependencies to version 0.8.0.
+- Remove `resolutions` from package.json since now we specify versions for `@concordium/react-components` and  `@concordium/wallet-connectors`
 
 ## 1.5.4
 
