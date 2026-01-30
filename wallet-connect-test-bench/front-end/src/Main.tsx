@@ -1296,7 +1296,7 @@ export default function Main(props: MainProps) {
 
                       const serializedMessage = serializeTypeValue(
                         signMessage,
-                        toBuffer(SET_OBJECT_PARAMETER_SCHEMA, "base64")
+                        Uint8Array.from(toBuffer(SET_OBJECT_PARAMETER_SCHEMA, "base64")).buffer
                       );
                       setSigningError("");
                       setByteSignature("");
