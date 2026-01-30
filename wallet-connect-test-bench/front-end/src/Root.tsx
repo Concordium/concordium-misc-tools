@@ -1,6 +1,4 @@
-import { WithWalletConnector, TESTNET } from "@concordium/react-components";
-import { STAGENET } from "@concordium/wallet-connectors";
-import { Network } from "@concordium/react-components";
+import { WithWalletConnector, Network, STAGENET } from "@concordium/react-components";
 
 /**
  * Connect to wallet, setup application state context, and render children when the wallet API is ready for use.
