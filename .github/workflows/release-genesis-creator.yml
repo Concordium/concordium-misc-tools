@@ -8,8 +8,6 @@ on:
     tags:
       - genesis-creator/*.*.*
 
-  workflow_dispatch:
-
 jobs:
   build-macos:
     name: Build and Sign Macos
@@ -175,7 +173,7 @@ jobs:
   release:
     permissions:
       contents: write
-    needs:  [build-windows, build-macos, build-ubuntu]
+    needs: [build-windows, build-macos, build-ubuntu]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
