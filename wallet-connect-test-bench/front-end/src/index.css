@@ -82,6 +82,27 @@ label,
   text-align: left;
 }
 
+.network-selector {
+  display: flex;
+  justify-content: center;
+  gap: 0;
+  margin: 20px 0;
+}
+
+.network-selector .btn {
+  border-radius: 0;
+  min-width: 120px;
+  font-weight: bold;
+}
+
+.network-selector .btn:first-child {
+  border-radius: 6px 0 0 6px;
+}
+
+.network-selector .btn:last-child {
+  border-radius: 0 6px 6px 0;
+}
+
 .inputFieldStyle {
   box-sizing: border-box;
   border-radius: 10px;

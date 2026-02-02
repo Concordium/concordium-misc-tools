@@ -108,6 +108,7 @@ export const WALLET_CONNECT_SCOPE: WalletConnectNamespaceConfig = {
   methods: [
     WalletConnectMethod.SignMessage,
     WalletConnectMethod.SignAndSendTransaction,
+    WalletConnectMethod.SignAndSendSponsoredTransaction,
   ],
   events: [WalletConnectEvent.AccountsChanged, WalletConnectEvent.ChainChanged],
 };
