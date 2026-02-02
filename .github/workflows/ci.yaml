@@ -81,4 +81,3 @@ jobs:
       - name: Run tests
         run: |
           cargo test --manifest-path=${{ matrix.crate }}/Cargo.toml --locked --all-features --release
-
