@@ -129,6 +129,7 @@ jobs:
           echo "CERTIFICATE_PATH=$CERTIFICATE_PATH" >> $env:GITHUB_OUTPUT
 
       - name: Sign
+        shell: bash
         env:
           # windows signing
           WINDOWS_PKCS11_CONFIG: ${{ steps.digicert_client.outputs.PKCS11_CONFIG }}
