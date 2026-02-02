@@ -145,7 +145,7 @@ jobs:
             export PATH="$SIGNTOOL_PATH:$PATH"
 
             smctl sign --keypair-alias ${{ env.WINDOWS_SM_KEYPAIR_ALIAS }} --input target/release/genesis-creator.exe --config-file ${{ env.WINDOWS_PKCS11_CONFIG }} --verbose --exit-non-zero-on-fail --failfast
-            smctl verify target/release/genesis-creator.exe
+            smctl sign verify --input target/release/genesis-creator.exe
 
   # TODO: comment out temporarily
   #     - name: Upload artifact
