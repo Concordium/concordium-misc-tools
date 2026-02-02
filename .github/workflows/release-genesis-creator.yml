@@ -13,77 +13,78 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-macos:
-    name: Build and Sign Macos
-    strategy:
-      fail-fast: true
-    runs-on: macos-latest
-    environment: release-genesis-tool
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
+  # TODO: comment out temporarily
+  # build-macos:
+  #   name: Build and Sign Macos
+  #   strategy:
+  #     fail-fast: true
+  #   runs-on: macos-latest
+  #   environment: release-genesis-tool
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #       with:
+  #         submodules: recursive
 
-      - name: Build
-        run: cargo build --locked --release --package genesis-creator
+  #     - name: Build
+  #       run: cargo build --locked --release --package genesis-creator
 
-      - name: Import Apple signing certificates into a keychain
-        id: import_certs
-        env:
-          # Base64 encoding of the p12 certificate for Apple code signing.
-          BUILD_CERTIFICATE_BASE64: ${{ secrets.APPLE_BUILD_CERTIFICATE_BASE64 }}
-          BUILD_INSTALLER_CERTIFICATE_BASE64: ${{ secrets.APPLE_BUILD_INSTALLER_CERTIFICATE_BASE64 }}
-          # Password for the p12 certificate for Apple code signing.
-          BUILD_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_BUILD_CERTIFICATE_PASSWORD }}
-          BUILD_INSTALLER_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_BUILD_INSTALLER_CERTIFICATE_PASSWORD }}
-          # Random string to use as the keychain password.
-          KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
-        run: |
-          # create variables
-          CERTIFICATE_PATH=$RUNNER_TEMP/apple_build_certificate.p12
-          INSTALLER_CERTIFICATE_PATH=$RUNNER_TEMP/apple_build_installer_certificate.p12
-          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+  #     - name: Import Apple signing certificates into a keychain
+  #       id: import_certs
+  #       env:
+  #         # Base64 encoding of the p12 certificate for Apple code signing.
+  #         BUILD_CERTIFICATE_BASE64: ${{ secrets.APPLE_BUILD_CERTIFICATE_BASE64 }}
+  #         BUILD_INSTALLER_CERTIFICATE_BASE64: ${{ secrets.APPLE_BUILD_INSTALLER_CERTIFICATE_BASE64 }}
+  #         # Password for the p12 certificate for Apple code signing.
+  #         BUILD_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_BUILD_CERTIFICATE_PASSWORD }}
+  #         BUILD_INSTALLER_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_BUILD_INSTALLER_CERTIFICATE_PASSWORD }}
+  #         # Random string to use as the keychain password.
+  #         KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
+  #       run: |
+  #         # create variables
+  #         CERTIFICATE_PATH=$RUNNER_TEMP/apple_build_certificate.p12
+  #         INSTALLER_CERTIFICATE_PATH=$RUNNER_TEMP/apple_build_installer_certificate.p12
+  #         KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
 
-          # import certificate and provisioning profile from secrets
-          echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode -o $CERTIFICATE_PATH
-          echo -n "$BUILD_INSTALLER_CERTIFICATE_BASE64" | base64 --decode -o $INSTALLER_CERTIFICATE_PATH
+  #         # import certificate and provisioning profile from secrets
+  #         echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode -o $CERTIFICATE_PATH
+  #         echo -n "$BUILD_INSTALLER_CERTIFICATE_BASE64" | base64 --decode -o $INSTALLER_CERTIFICATE_PATH
 
-          # create temporary keychain
-          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+  #         # create temporary keychain
+  #         security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+  #         security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+  #         security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
 
-          # import certificate to keychain
-          security import $CERTIFICATE_PATH -P "$BUILD_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
-          security import $INSTALLER_CERTIFICATE_PATH -P "$BUILD_INSTALLER_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
-          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-          security list-keychain -d user -s $KEYCHAIN_PATH
+  #         # import certificate to keychain
+  #         security import $CERTIFICATE_PATH -P "$BUILD_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+  #         security import $INSTALLER_CERTIFICATE_PATH -P "$BUILD_INSTALLER_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+  #         security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+  #         security list-keychain -d user -s $KEYCHAIN_PATH
 
-      - name: Sign macOS executable
-        env:
-          # Apple code signing variables (where to use them?):
-          # APPLEIDPASS: ${ secrets.APPLEIDPASS }
-          # APPLEID: ${ secrets.APPLEID }
-          # TEAMID
-          CODESIGN_IDENTITY: "K762RM4LQ3"
-          BINARY_PATH: target/release/genesis-creator
-          # Random string to use as the keychain password.
-          KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
-        run: |
-          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
-          echo "Signing $BINARY_PATH using keychain $KEYCHAIN_PATH"
+  #     - name: Sign macOS executable
+  #       env:
+  #         # Apple code signing variables (where to use them?):
+  #         # APPLEIDPASS: ${ secrets.APPLEIDPASS }
+  #         # APPLEID: ${ secrets.APPLEID }
+  #         # TEAMID
+  #         CODESIGN_IDENTITY: "K762RM4LQ3"
+  #         BINARY_PATH: target/release/genesis-creator
+  #         # Random string to use as the keychain password.
+  #         KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
+  #       run: |
+  #         KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+  #         echo "Signing $BINARY_PATH using keychain $KEYCHAIN_PATH"
     
-          # Ensure the keychain is unlocked
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+  #         # Ensure the keychain is unlocked
+  #         security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
     
-          # Sign the binary
-          codesign --deep --force --verbose \
-            --sign "$CODESIGN_IDENTITY" \
-            --keychain "$KEYCHAIN_PATH" \
-          "$BINARY_PATH"
+  #         # Sign the binary
+  #         codesign --deep --force --verbose \
+  #           --sign "$CODESIGN_IDENTITY" \
+  #           --keychain "$KEYCHAIN_PATH" \
+  #         "$BINARY_PATH"
     
-          # Verify the signature
-          codesign --verify --verbose=4 "$BINARY_PATH"
+  #         # Verify the signature
+  #         codesign --verify --verbose=4 "$BINARY_PATH"
 
   # TODO: comment out temporarily
   #     - name: Upload artifact
@@ -92,7 +93,6 @@ jobs:
   #         name: binary-macos-latest
   #         path: |
   #           target/release/genesis-creator
-
 
   build-windows:
     name: Build and Sign Windows
@@ -113,7 +113,7 @@ jobs:
 
       - name: Install DigiCert Client tools (Windows only)
         id: digicert_client
-        uses: digicert/ssm-code-signing@v1.0.0
+        uses: digicert/code-signing-software-trust-action@v1.0.0
         
       - name: Import Windows certificate (Windows only)
         id: windows_certificate
@@ -138,8 +138,13 @@ jobs:
           SM_CLIENT_CERT_FILE: ${{ steps.windows_certificate.outputs.CERTIFICATE_PATH }}
           SM_CLIENT_CERT_PASSWORD: ${{ secrets.WINDOWS_SM_CLIENT_CERT_PASSWORD }}
         run: |
-           smctl sign --keypair-alias ${{ env.WINDOWS_SM_KEYPAIR_ALIAS }} --input target\release\genesis-creator.exe --config-file ${{ env.WINDOWS_PKCS11_CONFIG }} --verbose --exit-non-zero-on-fail --failfast
-           smctl verify target\release\genesis-creator.exe
+            # Add Windows SDK signtool to PATH
+            SIGNTOOL_EXE=$(find "/c/Program Files (x86)/Windows Kits/10/bin" -type f -name "signtool.exe" -path "*/x64/*" | head -n 1)
+            SIGNTOOL_PATH=$(dirname "$SIGNTOOL_EXE")
+            export PATH="$SIGNTOOL_PATH:$PATH"
+
+            smctl sign --keypair-alias ${{ env.WINDOWS_SM_KEYPAIR_ALIAS }} --input target\release\genesis-creator.exe --config-file ${{ env.WINDOWS_PKCS11_CONFIG }} --verbose --exit-non-zero-on-fail --failfast
+            smctl verify target\release\genesis-creator.exe
 
   # TODO: comment out temporarily
   #     - name: Upload artifact
