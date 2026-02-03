@@ -167,7 +167,7 @@ jobs:
         with:
           name: binary-ubuntu-latest
           path: |
-            target/release/x86_64-unknown-linux-musl/genesis-creator
+            target/x86_64-unknown-linux-musl/release/genesis-creator
 
   # Attach binaries to the release identified by the tag.
   release:
