@@ -98,7 +98,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: genesis-creator-macos-${{ matrix.arch }}
+          name: binary-macos-${{ matrix.arch }}
           if-no-files-found: error
           path: genesis-creator/scripts/macOS/build/genesis-creator-macos-${{ matrix.arch }}.pkg
 
@@ -200,7 +200,8 @@ jobs:
       - uses: actions/download-artifact@v4
       - run: |
           mkdir uploads
-          mv binary-macos-latest/genesis-creator uploads/genesis-creator-darwin-amd64
+          mv binary-macos-arm/genesis-creator-macos-arm.pkg uploads/genesis-creator-macos-arm.pkg
+          mv binary-macos-intel/genesis-creator-macos-intel.pkg uploads/genesis-creator-macos-intel.pkg
           mv binary-windows-latest/genesis-creator.exe uploads/genesis-creator-windows-amd64.exe
           mv binary-ubuntu-latest/genesis-creator uploads/genesis-creator-linux-amd64
   
