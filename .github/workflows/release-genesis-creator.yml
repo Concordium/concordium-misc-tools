@@ -219,7 +219,8 @@ jobs:
   release:
     permissions:
       contents: write
-    needs: [validate-version, build-windows, build-macos, build-ubuntu]
+      # build-windows, build-ubuntu
+    needs: [validate-version, build-macos] 
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
