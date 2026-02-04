@@ -173,18 +173,6 @@ function expandInstallerPackage() {
     logInfo "Done"
 }
 
-# # Signs the binaries to be included in the installer with the developer application certificate.
-# function signBinaries() {
-#     logInfo "Signing binaries..."
-
-#     # Find and sign all the binaries and dylibs.
-#     find "$payloadDir" \
-#         -type f \
-#         -execdir sudo codesign -f --options runtime -s "$developerIdApplication" {} \;
-
-#     logInfo "Done"
-# }
-
 # Signs the binaries to be included in the installer with the developer application certificate.
 function signBinaries() {
     logInfo "Signing binaries..."
