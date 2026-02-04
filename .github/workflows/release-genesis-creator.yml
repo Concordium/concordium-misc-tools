@@ -121,7 +121,7 @@ jobs:
           APPLEIDPASS: ${{ secrets.APPLEIDPASS }}
           APPLEID: ${{ secrets.APPLEID }}
         run: |
-          ./build.sh --build-sign "${{ needs.validate-version.outputs.version }}"
+          ./macOS-package-build-sign.sh --build-sign "${{ needs.validate-version.outputs.version }}"
           mv "./build/genesis-creator-${{ needs.validate-version.outputs.version }}.pkg" "./build/genesis-creator-macos-${{ matrix.arch }}.pkg"
 
       - name: Upload artifact
