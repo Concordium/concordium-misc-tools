@@ -148,8 +148,8 @@ function compile() {
     logInfo "Done"
 }
 
-# Copy the compiled binary to the build folder.
-function copyCompiledItemsToBuildDir() {
+# Copy the compiled binary to the bin folder.
+function copyCompiledItemsToBinDir() {
     logInfo "Copy genesis creator to '$binDir/"
     cp "target/release/genesis-creator" "$binDir"
     logInfo "Done"
@@ -254,7 +254,7 @@ function buildInstaller() {
     cleanBuildDir
     createBuildDir
     compile
-    copyCompiledItemsToBuildDir
+    copyCompiledItemsToBinDir
     buildInstallerPackage
     logInfo "Build complete"
     logInfo "Installer located at:\n$pkgFile"
