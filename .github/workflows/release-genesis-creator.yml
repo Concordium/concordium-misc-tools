@@ -32,8 +32,8 @@ jobs:
           # Make sure the tag matches the version in Cargo.toml manifest.
           if [ ! "${{ github.ref_name }}" = "genesis-creator/${VERSION}" ]; then
              echo "::error Expected tag ${{ github.ref_name }} does not match the version ${VERSION}."
-            #  exit 1
-            echo "version=${VERSION}" > "$GITHUB_OUTPUT"
+             #  exit 1
+             echo "version=${VERSION}" > "$GITHUB_OUTPUT"
           else
              # Store the version into a version variable for the following step.
              echo "version=${VERSION}" > "$GITHUB_OUTPUT"
