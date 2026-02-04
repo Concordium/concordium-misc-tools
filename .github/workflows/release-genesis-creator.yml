@@ -1,20 +1,56 @@
 name: Publish genesis-creator binaries
 
-on:
+# on:
   # This release action always requires a tag to publish a release.
   # This job will run when a genesis-creator/$VERSION
   # tag is created.
+  # push:
+  #   tags:
+  #     - genesis-creator/*.*.*
+on:
   push:
-    tags:
-      - genesis-creator/*.*.*
+    branches:
+      - signing-macos-installer
 
 jobs:
+  validate-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Extract version tag from Cargo.toml manifest.
+        id: meta
+        run: |
+          # export VERSION=$(yq .package.version genesis-creator/Cargo.toml)
+          export VERSION="0.8.0"
+          # Make sure the tag matches the version in Cargo.toml manifest.
+          if [ ! "${{ github.ref_name }}" = "genesis-creator/${VERSION}" ]; then
+             echo "::error Expected tag ${{ github.ref_name }} does not match the version ${VERSION}."
+            #  exit 1
+            echo "version=${VERSION}" > "$GITHUB_OUTPUT"
+          else
+             # Store the version into a version variable for the following step.
+             echo "version=${VERSION}" > "$GITHUB_OUTPUT"
+
   build-macos:
     name: Build and Sign Macos
+    needs: [validate-version]
+    runs-on: ${{ matrix.runner }}
+    environment: release-genesis-tool
     strategy:
       fail-fast: true
-    runs-on: macos-latest
-    environment: release-genesis-tool
+      matrix:
+        include:
+          - arch: intel
+            runner: macos-latest-large
+          - arch: arm
+            runner: macos-latest-xlarge
     steps:
       - uses: actions/checkout@v4
         with:
@@ -55,125 +91,135 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
           security list-keychain -d user -s $KEYCHAIN_PATH
 
-      - name: Sign macOS executable
+      # - name: Sign macOS executable
+      #   env:
+      #     # Apple code signing variables
+      #     CODESIGN_IDENTITY: "K762RM4LQ3"
+      #     BINARY_PATH: target/release/genesis-creator
+      #     # Random string to use as the keychain password.
+      #     KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
+      #   run: |
+      #     KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+      #     echo "Signing $BINARY_PATH using keychain $KEYCHAIN_PATH"
+    
+      #     # Ensure the keychain is unlocked
+      #     security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+    
+      #     # Sign the binary
+      #     codesign --deep --force --verbose \
+      #       --sign "$CODESIGN_IDENTITY" \
+      #       --keychain "$KEYCHAIN_PATH" \
+      #     "$BINARY_PATH"
+    
+      #     # Verify the signature
+      #     codesign --verify --verbose=4 "$BINARY_PATH"
+
+      - name: Build
+        working-directory: genesis-creator/scripts/macOS
         env:
-          # Apple code signing variables
-          CODESIGN_IDENTITY: "K762RM4LQ3"
-          BINARY_PATH: target/release/genesis-creator
-          # Random string to use as the keychain password.
-          KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
+          # Apple code sign variables:
+          APPLEIDPASS: ${{ secrets.APPLEIDPASS }}
+          APPLEID: ${{ secrets.APPLEID }}
         run: |
-          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
-          echo "Signing $BINARY_PATH using keychain $KEYCHAIN_PATH"
-    
-          # Ensure the keychain is unlocked
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-    
-          # Sign the binary
-          codesign --deep --force --verbose \
-            --sign "$CODESIGN_IDENTITY" \
-            --keychain "$KEYCHAIN_PATH" \
-          "$BINARY_PATH"
-    
-          # Verify the signature
-          codesign --verify --verbose=4 "$BINARY_PATH"
+          ./build.sh --build-sign "${{ needs.validate-version.outputs.version }}"
+          mv "./build/genesis-creator-${{ needs.validate-version.outputs.version }}.pkg" "./build/genesis-creator-macos-${{ matrix.arch }}.pkg"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: binary-macos-latest
-          path: |
-            target/release/genesis-creator
+          name: concordium-client-macos-${{ matrix.arch }}
+          if-no-files-found: error
+          path: genesis-creator/scripts/macOS/build/genesis-creator-macos-${{ matrix.arch }}.pkg
 
-  build-windows:
-    name: Build and Sign Windows
-    strategy:
-      fail-fast: true
-    runs-on: windows-latest
-    environment: release-genesis-tool
-    steps:
-      - name: Support longpaths on Windows
-        run: git config --system core.longpaths true
+  # build-windows:
+  #   name: Build and Sign Windows
+  #   strategy:
+  #     fail-fast: true
+  #   runs-on: windows-latest
+  #   environment: release-genesis-tool
+  #   steps:
+  #     - name: Support longpaths on Windows
+  #       run: git config --system core.longpaths true
 
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
+  #     - uses: actions/checkout@v4
+  #       with:
+  #         submodules: recursive
 
-      - name: Build
-        run: cargo build --locked --release --package genesis-creator
+  #     - name: Build
+  #       run: cargo build --locked --release --package genesis-creator
 
-      - name: Install DigiCert Client tools (Windows only)
-        id: digicert_client
-        uses: digicert/code-signing-software-trust-action@v1.0.0
+  #     - name: Install DigiCert Client tools (Windows only)
+  #       id: digicert_client
+  #       uses: digicert/code-signing-software-trust-action@v1.0.0
         
-      - name: Import Windows certificate (Windows only)
-        id: windows_certificate
-        env:
-          # Base64 encoding of the pfx/p12 certificate for Windows code signing.
-          SM_CLIENT_CERT_FILE_B64: ${{ secrets.WINDOWS_SM_CLIENT_CERT_FILE_B64 }}
-        run: |
-          $CERTIFICATE_PATH_BASE64="$env:RUNNER_TEMP\cert-b64.txt"
-          $CERTIFICATE_PATH="$env:RUNNER_TEMP\cert.pfx"
+  #     - name: Import Windows certificate (Windows only)
+  #       id: windows_certificate
+  #       env:
+  #         # Base64 encoding of the pfx/p12 certificate for Windows code signing.
+  #         SM_CLIENT_CERT_FILE_B64: ${{ secrets.WINDOWS_SM_CLIENT_CERT_FILE_B64 }}
+  #       run: |
+  #         $CERTIFICATE_PATH_BASE64="$env:RUNNER_TEMP\cert-b64.txt"
+  #         $CERTIFICATE_PATH="$env:RUNNER_TEMP\cert.pfx"
 
-          Set-Content -Path $CERTIFICATE_PATH_BASE64 -Value $env:SM_CLIENT_CERT_FILE_B64
-          certutil -decode $CERTIFICATE_PATH_BASE64 $CERTIFICATE_PATH
-          echo "CERTIFICATE_PATH=$CERTIFICATE_PATH" >> $env:GITHUB_OUTPUT
+  #         Set-Content -Path $CERTIFICATE_PATH_BASE64 -Value $env:SM_CLIENT_CERT_FILE_B64
+  #         certutil -decode $CERTIFICATE_PATH_BASE64 $CERTIFICATE_PATH
+  #         echo "CERTIFICATE_PATH=$CERTIFICATE_PATH" >> $env:GITHUB_OUTPUT
 
-      - name: Sign
-        shell: bash
-        env:
-          # windows signing
-          WINDOWS_PKCS11_CONFIG: ${{ steps.digicert_client.outputs.PKCS11_CONFIG }}
-          WINDOWS_SM_KEYPAIR_ALIAS: ${{ secrets.WINDOWS_SM_KEYPAIR_ALIAS }}
-          SM_HOST: ${{ vars.WINDOWS_SM_HOST }}
-          SM_API_KEY: ${{ secrets.WINDOWS_SM_API_KEY }}
-          SM_CLIENT_CERT_FILE: ${{ steps.windows_certificate.outputs.CERTIFICATE_PATH }}
-          SM_CLIENT_CERT_PASSWORD: ${{ secrets.WINDOWS_SM_CLIENT_CERT_PASSWORD }}
-        run: |
-            # Add Windows SDK signtool to PATH
-            SIGNTOOL_EXE=$(find "/c/Program Files (x86)/Windows Kits/10/bin" -type f -name "signtool.exe" -path "*/x64/*" | head -n 1)
-            SIGNTOOL_PATH=$(dirname "$SIGNTOOL_EXE")
-            export PATH="$SIGNTOOL_PATH:$PATH"
+  #     - name: Sign
+  #       shell: bash
+  #       env:
+  #         # windows signing
+  #         WINDOWS_PKCS11_CONFIG: ${{ steps.digicert_client.outputs.PKCS11_CONFIG }}
+  #         WINDOWS_SM_KEYPAIR_ALIAS: ${{ secrets.WINDOWS_SM_KEYPAIR_ALIAS }}
+  #         SM_HOST: ${{ vars.WINDOWS_SM_HOST }}
+  #         SM_API_KEY: ${{ secrets.WINDOWS_SM_API_KEY }}
+  #         SM_CLIENT_CERT_FILE: ${{ steps.windows_certificate.outputs.CERTIFICATE_PATH }}
+  #         SM_CLIENT_CERT_PASSWORD: ${{ secrets.WINDOWS_SM_CLIENT_CERT_PASSWORD }}
+  #       run: |
+  #           # Add Windows SDK signtool to PATH
+  #           SIGNTOOL_EXE=$(find "/c/Program Files (x86)/Windows Kits/10/bin" -type f -name "signtool.exe" -path "*/x64/*" | head -n 1)
+  #           SIGNTOOL_PATH=$(dirname "$SIGNTOOL_EXE")
+  #           export PATH="$SIGNTOOL_PATH:$PATH"
 
-            smctl sign --keypair-alias ${{ env.WINDOWS_SM_KEYPAIR_ALIAS }} --input target/release/genesis-creator.exe --config-file ${{ env.WINDOWS_PKCS11_CONFIG }} --verbose --exit-non-zero-on-fail --failfast
-            smctl sign verify --input target/release/genesis-creator.exe
+  #           smctl sign --keypair-alias ${{ env.WINDOWS_SM_KEYPAIR_ALIAS }} --input target/release/genesis-creator.exe --config-file ${{ env.WINDOWS_PKCS11_CONFIG }} --verbose --exit-non-zero-on-fail --failfast
+  #           smctl sign verify --input target/release/genesis-creator.exe
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: binary-windows-latest
-          path: |
-            target\release\genesis-creator.exe
+  #     - name: Upload artifact
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: binary-windows-latest
+  #         path: |
+  #           target\release\genesis-creator.exe
 
-  build-ubuntu:
-    name: Build Ubuntu
-    strategy:
-      fail-fast: true
-    runs-on: ubuntu-latest
-    environment: release-genesis-tool
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
+  # build-ubuntu:
+  #   name: Build Ubuntu
+  #   strategy:
+  #     fail-fast: true
+  #   runs-on: ubuntu-latest
+  #   environment: release-genesis-tool
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #       with:
+  #         submodules: recursive
   
-      - name: Build
-        run: |
-          sudo apt-get install -y musl-tools musl-dev
-          rustup target add x86_64-unknown-linux-musl
-          cargo build --locked --release --package genesis-creator --target x86_64-unknown-linux-musl
+  #     - name: Build
+  #       run: |
+  #         sudo apt-get install -y musl-tools musl-dev
+  #         rustup target add x86_64-unknown-linux-musl
+  #         cargo build --locked --release --package genesis-creator --target x86_64-unknown-linux-musl
   
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: binary-ubuntu-latest
-          path: |
-            target/x86_64-unknown-linux-musl/release/genesis-creator
+  #     - name: Upload artifact
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: binary-ubuntu-latest
+  #         path: |
+  #           target/x86_64-unknown-linux-musl/release/genesis-creator
 
   # Attach binaries to the release identified by the tag.
   release:
     permissions:
       contents: write
-    needs: [build-windows, build-macos, build-ubuntu]
+    needs: [validate-version, build-windows, build-macos, build-ubuntu]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -187,21 +233,13 @@ jobs:
           mv binary-windows-latest/genesis-creator.exe uploads/genesis-creator-windows-amd64.exe
           mv binary-ubuntu-latest/genesis-creator uploads/genesis-creator-linux-amd64
   
-      - name: Extract version tag from Cargo.toml manifest.
+      - name: Print version.
         id: meta
         run: |
-          export VERSION=$(yq .package.version genesis-creator/Cargo.toml)
-          # Make sure the tag matches the version in Cargo.toml manifest.
-          if [ ! "${{ github.ref_name }}" = "genesis-creator/${VERSION}" ]; then
-             echo "::error Expected tag ${{ github.ref_name }} does not match the version ${VERSION}."
-             exit 1
-          else
-             # Store the version into a version variable for the following step.
-             echo "version=${VERSION}" > "$GITHUB_OUTPUT"
-          fi
+          echo "version=${{ needs.validate-version.outputs.version }}"
   
-      - name: Create release and attach binaries to release.
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release create ${{ github.ref_name }} --title "Genesis Creator ${{ steps.meta.outputs.version }}" uploads/*
+      # - name: Create release and attach binaries to release.
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      #   run: |
+      #     gh release create ${{ github.ref_name }} --title "Genesis Creator ${{ needs.validate-version.outputs.version }}" uploads/*
