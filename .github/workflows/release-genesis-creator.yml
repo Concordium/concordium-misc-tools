@@ -9,12 +9,42 @@ on:
       - genesis-creator/*.*.*
 
 jobs:
+  validate-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Extract version tag from Cargo.toml manifest.
+        id: meta
+        run: |
+          export VERSION=$(yq .package.version genesis-creator/Cargo.toml)
+          # Make sure the tag matches the version in Cargo.toml manifest.
+          if [ ! "${{ github.ref_name }}" = "genesis-creator/${VERSION}" ]; then
+             echo "::error Expected tag ${{ github.ref_name }} does not match the version ${VERSION}."
+             exit 1
+          else
+             # Store the version into a version variable for the following step.
+             echo "version=${VERSION}" > "$GITHUB_OUTPUT"
+
   build-macos:
     name: Build and Sign Macos
+    needs: [validate-version]
+    runs-on: ${{ matrix.runner }}
+    environment: release-genesis-tool
     strategy:
       fail-fast: true
-    runs-on: macos-latest
-    environment: release-genesis-tool
+      matrix:
+        include:
+          - arch: intel
+            runner: macos-latest-large
+          - arch: arm
+            runner: macos-latest-xlarge
     steps:
       - uses: actions/checkout@v4
         with:
@@ -55,35 +85,22 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
           security list-keychain -d user -s $KEYCHAIN_PATH
 
-      - name: Sign macOS executable
+      - name: Build
+        working-directory: genesis-creator/scripts/macOS
         env:
-          # Apple code signing variables
-          CODESIGN_IDENTITY: "K762RM4LQ3"
-          BINARY_PATH: target/release/genesis-creator
-          # Random string to use as the keychain password.
-          KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
+          # Apple code sign variables:
+          APPLEIDPASS: ${{ secrets.APPLEIDPASS }}
+          APPLEID: ${{ secrets.APPLEID }}
         run: |
-          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
-          echo "Signing $BINARY_PATH using keychain $KEYCHAIN_PATH"
-    
-          # Ensure the keychain is unlocked
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-    
-          # Sign the binary
-          codesign --deep --force --verbose \
-            --sign "$CODESIGN_IDENTITY" \
-            --keychain "$KEYCHAIN_PATH" \
-          "$BINARY_PATH"
-    
-          # Verify the signature
-          codesign --verify --verbose=4 "$BINARY_PATH"
+          ./macOS-package-build-sign.sh --build-sign "${{ needs.validate-version.outputs.version }}"
+          mv "./build/genesis-creator-${{ needs.validate-version.outputs.version }}.pkg" "./build/genesis-creator-macos-${{ matrix.arch }}.pkg"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: binary-macos-latest
-          path: |
-            target/release/genesis-creator
+          name: binary-macos-${{ matrix.arch }}
+          if-no-files-found: error
+          path: genesis-creator/scripts/macOS/build/genesis-creator-macos-${{ matrix.arch }}.pkg
 
   build-windows:
     name: Build and Sign Windows
@@ -173,7 +190,7 @@ jobs:
   release:
     permissions:
       contents: write
-    needs: [build-windows, build-macos, build-ubuntu]
+    needs: [validate-version, build-macos, build-windows, build-ubuntu] 
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -183,25 +200,13 @@ jobs:
       - uses: actions/download-artifact@v4
       - run: |
           mkdir uploads
-          mv binary-macos-latest/genesis-creator uploads/genesis-creator-darwin-amd64
+          mv binary-macos-arm/genesis-creator-macos-arm.pkg uploads/genesis-creator-macos-arm.pkg
+          mv binary-macos-intel/genesis-creator-macos-intel.pkg uploads/genesis-creator-macos-intel.pkg
           mv binary-windows-latest/genesis-creator.exe uploads/genesis-creator-windows-amd64.exe
           mv binary-ubuntu-latest/genesis-creator uploads/genesis-creator-linux-amd64
-  
-      - name: Extract version tag from Cargo.toml manifest.
-        id: meta
-        run: |
-          export VERSION=$(yq .package.version genesis-creator/Cargo.toml)
-          # Make sure the tag matches the version in Cargo.toml manifest.
-          if [ ! "${{ github.ref_name }}" = "genesis-creator/${VERSION}" ]; then
-             echo "::error Expected tag ${{ github.ref_name }} does not match the version ${VERSION}."
-             exit 1
-          else
-             # Store the version into a version variable for the following step.
-             echo "version=${VERSION}" > "$GITHUB_OUTPUT"
-          fi
   
       - name: Create release and attach binaries to release.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create ${{ github.ref_name }} --title "Genesis Creator ${{ steps.meta.outputs.version }}" uploads/*
+          gh release create ${{ github.ref_name }} --title "Genesis Creator ${{ needs.validate-version.outputs.version }}" uploads/*
