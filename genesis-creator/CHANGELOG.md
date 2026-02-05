@@ -1,6 +1,6 @@
 ## Unreleased changes
 
-## 0.8.0
+## 0.8.0 and 0.8.1
 
 - Support genesis data format of protocol version 11.
 
