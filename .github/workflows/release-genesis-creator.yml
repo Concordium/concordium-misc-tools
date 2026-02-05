@@ -24,13 +24,15 @@ jobs:
         id: meta
         run: |
           export VERSION=$(yq .package.version genesis-creator/Cargo.toml)
+
           # Make sure the tag matches the version in Cargo.toml manifest.
           if [ ! "${{ github.ref_name }}" = "genesis-creator/${VERSION}" ]; then
-             echo "::error Expected tag ${{ github.ref_name }} does not match the version ${VERSION}."
-             exit 1
-          else
-             # Store the version into a version variable for the following step.
-             echo "version=${VERSION}" > "$GITHUB_OUTPUT"
+            echo "::error Expected tag ${{ github.ref_name }} does not match the version ${VERSION}."
+            exit 1
+          fi
+
+          # Store the version into a version variable for the following step.
+          echo "version=${VERSION}" > "$GITHUB_OUTPUT"
 
   build-macos:
     name: Build and Sign Macos
