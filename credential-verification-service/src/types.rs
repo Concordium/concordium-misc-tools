@@ -85,7 +85,7 @@ impl IntoResponse for RejectionError {
         // request header for example.
         let trace_id = "dummy".to_string();
 
-        tracing::error!("Invalid json in the request: {self}");
+        tracing::warn!("Invalid json in the request: {self}");
 
         let json_message = self.to_string();
 

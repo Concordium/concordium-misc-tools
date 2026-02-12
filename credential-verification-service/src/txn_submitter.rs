@@ -78,7 +78,16 @@ impl TransactionSubmitter {
             self.account.lock(),
         )
         .await
-        .context("timeout waiting for local account sequence lock")?;
+        .map_err(|e| {
+            let ae = anyhow::Error::new(e);
+            tracing::error!(
+                method="account_sequence_lock",
+                error=%ae,
+                error_debug=%format!("{ae:?}"),
+                "Node call failed"
+            );
+            ae
+        })?;
 
         self.account_sequence_lock_wait_duration
             .observe(start_timer.elapsed().as_secs_f64());
@@ -119,7 +128,16 @@ impl TransactionSubmitter {
                 let node_view_on_nonce = node_client
                     .get_next_account_sequence_number(&account_guard.account_keys.address)
                     .await
-                    .context("get next account sequence number")?;
+                    .map_err(|e| {
+                        let ae = anyhow::Error::new(e);
+                        tracing::error!(
+                            method="get_next_account_sequence_number",
+                            error=%ae,
+                            error_debug=%format!("{ae:?}"),
+                            "Node call failed"
+                        );
+                        ae
+                    })?;
 
                 account_guard.nonce = node_view_on_nonce;
 
@@ -137,7 +155,16 @@ impl TransactionSubmitter {
                 let txn_hash = node_client
                     .send_block_item(&block_item)
                     .await
-                    .context("submit transaction, second try with updated nonce")?;
+                    .map_err(|e| {
+                        let ae = anyhow::Error::new(e);
+                        tracing::error!(
+                            method="send_block_item",
+                            error=%ae,
+                            error_debug=%format!("{ae:?}"),
+                            "Node call failed"
+                        );
+                        ae
+                    })?;
 
                 info!(
                     "Successfully submitted anchor transaction after the account nonce was refreshed."

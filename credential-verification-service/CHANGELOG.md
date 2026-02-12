@@ -1,5 +1,9 @@
 ## Unreleased
 
+## 0.2.4
+
+- debug logs (temporary)
+
 ## 0.2.3
 
 - Update submodule link so pre memory allocation is bounded when cbor decoding.
