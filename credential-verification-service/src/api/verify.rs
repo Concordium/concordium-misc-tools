@@ -132,12 +132,30 @@ async fn verify_presentation_with_request_anchor(
     let global_context = client
         .get_cryptographic_parameters(block_identifier)
         .await
-        .context("get cryptographic parameters")?;
+        .map_err(|e| {
+            let ae = anyhow::Error::new(e);
+            tracing::error!(
+                method="get_cryptographic_parameters",
+                error=%ae,
+                error_debug=%format!("{ae:?}"),
+                "Node call failed"
+            );
+            ae
+        })?;
 
     let block_slot_time = client
         .get_block_slot_time(block_identifier)
         .await
-        .context("get block slot time")?;
+        .map_err(|e| {
+            let ae = anyhow::Error::new(e);
+            tracing::error!(
+                method="get_block_slot_time",
+                error=%ae,
+                error_debug=%format!("{ae:?}"),
+                "Node call failed"
+            );
+            ae
+        })?;
 
     let request_anchor = lookup_request_anchor(
         state.anchor_wait_for_finalization_timeout,
