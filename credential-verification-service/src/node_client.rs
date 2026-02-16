@@ -208,7 +208,7 @@ pub struct NodeRequestLabels {
     method: String,
     status: String,
     grpc_status_code: String,
-    grpc_message: String,
+    upstream_http_status_code: Option<u16>,
 }
 
 /* Decorator for NodeClient that adds metrics collection
@@ -264,7 +264,7 @@ impl NodeClientMetricsDecorator {
                 method: name.to_string(),
                 status: status.to_string(),
                 grpc_status_code: grpc_status_code.to_string(),
-                grpc_message,
+                upstream_http_status_code: extract_http_status_code(status, &grpc_message),
             })
             .observe(start.elapsed().as_secs_f64());
     }
@@ -285,10 +285,28 @@ impl NodeClientMetricsDecorator {
                 method: name.to_string(),
                 status: status.to_string(),
                 grpc_status_code: grpc_status.to_string(),
-                grpc_message,
+                upstream_http_status_code: extract_http_status_code(status, &grpc_message),
             })
             .observe(start.elapsed().as_secs_f64());
     }
+}
+
+/// Helper function to extract the upstream http status code.
+/// Note: Sometimes the RPC calls can fail with a grpc code 'Internal error'
+/// and the underlying error response message can contain for example:
+/// "while receiving response with status: 429 Too Many Requests"
+/// This is to help extract this http error code so that we can scrape for prometheus.
+fn extract_http_status_code(status: &str, input: &str) -> Option<u16> {
+    if status == "success" {
+        return Some(200u16);
+    }
+    input
+        .split("status:")
+        .nth(1)?
+        .split_whitespace()
+        .next()?
+        .parse::<u16>()
+        .ok()
 }
 
 #[async_trait::async_trait]
@@ -423,5 +441,29 @@ impl NodeClient for NodeClientMetricsDecorator {
             inner: self.inner.box_clone(),
             node_request_duration: self.node_request_duration.clone(),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    #[test]
+    fn test_parse_http_status_code() {
+        let test_input = "protocol error: received message with invalid compression flag: 60 (valid flags are 0 and 1) while receiving response with status: 429 Too Many Requests";
+        let status = "error";
+        let result = extract_http_status_code(status, test_input).expect("expected code");
+
+        assert_eq!(result, 429);
+    }
+
+    #[test]
+    fn test_parse_http_status_code_success() {
+        let test_input = "some other input";
+        let status = "success";
+        let result = extract_http_status_code(status, test_input).expect("expected code");
+
+        assert_eq!(result, 200);
     }
 }
