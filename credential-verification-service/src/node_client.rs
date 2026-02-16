@@ -19,6 +19,7 @@ use prometheus_client::metrics::family::Family;
 use prometheus_client::metrics::histogram;
 use std::collections::BTreeMap;
 use std::fmt::Debug;
+use tonic::Code;
 
 /// Node interface used by the verifier service. Used to stub out node in tests
 #[async_trait::async_trait]
@@ -206,6 +207,8 @@ impl NodeClient for NodeClientImpl {
 pub struct NodeRequestLabels {
     method: String,
     status: String,
+    grpc_status_code: String,
+    grpc_message: String,
 }
 
 /* Decorator for NodeClient that adds metrics collection
@@ -219,6 +222,21 @@ pub struct NodeClientMetricsDecorator {
     node_request_duration: Family<NodeRequestLabels, histogram::Histogram>,
 }
 
+fn parse_grpc_data_from_query_error(err: &QueryError) -> (Code, String) {
+    match err {
+        QueryError::NotFound => (Code::NotFound, "Resource not found".to_string()),
+        QueryError::RPCError(rpc_err) => parse_grpc_data_from_rpc_error(rpc_err),
+    }
+}
+
+fn parse_grpc_data_from_rpc_error(err: &RPCError) -> (Code, String) {
+    match err {
+        RPCError::CallError(status) => (status.code(), status.message().to_string()),
+        RPCError::InvalidMetadata(_) => (Code::Internal, "Invalid metadata".to_string()),
+        RPCError::ParseError(_) => (Code::Internal, "Parse error".to_string()),
+    }
+}
+
 impl NodeClientMetricsDecorator {
     pub fn new(
         inner: Box<dyn NodeClient>,
@@ -230,20 +248,46 @@ impl NodeClientMetricsDecorator {
         }
     }
 
-    pub fn record_metrics<T, E>(
+    fn record_query_metrics<T>(
         &self,
         name: &str,
-        result: &Result<T, E>,
-        start_timer: tokio::time::Instant,
+        result: &concordium_rust_sdk::endpoints::QueryResult<T>,
+        start: tokio::time::Instant,
     ) {
-        let status = if result.is_ok() { "success" } else { "error" };
+        let (status, (grpc_status_code, grpc_message)) = match result {
+            Ok(_) => ("success", (tonic::Code::Ok, "success".to_string())),
+            Err(e) => ("error", (parse_grpc_data_from_query_error(e))),
+        };
 
         self.node_request_duration
             .get_or_create(&NodeRequestLabels {
                 method: name.to_string(),
                 status: status.to_string(),
+                grpc_status_code: grpc_status_code.to_string(),
+                grpc_message,
             })
-            .observe(start_timer.elapsed().as_secs_f64());
+            .observe(start.elapsed().as_secs_f64());
+    }
+
+    fn record_rpc_metrics<T>(
+        &self,
+        name: &str,
+        result: &concordium_rust_sdk::endpoints::RPCResult<T>,
+        start: tokio::time::Instant,
+    ) {
+        let (status, (grpc_status, grpc_message)) = match result {
+            Ok(_) => ("success", (tonic::Code::Ok, "success".to_string())),
+            Err(e) => ("error", parse_grpc_data_from_rpc_error(e)),
+        };
+
+        self.node_request_duration
+            .get_or_create(&NodeRequestLabels {
+                method: name.to_string(),
+                status: status.to_string(),
+                grpc_status_code: grpc_status.to_string(),
+                grpc_message,
+            })
+            .observe(start.elapsed().as_secs_f64());
     }
 }
 
@@ -257,7 +301,7 @@ impl NodeClient for NodeClientMetricsDecorator {
 
         let result = self.inner.wait_until_finalized(hash).await;
 
-        self.record_metrics("wait_until_finalized", &result, start_timer);
+        self.record_query_metrics("wait_until_finalized", &result, start_timer);
 
         result
     }
@@ -270,7 +314,7 @@ impl NodeClient for NodeClientMetricsDecorator {
 
         let result = self.inner.get_next_account_sequence_number(address).await;
 
-        self.record_metrics("get_next_account_sequence_number", &result, start_timer);
+        self.record_query_metrics("get_next_account_sequence_number", &result, start_timer);
 
         result
     }
@@ -280,7 +324,7 @@ impl NodeClient for NodeClientMetricsDecorator {
 
         let result = self.inner.get_genesis_block_hash().await;
 
-        self.record_metrics("get_genesis_block_hash", &result, start_timer);
+        self.record_query_metrics("get_genesis_block_hash", &result, start_timer);
 
         result
     }
@@ -293,7 +337,7 @@ impl NodeClient for NodeClientMetricsDecorator {
 
         let result = self.inner.send_block_item(bi).await;
 
-        self.record_metrics("send_block_item", &result, start_timer);
+        self.record_rpc_metrics("send_block_item", &result, start_timer);
 
         result
     }
@@ -306,7 +350,7 @@ impl NodeClient for NodeClientMetricsDecorator {
 
         let result = self.inner.get_cryptographic_parameters(bi).await;
 
-        self.record_metrics("get_cryptographic_parameters", &result, start_timer);
+        self.record_query_metrics("get_cryptographic_parameters", &result, start_timer);
 
         result
     }
@@ -316,7 +360,7 @@ impl NodeClient for NodeClientMetricsDecorator {
 
         let result = self.inner.get_block_slot_time(bi).await;
 
-        self.record_metrics("get_block_slot_time", &result, start_timer);
+        self.record_query_metrics("get_block_slot_time", &result, start_timer);
 
         result
     }
@@ -329,7 +373,7 @@ impl NodeClient for NodeClientMetricsDecorator {
 
         let result = self.inner.get_block_item_status(th).await;
 
-        self.record_metrics("get_block_item_status", &result, start_timer);
+        self.record_query_metrics("get_block_item_status", &result, start_timer);
 
         result
     }
@@ -343,7 +387,7 @@ impl NodeClient for NodeClientMetricsDecorator {
 
         let result = self.inner.get_account_credentials(cred_id, bi).await;
 
-        self.record_metrics("get_account_credentials", &result, start_timer);
+        self.record_query_metrics("get_account_credentials", &result, start_timer);
 
         result
     }
@@ -356,7 +400,7 @@ impl NodeClient for NodeClientMetricsDecorator {
 
         let result = self.inner.get_identity_providers(bi).await;
 
-        self.record_metrics("get_identity_providers", &result, start_timer);
+        self.record_query_metrics("get_identity_providers", &result, start_timer);
 
         result
     }
@@ -369,7 +413,7 @@ impl NodeClient for NodeClientMetricsDecorator {
 
         let result = self.inner.get_anonymity_revokers(bi).await;
 
-        self.record_metrics("get_anonymity_revokers", &result, start_timer);
+        self.record_query_metrics("get_anonymity_revokers", &result, start_timer);
 
         result
     }
