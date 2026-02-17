@@ -1,3 +1,4 @@
+use axum::http::StatusCode;
 use chrono::{DateTime, Utc};
 use concordium_rust_sdk::base::hashes::{BlockHash, TransactionHash};
 use concordium_rust_sdk::base::transactions::{BlockItem, EncodedPayload};
@@ -19,6 +20,7 @@ use prometheus_client::metrics::family::Family;
 use prometheus_client::metrics::histogram;
 use std::collections::BTreeMap;
 use std::fmt::Debug;
+use tonic::Code;
 
 /// Node interface used by the verifier service. Used to stub out node in tests
 #[async_trait::async_trait]
@@ -205,7 +207,8 @@ impl NodeClient for NodeClientImpl {
 #[derive(Debug, Clone, EncodeLabelSet, PartialEq, Eq, Hash)]
 pub struct NodeRequestLabels {
     method: String,
-    status: String,
+    grpc_status_code: String,
+    upstream_http_status_code: Option<String>,
 }
 
 /* Decorator for NodeClient that adds metrics collection
@@ -219,6 +222,21 @@ pub struct NodeClientMetricsDecorator {
     node_request_duration: Family<NodeRequestLabels, histogram::Histogram>,
 }
 
+fn parse_grpc_data_from_query_error(err: &QueryError) -> (Code, Option<&str>) {
+    match err {
+        QueryError::NotFound => (Code::NotFound, None),
+        QueryError::RPCError(rpc_err) => parse_grpc_data_from_rpc_error(rpc_err),
+    }
+}
+
+fn parse_grpc_data_from_rpc_error(err: &RPCError) -> (Code, Option<&str>) {
+    match err {
+        RPCError::CallError(status) => (status.code(), Some(status.message())),
+        RPCError::InvalidMetadata(_) => (Code::Internal, None),
+        RPCError::ParseError(_) => (Code::Internal, None),
+    }
+}
+
 impl NodeClientMetricsDecorator {
     pub fn new(
         inner: Box<dyn NodeClient>,
@@ -230,21 +248,71 @@ impl NodeClientMetricsDecorator {
         }
     }
 
-    pub fn record_metrics<T, E>(
+    fn record_query_metrics<T>(
         &self,
         name: &str,
-        result: &Result<T, E>,
-        start_timer: tokio::time::Instant,
+        result: &concordium_rust_sdk::endpoints::QueryResult<T>,
+        start: tokio::time::Instant,
     ) {
-        let status = if result.is_ok() { "success" } else { "error" };
+        let (grpc_status_code, grpc_message) = match result {
+            Ok(_) => (tonic::Code::Ok, None),
+            Err(e) => parse_grpc_data_from_query_error(e),
+        };
 
         self.node_request_duration
             .get_or_create(&NodeRequestLabels {
                 method: name.to_string(),
-                status: status.to_string(),
+                grpc_status_code: grpc_status_code.to_string(),
+                upstream_http_status_code: extract_http_status_code(grpc_status_code, grpc_message)
+                    .map(|code| code.to_string()),
             })
-            .observe(start_timer.elapsed().as_secs_f64());
+            .observe(start.elapsed().as_secs_f64());
     }
+
+    fn record_rpc_metrics<T>(
+        &self,
+        name: &str,
+        result: &concordium_rust_sdk::endpoints::RPCResult<T>,
+        start: tokio::time::Instant,
+    ) {
+        let (grpc_status_code, grpc_message) = match result {
+            Ok(_) => (tonic::Code::Ok, None),
+            Err(e) => parse_grpc_data_from_rpc_error(e),
+        };
+
+        self.node_request_duration
+            .get_or_create(&NodeRequestLabels {
+                method: name.to_string(),
+                grpc_status_code: grpc_status_code.to_string(),
+                upstream_http_status_code: extract_http_status_code(grpc_status_code, grpc_message)
+                    .map(|code| code.to_string()),
+            })
+            .observe(start.elapsed().as_secs_f64());
+    }
+}
+
+/// Helper function to extract the upstream http status code.
+/// Note: Sometimes the RPC calls can fail with a grpc code 'Internal error'
+/// and the underlying error response message can contain for example:
+/// "while receiving response with status: 429 Too Many Requests"
+/// This is to help extract this http error code so that we can scrape for prometheus.
+fn extract_http_status_code(grpc_status_code: Code, input: Option<&str>) -> Option<StatusCode> {
+    if grpc_status_code != tonic::Code::Internal {
+        return None;
+    }
+
+    if let Some(message) = input {
+        return message
+            .split("status:")
+            .nth(1)?
+            .split_whitespace()
+            .next()?
+            .parse::<u16>()
+            .ok()
+            .and_then(|code| StatusCode::from_u16(code).ok());
+    }
+
+    None
 }
 
 #[async_trait::async_trait]
@@ -257,7 +325,7 @@ impl NodeClient for NodeClientMetricsDecorator {
 
         let result = self.inner.wait_until_finalized(hash).await;
 
-        self.record_metrics("wait_until_finalized", &result, start_timer);
+        self.record_query_metrics("wait_until_finalized", &result, start_timer);
 
         result
     }
@@ -270,7 +338,7 @@ impl NodeClient for NodeClientMetricsDecorator {
 
         let result = self.inner.get_next_account_sequence_number(address).await;
 
-        self.record_metrics("get_next_account_sequence_number", &result, start_timer);
+        self.record_query_metrics("get_next_account_sequence_number", &result, start_timer);
 
         result
     }
@@ -280,7 +348,7 @@ impl NodeClient for NodeClientMetricsDecorator {
 
         let result = self.inner.get_genesis_block_hash().await;
 
-        self.record_metrics("get_genesis_block_hash", &result, start_timer);
+        self.record_query_metrics("get_genesis_block_hash", &result, start_timer);
 
         result
     }
@@ -293,7 +361,7 @@ impl NodeClient for NodeClientMetricsDecorator {
 
         let result = self.inner.send_block_item(bi).await;
 
-        self.record_metrics("send_block_item", &result, start_timer);
+        self.record_rpc_metrics("send_block_item", &result, start_timer);
 
         result
     }
@@ -306,7 +374,7 @@ impl NodeClient for NodeClientMetricsDecorator {
 
         let result = self.inner.get_cryptographic_parameters(bi).await;
 
-        self.record_metrics("get_cryptographic_parameters", &result, start_timer);
+        self.record_query_metrics("get_cryptographic_parameters", &result, start_timer);
 
         result
     }
@@ -316,7 +384,7 @@ impl NodeClient for NodeClientMetricsDecorator {
 
         let result = self.inner.get_block_slot_time(bi).await;
 
-        self.record_metrics("get_block_slot_time", &result, start_timer);
+        self.record_query_metrics("get_block_slot_time", &result, start_timer);
 
         result
     }
@@ -329,7 +397,7 @@ impl NodeClient for NodeClientMetricsDecorator {
 
         let result = self.inner.get_block_item_status(th).await;
 
-        self.record_metrics("get_block_item_status", &result, start_timer);
+        self.record_query_metrics("get_block_item_status", &result, start_timer);
 
         result
     }
@@ -343,7 +411,7 @@ impl NodeClient for NodeClientMetricsDecorator {
 
         let result = self.inner.get_account_credentials(cred_id, bi).await;
 
-        self.record_metrics("get_account_credentials", &result, start_timer);
+        self.record_query_metrics("get_account_credentials", &result, start_timer);
 
         result
     }
@@ -356,7 +424,7 @@ impl NodeClient for NodeClientMetricsDecorator {
 
         let result = self.inner.get_identity_providers(bi).await;
 
-        self.record_metrics("get_identity_providers", &result, start_timer);
+        self.record_query_metrics("get_identity_providers", &result, start_timer);
 
         result
     }
@@ -369,7 +437,7 @@ impl NodeClient for NodeClientMetricsDecorator {
 
         let result = self.inner.get_anonymity_revokers(bi).await;
 
-        self.record_metrics("get_anonymity_revokers", &result, start_timer);
+        self.record_query_metrics("get_anonymity_revokers", &result, start_timer);
 
         result
     }
@@ -379,5 +447,31 @@ impl NodeClient for NodeClientMetricsDecorator {
             inner: self.inner.box_clone(),
             node_request_duration: self.node_request_duration.clone(),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    #[test]
+    fn test_parse_http_status_code() {
+        let test_input = Some(
+            "protocol error: received message with invalid compression flag: 60 (valid flags are 0 and 1) while receiving response with status: 429 Too Many Requests",
+        );
+        let grpc_status_code = tonic::Code::Internal;
+        let result = extract_http_status_code(grpc_status_code, test_input).expect("expected code");
+
+        assert_eq!(result, 429);
+    }
+
+    #[test]
+    fn test_parse_http_status_code_success() {
+        let test_input = Some("some other input");
+        let grpc_status_code = tonic::Code::DeadlineExceeded;
+        let result = extract_http_status_code(grpc_status_code, test_input);
+
+        assert_eq!(result, None);
     }
 }

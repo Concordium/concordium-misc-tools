@@ -1,5 +1,9 @@
 ## Unreleased
 
+## 0.2.5
+
+- Added `grpc_status_code` and `upstream_http_status_code` for prometheus metrics scraping to help diagnose issues with any GRPC calls.
+
 ## 0.2.4
 
 - debug logs (temporary)
