@@ -20,6 +20,7 @@ use prometheus_client::metrics::histogram;
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 use tonic::Code;
+use axum::http::StatusCode;
 
 /// Node interface used by the verifier service. Used to stub out node in tests
 #[async_trait::async_trait]
@@ -206,9 +207,8 @@ impl NodeClient for NodeClientImpl {
 #[derive(Debug, Clone, EncodeLabelSet, PartialEq, Eq, Hash)]
 pub struct NodeRequestLabels {
     method: String,
-    status: String,
     grpc_status_code: String,
-    upstream_http_status_code: Option<u16>,
+    upstream_http_status_code: Option<String>,
 }
 
 /* Decorator for NodeClient that adds metrics collection
@@ -222,18 +222,18 @@ pub struct NodeClientMetricsDecorator {
     node_request_duration: Family<NodeRequestLabels, histogram::Histogram>,
 }
 
-fn parse_grpc_data_from_query_error(err: &QueryError) -> (Code, String) {
+fn parse_grpc_data_from_query_error(err: &QueryError) -> (Code, Option<&str>) {
     match err {
-        QueryError::NotFound => (Code::NotFound, "Resource not found".to_string()),
+        QueryError::NotFound => (Code::NotFound, None),
         QueryError::RPCError(rpc_err) => parse_grpc_data_from_rpc_error(rpc_err),
     }
 }
 
-fn parse_grpc_data_from_rpc_error(err: &RPCError) -> (Code, String) {
+fn parse_grpc_data_from_rpc_error(err: &RPCError) -> (Code, Option<&str>) {
     match err {
-        RPCError::CallError(status) => (status.code(), status.message().to_string()),
-        RPCError::InvalidMetadata(_) => (Code::Internal, "Invalid metadata".to_string()),
-        RPCError::ParseError(_) => (Code::Internal, "Parse error".to_string()),
+        RPCError::CallError(status) => (status.code(), Some(status.message())),
+        RPCError::InvalidMetadata(_) => (Code::Internal, None),
+        RPCError::ParseError(_) => (Code::Internal, None),
     }
 }
 
@@ -254,17 +254,17 @@ impl NodeClientMetricsDecorator {
         result: &concordium_rust_sdk::endpoints::QueryResult<T>,
         start: tokio::time::Instant,
     ) {
-        let (status, (grpc_status_code, grpc_message)) = match result {
-            Ok(_) => ("success", (tonic::Code::Ok, "success".to_string())),
-            Err(e) => ("error", (parse_grpc_data_from_query_error(e))),
+        let (grpc_status_code, grpc_message) = match result {
+            Ok(_) => (tonic::Code::Ok, None),
+            Err(e) => parse_grpc_data_from_query_error(e),
         };
 
         self.node_request_duration
             .get_or_create(&NodeRequestLabels {
                 method: name.to_string(),
-                status: status.to_string(),
                 grpc_status_code: grpc_status_code.to_string(),
-                upstream_http_status_code: extract_http_status_code(status, &grpc_message),
+                upstream_http_status_code: extract_http_status_code(grpc_status_code, grpc_message)
+                    .map(|code| code.to_string()),
             })
             .observe(start.elapsed().as_secs_f64());
     }
@@ -275,17 +275,17 @@ impl NodeClientMetricsDecorator {
         result: &concordium_rust_sdk::endpoints::RPCResult<T>,
         start: tokio::time::Instant,
     ) {
-        let (status, (grpc_status, grpc_message)) = match result {
-            Ok(_) => ("success", (tonic::Code::Ok, "success".to_string())),
-            Err(e) => ("error", parse_grpc_data_from_rpc_error(e)),
+        let (grpc_status_code, grpc_message) = match result {
+            Ok(_) => (tonic::Code::Ok, None),
+            Err(e) => parse_grpc_data_from_rpc_error(e),
         };
 
         self.node_request_duration
             .get_or_create(&NodeRequestLabels {
                 method: name.to_string(),
-                status: status.to_string(),
-                grpc_status_code: grpc_status.to_string(),
-                upstream_http_status_code: extract_http_status_code(status, &grpc_message),
+                grpc_status_code: grpc_status_code.to_string(),
+                upstream_http_status_code: extract_http_status_code(grpc_status_code, grpc_message)
+                    .map(|code| code.to_string()),
             })
             .observe(start.elapsed().as_secs_f64());
     }
@@ -296,17 +296,23 @@ impl NodeClientMetricsDecorator {
 /// and the underlying error response message can contain for example:
 /// "while receiving response with status: 429 Too Many Requests"
 /// This is to help extract this http error code so that we can scrape for prometheus.
-fn extract_http_status_code(status: &str, input: &str) -> Option<u16> {
-    if status == "success" {
-        return Some(200u16);
+fn extract_http_status_code(grpc_status_code: Code, input: Option<&str>) -> Option<StatusCode> {
+    if grpc_status_code != tonic::Code::Internal {
+        return None;
     }
-    input
-        .split("status:")
-        .nth(1)?
-        .split_whitespace()
-        .next()?
-        .parse::<u16>()
-        .ok()
+
+    if let Some(message) = input {
+        return message
+            .split("status:")
+            .nth(1)?
+            .split_whitespace()
+            .next()?
+            .parse::<u16>()
+            .ok()
+            .and_then(|code| StatusCode::from_u16(code).ok())
+    }
+
+    None
 }
 
 #[async_trait::async_trait]
@@ -451,19 +457,21 @@ mod tests {
 
     #[test]
     fn test_parse_http_status_code() {
-        let test_input = "protocol error: received message with invalid compression flag: 60 (valid flags are 0 and 1) while receiving response with status: 429 Too Many Requests";
-        let status = "error";
-        let result = extract_http_status_code(status, test_input).expect("expected code");
+        let test_input = Some(
+            "protocol error: received message with invalid compression flag: 60 (valid flags are 0 and 1) while receiving response with status: 429 Too Many Requests",
+        );
+        let grpc_status_code = tonic::Code::Internal;
+        let result = extract_http_status_code(grpc_status_code, test_input).expect("expected code");
 
         assert_eq!(result, 429);
     }
 
     #[test]
     fn test_parse_http_status_code_success() {
-        let test_input = "some other input";
-        let status = "success";
-        let result = extract_http_status_code(status, test_input).expect("expected code");
+        let test_input = Some("some other input");
+        let grpc_status_code = tonic::Code::DeadlineExceeded;
+        let result = extract_http_status_code(grpc_status_code, test_input);
 
-        assert_eq!(result, 200);
+        assert_eq!(result, None);
     }
 }
