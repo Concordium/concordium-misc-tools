@@ -1,3 +1,4 @@
+use axum::http::StatusCode;
 use chrono::{DateTime, Utc};
 use concordium_rust_sdk::base::hashes::{BlockHash, TransactionHash};
 use concordium_rust_sdk::base::transactions::{BlockItem, EncodedPayload};
@@ -20,7 +21,6 @@ use prometheus_client::metrics::histogram;
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 use tonic::Code;
-use axum::http::StatusCode;
 
 /// Node interface used by the verifier service. Used to stub out node in tests
 #[async_trait::async_trait]
@@ -309,7 +309,7 @@ fn extract_http_status_code(grpc_status_code: Code, input: Option<&str>) -> Opti
             .next()?
             .parse::<u16>()
             .ok()
-            .and_then(|code| StatusCode::from_u16(code).ok())
+            .and_then(|code| StatusCode::from_u16(code).ok());
     }
 
     None
