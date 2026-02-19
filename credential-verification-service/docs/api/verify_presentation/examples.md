@@ -1,13 +1,20 @@
 # Example Payloads
 
+See data model here for request payload strucuture: [Link text](./data_model.md)
+
+Notes:
+- `connectionId`, `resourceId`, and `requestedClaims` are required for creating a verification request
+- `publicInfo` is optional, you can leave this parameter as empty or ommit entirely. If you choose to supply `publicInfo` it must be a map where each key is a String and each value is a CBOR encoded value per the standard here: https://www.rfc-editor.org/rfc/rfc8949.html#name-encoded-cbor-data-item (Note: there are helpful online editors to convert to CBOR, payload below shows an example CBOR value)
+
+
 ## Request Example
 
 ```json
 {
   "auditRecordId": "recordid1234",
   "publicInfo": {
-    "key1": "6676616C756531",
-    "key2": "6676616C756532"
+    "key1": "<SOME CBOR ENCODED VALUE>",
+    "key2": "<SOME CBOR ENCODED VALUE>"
   },
   "presentation": <PresentationV1>,
   "verificationRequest": <VerificationRequest>
