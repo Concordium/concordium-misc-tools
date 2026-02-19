@@ -23,8 +23,9 @@ classDiagram
         <<Request>>
         string connectionId
         string resourceId
-        string ?contextString
-        HashMap publicInfo
+        option&lt;string&gt; context_string,
+        // optional public info. String keys to CBOR encoded values
+        option&lt;HashMap&lt;String, CborValue&gt;&gt; publicInfo
         SubjectClaims[] subjectClaims
     }
 
