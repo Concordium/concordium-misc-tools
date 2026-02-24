@@ -10,6 +10,8 @@ import {
   Energy,
   ContractName,
   ContractAddress,
+  Transaction,
+  Parameter,
 } from "@concordium/web-sdk";
 import { WalletConnection } from "@concordium/react-components";
 import {
@@ -710,6 +712,59 @@ export async function internalCallSuccess(
     AccountTransactionType.Update,
     payload
   );
+}
+
+type SubmitPayloadToSponsorFunction = (
+  sender: AccountAddress.Type,
+  transaction: any,
+  sponsorAccountAddress: string,
+  sponsorKey: string
+) => Promise<any>;
+
+export async function sponsorInternalCallSuccess(
+  connection: WalletConnection,
+  account: string,
+  ccdSponsorAccount: string,
+  ccdSponsorPrivateKey: string,
+  submitPayloadToSponsorFn: SubmitPayloadToSponsorFunction
+) {
+
+  const updateContractPayload = {
+    amount: CcdAmount.fromMicroCcd(0),
+    address: ContractAddress.create(CONTRACT_INDEX, CONTRACT_SUB_INDEX),
+    receiveName: ReceiveName.fromString(
+      `${CONTRACT_NAME}.internal_call_success`
+    ),
+    message: Parameter.fromBuffer(new Uint8Array([1,2,3,4])),
+  };
+
+  const transaction = Transaction.updateContract(updateContractPayload, Energy.create(30000n));
+
+  console.debug("Sending update transaction:");
+  console.debug("UpdateContractPayload:");
+  console.debug(updateContractPayload);
+  console.debug("Account:");
+  console.debug(account);
+  console.debug("Sponsor Account:");
+  console.debug(ccdSponsorAccount);
+  console.debug("");
+  
+  const sponsorResponse = await submitPayloadToSponsorFn(
+        AccountAddress.fromBase58(account),
+        Transaction.toJSON(transaction),
+        ccdSponsorAccount,
+        ccdSponsorPrivateKey
+      );
+
+  const sponsored = Transaction.signableFromJSON(
+        Transaction.toJSON(sponsorResponse)
+  );
+  
+  return connection
+        .signAndSendSponsoredTransaction(
+          AccountAddress.fromBase58(account),
+          sponsored
+        )    
 }
 
 export async function notExistingEntrypoint(
