@@ -740,15 +740,16 @@ export async function sponsorInternalCallSuccess(
 
   const transaction = Transaction.updateContract(updateContractPayload, Energy.create(30000n));
 
-  console.debug("Sending update transaction:");
-  console.debug("UpdateContractPayload:");
-  console.debug(updateContractPayload);
-  console.debug("Account:");
-  console.debug(account);
-  console.debug("Sponsor Account:");
-  console.debug(ccdSponsorAccount);
-  console.debug("");
-  
+  //TODO: Change or Remove these after testing locally
+  console.log("Sending update transaction:");
+  console.log("UpdateContractPayload:");
+  console.log(updateContractPayload);
+  console.log("Account:");
+  console.log(account);
+  console.log("Sponsor Account:");
+  console.log(ccdSponsorAccount);
+  console.log("");
+
   const sponsorResponse = await submitPayloadToSponsorFn(
         AccountAddress.fromBase58(account),
         Transaction.toJSON(transaction),
@@ -756,10 +757,18 @@ export async function sponsorInternalCallSuccess(
         ccdSponsorPrivateKey
       );
 
+  console.log("Received sponsor response:");
+  console.log(sponsorResponse);
+  console.log("");
+
   const sponsored = Transaction.signableFromJSON(
         Transaction.toJSON(sponsorResponse)
   );
   
+  console.log("Received signed transaction from sponsor:");
+  console.log(sponsored);
+  console.log("");
+
   return connection
         .signAndSendSponsoredTransaction(
           AccountAddress.fromBase58(account),

@@ -1540,7 +1540,7 @@ export default function Main(props: MainProps) {
                     onClick={() => {
                       setTxHash("");
                       setTransactionError("");
-                      const tx = sponsorInternalCallSuccess(connection, account, ccdSponsorAccount, ccdSponsorPrivateKey, submitPayloadToSponsor);
+                      const tx = sponsorInternalCallSuccess(connection, account, sponsorAccount, sponsorPrivateKey, submitPayloadToSponsor);
                       tx.then(setTxHash).catch((err: Error) =>
                         setTransactionError((err as Error).message)
                       );
