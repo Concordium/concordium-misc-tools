@@ -50,7 +50,7 @@ import {
   deploy,
   simpleCCDTransfer,
   simpleCCDTransferToNonExistingAccountAddress,
-  sponsorInternalCallSuccess,
+  sponsorSetU8,
 } from "./writing_to_blockchain";
 
 import {
@@ -1499,8 +1499,7 @@ export default function Main(props: MainProps) {
                   </button>
                 </TestBox>
                 <TestBox
-                  header="
-                                                                                    (TE) Testing that a smart contract can be updated as part of a sponsored transaction"
+                  header="(TE) Testing that a smart contract can be updated as part of a sponsored transaction"
                   note="
                                         Expected result after pressing the button and confirming in wallet: The
                                         transaction hash or an error message should appear in the right column.
@@ -1538,7 +1537,7 @@ export default function Main(props: MainProps) {
                     onClick={() => {
                       setTxHash("");
                       setTransactionError("");
-                      const tx = sponsorInternalCallSuccess(connection, account, sponsorAccount, sponsorPrivateKey, submitPayloadToSponsor);
+                      const tx = sponsorSetU8(connection, account, sponsorAccount, sponsorPrivateKey, submitPayloadToSponsor);
                       tx.then(setTxHash).catch((err: Error) =>
                         setTransactionError((err as Error).message)
                       );
