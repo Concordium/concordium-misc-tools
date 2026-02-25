@@ -721,7 +721,7 @@ type SubmitPayloadToSponsorFunction = (
   sponsorKey: string
 ) => Promise<any>;
 
-export async function sponsorInternalCallSuccess(
+export async function sponsorSetU8(
   connection: WalletConnection,
   account: string,
   ccdSponsorAccount: string,
