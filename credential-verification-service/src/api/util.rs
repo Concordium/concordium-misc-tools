@@ -45,8 +45,7 @@ pub fn json_to_cbor_map(
 
 /// converts a json value to its corresponding Cbor Value.
 /// If the json contains a number, we will do our best to try to find the corresponding
-/// Cbor value type, if the number is out of range we fallback to a text representation
-/// of the number
+/// Cbor value type. Error if we cannot resolve the number as a valid integer or float.
 fn json_to_cbor_value(value: &serde_json::Value) -> Result<cbor::value::Value, ServerError> {
     Ok(match value {
         serde_json::Value::Null => cbor::value::Value::Null,
