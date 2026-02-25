@@ -1,5 +1,4 @@
 use concordium_rust_sdk::base::web3id::v1::anchor::PresentationVerifyFailure;
-use concordium_rust_sdk::common::cbor;
 use concordium_rust_sdk::{
     base::{
         hashes::TransactionHash,
@@ -11,7 +10,6 @@ use concordium_rust_sdk::{
     id::constants::{ArCurve, IpPairing},
     web3id::Web3IdAttribute,
 };
-use std::collections::HashMap;
 
 /// Parameters posted to this service when calling the API
 /// endpoint `/verifiable-presentations/create-verification-request`.
@@ -23,18 +21,13 @@ pub struct CreateVerificationRequest {
     /// A resource id to track the connected website (e.g. website URL or TLS fingerprint).
     pub resource_id: String,
     /// A general purpose string value included in the verification request context.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub context_string: Option<String>,
     /// The subject claims being requested to be proven.
     pub requested_claims: Vec<RequestedSubjectClaims>,
     /// Additional public info which will be included in the anchor transaction (VRA)
     /// that is submitted on-chain.
-    #[serde(
-        with = "map_hex_cbor_values_option",
-        default,
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub public_info: Option<HashMap<String, cbor::value::Value>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub public_info: Option<serde_json::Value>,
 }
 
 /// API request payload for verifying a presentation
@@ -46,12 +39,8 @@ pub struct VerifyPresentationRequest {
     pub audit_record_id: String,
     /// Additional public info which will be included in the anchor transaction (VAA)
     /// that is submitted on-chain.
-    #[serde(
-        with = "map_hex_cbor_values_option",
-        default,
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub public_info: Option<HashMap<String, cbor::value::Value>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub public_info: Option<serde_json::Value>,
     /// Verifiable presentation that contains verifiable credentials each
     /// consisting of subject claims and proofs of them.
     /// It is the response to proving a [`RequestV1`] with [`RequestV1::prove`].
@@ -123,43 +112,4 @@ pub struct ErrorDetail {
     pub path: String,
     /// specific helpful error message defining what has happened for this error
     pub message: String,
-}
-
-mod map_hex_cbor_values_option {
-    use super::*;
-    use hex::{FromHex, ToHex};
-    use serde::{Deserialize, Deserializer, Serialize, Serializer};
-
-    /// Serialize a `HashMap<String, value::Value>` as hex-encoded CBOR.
-    pub fn serialize<S>(
-        map: &Option<HashMap<String, cbor::value::Value>>,
-        serializer: S,
-    ) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut hex_map = HashMap::new();
-        for (key, value) in map.iter().flatten() {
-            let cbor_bytes = cbor::cbor_encode(value).map_err(serde::ser::Error::custom)?;
-            hex_map.insert(key, cbor_bytes.encode_hex::<String>());
-        }
-        hex_map.serialize(serializer)
-    }
-
-    /// Deserialize a `HashMap<String, value::Value>` from hex-encoded CBOR.
-    pub fn deserialize<'de, D>(
-        deserializer: D,
-    ) -> Result<Option<HashMap<String, cbor::value::Value>>, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let hex_map: HashMap<String, String> = HashMap::deserialize(deserializer)?;
-        let mut map = HashMap::new();
-        for (key, hex_str) in hex_map {
-            let cbor_bytes = Vec::from_hex(&hex_str).map_err(serde::de::Error::custom)?;
-            let value = cbor::cbor_decode(&cbor_bytes).map_err(serde::de::Error::custom)?;
-            map.insert(key, value);
-        }
-        Ok(Some(map))
-    }
 }

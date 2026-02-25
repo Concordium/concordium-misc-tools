@@ -4,7 +4,7 @@ use crate::node_client::{
 };
 use crate::txn_submitter::TransactionSubmitter;
 use crate::{api, configs::ServiceConfigs, types::Service};
-use anyhow::{Context, bail};
+use anyhow::Context;
 use concordium_rust_sdk::{
     constants::{MAINNET_GENESIS_BLOCK_HASH, TESTNET_GENESIS_BLOCK_HASH},
     types::WalletAccount,
@@ -104,13 +104,11 @@ pub async fn run_with_dependencies(
         .await
         .context("get genesis block hash")?;
 
+    // If any network is specified other than testnet or mainnet, we default to testnet.
     let network = match genesis_hash.bytes {
-        TESTNET_GENESIS_BLOCK_HASH => Network::Testnet,
         MAINNET_GENESIS_BLOCK_HASH => Network::Mainnet,
-        _ => bail!(
-            "Only TESTNET/MAINNET supported. Unknown genesis hash: {:?}",
-            genesis_hash
-        ),
+        TESTNET_GENESIS_BLOCK_HASH => Network::Testnet,
+        _ => Network::Testnet,
     };
 
     let account_sequence_lock_wait_duration =

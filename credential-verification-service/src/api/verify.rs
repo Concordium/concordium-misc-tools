@@ -78,8 +78,10 @@ pub async fn verify_presentation(
 
     // Submit the audit anchor if verification was successful
     let anchor_transaction_hash = if presentation_verification_result.is_success() {
-        let audit_record_anchor =
-            verification_audit_record.to_anchor(verify_presentation_request.public_info);
+        let parsed_public_info = util::convert_public_info_to_hashmap_of_string_to_cbor(
+            &verify_presentation_request.public_info,
+        )?;
+        let audit_record_anchor = verification_audit_record.to_anchor(parsed_public_info);
         let anchor_data = util::anchor_to_registered_data(&audit_record_anchor)
             .map_err(|e| {
                 debug!("An error occurred during verify presentation api call for converting the anchor to the registered data transaction. Error is: {:?}",e);
