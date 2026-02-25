@@ -1500,9 +1500,7 @@ export default function Main(props: MainProps) {
                 </TestBox>
                 <TestBox
                   header="
-                                                                                    (TE) Testing sponsored transaction to calling a function that calls another smart contract
-                                            successfully
-                                        "
+                                                                                    (TE) Testing that a smart contract can be updated as part of a sponsored transaction"
                   note="
                                         Expected result after pressing the button and confirming in wallet: The
                                         transaction hash or an error message should appear in the right column.
@@ -1546,7 +1544,7 @@ export default function Main(props: MainProps) {
                       );
                     }}
                   >
-                    Success (sponsored transaction to call a smart contract)
+                    Submit (sponsored transaction to update a smart contract)
                   </button>
                 </TestBox>
                 <br />

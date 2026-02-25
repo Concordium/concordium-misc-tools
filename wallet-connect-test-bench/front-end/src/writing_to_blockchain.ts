@@ -733,9 +733,9 @@ export async function sponsorInternalCallSuccess(
     amount: CcdAmount.fromMicroCcd(0),
     address: ContractAddress.create(CONTRACT_INDEX, CONTRACT_SUB_INDEX),
     receiveName: ReceiveName.fromString(
-      `${CONTRACT_NAME}.internal_call_success`
+      `${CONTRACT_NAME}.set_u8`
     ),
-    message: Parameter.fromBuffer(new Uint8Array([1,2,3,4])),
+    message: Parameter.fromBuffer(new Uint8Array([1])),
   };
 
   const transaction = Transaction.updateContract(updateContractPayload, Energy.create(30000n));
@@ -746,7 +746,6 @@ export async function sponsorInternalCallSuccess(
   console.debug("UpdateContractPayload:");
   console.debug(updateContractPayload);
   console.debug("Account:");
-  console.debug(account);
   console.debug("Sponsor Account:");
   console.debug(ccdSponsorAccount);
   console.debug("");
