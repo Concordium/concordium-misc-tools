@@ -50,6 +50,7 @@ import {
   deploy,
   simpleCCDTransfer,
   simpleCCDTransferToNonExistingAccountAddress,
+  sponsorSetU8,
 } from "./writing_to_blockchain";
 
 import {
@@ -1495,6 +1496,54 @@ export default function Main(props: MainProps) {
                     }}
                   >
                     Sign And Submit Sponsored CCD Transfer
+                  </button>
+                </TestBox>
+                <TestBox
+                  header="(TE) Testing that a smart contract can be updated as part of a sponsored transaction"
+                  note="
+                                        Expected result after pressing the button and confirming in wallet: The
+                                        transaction hash or an error message should appear in the right column.
+                                        "
+                >
+                                    <label className="field">
+                    <p>Sponsor Account:</p>
+                    <input
+                      className="inputFieldStyle"
+                      id="sponsorAccount"
+                      type="text"
+                      placeholder="Sponsor account address"
+                      value={sponsorAccount}
+                      onChange={(e) => setSponsorAccount(e.target.value)}
+                    />
+                  </label>
+                  <br />
+                  <label className="field">
+                    <p>Sponsor Private Key:</p>
+                    <input
+                      className="inputFieldStyle"
+                      id="sponsorPrivateKey"
+                      type="text"
+                      placeholder="Sponsor private key"
+                      value={sponsorPrivateKey}
+                      onChange={(e) =>
+                        setSponsorPrivateKey(e.target.value)
+                      }
+                    />
+                  </label>
+                  <br />
+                  <button
+                    className="btn btn-primary"
+                    type="button"
+                    onClick={() => {
+                      setTxHash("");
+                      setTransactionError("");
+                      const tx = sponsorSetU8(connection, account, sponsorAccount, sponsorPrivateKey, submitPayloadToSponsor);
+                      tx.then(setTxHash).catch((err: Error) =>
+                        setTransactionError((err as Error).message)
+                      );
+                    }}
+                  >
+                    Submit (sponsored transaction to update a smart contract)
                   </button>
                 </TestBox>
                 <br />

@@ -10,6 +10,8 @@ import {
   Energy,
   ContractName,
   ContractAddress,
+  Transaction,
+  Parameter,
 } from "@concordium/web-sdk";
 import { WalletConnection } from "@concordium/react-components";
 import {
@@ -710,6 +712,69 @@ export async function internalCallSuccess(
     AccountTransactionType.Update,
     payload
   );
+}
+
+type SubmitPayloadToSponsorFunction = (
+  sender: AccountAddress.Type,
+  transaction: any,
+  sponsorAccountAddress: string,
+  sponsorKey: string
+) => Promise<any>;
+
+export async function sponsorSetU8(
+  connection: WalletConnection,
+  account: string,
+  ccdSponsorAccount: string,
+  ccdSponsorPrivateKey: string,
+  submitPayloadToSponsorFn: SubmitPayloadToSponsorFunction
+) {
+
+  const updateContractPayload = {
+    amount: CcdAmount.fromMicroCcd(0),
+    address: ContractAddress.create(CONTRACT_INDEX, CONTRACT_SUB_INDEX),
+    receiveName: ReceiveName.fromString(
+      `${CONTRACT_NAME}.set_u8`
+    ),
+    message: Parameter.fromBuffer(new Uint8Array([1])),
+  };
+
+  const transaction = Transaction.updateContract(updateContractPayload, Energy.create(30000n));
+
+  const schema = moduleSchemaFromBase64(BASE_64_SCHEMA);
+
+  console.debug("Sending update transaction:");
+  console.debug("UpdateContractPayload:");
+  console.debug(updateContractPayload);
+  console.debug("Account:");
+  console.debug("Sponsor Account:");
+  console.debug(ccdSponsorAccount);
+  console.debug("");
+
+  const sponsorResponse = await submitPayloadToSponsorFn(
+        AccountAddress.fromBase58(account),
+        Transaction.toJSON(transaction),
+        ccdSponsorAccount,
+        ccdSponsorPrivateKey
+      );
+
+  console.log("Received sponsor response:");
+  console.log(sponsorResponse);
+  console.log("");
+
+  const sponsored = Transaction.signableFromJSON(
+        Transaction.toJSON(sponsorResponse)
+  );
+  
+  console.log("Received signed transaction from sponsor:");
+  console.log(sponsored);
+  console.log("");
+
+  return connection
+        .signAndSendSponsoredTransaction(
+          AccountAddress.fromBase58(account),
+          sponsored, 
+          schema
+        )    
 }
 
 export async function notExistingEntrypoint(

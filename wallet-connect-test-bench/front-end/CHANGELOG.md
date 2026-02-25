@@ -1,3 +1,7 @@
+## Unreleased
+
+- Add a new section on the UI to sponsor the transaction invoking a smart contract
+
 ## 1.5.5
 
 - Add network switcher (Stagenet/Testnet) to the top of the page.
