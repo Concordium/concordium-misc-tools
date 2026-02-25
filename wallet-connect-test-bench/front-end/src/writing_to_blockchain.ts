@@ -740,15 +740,16 @@ export async function sponsorInternalCallSuccess(
 
   const transaction = Transaction.updateContract(updateContractPayload, Energy.create(30000n));
 
-  //TODO: Change or Remove these after testing locally
-  console.log("Sending update transaction:");
-  console.log("UpdateContractPayload:");
-  console.log(updateContractPayload);
-  console.log("Account:");
-  console.log(account);
-  console.log("Sponsor Account:");
-  console.log(ccdSponsorAccount);
-  console.log("");
+  const schema = moduleSchemaFromBase64(BASE_64_SCHEMA);
+
+  console.debug("Sending update transaction:");
+  console.debug("UpdateContractPayload:");
+  console.debug(updateContractPayload);
+  console.debug("Account:");
+  console.debug(account);
+  console.debug("Sponsor Account:");
+  console.debug(ccdSponsorAccount);
+  console.debug("");
 
   const sponsorResponse = await submitPayloadToSponsorFn(
         AccountAddress.fromBase58(account),
@@ -772,7 +773,8 @@ export async function sponsorInternalCallSuccess(
   return connection
         .signAndSendSponsoredTransaction(
           AccountAddress.fromBase58(account),
-          sponsored
+          sponsored, 
+          schema
         )    
 }
 
