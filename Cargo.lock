@@ -546,6 +546,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "block-stats-tool"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "clap",
+ "concordium-rust-sdk",
+ "futures",
+ "tokio",
+]
+
+[[package]]
 name = "borsh"
 version = "1.5.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
