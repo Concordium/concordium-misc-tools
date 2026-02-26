@@ -1,4 +1,4 @@
-## 1.5.6
+## 1.5.7 (1.5.6 abandoned)
 
 - Add a new section on the UI to sponsor the transaction invoking a smart contract
 
