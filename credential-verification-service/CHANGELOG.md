@@ -1,5 +1,10 @@
 ## Unreleased
 
+## 0.3.0
+
+- Create verification API and verify presentation API are now changed to accept aribitrary json that is then encoded to CBOR for
+submission to the chain.
+
 ## 0.2.5
 
 - Added `grpc_status_code` and `upstream_http_status_code` for prometheus metrics scraping to help diagnose issues with any GRPC calls.

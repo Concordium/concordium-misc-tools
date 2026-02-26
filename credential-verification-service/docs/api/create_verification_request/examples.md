@@ -4,8 +4,46 @@ See data model here for request payload strucuture: [Link text](./data_model.md)
 
 Notes:
 - `connectionId`, `resourceId`, and `requestedClaims` are required for creating a verification request
-- `publicInfo` is optional, you can leave this parameter as empty or ommit entirely. If you choose to supply `publicInfo` it must be a map where each key is a String and each value is a CBOR encoded value per the standard here: https://www.rfc-editor.org/rfc/rfc8949.html#name-encoded-cbor-data-item (Note: there are helpful online editors to convert to CBOR, payload below shows an example CBOR value)
+- `publicInfo` is optional and may be omitted. If provided, it must be a JSON object. The value is treated 
+as arbitrary public metadata and will be re-encoded as CBOR for submission on-chain as part of a registered data transaction.
+Supported JSON types inside `publicInfo` are: null, boolean, string, number, array, and object. JSON objects become CBOR maps, 
+arrays become CBOR arrays, strings become CBOR text, booleans/null become CBOR simple values.
 
+Number handling: integer JSON tokens are encoded as CBOR integers (Positive/Negative), and non-integer JSON tokens (fractional/exponent)
+ are encoded as CBOR float64.
+
+Precision note: to preserve exact integer values across common clients (especially JavaScript), send integers outside the 
+safe range `-9007199254740991` to `9007199254740991` as JSON strings.
+
+
+a publicInfo sample may be as simple as:
+
+```json
+"publicInfo": {
+  "key1": "some value",
+  "key2": "another value"
+},
+```
+
+Or as arbitrary as:
+
+```json
+"publicInfo": {
+  "sessionIdRef": {
+    "name": "Poker Games",
+    "category": "cards",
+    "sub-game": 9007199254740991,
+    "hand": 2,
+    "minBid": 100
+  },
+  "tags": [
+    "TexasHoldem",
+    "cards101"
+  ],
+  "houseWinRatio": 51.97,
+  "negativeNumberId": -212
+},
+```
 
 
 ## Request Example
@@ -16,20 +54,38 @@ Notes:
   "resourceId": "some string for resource",
   "contextString": "optional context string here",
   "publicInfo": {
-    "key1": "<SOME CBOR ENCODED VALUE>",
-    "key2": "<SOME CBOR ENCODED VALUE>"
+    "sessionIdRef": {
+      "name": "Poker Games",
+      "category": "cards",
+      "sub-game": 9007199254740991,
+      "hand": 2,
+      "minBid": 100
+    },
+    "tags": [
+      "TexasHoldem",
+      "cards101"
+    ],
+    "houseWinRatio": 51.97,
+    "negativeNumberId": -212
   },
   "requestedClaims": [
     {
       "type": "identity",
-      "source": ["identityCredential","accountCredential"],
-      "issuers": ["did:ccd:testnet:idp:0","did:ccd:testnet:idp:1","did:ccd:testnet:idp:2"],
+      "source": [
+        "identityCredential",
+        "accountCredential"
+      ],
+      "issuers": [
+        "did:ccd:testnet:idp:0",
+        "did:ccd:testnet:idp:1",
+        "did:ccd:testnet:idp:2"
+      ],
       "statements": [
         {
           "type": "AttributeInRange",
           "attributeTag": "dob",
-          "lower": "18000101",
-          "upper": "20080106"
+          "lower": "19000101",
+          "upper": "20240101"
         },
         {
           "type": "AttributeInSet",
@@ -59,6 +115,7 @@ Notes:
     }
   ]
 }
+
 ```
 
 ## List of allowed attribute tags

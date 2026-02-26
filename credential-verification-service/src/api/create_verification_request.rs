@@ -42,7 +42,9 @@ pub async fn create_verification_request(
     let verification_request_data = builder.build();
 
     // Create the request anchor
-    let verification_request_anchor = verification_request_data.to_anchor(params.public_info);
+    let parsed_public_info =
+        util::convert_public_info_to_hashmap_of_string_to_cbor(&params.public_info)?;
+    let verification_request_anchor = verification_request_data.to_anchor(parsed_public_info);
     let anchor_data = util::anchor_to_registered_data(&verification_request_anchor)
         .inspect_err(|e| {
             debug!("A server error has occurred while converting the verification request to anchor. Verification request: {:?}. Error: {:?}", &verification_request_data, e);

@@ -61,7 +61,7 @@ pub enum ServerError {
 }
 
 /// Error for validating the statements/claims in a request to this service.
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, PartialEq)]
 #[error("validation failed")]
 pub struct ValidationError {
     pub details: Vec<ErrorDetail>,

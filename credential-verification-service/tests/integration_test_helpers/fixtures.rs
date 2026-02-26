@@ -40,13 +40,58 @@ pub mod credentials;
 pub const ATTRIBUTE_TAG_DOB: AttributeTag = AttributeTag(3);
 pub const ATTRIBUTE_TAG_COUNTRY_OF_RESIDENCE: AttributeTag = AttributeTag(4);
 
+/// A fixture representing the public info as it is provided during anchor on chain
+/// which is a HashMap of string to Cbor Value
 pub fn public_info() -> HashMap<String, cbor::value::Value> {
-    [(
-        "key1".to_string(),
-        cbor::value::Value::Text("value1".to_string()),
-    )]
-    .into_iter()
-    .collect()
+    use cbor::value::Value;
+
+    let session_id_ref_value = cbor::value::Value::Map(vec![
+        (
+            cbor::value::Value::Text("name".to_string()),
+            cbor::value::Value::Text("TexasHoldem".to_string()),
+        ),
+        (
+            cbor::value::Value::Text("category".to_string()),
+            cbor::value::Value::Text("cards".to_string()),
+        ),
+        (
+            cbor::value::Value::Text("subGame".to_string()),
+            cbor::value::Value::Positive(412_102),
+        ),
+        (
+            cbor::value::Value::Text("hand".to_string()),
+            cbor::value::Value::Positive(2),
+        ),
+        (
+            cbor::value::Value::Text("minBid".to_string()),
+            cbor::value::Value::Positive(100),
+        ),
+    ]);
+
+    HashMap::from([
+        ("sessionIdRef".to_string(), session_id_ref_value),
+        ("houseWinRatio".to_string(), Value::Positive(51)),
+        ("negativeNumberId".to_string(), Value::Negative(211)),
+    ])
+}
+
+/// A fixture representing the public info as it is received at the API level
+/// which is a Serde json structure, that is eventually converted and parsed into
+/// the actual structure submitted to the chain: HashMap of String to CborValue
+pub fn public_info_as_serde_json() -> serde_json::Value {
+    serde_json::json!(
+        {
+            "sessionIdRef": {
+                "name": "TexasHoldem",
+                "category": "cards",
+                "subGame": 412102,
+                "hand": 2,
+                "minBid": 100
+            },
+            "houseWinRatio": 51,
+            "negativeNumberId": -212
+        }
+    )
 }
 
 pub fn generate_presentation_identity(
@@ -316,7 +361,7 @@ pub fn create_verification_request() -> CreateVerificationRequest {
         resource_id: "resid1".to_string(),
         context_string: None,
         requested_claims: vec![identity_claims.into()],
-        public_info: Some(public_info()),
+        public_info: Some(public_info_as_serde_json()),
     }
 }
 
@@ -352,7 +397,7 @@ pub fn verify_request_account(
 
     let request = VerifyPresentationRequest {
         audit_record_id: "auditrecid1".to_string(),
-        public_info: Some(public_info()),
+        public_info: Some(public_info_as_serde_json()),
         presentation,
         verification_request,
     };
@@ -388,7 +433,7 @@ pub fn verify_request_identity(
 
     let request = VerifyPresentationRequest {
         audit_record_id: "auditrecid1".to_string(),
-        public_info: Some(public_info()),
+        public_info: Some(public_info_as_serde_json()),
         presentation,
         verification_request,
     };
