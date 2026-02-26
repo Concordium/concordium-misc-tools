@@ -1,5 +1,9 @@
 ## Unreleased
 
+## 0.3.1
+
+- fix for precision integer handling in the correct range for public info. Range supported for: `-18446744073709551616` -> `18446744073709551615`
+
 ## 0.3.0
 
 - Create verification API and verify presentation API are now changed to accept aribitrary json that is then encoded to CBOR for

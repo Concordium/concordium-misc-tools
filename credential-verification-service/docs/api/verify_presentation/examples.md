@@ -9,11 +9,14 @@ as arbitrary public metadata and will be re-encoded as CBOR for submission on-ch
 Supported JSON types inside `publicInfo` are: null, boolean, string, number, array, and object. JSON objects become CBOR maps, 
 arrays become CBOR arrays, strings become CBOR text, booleans/null become CBOR simple values.
 
-Number handling: integer JSON tokens are encoded as CBOR integers (Positive/Negative), and non-integer JSON tokens (fractional/exponent)
- are encoded as CBOR float64.
+- Json Number handling: 
+For Integer literals the range accepted is between Negative(u64 Max) and Positve(u64 Max): `-18446744073709551616` -> `18446744073709551615`.
+Note that CBOR for negative is: -(`negative` + 1). Integers are parsed and tested within this range, if they fall outside they will be 
+rejected with a ValidationError that notes to resubmit as a Json string.
 
-Precision note: to preserve exact integer values across common clients (especially JavaScript), send integers outside the 
-safe range `-9007199254740991` to `9007199254740991` as JSON strings.
+Non-Integers (fractional/exponent) will be encoded as a CBOR Float. Float precision is tricky and precision can be lost between 15-16 
+significant digits. There is no rejection by the API by these values, rather any Finite Float will be accepted, but please note precision
+will be lost so prefer strings if using so many significant digits.
 
 a publicInfo sample may be as simple as:
 

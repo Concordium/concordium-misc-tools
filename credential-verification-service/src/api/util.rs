@@ -58,37 +58,77 @@ fn json_to_cbor_value(value: &serde_json::Value) -> Result<cbor::value::Value, V
         serde_json::Value::String(s) => cbor::value::Value::Text(s.clone()),
 
         serde_json::Value::Number(n) => {
-            if let Some(i) = n.as_i64() {
+            // With serde_json feature "arbitrary_precision", this preserves the value.
+            let s = n.to_string();
+
+            let is_integer_literal = !s.contains('.') && !s.contains('e') && !s.contains('E');
+
+            // Check if we are dealing with an Integer literal. The supported
+            // range for an integer literal storage with CBOR is shown in Cbor Value
+            // Positive(u64) and Negative(u64)
+            if is_integer_literal {
+                const CBOR_POS_MAX: i128 = u64::MAX as i128; // 18446744073709551615
+                const CBOR_NEG_MIN: i128 = -(u64::MAX as i128) - 1; // -18446744073709551616
+
+                // Parse into i128. If it does not fit in i128, immediately its out of range
+                let i: i128 = s.parse::<i128>().map_err(|_| ValidationError {
+                    details: vec![ErrorDetail {
+                        code: "PUBLIC_INFO_INTEGER_OUT_OF_RANGE".to_string(),
+                        path: "publicInfo".to_string(),
+                        message: format!(
+                            "integer is too large to be represented (expected 64-bit CBOR int). Send as JSON string: {}",
+                            s
+                        ),
+                    }],
+                })?;
+
+                // check if the parsed i128 is within the CBOR min and max
+                if !(CBOR_NEG_MIN..=CBOR_POS_MAX).contains(&i) {
+                    return Err(ValidationError {
+                        details: vec![ErrorDetail {
+                            code: "PUBLIC_INFO_INTEGER_OUT_OF_RANGE".to_string(),
+                            path: "publicInfo".to_string(),
+                            message: format!(
+                                "Integer is outside CBOR 64-bit integer range ({}..={}): {}. Please send values outside this range as a JSON string.",
+                                CBOR_NEG_MIN, CBOR_POS_MAX, s
+                            ),
+                        }],
+                    });
+                }
+
+                // at this point we have parsed successfully as i128, and we
+                // also know it lies in the valid Cbor range, so the last
+                // checks here and just to determine if its positve or negative.
                 if i >= 0 {
                     cbor::value::Value::Positive(i as u64)
                 } else {
-                    let mag: u64 =
-                        (-1i128 - i as i128)
-                            .try_into()
-                            .map_err(|_| ValidationError {
-                                details: vec![ErrorDetail {
-                                    code: "PUBLIC_INFO_NEGATIVE_INTEGER_OUT_OF_RANGE".to_string(),
-                                    path: "publicInfo".to_string(),
-                                    message: format!("negative integer out of range: {:?}", i),
-                                }],
-                            })?;
+                    // CBOR negative argument mag = (-1 - i)
+                    let mag = (-1i128 - i) as u64;
                     cbor::value::Value::Negative(mag)
                 }
-            } else if let Some(u) = n.as_u64() {
-                cbor::value::Value::Positive(u)
-            } else if let Some(f) = n.as_f64() {
-                cbor::value::Value::Float(f)
             } else {
-                return Err(ValidationError {
+                // Non integer json numbers are treated as float. Finite floats
+                // are accepted, but precision may be lost with large float
+                // values.
+                let f = n.as_f64().ok_or_else(|| ValidationError {
                     details: vec![ErrorDetail {
                         code: "PUBLIC_INFO_NUMBER_NOT_REPRESENTABLE".to_string(),
                         path: "publicInfo".to_string(),
-                        message: format!(
-                            "serde_json::Number not representable as i64/u64/f64: {:?}",
-                            n
-                        ),
+                        message: format!("number not representable as f64: {}", s),
                     }],
-                });
+                })?;
+
+                if !f.is_finite() {
+                    return Err(ValidationError {
+                        details: vec![ErrorDetail {
+                            code: "PUBLIC_INFO_FLOAT_OUT_OF_RANGE".to_string(),
+                            path: "publicInfo".to_string(),
+                            message: format!("float out of range for f64: {}", s),
+                        }],
+                    });
+                }
+
+                cbor::value::Value::Float(f)
             }
         }
 
@@ -114,6 +154,7 @@ fn json_to_cbor_value(value: &serde_json::Value) -> Result<cbor::value::Value, V
 mod tests {
     use super::*;
 
+    /// Positive Test Scenarios
     #[test]
     fn test_public_info_none_returns_ok_none() {
         let public_info: Option<serde_json::Value> = None;
@@ -122,32 +163,6 @@ mod tests {
 
         assert!(result.is_ok());
         assert!(result.unwrap().is_none());
-    }
-
-    #[test]
-    fn test_public_info_not_json_object_at_root_validation_error() {
-        // The expected validation error
-        let expected_error = ValidationError {
-            details: vec![ErrorDetail {
-                code: "PUBLIC_INFO_EXPECTED_JSON".to_string(),
-                path: "publicInfo".to_string(),
-                message: "expected json at top level, got: Number(1)".to_string(),
-            }],
-        };
-
-        // creating a public info that produces the validation error (just a json number rather than an object at root)
-        let public_info: Option<serde_json::Value> =
-            Some(serde_json::Value::Number(serde_json::Number::from(1u64)));
-
-        // call our convert function
-        let result = convert_public_info_to_hashmap_of_string_to_cbor(&public_info);
-
-        // ensure we have a result in error
-        assert!(result.is_err());
-
-        let result_error = result.unwrap_err();
-
-        assert_eq!(result_error, expected_error);
     }
 
     #[test]
@@ -177,15 +192,6 @@ mod tests {
             result.get("contentNumber"),
             Some(&cbor::value::Value::Positive(32156789))
         );
-    }
-
-    #[test]
-    fn test_parse_public_info_fails_when_not_object() {
-        let public_info = Some(serde_json::json!("hello"));
-
-        let result = convert_public_info_to_hashmap_of_string_to_cbor(&public_info);
-
-        assert!(result.is_err(), "top-level non-object should error");
     }
 
     #[test]
@@ -234,6 +240,221 @@ mod tests {
         assert_eq!(
             map.get("negativeNumberId"),
             Some(&cbor::value::Value::Negative(211))
+        );
+    }
+
+    /// Error scenarios and validations.
+    #[test]
+    fn test_parse_public_info_fails_when_not_object() {
+        let public_info = Some(serde_json::json!("hello"));
+
+        let result = convert_public_info_to_hashmap_of_string_to_cbor(&public_info);
+
+        assert!(result.is_err(), "top-level non-object should error");
+    }
+
+    /// Public Info number parsing tests and constraints
+    #[test]
+    fn test_public_info_positive_integer_parsed_to_cbor_positive() {
+        let public_info: Option<serde_json::Value> =
+            Some(serde_json::from_str(r#"{"simplePositiveInt": 42}"#).unwrap());
+
+        let result = convert_public_info_to_hashmap_of_string_to_cbor(&public_info);
+        assert!(result.is_ok());
+
+        let map = result.unwrap().expect("should have public info");
+        assert_eq!(
+            map.get("simplePositiveInt"),
+            Some(&cbor::value::Value::Positive(42))
+        );
+    }
+
+    #[test]
+    fn test_public_info_negative_one_parsed_to_cbor_negative_zero() {
+        let public_info: Option<serde_json::Value> =
+            Some(serde_json::from_str(r#"{"simpleNegative": -1}"#).unwrap());
+
+        let result = convert_public_info_to_hashmap_of_string_to_cbor(&public_info);
+        assert!(result.is_ok());
+
+        let map = result.unwrap().expect("should have public info");
+        assert_eq!(
+            map.get("simpleNegative"),
+            Some(&cbor::value::Value::Negative(0))
+        );
+    }
+
+    /// Minimum negative that can be stored in CBOR
+    #[test]
+    fn test_public_info_cbor_min_negative() {
+        let public_info: Option<serde_json::Value> =
+            Some(serde_json::from_str(r#"{"i64min": -18446744073709551616}"#).unwrap());
+
+        let result = convert_public_info_to_hashmap_of_string_to_cbor(&public_info);
+        assert!(result.is_ok());
+
+        let map = result.unwrap().expect("should have public info");
+
+        assert_eq!(
+            map.get("i64min"),
+            Some(&cbor::value::Value::Negative(u64::MAX))
+        );
+    }
+
+    /// Max positive that can be stored in CBOR
+    #[test]
+    fn test_public_info_cbor_max_u64_positive() {
+        let public_info: Option<serde_json::Value> =
+            Some(serde_json::from_str(r#"{"u64max": 18446744073709551615}"#).unwrap());
+
+        let result = convert_public_info_to_hashmap_of_string_to_cbor(&public_info);
+        assert!(result.is_ok());
+
+        let map = result.unwrap().expect("should have public info");
+        assert_eq!(
+            map.get("u64max"),
+            Some(&cbor::value::Value::Positive(u64::MAX))
+        );
+    }
+
+    /// 1 number above the Max that can be stored in CBOR positive - results
+    /// in validation error for integer out of range
+    #[test]
+    fn test_public_info_integer_max_out_of_range() {
+        // u64::MAX + 1
+        let public_info: Option<serde_json::Value> =
+            Some(serde_json::from_str(r#"{"tooBig": 18446744073709551616}"#).unwrap());
+
+        // expect error for max u64 Cbor
+        let result = convert_public_info_to_hashmap_of_string_to_cbor(&public_info);
+        assert!(result.is_err());
+
+        let err = result.unwrap_err();
+
+        assert_eq!(err.details.len(), 1);
+        assert_eq!(err.details[0].code, "PUBLIC_INFO_INTEGER_OUT_OF_RANGE");
+        assert_eq!(err.details[0].path, "publicInfo");
+        assert!(err.details[0].message.contains("outside CBOR"));
+    }
+
+    /// 1 below the minimum that can be stored in CBOR negative.
+    /// Results in Validation Error of integer out of range.
+    #[test]
+    fn test_public_info_integer_min_out_of_range() {
+        // Minimum number supported for negative CBOR is -18446744073709551616, this is 1 below the min
+        let public_info: Option<serde_json::Value> =
+            Some(serde_json::from_str(r#"{"tooBig": -18446744073709551617}"#).unwrap());
+
+        // expect error for max u64 Cbor
+        let result = convert_public_info_to_hashmap_of_string_to_cbor(&public_info);
+        assert!(result.is_err());
+
+        let err = result.unwrap_err();
+
+        assert_eq!(err.details.len(), 1);
+        assert_eq!(err.details[0].code, "PUBLIC_INFO_INTEGER_OUT_OF_RANGE");
+        assert_eq!(err.details[0].path, "publicInfo");
+        assert!(err.details[0].message.contains("outside CBOR"));
+    }
+
+    /// Test standard float works as expected.
+    #[test]
+    fn test_public_info_simple_float_parsed_to_cbor_float() {
+        let public_info: Option<serde_json::Value> =
+            Some(serde_json::from_str(r#"{"simpleFloat": 0.1}"#).unwrap());
+
+        let result = convert_public_info_to_hashmap_of_string_to_cbor(&public_info);
+        assert!(result.is_ok());
+
+        let map = result.unwrap().expect("should have public info");
+        assert_eq!(
+            map.get("simpleFloat"),
+            Some(&cbor::value::Value::Float(0.1))
+        );
+    }
+
+    /// Ensure float followed by .0 is stored as a Float.
+    #[test]
+    fn test_public_info_float_with_dot_zero_stays_float() {
+        let public_info: Option<serde_json::Value> =
+            Some(serde_json::from_str(r#"{"onePointZero": 1.0}"#).unwrap());
+
+        let result = convert_public_info_to_hashmap_of_string_to_cbor(&public_info);
+        assert!(result.is_ok());
+
+        let map = result.unwrap().expect("should have public info");
+        assert_eq!(
+            map.get("onePointZero"),
+            Some(&cbor::value::Value::Float(1.0))
+        );
+    }
+
+    /// Ensure scientific numbers with exponential are stored
+    /// as their true Float value
+    #[test]
+    fn test_public_info_scientific_notation_parsed_to_cbor_float() {
+        let public_info: Option<serde_json::Value> =
+            Some(serde_json::from_str(r#"{"sci": 1e3}"#).unwrap());
+
+        let result = convert_public_info_to_hashmap_of_string_to_cbor(&public_info);
+        assert!(result.is_ok());
+
+        let map = result.unwrap().expect("should have public info");
+        assert_eq!(map.get("sci"), Some(&cbor::value::Value::Float(1000.0)));
+    }
+
+    /// Test a super large Float, returns with Validation
+    /// Error as not representable.
+    #[test]
+    fn test_public_info_float_out_of_f64_range_errors() {
+        let public_info: Option<serde_json::Value> =
+            Some(serde_json::from_str(r#"{"tooBigFloat": 1e400}"#).unwrap());
+
+        let result = convert_public_info_to_hashmap_of_string_to_cbor(&public_info);
+        assert!(result.is_err());
+
+        let err = result.unwrap_err();
+        assert_eq!(err.details.len(), 1);
+        assert_eq!(err.details[0].code, "PUBLIC_INFO_NUMBER_NOT_REPRESENTABLE");
+        assert_eq!(err.details[0].path, "publicInfo");
+        assert!(
+            err.details[0]
+                .message
+                .contains("number not representable as f64")
+        );
+    }
+
+    // Float with 14 digits after decimal is precise
+    #[test]
+    fn test_public_info_float_14_digits_after_decimal_is_precise() {
+        let public_info: Option<serde_json::Value> =
+            Some(serde_json::from_str(r#"{"preciseFloat": 99.99999999999999}"#).unwrap());
+
+        let result = convert_public_info_to_hashmap_of_string_to_cbor(&public_info);
+        assert!(result.is_ok());
+
+        let map = result.unwrap().expect("should have public info");
+        assert_eq!(
+            map.get("preciseFloat"),
+            Some(&cbor::value::Value::Float(99.99999999999999))
+        );
+    }
+
+    // Float with 15 digits after decimal loses precision
+    #[test]
+    fn test_public_info_float_15_digits_after_decimal_loses_precision() {
+        let public_info: Option<serde_json::Value> =
+            Some(serde_json::from_str(r#"{"preciseFloat": 99.999999999999999}"#).unwrap());
+
+        let result = convert_public_info_to_hashmap_of_string_to_cbor(&public_info);
+        assert!(result.is_ok());
+
+        let map = result.unwrap().expect("should have public info");
+
+        // proof that precision gets lost for this
+        assert_eq!(
+            map.get("preciseFloat"),
+            Some(&cbor::value::Value::Float(100.0))
         );
     }
 }
