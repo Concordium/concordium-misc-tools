@@ -73,6 +73,68 @@ async fn test_create_verification_request() {
         .expect("nonce property");
 }
 
+/// Ensuring that for a valid request with no public info provided passes successfully
+/// as public info is optional.
+#[tokio::test]
+async fn test_create_verification_request_absent_public_info_success() {
+    let handle = server::start_server();
+
+    let mut create_request = fixtures::create_verification_request();
+
+    // set public info to None here now
+    create_request.public_info = None;
+
+    let resp = handle
+        .rest_client()
+        .post("verifiable-presentations/create-verification-request")
+        .json(&create_request)
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), StatusCode::OK);
+    let verification_request: VerificationRequest = resp.json().await.unwrap();
+    handle
+        .node_client_stub()
+        .expect_send_block_item(&verification_request.anchor_transaction_hash);
+    assert_eq!(
+        verification_request.subject_claims,
+        create_request.requested_claims
+    );
+    let expected_requested_labels: HashSet<_> = [ContextLabel::BlockHash].into_iter().collect();
+    assert_eq!(
+        get_requested_property_labels(&verification_request.context),
+        expected_requested_labels
+    );
+    let expected_given_labels: HashSet<_> = [
+        ContextLabel::ResourceId,
+        ContextLabel::Nonce,
+        ContextLabel::ConnectionId,
+    ]
+    .into_iter()
+    .collect();
+    assert_eq!(
+        get_given_property_labels(&verification_request.context),
+        expected_given_labels
+    );
+    assert_eq!(
+        get_given_property_value(&verification_request.context, ContextLabel::ResourceId)
+            .expect("resource id property"),
+        create_request.resource_id
+    );
+    assert!(
+        get_given_property_value(&verification_request.context, ContextLabel::ContextString)
+            .is_none()
+    );
+    assert_eq!(
+        get_given_property_value(&verification_request.context, ContextLabel::ConnectionId)
+            .expect("connection id property"),
+        create_request.connection_id
+    );
+    get_given_property_value(&verification_request.context, ContextLabel::Nonce)
+        .expect("nonce property");
+}
+
 /// Test create verification request. Test specifying ContextString property in verification context
 #[tokio::test]
 async fn test_create_verification_request_with_context_string() {
@@ -176,6 +238,49 @@ async fn test_create_verification_request_multiple_errors_range_and_set() {
         "COUNTRY_CODE_INVALID",
         "Country code must be 2 letter and both uppercase following the ISO3166-1 alpha-2 uppercase standard. (e.g `DE`)",
         "requestedClaims[0].statements[1].set[0]",
+    );
+}
+
+#[tokio::test]
+async fn test_create_verification_request_public_info_not_json_object() {
+    let handle = server::start_server();
+
+    // create the verification request api payload
+    // modify with range not numeric
+    let mut create_verification_request = fixtures::create_verification_request();
+
+    // set public info to just a serde json number. Our public info parsing function
+    // expected a json structure of key values.
+    create_verification_request.public_info =
+        Some(serde_json::Value::Number(serde_json::Number::from(1u64)));
+
+    // Call the API with the invalid request
+    let resp = handle
+        .rest_client()
+        .post("verifiable-presentations/create-verification-request")
+        .json(&create_verification_request)
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+    // unwrap the Error Response
+    let error_response: ErrorResponse = resp.json().await.unwrap();
+    assert_eq!(error_response.error.details.len(), 1);
+
+    // Assertions and expected validation codes and messages
+    let expected_code = "VALIDATION_ERROR";
+    let expected_message =
+        "Validation errors have occurred. Please check the details below for more information.";
+    assert_eq!(&error_response.error.code, expected_code);
+    assert_eq!(&error_response.error.message, expected_message);
+
+    fixtures::assert_has_detail(
+        &error_response.error.details,
+        "PUBLIC_INFO_EXPECTED_JSON",
+        "expected json at top level, got: Number(1)",
+        "publicInfo",
     );
 }
 
