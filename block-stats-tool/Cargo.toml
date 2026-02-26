@@ -1,0 +1,19 @@
+[package]
+name = "block-stats-tool"
+version = "1.0.0"
+authors = ["Concordium <developers@concordium.com>"]
+edition = "2021"
+rust-version = "1.85"
+license-file = "LICENSE"
+readme = "README.md"
+include = ["src/", "CHANGELOG.md"]
+description = "A tool for gathering block statics."
+repository = "https://github.com/Concordium/concordium-misc-tools"
+
+[dependencies]
+anyhow.workspace = true
+chrono.workspace = true
+clap.workspace = true 
+futures.workspace = true
+concordium-rust-sdk.workspace = true
+tokio.workspace = true
