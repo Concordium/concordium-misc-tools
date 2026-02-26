@@ -1,6 +1,6 @@
 ## Unreleased
 
-- Add a new section on the UI to sponsor the transaction invoking a smart contract
+- Add a new section on the UI to sponsor the transaction configuring delegation.
 
 ## 1.5.7 (1.5.6 abandoned)
 
