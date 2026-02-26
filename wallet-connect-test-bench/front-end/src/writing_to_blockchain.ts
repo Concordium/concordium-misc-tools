@@ -735,7 +735,7 @@ export async function sponsorSetU8(
     receiveName: ReceiveName.fromString(
       `${CONTRACT_NAME}.set_u8`
     ),
-    message: Parameter.fromBuffer(new Uint8Array([1])),
+    message: Parameter.fromBuffer(new Uint8Array([1]).buffer),
   };
 
   const transaction = Transaction.updateContract(updateContractPayload, Energy.create(30000n));
