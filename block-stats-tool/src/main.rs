@@ -11,12 +11,12 @@
 //! - the number of transactions included in the block
 use chrono::Utc;
 use clap::Parser;
-use futures::TryStreamExt;
 use concordium_rust_sdk::{
     types::{AbsoluteBlockHeight, SpecialTransactionOutcome},
     v2,
     v2::Endpoint,
 };
+use futures::TryStreamExt;
 
 #[derive(Parser)]
 #[command(name = "block-stats-tool")]
@@ -41,7 +41,7 @@ struct App {
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> anyhow::Result<()> {
-   let app= App::parse();
+    let app = App::parse();
 
     let mut client = v2::Client::new(app.endpoint).await?;
 

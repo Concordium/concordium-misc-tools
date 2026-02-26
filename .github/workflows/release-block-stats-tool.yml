@@ -1,0 +1,78 @@
+name: Release BlockStatsTool
+
+on:
+  push:
+    tags:
+      - block-stats-tool/*.*.*
+
+  workflow_dispatch:
+
+env:
+  TAG: ${{ github.ref_name }}
+
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    # environment: release
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # Validate that the tag version matches the version in Cargo.toml
+      - name: validate tag version has correct matching tag
+        id: meta
+        run: |
+          echo "Validating tag version $TAG matches expected version from Cargo.toml"
+          EXPECTED_VERSION_FROM_CARGO=$(yq .package.version block-stats-tool/Cargo.toml)
+          TAG_VERSION_NUMBER=${TAG##block-stats-tool/}
+          
+          # Check if the tag version number matches the expected version from Cargo.toml
+          if [ "$TAG_VERSION_NUMBER" != "$EXPECTED_VERSION_FROM_CARGO" ]; then
+            echo "version tagged: $TAG_VERSION_NUMBER  does not match cargo version: $EXPECTED_VERSION_FROM_CARGO. Exiting."
+            exit 1
+          else
+            echo "Tag version number matches expected version from Cargo.toml. Proceeding with release."
+          fi
+
+          # Store the version into a version variable for the following step.
+          echo "version=${TAG_VERSION_NUMBER}" > "$GITHUB_OUTPUT"
+
+      - name: Build
+        run: |
+          echo "Building BlockStatsTool"
+          cargo build --locked --release --package block-stats-tool
+
+      - name: Store build artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: artifacts
+          path: |
+            target/release/block-stats-tool
+
+  # Attach binaries to the release identified by the tag.
+  release:
+    permissions:
+      contents: write
+    needs: [build] 
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+  
+      - uses: actions/download-artifact@v4
+      - run: |
+          mkdir uploads
+          mv artifacts/block-stats-tool uploads/block-stats-tool
+  
+      # - name: Create release and attach binaries to release.
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      #   run: |
+      #     gh release create ${{ github.ref_name }} --title "BlockStatsTool ${{ needs.validate-version.outputs.version }}" uploads/*
