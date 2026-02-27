@@ -68,7 +68,7 @@ fn json_to_cbor_value(value: &serde_json::Value) -> Result<cbor::value::Value, V
             // Positive(u64) and Negative(u64)
             if is_integer_literal {
                 const CBOR_POS_MAX: i128 = u64::MAX as i128; // 18446744073709551615
-                const CBOR_NEG_MIN: i128 = -(u64::MAX as i128) - 1; // -18446744073709551616
+                const CBOR_NEG_MIN: i128 = -(u64::MAX as i128); // -18446744073709551615
 
                 // Parse into i128. If it does not fit in i128, immediately its out of range
                 let i: i128 = s.parse::<i128>().map_err(|_| ValidationError {
@@ -288,7 +288,7 @@ mod tests {
     #[test]
     fn test_public_info_cbor_min_negative() {
         let public_info: Option<serde_json::Value> =
-            Some(serde_json::from_str(r#"{"i64min": -18446744073709551616}"#).unwrap());
+            Some(serde_json::from_str(r#"{"i64min": -18446744073709551615}"#).unwrap());
 
         let result = convert_public_info_to_hashmap_of_string_to_cbor(&public_info);
         assert!(result.is_ok());
@@ -297,7 +297,7 @@ mod tests {
 
         assert_eq!(
             map.get("i64min"),
-            Some(&cbor::value::Value::Negative(u64::MAX))
+            Some(&cbor::value::Value::Negative(u64::MAX -1))
         );
     }
 
@@ -343,7 +343,7 @@ mod tests {
     fn test_public_info_integer_min_out_of_range() {
         // Minimum number supported for negative CBOR is -18446744073709551616, this is 1 below the min
         let public_info: Option<serde_json::Value> =
-            Some(serde_json::from_str(r#"{"tooBig": -18446744073709551617}"#).unwrap());
+            Some(serde_json::from_str(r#"{"tooBig": -18446744073709551616}"#).unwrap());
 
         // expect error for max u64 Cbor
         let result = convert_public_info_to_hashmap_of_string_to_cbor(&public_info);
