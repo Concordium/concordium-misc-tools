@@ -297,7 +297,7 @@ mod tests {
 
         assert_eq!(
             map.get("i64min"),
-            Some(&cbor::value::Value::Negative(u64::MAX -1))
+            Some(&cbor::value::Value::Negative(u64::MAX - 1))
         );
     }
 
