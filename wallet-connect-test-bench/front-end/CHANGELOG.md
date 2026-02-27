@@ -1,4 +1,4 @@
-## Unreleased
+## 1.5.8
 
 - Add a new section on the UI to sponsor the transaction configuring delegation.
 
