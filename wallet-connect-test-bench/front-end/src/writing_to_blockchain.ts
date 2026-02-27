@@ -12,6 +12,7 @@ import {
   ContractAddress,
   Transaction,
   Parameter,
+  DelegationTargetType,
 } from "@concordium/web-sdk";
 import { WalletConnection } from "@concordium/react-components";
 import {
@@ -776,6 +777,60 @@ export async function sponsorSetU8(
           schema
         )    
 }
+
+export async function sponsorConfigureDelegation(
+  connection: WalletConnection,
+  account: string,
+  ccdSponsorAccount: string,
+  ccdSponsorPrivateKey: string,
+  ccdAmount: string,
+  submitPayloadToSponsorFn: SubmitPayloadToSponsorFunction
+) {
+
+  const configureDelegationPayload = {
+    stake: CcdAmount.fromMicroCcd(ccdAmount ? ccdAmount : 0),
+    restakeEarnings: true,
+    delegationTarget: {
+      delegateType: DelegationTargetType.PassiveDelegation as const
+    }
+  };
+
+  const transaction = Transaction.configureDelegation(configureDelegationPayload);
+
+  console.debug("Sending configure delegation transaction:");
+  console.debug("ConfigureDelegationPayload:");
+  console.debug(configureDelegationPayload);
+  console.debug("Account:");
+  console.debug("Sponsor Account:");
+  console.debug(ccdSponsorAccount);
+  console.debug("");
+
+  const sponsorResponse = await submitPayloadToSponsorFn(
+        AccountAddress.fromBase58(account),
+        Transaction.toJSON(transaction),
+        ccdSponsorAccount,
+        ccdSponsorPrivateKey
+      );
+
+  console.log("Received sponsor response:");
+  console.log(sponsorResponse);
+  console.log("");
+
+  const sponsored = Transaction.signableFromJSON(
+        Transaction.toJSON(sponsorResponse)
+  );
+  
+  console.log("Received signed transaction from sponsor:");
+  console.log(sponsored);
+  console.log("");
+
+  return connection
+        .signAndSendSponsoredTransaction(
+          AccountAddress.fromBase58(account),
+          sponsored, 
+        )    
+}
+
 
 export async function notExistingEntrypoint(
   connection: WalletConnection,
