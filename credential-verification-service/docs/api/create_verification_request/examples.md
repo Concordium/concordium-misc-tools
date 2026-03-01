@@ -11,12 +11,10 @@ Supported JSON types inside `publicInfo` are: null, boolean, string, number, arr
 arrays become CBOR arrays, strings become CBOR text, booleans/null become CBOR simple values.
 
 - Json Number handling: 
-For Integer literals the range accepted is between Negative(u64 Max) and Positve(u64 Max): `-18446744073709551615` -> `18446744073709551615`.
-Note that CBOR for negative is: -(`negative` + 1). Integers are parsed and tested within this range, if they fall outside they will be 
-rejected with a ValidationError that notes to resubmit as a Json string.
-Non-Integers (fractional/exponent) will be encoded as a CBOR Float. Float precision is tricky and precision can be lost between 15-16 
-significant digits. There is no rejection by the API by these values, rather any Finite Float will be accepted, but please note precision
-will be lost so prefer strings if using so many significant digits.
+For Integer literals the range accepted is between Negative(i64 MIN) and Positve(u64 Max): `-9223372036854775808` -> `18446744073709551615`.
+Note that CBOR for negative is: -(`negative` + 1). Numbers outside this range will be treated as an f64 and may result in precision loss
+if the provided number contains 15-16 significant digits. It is advisable to submit the number as a JSON string if using very large numbers
+outside the number literal range above or float containing too many significant digits.
  
 
 a publicInfo sample may be as simple as:

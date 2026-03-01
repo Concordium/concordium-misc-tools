@@ -58,77 +58,28 @@ fn json_to_cbor_value(value: &serde_json::Value) -> Result<cbor::value::Value, V
         serde_json::Value::String(s) => cbor::value::Value::Text(s.clone()),
 
         serde_json::Value::Number(n) => {
-            // With serde_json feature "arbitrary_precision", this preserves the value.
-            let s = n.to_string();
-
-            let is_integer_literal = !s.contains('.') && !s.contains('e') && !s.contains('E');
-
-            // Check if we are dealing with an Integer literal. The supported
-            // range for an integer literal storage with CBOR is shown in Cbor Value
-            // Positive(u64) and Negative(u64)
-            if is_integer_literal {
-                const CBOR_POS_MAX: i128 = u64::MAX as i128; // 18446744073709551615
-                const CBOR_NEG_MIN: i128 = -(u64::MAX as i128); // -18446744073709551615
-
-                // Parse into i128. If it does not fit in i128, immediately its out of range
-                let i: i128 = s.parse::<i128>().map_err(|_| ValidationError {
-                    details: vec![ErrorDetail {
-                        code: "PUBLIC_INFO_INTEGER_OUT_OF_RANGE".to_string(),
-                        path: "publicInfo".to_string(),
-                        message: format!(
-                            "integer is too large to be represented (expected 64-bit CBOR int). Send as JSON string: {}",
-                            s
-                        ),
-                    }],
-                })?;
-
-                // check if the parsed i128 is within the CBOR min and max
-                if !(CBOR_NEG_MIN..=CBOR_POS_MAX).contains(&i) {
-                    return Err(ValidationError {
-                        details: vec![ErrorDetail {
-                            code: "PUBLIC_INFO_INTEGER_OUT_OF_RANGE".to_string(),
-                            path: "publicInfo".to_string(),
-                            message: format!(
-                                "Integer is outside CBOR 64-bit integer range ({}..={}): {}. Please send values outside this range as a JSON string.",
-                                CBOR_NEG_MIN, CBOR_POS_MAX, s
-                            ),
-                        }],
-                    });
-                }
-
-                // at this point we have parsed successfully as i128, and we
-                // also know it lies in the valid Cbor range, so the last
-                // checks here and just to determine if its positve or negative.
-                if i >= 0 {
-                    cbor::value::Value::Positive(i as u64)
-                } else {
-                    // CBOR negative argument mag = (-1 - i)
-                    let mag = (-1i128 - i) as u64;
-                    cbor::value::Value::Negative(mag)
-                }
+            if let Some(posint) = n.as_u64() {
+                // postive number that fits in u64
+                cbor::value::Value::Positive(posint)
+            } else if let Some(negint) = n.as_i64() {
+                // this number is definitely negative
+                let negintmag: u64 = (-1i64 - negint) as u64;
+                cbor::value::Value::Negative(negintmag)
+            } else if let Some(float) = n.as_f64() {
+                // either a float, or an integer that is too big
+                // for serialization without precision loss
+                cbor::value::Value::Float(float)
             } else {
-                // Non integer json numbers are treated as float. Finite floats
-                // are accepted, but precision may be lost with large float
-                // values.
-                let f = n.as_f64().ok_or_else(|| ValidationError {
+                // this should never happen, as serde_json::Number should always be one of the above 3 cases
+                // it does happen with way too big Float numbers such as `1e400`. In this case, we produce a
+                // validation error as it did not fit in u64, i64 or f64.
+                return Err(ValidationError {
                     details: vec![ErrorDetail {
                         code: "PUBLIC_INFO_NUMBER_NOT_REPRESENTABLE".to_string(),
+                        message: format!("Unable to parse this json number. {:?}", n),
                         path: "publicInfo".to_string(),
-                        message: format!("number not representable as f64: {}", s),
                     }],
-                })?;
-
-                if !f.is_finite() {
-                    return Err(ValidationError {
-                        details: vec![ErrorDetail {
-                            code: "PUBLIC_INFO_FLOAT_OUT_OF_RANGE".to_string(),
-                            path: "publicInfo".to_string(),
-                            message: format!("float out of range for f64: {}", s),
-                        }],
-                    });
-                }
-
-                cbor::value::Value::Float(f)
+                });
             }
         }
 
@@ -286,9 +237,9 @@ mod tests {
 
     /// Minimum negative that can be stored in CBOR
     #[test]
-    fn test_public_info_cbor_min_negative() {
+    fn test_public_info_cbor_i64_min_negative() {
         let public_info: Option<serde_json::Value> =
-            Some(serde_json::from_str(r#"{"i64min": -18446744073709551615}"#).unwrap());
+            Some(serde_json::from_str(r#"{"i64min": -9223372036854775808}"#).unwrap());
 
         let result = convert_public_info_to_hashmap_of_string_to_cbor(&public_info);
         assert!(result.is_ok());
@@ -297,7 +248,7 @@ mod tests {
 
         assert_eq!(
             map.get("i64min"),
-            Some(&cbor::value::Value::Negative(u64::MAX - 1))
+            Some(&cbor::value::Value::Negative(i64::MAX as u64))
         );
     }
 
@@ -315,46 +266,6 @@ mod tests {
             map.get("u64max"),
             Some(&cbor::value::Value::Positive(u64::MAX))
         );
-    }
-
-    /// 1 number above the Max that can be stored in CBOR positive - results
-    /// in validation error for integer out of range
-    #[test]
-    fn test_public_info_integer_max_out_of_range() {
-        // u64::MAX + 1
-        let public_info: Option<serde_json::Value> =
-            Some(serde_json::from_str(r#"{"tooBig": 18446744073709551616}"#).unwrap());
-
-        // expect error for max u64 Cbor
-        let result = convert_public_info_to_hashmap_of_string_to_cbor(&public_info);
-        assert!(result.is_err());
-
-        let err = result.unwrap_err();
-
-        assert_eq!(err.details.len(), 1);
-        assert_eq!(err.details[0].code, "PUBLIC_INFO_INTEGER_OUT_OF_RANGE");
-        assert_eq!(err.details[0].path, "publicInfo");
-        assert!(err.details[0].message.contains("outside CBOR"));
-    }
-
-    /// 1 below the minimum that can be stored in CBOR negative.
-    /// Results in Validation Error of integer out of range.
-    #[test]
-    fn test_public_info_integer_min_out_of_range() {
-        // Minimum number supported for negative CBOR is -18446744073709551616, this is 1 below the min
-        let public_info: Option<serde_json::Value> =
-            Some(serde_json::from_str(r#"{"tooBig": -18446744073709551616}"#).unwrap());
-
-        // expect error for max u64 Cbor
-        let result = convert_public_info_to_hashmap_of_string_to_cbor(&public_info);
-        assert!(result.is_err());
-
-        let err = result.unwrap_err();
-
-        assert_eq!(err.details.len(), 1);
-        assert_eq!(err.details[0].code, "PUBLIC_INFO_INTEGER_OUT_OF_RANGE");
-        assert_eq!(err.details[0].path, "publicInfo");
-        assert!(err.details[0].message.contains("outside CBOR"));
     }
 
     /// Test standard float works as expected.
@@ -413,14 +324,18 @@ mod tests {
         let result = convert_public_info_to_hashmap_of_string_to_cbor(&public_info);
         assert!(result.is_err());
 
-        let err = result.unwrap_err();
-        assert_eq!(err.details.len(), 1);
-        assert_eq!(err.details[0].code, "PUBLIC_INFO_NUMBER_NOT_REPRESENTABLE");
-        assert_eq!(err.details[0].path, "publicInfo");
+        let result = result.unwrap_err();
+
+        assert_eq!(result.details.len(), 1);
+        assert_eq!(
+            result.details[0].code,
+            "PUBLIC_INFO_NUMBER_NOT_REPRESENTABLE"
+        );
+        assert_eq!(result.details[0].path, "publicInfo");
         assert!(
-            err.details[0]
+            result.details[0]
                 .message
-                .contains("number not representable as f64")
+                .contains("Unable to parse this json number")
         );
     }
 
