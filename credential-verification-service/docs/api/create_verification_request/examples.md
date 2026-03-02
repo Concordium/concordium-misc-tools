@@ -4,17 +4,18 @@ See data model here for request payload strucuture: [Link text](./data_model.md)
 
 Notes:
 - `connectionId`, `resourceId`, and `requestedClaims` are required for creating a verification request
+
 - `publicInfo` is optional and may be omitted. If provided, it must be a JSON object. The value is treated 
 as arbitrary public metadata and will be re-encoded as CBOR for submission on-chain as part of a registered data transaction.
 Supported JSON types inside `publicInfo` are: null, boolean, string, number, array, and object. JSON objects become CBOR maps, 
 arrays become CBOR arrays, strings become CBOR text, booleans/null become CBOR simple values.
 
-Number handling: integer JSON tokens are encoded as CBOR integers (Positive/Negative), and non-integer JSON tokens (fractional/exponent)
- are encoded as CBOR float64.
-
-Precision note: to preserve exact integer values across common clients (especially JavaScript), send integers outside the 
-safe range `-9007199254740991` to `9007199254740991` as JSON strings.
-
+- Json Number handling: 
+For Integer literals the range accepted is between Negative(i64 MIN) and Positve(u64 Max): `-9223372036854775808` -> `18446744073709551615`.
+Note that CBOR for negative is: -(`negative` + 1). Numbers outside this range will be treated as an f64 and may result in precision loss
+if the provided number contains 15-16 significant digits. It is advisable to submit the number as a JSON string if using very large numbers
+outside the number literal range above or float containing too many significant digits.
+ 
 
 a publicInfo sample may be as simple as:
 
