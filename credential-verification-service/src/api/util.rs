@@ -372,4 +372,30 @@ mod tests {
             Some(&cbor::value::Value::Float(100.0))
         );
     }
+
+    #[test]
+    fn test_public_info_zero_successfully_recorded_as_cbor_positive() {
+        let public_info: Option<serde_json::Value> =
+            Some(serde_json::from_str(r#"{"val": 0}"#).unwrap());
+
+        let result = convert_public_info_to_hashmap_of_string_to_cbor(&public_info);
+        assert!(result.is_ok());
+
+        let map = result.unwrap().expect("should have public info");
+
+        assert_eq!(map.get("val"), Some(&cbor::value::Value::Positive(0)));
+    }
+
+    #[test]
+    fn test_public_info_neg_zero_successfully_recorded_as_cbor_positive() {
+        let public_info: Option<serde_json::Value> =
+            Some(serde_json::from_str(r#"{"val": -0}"#).unwrap());
+
+        let result = convert_public_info_to_hashmap_of_string_to_cbor(&public_info);
+        assert!(result.is_ok());
+
+        let map = result.unwrap().expect("should have public info");
+
+        assert_eq!(map.get("val"), Some(&cbor::value::Value::Positive(0)));
+    }
 }
