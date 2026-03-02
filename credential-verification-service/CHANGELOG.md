@@ -2,7 +2,7 @@
 
 ## 0.3.1
 
-- fix for precision integer handling in the correct range for public info. Range supported for: `-18446744073709551616` -> `18446744073709551615`
+- fix for precision integer handling in the correct range for public info. Range supported for: `-9223372036854775808` -> `18446744073709551615`
 
 ## 0.3.0
 
