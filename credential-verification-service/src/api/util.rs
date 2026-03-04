@@ -64,7 +64,7 @@ fn json_to_cbor_value(value: &serde_json::Value) -> Result<cbor::value::Value, V
             } else if let Some(negint) = n.as_i64() {
                 // this number should definitely be negative as above we test
                 // if we are in the u64 range: 0 -> u64::max. i64 is a smaller
-                // range than u64 so `n` should always be negative reaching  
+                // range than u64 so `n` should always be negative reaching
                 // this point. Error if >= 0.
                 if negint >= 0 {
                     return Err(ValidationError {
