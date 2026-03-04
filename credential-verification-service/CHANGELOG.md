@@ -1,5 +1,7 @@
 ## Unreleased
 
+- add check to ensure number is negative for public info number checking for cases where we tried the literal as a u64 first.
+
 ## 0.3.1
 
 - fix for precision integer handling in the correct range for public info. Range supported for: `-9223372036854775808` -> `18446744073709551615`
