@@ -62,7 +62,22 @@ fn json_to_cbor_value(value: &serde_json::Value) -> Result<cbor::value::Value, V
                 // postive number that fits in u64
                 cbor::value::Value::Positive(posint)
             } else if let Some(negint) = n.as_i64() {
-                // this number is definitely negative
+                // this number should definitely be negative as above we test
+                // if we are in the u64 range: 0 -> u64::max. i64 is a smaller
+                // range than u64 so `n` should always be negative reaching
+                // this point. Error if >= 0.
+                if negint >= 0 {
+                    return Err(ValidationError {
+                        details: vec![ErrorDetail {
+                            code: "PUBLIC_INFO_NUMBER_PARSE_ISSUE".to_string(),
+                            message: format!(
+                                "Number was treated as i64 and expected to be negative at this point. {:?}",
+                                n
+                            ),
+                            path: "publicInfo".to_string(),
+                        }],
+                    });
+                }
                 let negintmag: u64 = (-1i64 - negint) as u64;
                 cbor::value::Value::Negative(negintmag)
             } else if let Some(float) = n.as_f64() {
