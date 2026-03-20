@@ -1003,6 +1003,7 @@ impl GenesisData {
                 core,
                 initial_state,
             } => {
+                ProtocolVersion::P11.serial(&mut hasher);
                 // tag of initial genesis
                 0u8.serial(&mut hasher);
                 core.serial(&mut hasher);

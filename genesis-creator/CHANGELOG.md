@@ -1,5 +1,9 @@
 ## Unreleased changes
 
+## 0.8.2
+
+- Fix a bug in the computation of the genesis hash for protocol version 11.
+
 ## 0.8.0 and 0.8.1
 
 - Support genesis data format of protocol version 11.
