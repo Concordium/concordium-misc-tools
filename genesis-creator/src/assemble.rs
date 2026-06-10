@@ -2,7 +2,7 @@
 use concordium_rust_sdk::{common::SerdeDeserialize, id::types::AccountAddress};
 use std::path::PathBuf;
 
-use crate::config::ProtocolConfig;
+use crate::config::ProtocolConfigToml;
 
 /// Configuration struct for specifying protocol version, the genesis
 /// parameters, the foundation account and where to find genesis accounts,
@@ -13,7 +13,7 @@ use crate::config::ProtocolConfig;
 pub struct AssembleGenesisConfig {
     /// Protocol specific configurations.
     #[serde(flatten)]
-    pub protocol: ProtocolConfig,
+    pub protocol: ProtocolConfigToml,
     /// Address of the account to set as the initial foundation account.
     pub foundation_account: AccountAddress,
     /// A file with a list of accounts that should be assembled into

@@ -8,30 +8,7 @@
 /// In both modes the tool takes a TOML configuration file that specifies the
 /// genesis. For details, see the README.
 use clap::Parser;
-use genesis_creator::{handle_assemble, handle_generate};
-use std::path::PathBuf;
-
-/// Subcommands supported by the tool.
-#[derive(clap::Subcommand, Debug)]
-#[clap(author, version, about)]
-enum GenesisCreatorCommand {
-    Assemble {
-        #[clap(long, short)]
-        /// The TOML configuration file describing the genesis.
-        config: PathBuf,
-        #[clap(long, short)]
-        /// Whether to output additional data during genesis generation.
-        verbose: bool,
-    },
-    Generate {
-        #[clap(long, short)]
-        /// The TOML configuration file describing the genesis.
-        config: PathBuf,
-        #[clap(long, short)]
-        /// Whether to output additional data during genesis generation.
-        verbose: bool,
-    },
-}
+use genesis_creator::{run, GenesisCreatorCommand};
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about)]
@@ -41,13 +18,15 @@ struct GenesisCreator {
 }
 
 fn main() -> anyhow::Result<()> {
-    let args = GenesisCreator::parse();
+    // Initialise tracing with a message-only format so the output matches the
+    // previous plain println! style that operators are used to.
+    use tracing_subscriber::fmt;
+    fmt()
+        .with_max_level(tracing::Level::INFO)
+        .without_time()
+        .with_level(false)
+        .with_target(false)
+        .init();
 
-    match &args.action {
-        GenesisCreatorCommand::Assemble { config, verbose } => handle_assemble(config, *verbose),
-        GenesisCreatorCommand::Generate { config, verbose } => handle_generate(config, *verbose),
-    }
+    run(GenesisCreator::parse().action)
 }
-
-// TODO: Deny unused fields.
-// TODO: Output genesis_hash
