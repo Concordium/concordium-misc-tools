@@ -1021,7 +1021,7 @@ impl Generate for SponsoredTransactionGenerator {
             self.expiry,
             self.token_id.clone(),
             [operation].into_iter().collect(),
-        )?
+        )
         .extend()
         .add_sponsor(self.sponsor.address, 1)
         .expect("Can add sponsor account")

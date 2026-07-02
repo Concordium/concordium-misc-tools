@@ -46,10 +46,7 @@ async fn test_create_verification_request_and_verify() {
         verification_request.anchor_transaction_hash,
         fixtures::chain::transaction_status_finalized(
             verification_request.anchor_transaction_hash,
-            cbor::cbor_encode(&request_anchor)
-                .unwrap()
-                .try_into()
-                .unwrap(),
+            cbor::cbor_encode(&request_anchor).try_into().unwrap(),
         ),
     );
 

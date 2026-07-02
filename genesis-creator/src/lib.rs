@@ -1,8 +1,7 @@
-pub mod assemble;
-pub mod config;
-pub mod genesis;
+pub(crate) mod assemble;
+pub(crate) mod config;
+pub(crate) mod genesis;
 
-use crate::{assemble::AssembleGenesisConfig, config::*, genesis::*};
 /// A command line tool for generating genesis files.
 ///
 /// The tool has two modes: `generate` that can generate a new genesis,
@@ -12,864 +11,36 @@ use crate::{assemble::AssembleGenesisConfig, config::*, genesis::*};
 ///
 /// In both modes the tool takes a TOML configuration file that specifies the
 /// genesis. For details, see the README.
-use anyhow::{anyhow, bail, ensure, Context};
+use crate::{assemble::AssembleGenesisConfig, config::*, genesis::*};
+use anyhow::{anyhow, Context};
 use concordium_rust_sdk::{
-    common::{
-        types::{CredentialIndex, KeyIndex, KeyPair},
-        Serial, Versioned, VERSION_0,
-    },
-    id,
-    id::{
-        account_holder::compute_sharing_data,
-        constants::{ArCurve, IpPairing},
-        curve_arithmetic::{Curve, Value},
-        types::{
-            account_address_from_registration_id, mk_dummy_description, AccCredentialInfo,
-            AccountCredentialWithoutProofs, AccountKeys, ArData, ArIdentity, ArInfo, ChainArData,
-            CredentialData, CredentialDeploymentCommitments, CredentialDeploymentValues,
-            CredentialHolderInfo, GlobalContext, IpData, IpIdentity, IpInfo, Policy,
-            PublicCredentialData, SignatureThreshold, YearMonth,
+    common::{Versioned, VERSION_0},
+    genesis::{
+        builder::GenesisBuilderCommon,
+        builder::{
+            FreshAccountConfig, GovernanceKeyLevelConfig, GovernanceKeySpec,
+            GovernanceKeysGenerateConfig, GovernanceKeysInput, Level2AccessConfig,
+            Level2GovernanceKeysConfig,
         },
+        genesis_builder_p1, genesis_builder_p10, genesis_builder_p11, genesis_builder_p2,
+        genesis_builder_p3, genesis_builder_p4, genesis_builder_p5, genesis_builder_p6,
+        genesis_builder_p7, genesis_builder_p8, genesis_builder_p9,
+        output::GenesisOutputCPV,
+    },
+    id::{
+        constants::{ArCurve, IpPairing},
+        types::{ArIdentity, ArInfo, GlobalContext, IpIdentity, IpInfo, SignatureThreshold},
     },
     types::{
-        AccountIndex, AuthorizationsV0, AuthorizationsV1, BakerCredentials, BakerId, BakerKeyPairs,
-        HigherLevelAccessStructure, ProtocolVersion, UpdateKeyPair, UpdatePublicKey,
+        AuthorizationsV0, AuthorizationsV1, BakerCredentials, ProtocolVersion, UpdatePublicKey,
     },
 };
-use rayon::prelude::*;
-use rust_decimal::prelude::FromPrimitive;
-use serde::de::DeserializeOwned;
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
-    sync::atomic::AtomicU64,
 };
 
-/// Function for creating the cryptographic parameters (also called global
-/// context). The arguments are
-/// - `global_out` - if some, where to write the cryptographic parameters
-/// - `cfg` - The configuration deciding whether to use existing cryptographic
-///   parameters or to generate fresh ones.
-///
-/// The function returns [`anyhow::Result`], which upon success will contain the
-/// cryptographic parameters.
-fn crypto_parameters(
-    global_out: Option<PathBuf>,
-    cfg: CryptoParamsConfig,
-) -> anyhow::Result<GlobalContext<ArCurve>> {
-    match cfg {
-        CryptoParamsConfig::Existing { source } => {
-            let data = std::fs::read(&source).context(format!(
-                "Could not read cryptographic parameters: {}",
-                source.display()
-            ))?;
-            let data: Versioned<GlobalContext<ArCurve>> = serde_json::from_slice(&data)
-                .context("Could not parse cryptographic parameters.")?;
-            ensure!(
-                data.version == 0.into(),
-                "Incorrect version of cryptographic parameters. Expected 0, but got {}",
-                data.version
-            );
-            Ok(data.value)
-        }
-        CryptoParamsConfig::Generate { genesis_string } => {
-            let ver_global: Versioned<GlobalContext<ArCurve>> = Versioned {
-                version: VERSION_0,
-                value: GlobalContext::generate(genesis_string),
-            };
-            if let Some(out) = global_out {
-                let mut path = out;
-                path.push("cryptographic-parameters.json");
-                std::fs::write(path, serde_json::to_string_pretty(&ver_global).unwrap())
-                    .context("Unable to output account keys.")?;
-            }
-            Ok(ver_global.value)
-        }
-    }
-}
-
-/// Function for creating the genesis identity providers. The arguments are
-/// - idp_out - where to write the identity providers
-/// - cfgs - A vector of configurations, each deciding whether to use an
-///   existing identity provider or to generate one or more freshly.
-///
-/// For each generated anonymity revoker, the private identity provider data
-/// will be written to a file. The function returns a in a `anyhow::Result`,
-/// which upon success contains a `BTreeMap` with the public identity provider
-/// infos.
-fn identity_providers(
-    idp_out: PathBuf,
-    cfgs: Vec<IdentityProviderConfig>,
-) -> anyhow::Result<BTreeMap<IpIdentity, IpInfo<IpPairing>>> {
-    let mut csprng = rand::thread_rng();
-    let mut out = BTreeMap::new();
-    for cfg in cfgs {
-        match cfg {
-            IdentityProviderConfig::Existing { source } => {
-                let data = std::fs::read(&source).context(format!(
-                    "Could not read the identity provider file: {}",
-                    source.display()
-                ))?;
-                let data: Versioned<IpInfo<IpPairing>> = serde_json::from_slice(&data)
-                    .context("Could not parse the identity provider.")?;
-                let ip_identity = data.value.ip_identity;
-                if out.insert(data.value.ip_identity, data.value).is_some() {
-                    bail!("Duplicate identity provider id {}", ip_identity);
-                }
-            }
-            IdentityProviderConfig::Fresh { id, repeat } => {
-                let num = repeat.unwrap_or(1);
-                for n in id.0..id.0 + num {
-                    let ip_identity = IpIdentity::from(n);
-                    ensure!(
-                        !out.contains_key(&ip_identity),
-                        "Duplicate identity provider {}",
-                        ip_identity
-                    );
-                    let ip_description = mk_dummy_description(format!("Generated IP {n}"));
-                    // using 30 as the key capacity. That is enough given the current list of
-                    // attributes.
-                    let ip_secret_key =
-                        concordium_rust_sdk::id::ps_sig::SecretKey::<IpPairing>::generate(
-                            30,
-                            &mut csprng,
-                        );
-                    let ip_verify_key = (&ip_secret_key).into();
-                    let ip_cdi_kp_secret = ed25519_dalek::SigningKey::generate(&mut csprng);
-                    let ip_cdi_verify_key = ip_cdi_kp_secret.verifying_key();
-                    let ip_data = IpData {
-                        public_ip_info: IpInfo {
-                            ip_identity,
-                            ip_description,
-                            ip_verify_key,
-                            ip_cdi_verify_key,
-                        },
-                        ip_secret_key,
-                        ip_cdi_secret_key: ip_cdi_kp_secret.to_bytes(),
-                    };
-                    {
-                        let mut path = idp_out.clone();
-                        path.push(format!("ip-data-{n}.json"));
-                        std::fs::write(path, serde_json::to_string_pretty(&ip_data).unwrap())
-                            .context("Unable to write the identity provider.")?;
-                    }
-                    out.insert(ip_identity, ip_data.public_ip_info);
-                }
-            }
-        }
-    }
-    let ver_idps = Versioned {
-        version: VERSION_0,
-        value: out,
-    };
-    {
-        let mut path = idp_out;
-        path.push("identity-providers.json");
-        std::fs::write(path, serde_json::to_string_pretty(&ver_idps).unwrap())
-            .context("Unable to write the identity providers.")?;
-    }
-    Ok(ver_idps.value)
-}
-
-/// Function for creating the genesis anonymity revokers. The arguments are
-/// - ars_out - where to write the anonymity revokers
-/// - cfgs - A vector of configurations, each deciding whether to use an
-///   existing anonymity revoker or to generate one or more freshly.
-///
-/// For each generated anonymity revoker, the private anonymity revoker data
-/// will be written to a file. The function returns a in a `anyhow::Result`,
-/// which upon success contains a `BTreeMap` with the public anonymity revoker
-/// infos.
-fn anonymity_revokers(
-    ars_out: PathBuf,
-    params: &GlobalContext<ArCurve>,
-    cfgs: Vec<AnonymityRevokerConfig>,
-) -> anyhow::Result<BTreeMap<ArIdentity, ArInfo<ArCurve>>> {
-    let mut csprng = rand::thread_rng();
-    let mut out = BTreeMap::new();
-    for cfg in cfgs {
-        match cfg {
-            AnonymityRevokerConfig::Existing { source } => {
-                let data = std::fs::read(&source).context(format!(
-                    "Could not read the identity provider file: {}",
-                    source.display()
-                ))?;
-                let data: Versioned<ArInfo<ArCurve>> = serde_json::from_slice(&data)
-                    .context("Could not parse the anonymity revoker.")?;
-                let ar_identity = data.value.ar_identity;
-                if out.insert(ar_identity, data.value).is_some() {
-                    bail!("Duplicate anonymity revoker id {}", ar_identity);
-                }
-            }
-            AnonymityRevokerConfig::Fresh { id, repeat } => {
-                let num = repeat.unwrap_or(1);
-                for n in u32::from(id)..u32::from(id) + num {
-                    let ar_identity = ArIdentity::try_from(n).map_err(|_| {
-                        anyhow::anyhow!("Invalid anonymity revoker ID would be generated.")
-                    })?;
-                    ensure!(
-                        !out.contains_key(&ar_identity),
-                        "Duplicate anonymity revoker {}",
-                        ar_identity
-                    );
-                    let ar_description = mk_dummy_description(format!("Generated AR {n}"));
-                    let ar_secret_key =
-                        id::elgamal::SecretKey::generate(params.elgamal_generator(), &mut csprng);
-                    let ar_data = ArData {
-                        public_ar_info: ArInfo {
-                            ar_identity,
-                            ar_description,
-                            ar_public_key: (&ar_secret_key).into(),
-                        },
-                        ar_secret_key,
-                    };
-                    {
-                        let mut path = ars_out.clone();
-                        path.push(format!("ar-data-{n}.json"));
-                        std::fs::write(path, serde_json::to_string_pretty(&ar_data).unwrap())
-                            .context("Unable to write the anonymity revoker.")?;
-                    }
-                    out.insert(ar_identity, ar_data.public_ar_info);
-                }
-            }
-        }
-    }
-    let ver_ars = Versioned {
-        version: VERSION_0,
-        value: out,
-    };
-    {
-        let mut path = ars_out;
-        path.push("anonymity-revokers.json");
-        std::fs::write(path, serde_json::to_string_pretty(&ver_ars).unwrap())
-            .context("Unable to write the anonymity revokers.")?;
-    }
-    Ok(ver_ars.value)
-}
-
-/// Function for creating a vector of root, level 1 or level 2 keys, where each
-/// key is either generated freshly or read from a file. The arguments are
-/// - ctx - description of the keys, e.g. "root", "level1" or "level2".
-/// - root_out - the directory in which the keys whould be placed.
-/// - csprng - a cryptographically secure random number generator.
-/// - key_cfgs - A vector of confiurations, each deciding whether to generate or
-///   to read from a file.
-///
-/// For each generated key, the private keypair will be written to a file.
-/// The function returns a `anyhow::Result`, which upon success will contain a
-/// vector with the public keys.
-fn read_or_generate_update_keys<R: rand::Rng + rand::CryptoRng>(
-    ctx: &str,
-    root_out: Option<&Path>,
-    csprng: &mut R,
-    key_cfgs: &[HigherLevelKey],
-) -> anyhow::Result<Vec<UpdatePublicKey>> {
-    let mut out = Vec::new();
-    for key_cfg in key_cfgs {
-        match key_cfg {
-            HigherLevelKey::Existing { source } => {
-                let data = std::fs::read(source).context(format!(
-                    "Could not read the {} key: {}",
-                    ctx,
-                    source.display()
-                ))?;
-                let key: UpdatePublicKey = serde_json::from_slice(&data)
-                    .context(format!("Could not parse the {ctx} key."))?;
-                out.push(key);
-            }
-            HigherLevelKey::Fresh { repeat } => {
-                for _ in 0..*repeat {
-                    let new_key = UpdateKeyPair::generate(csprng);
-                    if let Some(root_out) = root_out {
-                        let mut path = root_out.to_path_buf();
-                        path.push(format!("{}-key-{}.json", ctx, out.len()));
-                        std::fs::write(path, serde_json::to_string_pretty(&new_key).unwrap())
-                            .context(format!("Unable to write {ctx} key."))?;
-                    }
-                    out.push((&new_key).into());
-                }
-            }
-        }
-    }
-    Ok(out)
-}
-
-/// Function for creating a version 0 `UpdateKeysCollection` containing all
-/// root, level 1 and level 2 keys. The arguments are
-/// - updates_out - where to put all chain update keys
-/// - update_cfg - the configuration specifying all keys and thresholds
-///
-/// The function returns a `anyhow::Result`, whic upon success contains the
-/// version 0 `UpdateKeysCollection`. NB: To be used only in chain parameters
-/// version 0.
-fn updates_v0(
-    updates_out: Option<PathBuf>,
-    update_cfg: UpdateKeysConfig,
-) -> anyhow::Result<UpdateKeysCollectionSkeleton<AuthorizationsV0>> {
-    let mut csprng = rand::thread_rng();
-    let root_keys = read_or_generate_update_keys(
-        "root",
-        updates_out.as_deref(),
-        &mut csprng,
-        &update_cfg.root.keys,
-    )?;
-    ensure!(
-        usize::from(u16::from(update_cfg.root.threshold)) <= root_keys.len(),
-        "The number of root keys ({}) is less than the threshold ({}).",
-        root_keys.len(),
-        update_cfg.root.threshold
-    );
-
-    let level1_keys = read_or_generate_update_keys(
-        "level1",
-        updates_out.as_deref(),
-        &mut csprng,
-        &update_cfg.level1.keys,
-    )?;
-    ensure!(
-        usize::from(u16::from(update_cfg.level1.threshold)) <= level1_keys.len(),
-        "The number of level_1 keys ({}) is less than the threshold ({}).",
-        level1_keys.len(),
-        update_cfg.level1.threshold
-    );
-
-    let level2_keys = read_or_generate_update_keys(
-        "level2",
-        updates_out.as_deref(),
-        &mut csprng,
-        &update_cfg.level2.keys,
-    )?;
-    ensure!(
-        !level2_keys.is_empty(),
-        "There must be at least one level 2 key.",
-    );
-
-    let level2 = update_cfg.level2;
-    let emergency = level2.emergency.access_structure(&level2_keys)?;
-    let protocol = level2.protocol.access_structure(&level2_keys)?;
-    let election_difficulty = level2.election_difficulty.access_structure(&level2_keys)?;
-    let euro_per_energy = level2.euro_per_energy.access_structure(&level2_keys)?;
-    let micro_gtu_per_euro = level2.micro_ccd_per_euro.access_structure(&level2_keys)?;
-    let foundation_account = level2.foundation_account.access_structure(&level2_keys)?;
-    let mint_distribution = level2.mint_distribution.access_structure(&level2_keys)?;
-    let transaction_fee_distribution = level2
-        .transaction_fee_distribution
-        .access_structure(&level2_keys)?;
-    let param_gas_rewards = level2.gas_rewards.access_structure(&level2_keys)?;
-    let pool_parameters = level2.pool_parameters.access_structure(&level2_keys)?;
-    let add_anonymity_revoker = level2
-        .add_anonymity_revoker
-        .access_structure(&level2_keys)?;
-    let add_identity_provider = level2
-        .add_identity_provider
-        .access_structure(&level2_keys)?;
-
-    let level_2_keys = AuthorizationsV0 {
-        keys: level2_keys,
-        emergency,
-        protocol,
-        election_difficulty,
-        euro_per_energy,
-        micro_gtu_per_euro,
-        foundation_account,
-        mint_distribution,
-        transaction_fee_distribution,
-        param_gas_rewards,
-        pool_parameters,
-        add_anonymity_revoker,
-        add_identity_provider,
-    };
-
-    let uks = UpdateKeysCollectionSkeleton {
-        root_keys: HigherLevelAccessStructure {
-            keys: root_keys,
-            threshold: update_cfg.root.threshold,
-            _phantom: Default::default(),
-        },
-        level_1_keys: HigherLevelAccessStructure {
-            keys: level1_keys,
-            threshold: update_cfg.level1.threshold,
-            _phantom: Default::default(),
-        },
-        level_2_keys,
-    };
-
-    if let Some(mut path) = updates_out {
-        path.push("governance-keys.json");
-        std::fs::write(path, serde_json::to_string_pretty(&uks).unwrap())
-            .context("Unable to write authorizations.")?;
-    }
-
-    Ok(uks)
-}
-
-/// Function for creating a version 1 `UpdateKeysCollection` containing all
-/// root, level 1 and level 2 keys. The arguments are
-/// - updates_out - where to put all chain update keys
-/// - update_cfg - the configuration specifying all keys and thresholds
-///
-/// The function returns a `anyhow::Result`, which upon success contains the
-/// version 1 `UpdateKeysCollection`.
-fn updates_v1(
-    updates_out: Option<PathBuf>,
-    update_cfg: &UpdateKeysConfig,
-) -> anyhow::Result<UpdateKeysCollectionSkeleton<AuthorizationsV1>> {
-    let mut csprng = rand::thread_rng();
-    let root_keys = read_or_generate_update_keys(
-        "root",
-        updates_out.as_deref(),
-        &mut csprng,
-        &update_cfg.root.keys,
-    )?;
-    ensure!(
-        usize::from(u16::from(update_cfg.root.threshold)) <= root_keys.len(),
-        "The number of root keys ({}) is less than the threshold ({}).",
-        root_keys.len(),
-        update_cfg.root.threshold
-    );
-
-    let level1_keys = read_or_generate_update_keys(
-        "level1",
-        updates_out.as_deref(),
-        &mut csprng,
-        &update_cfg.level1.keys,
-    )?;
-    ensure!(
-        usize::from(u16::from(update_cfg.level1.threshold)) <= level1_keys.len(),
-        "The number of level_1 keys ({}) is less than the threshold ({}).",
-        level1_keys.len(),
-        update_cfg.level1.threshold
-    );
-
-    let level2_keys = read_or_generate_update_keys(
-        "level2",
-        updates_out.as_deref(),
-        &mut csprng,
-        &update_cfg.level2.keys,
-    )?;
-    ensure!(
-        !level2_keys.is_empty(),
-        "There must be at least one level 2 key.",
-    );
-
-    let level2 = &update_cfg.level2;
-    let emergency = level2.emergency.access_structure(&level2_keys)?;
-    let protocol = level2.protocol.access_structure(&level2_keys)?;
-    let election_difficulty = level2.election_difficulty.access_structure(&level2_keys)?;
-    let euro_per_energy = level2.euro_per_energy.access_structure(&level2_keys)?;
-    let micro_gtu_per_euro = level2.micro_ccd_per_euro.access_structure(&level2_keys)?;
-    let foundation_account = level2.foundation_account.access_structure(&level2_keys)?;
-    let mint_distribution = level2.mint_distribution.access_structure(&level2_keys)?;
-    let transaction_fee_distribution = level2
-        .transaction_fee_distribution
-        .access_structure(&level2_keys)?;
-    let param_gas_rewards = level2.gas_rewards.access_structure(&level2_keys)?;
-    let pool_parameters = level2.pool_parameters.access_structure(&level2_keys)?;
-    let add_anonymity_revoker = level2
-        .add_anonymity_revoker
-        .access_structure(&level2_keys)?;
-    let add_identity_provider = level2
-        .add_identity_provider
-        .access_structure(&level2_keys)?;
-    let cooldown_parameters = level2
-        .cooldown_parameters
-        .as_ref()
-        .ok_or_else(|| anyhow!("Cooldown parameters missing"))?
-        .access_structure(&level2_keys)?;
-    let time_parameters = level2
-        .time_parameters
-        .as_ref()
-        .ok_or_else(|| anyhow!("Time parameters missing"))?
-        .access_structure(&level2_keys)?;
-
-    let v0 = AuthorizationsV0 {
-        keys: level2_keys,
-        emergency,
-        protocol,
-        election_difficulty,
-        euro_per_energy,
-        micro_gtu_per_euro,
-        foundation_account,
-        mint_distribution,
-        transaction_fee_distribution,
-        param_gas_rewards,
-        pool_parameters,
-        add_anonymity_revoker,
-        add_identity_provider,
-    };
-    let level_2_keys = AuthorizationsV1 {
-        v0,
-        cooldown_parameters,
-        time_parameters,
-        create_plt: None,
-    };
-
-    let uks = UpdateKeysCollectionSkeleton {
-        root_keys: HigherLevelAccessStructure {
-            keys: root_keys,
-            threshold: update_cfg.root.threshold,
-            _phantom: Default::default(),
-        },
-        level_1_keys: HigherLevelAccessStructure {
-            keys: level1_keys,
-            threshold: update_cfg.level1.threshold,
-            _phantom: Default::default(),
-        },
-        level_2_keys,
-    };
-
-    if let Some(mut path) = updates_out {
-        path.push("governance-keys.json");
-        std::fs::write(path, serde_json::to_string_pretty(&uks).unwrap())
-            .context("Unable to write authorizations.")?;
-    }
-
-    Ok(uks)
-}
-
-/// Function for creating a version 2 `UpdateKeysCollection` containing all
-/// root, level 1 and level 2 keys. The arguments are
-/// - updates_out - where to put all chain update keys
-/// - update_cfg - the configuration specifying all keys and thresholds
-///
-/// The function returns a `anyhow::Result`, which upon success contains the
-/// version 2 `UpdateKeysCollection`.
-fn updates_v2(
-    updates_out: Option<PathBuf>,
-    update_cfg: &UpdateKeysConfig,
-) -> anyhow::Result<UpdateKeysCollectionSkeleton<AuthorizationsV1>> {
-    let mut updates = updates_v1(updates_out, update_cfg)?;
-    let create_plt = update_cfg
-        .level2
-        .create_plt
-        .as_ref()
-        .ok_or_else(|| anyhow!("Create PLT authorizations missing"))?
-        .access_structure(&updates.level_2_keys.v0.keys)?;
-    updates.level_2_keys.create_plt = Some(create_plt);
-    Ok(updates)
-}
-
-/// Function for creating a vector of genesis accounts, where each key is either
-/// generated freshly or read from a file. The arguments are
-/// - baker_keys_out - where to put baker keys for those accounts that are
-///   bakers.
-/// - account_keys_out - where to put the account keys.
-/// - params - the cryptographic parameters.
-/// - ars - the anonymity revokers
-/// - cfgs - A vector of confiurations, each deciding whether to generate or to
-///   read from a file.
-///
-/// For each generated account, the private account information will be written
-/// to a file. The function returns a `anyhow::Result`, which upon success will
-/// contain the foundation account index together with a vector with the public
-/// account parts.
-///
-/// The return value is a triple of the index of the foundation account, the
-/// number of bakers, and the list of public account data that goes into
-/// genesis.
-fn accounts(
-    baker_keys_out: PathBuf,
-    account_keys_out: PathBuf,
-    params: &GlobalContext<ArCurve>,
-    ars: &BTreeMap<ArIdentity, ArInfo<ArCurve>>,
-    cfgs: Vec<AccountConfig>,
-) -> anyhow::Result<(AccountIndex, u64, Vec<GenesisAccountPublic>)> {
-    let mut foundation_index = None;
-    let mut idx: u64 = 0;
-
-    let mut gas = Vec::new();
-
-    let mut csprng = rand::thread_rng();
-
-    let num_bakers = AtomicU64::new(0);
-
-    for cfg in cfgs {
-        match cfg {
-            AccountConfig::Existing {
-                source,
-                foundation,
-                balance,
-                stake,
-                restake_earnings,
-                baker_keys,
-            } => {
-                if foundation {
-                    let old = foundation_index.replace(AccountIndex::from(idx));
-                    if old.is_some() {
-                        bail!(
-                            "There are two accounts marked as foundation accounts. That will not \
-                             work."
-                        );
-                    }
-                }
-                let ga: GenesisAccount = serde_json::from_slice(
-                    &std::fs::read(source).context("Could not read existing account file.")?,
-                )
-                .context("Could not parse existing account file.")?;
-
-                let baker = if let Some(stake) = stake {
-                    num_bakers.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
-                    let baker_id = BakerId::from(AccountIndex::from(idx));
-                    let creds = {
-                        if let Some(baker_keys) = baker_keys {
-                            let creds: BakerCredentials = serde_json::from_slice(
-                                &std::fs::read(baker_keys)
-                                    .context("Could not read existing baker credentials file.")?,
-                            )
-                            .context("Could not parse existing baker credentials file.")?;
-                            ensure!(
-                                creds.baker_id == baker_id,
-                                "Baker credential does not match the assign account index."
-                            );
-                            creds
-                        } else {
-                            let creds = BakerCredentials::new(
-                                baker_id,
-                                BakerKeyPairs::generate(&mut csprng),
-                            );
-                            let mut path = baker_keys_out.clone();
-                            path.push(format!("baker-{idx}-credentials.json"));
-                            std::fs::write(path, serde_json::to_string_pretty(&creds).unwrap())
-                                .context("Unable to output baker keys.")?;
-                            creds
-                        }
-                    };
-                    let gb = GenesisBakerPublic {
-                        aggregation_verify_key: creds.keys.aggregation_verify,
-                        election_verify_key: creds.keys.election_verify,
-                        signature_verify_key: creds.keys.signature_verify,
-                        baker_id,
-                        stake,
-                        restake_earnings,
-                    };
-                    Some(gb)
-                } else {
-                    None
-                };
-
-                let ga_public = GenesisAccountPublic {
-                    address: ga.address,
-                    account_threshold: ga.account_keys.threshold,
-                    credentials: ga.credentials.value,
-                    balance,
-                    baker,
-                };
-                gas.push(ga_public);
-                idx += 1;
-            }
-            AccountConfig::Fresh {
-                repeat,
-                stake,
-                restake_earnings,
-                balance,
-                template,
-                num_keys,
-                threshold,
-                identity_provider,
-                foundation,
-            } => {
-                if foundation_index.is_some() && foundation {
-                    bail!(
-                        "There are two accounts marked as foundation accounts. That will not work."
-                    );
-                }
-                if foundation {
-                    foundation_index = Some(AccountIndex::from(idx));
-                }
-
-                let num = repeat.unwrap_or(1);
-                ensure!(num > 0, "repeat cannot be 0");
-
-                let num_keys = num_keys.unwrap_or(1);
-                let threshold = threshold.unwrap_or(SignatureThreshold::ONE);
-
-                ensure!(
-                    num_keys >= u8::from(threshold),
-                    "Signature threshold must be at most the number of keys."
-                );
-
-                let mut gas_public = (idx..idx + u64::from(num))
-                    .into_par_iter()
-                    .map(|n| {
-                        let mut csprng = rand::thread_rng();
-                        let prf_key = concordium_rust_sdk::id::dodis_yampolskiy_prf::SecretKey::<
-                            ArCurve,
-                        >::generate_non_zero(&mut csprng);
-                        let prf_exponent = prf_key.prf_exponent(0)?;
-                        let cred_id: ArCurve = prf_key.prf(params.elgamal_generator(), 0)?;
-
-                        let created_at = YearMonth::now();
-                        let valid_to =
-                            YearMonth::new(created_at.year + 5, created_at.month).unwrap();
-
-                        let id_cred_sec = Value::<ArCurve>::generate_non_zero(&mut csprng);
-
-                        let ar_threshold = std::cmp::max(1, u8::try_from(ars.len() - 1)?);
-
-                        let sharing_data = compute_sharing_data(
-                            &id_cred_sec,
-                            ars,
-                            ar_threshold.try_into().unwrap(),
-                            &params.on_chain_commitment_key,
-                            &mut csprng,
-                        );
-
-                        let ar_data = sharing_data
-                            .0
-                            .into_iter()
-                            .map(|sad| {
-                                (
-                                    sad.ar.ar_identity,
-                                    ChainArData {
-                                        enc_id_cred_pub_share: sad.encrypted_share,
-                                    },
-                                )
-                            })
-                            .collect();
-
-                        let (account_keys, cred_key_info) = {
-                            let mut cred_keys = BTreeMap::new();
-                            for i in 0..num_keys {
-                                cred_keys.insert(KeyIndex(i), KeyPair::generate(&mut csprng));
-                            }
-                            let cred_data = CredentialData {
-                                keys: cred_keys,
-                                threshold,
-                            };
-                            let cred_key_info = cred_data.get_cred_key_info();
-                            (AccountKeys::from(cred_data), cred_key_info)
-                        };
-
-                        let acc_cred = AccountCredentialWithoutProofs::Normal {
-                            cdv: CredentialDeploymentValues {
-                                cred_key_info,
-                                cred_id,
-                                ip_identity: identity_provider,
-                                threshold: 1u8.try_into().unwrap(),
-                                ar_data,
-                                policy: Policy {
-                                    valid_to,
-                                    created_at,
-                                    policy_vec: BTreeMap::new(),
-                                    _phantom: Default::default(),
-                                },
-                            },
-                            commitments: CredentialDeploymentCommitments {
-                                cmm_prf: params
-                                    .on_chain_commitment_key
-                                    .commit(&prf_key, &mut csprng)
-                                    .0,
-                                cmm_cred_counter: params
-                                    .on_chain_commitment_key
-                                    .commit(
-                                        &Value::<ArCurve>::new(ArCurve::scalar_from_u64(0)),
-                                        &mut csprng,
-                                    )
-                                    .0,
-                                cmm_max_accounts: params
-                                    .on_chain_commitment_key
-                                    .commit(
-                                        &Value::<ArCurve>::new(ArCurve::scalar_from_u64(1)),
-                                        &mut csprng,
-                                    )
-                                    .0,
-                                cmm_attributes: BTreeMap::new(),
-                                cmm_id_cred_sec_sharing_coeff: sharing_data.1,
-                            },
-                        };
-                        let encryption_secret_key = concordium_rust_sdk::id::elgamal::SecretKey {
-                            generator: *params.elgamal_generator(),
-                            scalar: prf_exponent,
-                        };
-
-                        let aci = AccCredentialInfo {
-                            cred_holder_info: CredentialHolderInfo {
-                                id_cred: id_cred_sec.into(),
-                            },
-                            prf_key,
-                        };
-
-                        let ga = GenesisAccount {
-                            account_keys,
-                            aci,
-                            address: account_address_from_registration_id(&cred_id),
-                            credentials: Versioned::new(
-                                VERSION_0,
-                                [(CredentialIndex { index: 0 }, acc_cred)]
-                                    .into_iter()
-                                    .collect(),
-                            ),
-                            encryption_public_key: (&encryption_secret_key).into(),
-                            encryption_secret_key,
-                        };
-
-                        {
-                            let mut path = account_keys_out.clone();
-                            path.push(format!("{template}-{n}.json"));
-                            std::fs::write(path, serde_json::to_string_pretty(&ga).unwrap())
-                                .context("Unable to output account keys.")?;
-                        }
-
-                        let baker = if let Some(stake) = stake {
-                            ensure!(
-                                stake <= balance,
-                                "Initial stake must not be above the initial balance."
-                            );
-                            num_bakers.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
-                            let keys = BakerKeyPairs::generate(&mut csprng);
-                            let baker_id = BakerId::from(AccountIndex::from(n));
-                            let creds = BakerCredentials::new(baker_id, keys);
-
-                            let mut path = baker_keys_out.clone();
-                            path.push(format!("baker-{n}-credentials.json"));
-                            std::fs::write(path, serde_json::to_string_pretty(&creds).unwrap())
-                                .context("Unable to output baker keys.")?;
-
-                            let gb = GenesisBakerPublic {
-                                aggregation_verify_key: creds.keys.aggregation_verify,
-                                election_verify_key: creds.keys.election_verify,
-                                signature_verify_key: creds.keys.signature_verify,
-                                baker_id,
-                                stake,
-                                restake_earnings,
-                            };
-                            Some(gb)
-                        } else {
-                            None
-                        };
-
-                        Ok(GenesisAccountPublic {
-                            address: account_address_from_registration_id(&cred_id),
-                            account_threshold: 1.try_into().unwrap(),
-                            credentials: ga.credentials.value,
-                            balance,
-                            baker,
-                        })
-                    })
-                    .collect::<anyhow::Result<_>>()?;
-                gas.append(&mut gas_public);
-                idx += u64::from(num);
-            }
-        }
-    }
-    {
-        let mut path = account_keys_out;
-        path.push("accounts.json");
-        std::fs::write(path, serde_json::to_string_pretty(&gas).unwrap())
-            .context("Unable to output accounts.")?;
-    }
-    if let Some(foundation_index) = foundation_index {
-        Ok((
-            foundation_index,
-            num_bakers.load(std::sync::atomic::Ordering::Acquire),
-            gas,
-        ))
-    } else {
-        bail!("Exactly one account must be designated as a foundation account.")
-    }
-}
-
-fn read_json<S: DeserializeOwned>(path: &Path) -> anyhow::Result<S> {
+fn read_json<S: serde::de::DeserializeOwned>(path: &Path) -> anyhow::Result<S> {
     let data_value: serde_json::Value = serde_json::from_slice(
         &std::fs::read(path).context("Could not read existing account file.")?,
     )?;
@@ -895,256 +66,302 @@ fn check_and_create_dir(delete_existing: bool, path: &Path, verbose: bool) -> an
             }
             std::fs::remove_dir_all(path).context("Failed to remove the existing directory.")?;
         } else {
-            bail!("Supplied output path {} already exists.", path.display());
+            anyhow::bail!("Supplied output path {} already exists.", path.display());
         }
     }
     std::fs::create_dir_all(path)?;
     Ok(())
 }
 
-/// Function for assembling the genesis data file given a path to TOML file that
-/// can be parsed as a `AssembleGenesisConfig`. Upon success it writes the
-/// genesis data to the a file and returns `Ok(())`.
+// ── Shared helpers ────────────────────────────────────────────────────────────
+
+/// Tracks a freshly generated account so its key file can be named correctly
+/// after [`populate_builder`] returns.
+struct FreshAccountEntry {
+    /// Index of this account in `GenesisOutput::account_data`.
+    account_data_index: usize,
+    /// Global account number (used in the output file name).
+    global_index: u64,
+    /// File-name template (e.g. `"baker"` or `"account"`).
+    template: String,
+}
+
+/// Create all output directories declared in `out` and print the corresponding
+/// announcements.  Called once at the top of every `handle_generate_cpvN`.
+fn prepare_output_directories(out: &OutputConfig, verbose: bool) -> anyhow::Result<()> {
+    if out.delete_existing {
+        println!("Deleting any existing directories.");
+    }
+    check_and_create_dir(out.delete_existing, &out.account_keys, verbose)?;
+    if let Some(dir) = out.update_keys.as_ref() {
+        check_and_create_dir(out.delete_existing, dir, verbose)?;
+    }
+    check_and_create_dir(out.delete_existing, &out.identity_providers, verbose)?;
+    check_and_create_dir(out.delete_existing, &out.anonymity_revokers, verbose)?;
+    check_and_create_dir(out.delete_existing, &out.baker_keys, verbose)?;
+    if let Some(global) = &out.cryptographic_parameters {
+        check_and_create_dir(out.delete_existing, global, verbose)?;
+    }
+
+    println!(
+        "Account keys will be generated in {}",
+        out.account_keys.display()
+    );
+    if let Some(dir) = out.update_keys.as_ref() {
+        println!("Chain update keys will be generated in {}", dir.display());
+    }
+    println!(
+        "Identity providers will be generated in {}",
+        out.identity_providers.display()
+    );
+    println!(
+        "Anonymity revokers will be generated in {}",
+        out.anonymity_revokers.display()
+    );
+    println!(
+        "Baker keys will be generated in {}",
+        out.baker_keys.display()
+    );
+    if let Some(global) = &out.cryptographic_parameters {
+        println!(
+            "Cryptographic parameters will be generated in {}",
+            global.display()
+        );
+    }
+    println!(
+        "The genesis data will be stored in {}",
+        out.genesis.display()
+    );
+    println!(
+        "The genesis hash will be written to {}",
+        out.genesis_hash.display()
+    );
+    Ok(())
+}
+
+/// Feed cryptographic parameters, identity providers, anonymity revokers, and
+/// accounts from `config` into `builder`.
+///
+/// Returns the populated builder together with a `fresh_entries` list that
+/// maps each freshly generated account's position in `output.account_data`
+/// to its global index and file-name template — used by `write_generate_output`
+/// to name the per-account key files.
+fn populate_builder<B: GenesisBuilderCommon>(
+    mut builder: B,
+    crypto_params_cfg: CryptoParamsConfig,
+    identity_providers: Vec<IdentityProviderConfig>,
+    anonymity_revokers: Vec<AnonymityRevokerConfig>,
+    accounts: Vec<AccountConfig>,
+) -> anyhow::Result<(B, Vec<FreshAccountEntry>)> {
+    // Crypto params
+    builder = match crypto_params_cfg {
+        CryptoParamsConfig::Existing { source } => {
+            let data = std::fs::read(&source).context(format!(
+                "Could not read cryptographic parameters: {}",
+                source.display()
+            ))?;
+            let ver: Versioned<GlobalContext<ArCurve>> = serde_json::from_slice(&data)
+                .context("Could not parse cryptographic parameters.")?;
+            anyhow::ensure!(
+                ver.version == 0.into(),
+                "Incorrect version of cryptographic parameters."
+            );
+            builder.with_crypto_params(ver.value)
+        }
+        CryptoParamsConfig::Generate { genesis_string } => {
+            builder.generate_crypto_params(genesis_string)
+        }
+    };
+
+    // Identity providers
+    for ip_cfg in identity_providers {
+        builder = match ip_cfg {
+            IdentityProviderConfig::Existing { source } => {
+                let data = std::fs::read(&source).context(format!(
+                    "Could not read the identity provider file: {}",
+                    source.display()
+                ))?;
+                let ver: Versioned<IpInfo<IpPairing>> =
+                    serde_json::from_slice(&data).context("Could not parse identity provider.")?;
+                builder.add_identity_provider_public(ver.value)
+            }
+            IdentityProviderConfig::Fresh { id, repeat } => {
+                builder.generate_identity_providers(id, repeat.unwrap_or(1))
+            }
+        };
+    }
+
+    // Anonymity revokers
+    for ar_cfg in anonymity_revokers {
+        builder = match ar_cfg {
+            AnonymityRevokerConfig::Existing { source } => {
+                let data = std::fs::read(&source).context(format!(
+                    "Could not read the anonymity revoker file: {}",
+                    source.display()
+                ))?;
+                let ver: Versioned<ArInfo<ArCurve>> =
+                    serde_json::from_slice(&data).context("Could not parse anonymity revoker.")?;
+                builder.add_anonymity_revoker_public(ver.value)
+            }
+            AnonymityRevokerConfig::Fresh { id, repeat } => {
+                builder.generate_anonymity_revokers(id, repeat.unwrap_or(1))
+            }
+        };
+    }
+
+    // Accounts
+    let mut fresh_entries: Vec<FreshAccountEntry> = Vec::new();
+    let mut running_idx: u64 = 0;
+    let mut ad_count: usize = 0;
+
+    for acc_cfg in accounts {
+        builder = match acc_cfg {
+            AccountConfig::Existing {
+                source,
+                foundation,
+                balance,
+                stake,
+                restake_earnings,
+                baker_keys,
+            } => {
+                let account: crate::genesis::GenesisAccount =
+                    serde_json::from_slice(&std::fs::read(&source).context(format!(
+                        "Could not read existing account file: {}",
+                        source.display()
+                    ))?)
+                    .context("Could not parse existing account file.")?;
+                let baker_creds = if let Some(bk) = baker_keys {
+                    let creds: BakerCredentials =
+                        serde_json::from_slice(&std::fs::read(&bk).context(format!(
+                            "Could not read baker credentials file: {}",
+                            bk.display()
+                        ))?)
+                        .context("Could not parse baker credentials file.")?;
+                    Some(creds)
+                } else {
+                    None
+                };
+                running_idx += 1;
+                ad_count += 1;
+                builder.add_existing_account(
+                    account,
+                    balance,
+                    stake,
+                    restake_earnings,
+                    baker_creds,
+                    foundation,
+                )
+            }
+            AccountConfig::Fresh {
+                repeat,
+                stake,
+                balance,
+                template,
+                identity_provider,
+                num_keys,
+                threshold,
+                restake_earnings,
+                foundation,
+            } => {
+                let count = u64::from(repeat.unwrap_or(1));
+                for (offset, n) in (running_idx..(running_idx + count)).enumerate() {
+                    fresh_entries.push(FreshAccountEntry {
+                        account_data_index: ad_count + offset,
+                        global_index: n,
+                        template: template.clone(),
+                    });
+                }
+                ad_count += count as usize;
+                running_idx += count;
+                builder.generate_accounts(FreshAccountConfig {
+                    count: count as u32,
+                    stake,
+                    balance,
+                    num_keys: num_keys.unwrap_or(1),
+                    threshold: threshold.unwrap_or(SignatureThreshold::ONE),
+                    identity_provider,
+                    restake_earnings,
+                    foundation,
+                })
+            }
+        };
+    }
+
+    Ok((builder, fresh_entries))
+}
+
+/// Artifacts shared across all assemble handlers.
+struct AssembleArtifacts {
+    accounts: Vec<GenesisAccountPublic>,
+    global: Versioned<GlobalContext<ArCurve>>,
+    idps: Versioned<BTreeMap<IpIdentity, IpInfo<IpPairing>>>,
+    ars: Versioned<BTreeMap<ArIdentity, ArInfo<ArCurve>>>,
+}
+
+/// Read the four JSON artifact files that every assemble handler needs.
+fn load_assemble_artifacts(
+    config_path: &Path,
+    config: &AssembleGenesisConfig,
+) -> anyhow::Result<AssembleArtifacts> {
+    Ok(AssembleArtifacts {
+        accounts: read_json(&make_relative(config_path, &config.accounts)?)?,
+        global: read_json(&make_relative(config_path, &config.global)?)?,
+        idps: read_json(&make_relative(config_path, &config.idps)?)?,
+        ars: read_json(&make_relative(config_path, &config.ars)?)?,
+    })
+}
+
+/// Feed assemble-mode artifacts into a builder: crypto params, IPs, ARs, and
+/// existing public accounts.
+fn populate_assemble_builder<B: GenesisBuilderCommon>(
+    mut builder: B,
+    artifacts: AssembleArtifacts,
+    foundation_addr: concordium_rust_sdk::id::types::AccountAddress,
+) -> anyhow::Result<B> {
+    anyhow::ensure!(
+        artifacts
+            .accounts
+            .iter()
+            .any(|a| a.address == foundation_addr),
+        "Cannot find foundation account."
+    );
+    builder = builder.with_crypto_params(artifacts.global.value);
+    for (_, ip_info) in artifacts.idps.value {
+        builder = builder.add_identity_provider_public(ip_info);
+    }
+    for (_, ar_info) in artifacts.ars.value {
+        builder = builder.add_anonymity_revoker_public(ar_info);
+    }
+    for account in artifacts.accounts {
+        let is_foundation = account.address == foundation_addr;
+        builder = builder.add_existing_public_account(account, is_foundation);
+    }
+    Ok(builder)
+}
+
+// ── Top-level entry points ────────────────────────────────────────────────────
+
 pub fn handle_assemble(config_path: &Path, verbose: bool) -> anyhow::Result<()> {
     let config_source =
         std::fs::read(config_path).context("Unable to read the configuration file.")?;
     let config: AssembleGenesisConfig =
         toml::from_slice(&config_source).context("Unable to parse the configuration file.")?;
-    let accounts: Vec<GenesisAccountPublic> =
-        read_json(&make_relative(config_path, &config.accounts)?)?;
-    let global = read_json::<Versioned<_>>(&make_relative(config_path, &config.global)?)?;
-    let idps = read_json::<Versioned<_>>(&make_relative(config_path, &config.idps)?)?;
-    let ars = read_json::<Versioned<_>>(&make_relative(config_path, &config.ars)?)?;
-
     if verbose {
         println!("Using the following configuration structure for generating genesis.");
         println!("{config:#?}");
     }
-
-    let idx = accounts
-        .iter()
-        .zip(0u64..)
-        .find_map(|(acc, i)| {
-            if acc.address == config.foundation_account {
-                Some(i)
-            } else {
-                None
-            }
-        })
-        .context("Cannot find foundation account.")?;
-
-    println!(
-        "The genesis data will be stored in {}",
-        config.genesis_out.display()
-    );
-    println!(
-        "The genesis hash will be written to {}",
-        config.genesis_hash_out.display()
-    );
-
-    let protocol_version = config.protocol.protocol_version();
-
-    let genesis = match config.protocol {
-        ProtocolConfig::P1 { parameters }
-        | ProtocolConfig::P2 { parameters }
-        | ProtocolConfig::P3 { parameters }
-        | ProtocolConfig::P4 { parameters }
-        | ProtocolConfig::P5 { parameters } => {
-            let core = parameters.to_core()?;
-            match parameters.chain {
-                GenesisChainParameters::V0(params) => {
-                    let update_keys =
-                        read_json(&make_relative(config_path, &config.governance_keys)?)?;
-                    let initial_state = GenesisStateCPV0 {
-                        cryptographic_parameters: global.value,
-                        identity_providers: idps.value,
-                        anonymity_revokers: ars.value,
-                        update_keys,
-                        chain_parameters: params.chain_parameters(AccountIndex::from(idx)),
-                        leadership_election_nonce: parameters.leadership_election_nonce,
-                        accounts,
-                    };
-                    make_genesis_data_cpv0(protocol_version, core, initial_state)
-                        .context("P4 does not have CPV0")?
-                }
-                GenesisChainParameters::V1(params) => {
-                    let update_keys: UpdateKeysCollectionSkeleton<AuthorizationsV1> =
-                        read_json(&make_relative(config_path, &config.governance_keys)?)?;
-
-                    if update_keys.level_2_keys.create_plt.is_some() {
-                        bail!(
-                            "{} does not support createPLT authorization.",
-                            protocol_version
-                        );
-                    }
-                    let initial_state = GenesisStateCPV1 {
-                        cryptographic_parameters: global.value,
-                        identity_providers: idps.value,
-                        anonymity_revokers: ars.value,
-                        update_keys,
-                        chain_parameters: params.chain_parameters(AccountIndex::from(idx)),
-                        leadership_election_nonce: parameters.leadership_election_nonce,
-                        accounts,
-                    };
-                    match protocol_version {
-                        ProtocolVersion::P4 => GenesisData::P4 {
-                            core,
-                            initial_state,
-                        },
-                        ProtocolVersion::P5 => GenesisData::P5 {
-                            core,
-                            initial_state,
-                        },
-                        _ => {
-                            unreachable!("Already checked.")
-                        }
-                    }
-                }
-            }
+    match config.protocol.protocol_version() {
+        ProtocolVersion::P1 | ProtocolVersion::P2 | ProtocolVersion::P3 => {
+            handle_assemble_cpv0(config_path, config)
         }
-        ProtocolConfig::P6 { parameters } | ProtocolConfig::P7 { parameters } => {
-            let update_keys: UpdateKeysCollectionSkeleton<AuthorizationsV1> =
-                read_json(&make_relative(config_path, &config.governance_keys)?)?;
-
-            if update_keys.level_2_keys.create_plt.is_some() {
-                bail!(
-                    "{} does not support createPLT authorization.",
-                    protocol_version
-                );
-            }
-
-            let initial_state = GenesisStateCPV2 {
-                cryptographic_parameters: global.value,
-                identity_providers: idps.value,
-                anonymity_revokers: ars.value,
-                update_keys,
-                chain_parameters: parameters.chain.chain_parameters(AccountIndex::from(idx))?,
-                leadership_election_nonce: parameters.leadership_election_nonce,
-                accounts,
-            };
-            let core = parameters.core.try_into()?;
-            match protocol_version {
-                ProtocolVersion::P6 => GenesisData::P6 {
-                    core,
-                    initial_state,
-                },
-                ProtocolVersion::P7 => GenesisData::P7 {
-                    core,
-                    initial_state,
-                },
-                _ => unreachable!("Already checked."),
-            }
+        ProtocolVersion::P4 | ProtocolVersion::P5 => handle_assemble_cpv1(config_path, config),
+        ProtocolVersion::P6 | ProtocolVersion::P7 => handle_assemble_cpv2(config_path, config),
+        ProtocolVersion::P8 | ProtocolVersion::P9 | ProtocolVersion::P10 | ProtocolVersion::P11 => {
+            handle_assemble_cpv3(config_path, config)
         }
-        ProtocolConfig::P8 { parameters } => {
-            let update_keys: UpdateKeysCollectionSkeleton<AuthorizationsV1> =
-                read_json(&make_relative(config_path, &config.governance_keys)?)?;
-
-            if update_keys.level_2_keys.create_plt.is_some() {
-                bail!("P8 does not support createPLT authorization.");
-            }
-
-            let initial_state = GenesisStateCPV3 {
-                cryptographic_parameters: global.value,
-                identity_providers: idps.value,
-                anonymity_revokers: ars.value,
-                update_keys,
-                chain_parameters: parameters.chain.chain_parameters(AccountIndex::from(idx))?,
-                leadership_election_nonce: parameters.leadership_election_nonce,
-                accounts,
-            };
-            let core = parameters.core.try_into()?;
-            GenesisData::P8 {
-                core,
-                initial_state,
-            }
-        }
-
-        ProtocolConfig::P9 { parameters } => {
-            let update_keys: UpdateKeysCollectionSkeleton<AuthorizationsV1> =
-                read_json(&make_relative(config_path, &config.governance_keys)?)?;
-
-            if update_keys.level_2_keys.create_plt.is_none() {
-                bail!("P9 requires createPLT authorization.");
-            }
-
-            let initial_state = GenesisStateCPV3 {
-                cryptographic_parameters: global.value,
-                identity_providers: idps.value,
-                anonymity_revokers: ars.value,
-                update_keys,
-                chain_parameters: parameters.chain.chain_parameters(AccountIndex::from(idx))?,
-                leadership_election_nonce: parameters.leadership_election_nonce,
-                accounts,
-            };
-            let core = parameters.core.try_into()?;
-            GenesisData::P9 {
-                core,
-                initial_state,
-            }
-        }
-        ProtocolConfig::P10 { parameters } => {
-            let update_keys: UpdateKeysCollectionSkeleton<AuthorizationsV1> =
-                read_json(&make_relative(config_path, &config.governance_keys)?)?;
-
-            if update_keys.level_2_keys.create_plt.is_none() {
-                bail!("P10 requires createPLT authorization.");
-            }
-
-            let initial_state = GenesisStateCPV3 {
-                cryptographic_parameters: global.value,
-                identity_providers: idps.value,
-                anonymity_revokers: ars.value,
-                update_keys,
-                chain_parameters: parameters.chain.chain_parameters(AccountIndex::from(idx))?,
-                leadership_election_nonce: parameters.leadership_election_nonce,
-                accounts,
-            };
-            let core = parameters.core.try_into()?;
-            GenesisData::P10 {
-                core,
-                initial_state,
-            }
-        }
-        ProtocolConfig::P11 { parameters } => {
-            let update_keys: UpdateKeysCollectionSkeleton<AuthorizationsV1> =
-                read_json(&make_relative(config_path, &config.governance_keys)?)?;
-
-            if update_keys.level_2_keys.create_plt.is_none() {
-                bail!("P11 requires createPLT authorization.");
-            }
-            let initial_state = GenesisStateCPV3 {
-                cryptographic_parameters: global.value,
-                identity_providers: idps.value,
-                anonymity_revokers: ars.value,
-                update_keys,
-                chain_parameters: parameters
-                    .chain
-                    .chain_parameters(AccountIndex { index: idx })?,
-                leadership_election_nonce: parameters.leadership_election_nonce,
-                accounts,
-            };
-            let core = parameters.core.try_into()?;
-            GenesisData::P11 {
-                core,
-                initial_state,
-            }
-        }
-    };
-
-    write_genesis(
-        &make_relative(config_path, &config.genesis_out)?,
-        &make_relative(config_path, &config.genesis_hash_out)?,
-        &genesis,
-    )?;
-
-    println!("DONE");
-    Ok(())
+    }
 }
 
-/// Function for generating a new genesis data file given a path to TOML file
-/// that can be parsed as a `Config`. Upon success it writes the genesis data to
-/// the a file and writes all relevant private data to their desired locations
-/// and returns `Ok(())`.
 pub fn handle_generate(config_path: &Path, verbose: bool) -> anyhow::Result<()> {
     let config_source =
         std::fs::read(config_path).context("Unable to read the configuration file.")?;
@@ -1154,297 +371,604 @@ pub fn handle_generate(config_path: &Path, verbose: bool) -> anyhow::Result<()> 
         println!("Using the following configuration structure for generating genesis.");
         println!("{config:#?}");
     }
+    match config.protocol.protocol_version() {
+        ProtocolVersion::P1 | ProtocolVersion::P2 | ProtocolVersion::P3 => {
+            handle_generate_cpv0(config, verbose)
+        }
+        ProtocolVersion::P4 | ProtocolVersion::P5 => handle_generate_cpv1(config, verbose),
+        ProtocolVersion::P6 | ProtocolVersion::P7 => handle_generate_cpv2(config, verbose),
+        ProtocolVersion::P8 | ProtocolVersion::P9 | ProtocolVersion::P10 | ProtocolVersion::P11 => {
+            handle_generate_cpv3(config, verbose)
+        }
+    }
+}
 
-    if config.out.delete_existing {
-        println!("Deleting any existing directories.")
+// ── Output writing ────────────────────────────────────────────────────────────
+
+fn write_generate_output<GK: serde::Serialize>(
+    out_cfg: &OutputConfig,
+    fresh_entries: &[FreshAccountEntry],
+    output: &GenesisOutputCPV<GK>,
+) -> anyhow::Result<()> {
+    // Crypto params
+    if let Some(global_out) = &out_cfg.cryptographic_parameters {
+        let ver = Versioned {
+            version: VERSION_0,
+            value: &output.crypto_params,
+        };
+        let mut path = global_out.clone();
+        path.push("cryptographic-parameters.json");
+        std::fs::write(path, serde_json::to_string_pretty(&ver).unwrap())
+            .context("Unable to write cryptographic parameters.")?;
     }
 
-    check_and_create_dir(
-        config.out.delete_existing,
-        &config.out.account_keys,
-        verbose,
-    )?;
-    if let Some(dir) = config.out.update_keys.as_ref() {
-        check_and_create_dir(config.out.delete_existing, dir, verbose)?;
+    // Identity providers
+    let idp_out = &out_cfg.identity_providers;
+    for ip_data in &output.identity_provider_data {
+        let n = ip_data.public_ip_info.ip_identity.0;
+        let mut path = idp_out.clone();
+        path.push(format!("ip-data-{n}.json"));
+        std::fs::write(path, serde_json::to_string_pretty(ip_data).unwrap())
+            .context("Unable to write identity provider.")?;
     }
-    check_and_create_dir(
-        config.out.delete_existing,
-        &config.out.identity_providers,
-        verbose,
-    )?;
-    check_and_create_dir(
-        config.out.delete_existing,
-        &config.out.anonymity_revokers,
-        verbose,
-    )?;
-    check_and_create_dir(config.out.delete_existing, &config.out.baker_keys, verbose)?;
-    if let Some(global) = &config.out.cryptographic_parameters {
-        check_and_create_dir(config.out.delete_existing, global, verbose)?;
+    {
+        let ver_idps = Versioned {
+            version: VERSION_0,
+            value: &output.identity_provider_infos,
+        };
+        let mut path = idp_out.clone();
+        path.push("identity-providers.json");
+        std::fs::write(path, serde_json::to_string_pretty(&ver_idps).unwrap())
+            .context("Unable to write identity providers.")?;
     }
 
-    println!(
-        "Account keys will be generated in {}",
-        config.out.account_keys.display()
-    );
-    if let Some(dir) = config.out.update_keys.as_ref() {
-        println!("Chain update keys will be generated in {}", dir.display(),)
+    // Anonymity revokers
+    let ars_out = &out_cfg.anonymity_revokers;
+    for ar_data in &output.anonymity_revoker_data {
+        let n = u32::from(ar_data.public_ar_info.ar_identity);
+        let mut path = ars_out.clone();
+        path.push(format!("ar-data-{n}.json"));
+        std::fs::write(path, serde_json::to_string_pretty(ar_data).unwrap())
+            .context("Unable to write anonymity revoker.")?;
     }
-    println!(
-        "Identity providers will be generated in {}",
-        config.out.identity_providers.display()
-    );
-    println!(
-        "Anonymity revokers will be generated in {}",
-        config.out.anonymity_revokers.display()
-    );
-    println!(
-        "Baker keys will be generated in {}",
-        config.out.baker_keys.display()
-    );
-    if let Some(global) = &config.out.cryptographic_parameters {
-        println!(
-            "Cryptographic parameter will be generated in {}",
-            global.display()
-        );
+    {
+        let ver_ars = Versioned {
+            version: VERSION_0,
+            value: &output.anonymity_revoker_infos,
+        };
+        let mut path = ars_out.clone();
+        path.push("anonymity-revokers.json");
+        std::fs::write(path, serde_json::to_string_pretty(&ver_ars).unwrap())
+            .context("Unable to write anonymity revokers.")?;
     }
 
-    println!(
-        "The genesis data will be stored in {}",
-        config.out.genesis.display()
-    );
-    println!(
-        "The genesis hash will be written to {}",
-        config.out.genesis_hash.display()
-    );
+    // Freshly generated accounts
+    for entry in fresh_entries {
+        let ga = &output.account_data[entry.account_data_index];
+        let path = out_cfg
+            .account_keys
+            .join(format!("{}-{}.json", entry.template, entry.global_index));
+        std::fs::write(&path, serde_json::to_string_pretty(ga).unwrap())
+            .context(format!("Unable to write account {}.", entry.global_index))?;
+    }
+    {
+        let path = out_cfg.account_keys.join("accounts.json");
+        std::fs::write(
+            path,
+            serde_json::to_string_pretty(&output.accounts_public).unwrap(),
+        )
+        .context("Unable to write accounts.")?;
+    }
 
-    let cryptographic_parameters = crypto_parameters(
-        config.out.cryptographic_parameters,
-        config.cryptographic_parameters,
-    )?;
-    let identity_providers =
-        identity_providers(config.out.identity_providers, config.identity_providers)?;
-    let anonymity_revokers = anonymity_revokers(
-        config.out.anonymity_revokers,
-        &cryptographic_parameters,
-        config.anonymity_revokers,
-    )?;
-
-    let (foundation_idx, num_bakers, accounts) = accounts(
-        config.out.baker_keys,
-        config.out.account_keys,
-        &cryptographic_parameters,
-        &anonymity_revokers,
-        config.accounts,
-    )?;
-
-    println!(
-        "There are {} accounts in genesis, {} of which are bakers.",
-        accounts.len(),
-        num_bakers
-    );
-
-    let protocol_version = config.protocol.protocol_version();
-
-    let genesis = match config.protocol {
-        ProtocolConfig::P1 { parameters }
-        | ProtocolConfig::P2 { parameters }
-        | ProtocolConfig::P3 { parameters }
-        | ProtocolConfig::P4 { parameters }
-        | ProtocolConfig::P5 { parameters } => {
-            let core = parameters.to_core()?;
-            let genesis_time = chrono::DateTime::<chrono::Utc>::from(std::time::UNIX_EPOCH)
-                + chrono::Duration::milliseconds(core.time.millis as i64);
-
-            println!("Genesis time is set to {genesis_time}.");
-            let slot_duration = rust_decimal::Decimal::from_u64(parameters.slot_duration.millis)
-                .context("Too large slot duration.")?;
-            let elect_diff = parameters.chain.election_difficulty();
-            let average_block_time: rust_decimal::Decimal =
-                slot_duration / rust_decimal::Decimal::from(elect_diff);
-            println!("Average block time is set to {average_block_time}ms.");
-
-            match protocol_version {
-                ProtocolVersion::P1 | ProtocolVersion::P2 | ProtocolVersion::P3 => {
-                    let params = match parameters.chain {
-                        GenesisChainParameters::V0(params) => params,
-                        GenesisChainParameters::V1(_) => {
-                            bail!(format!(
-                                "Protocol version {} supports only chain parameters version 0.",
-                                protocol_version
-                            ))
-                        }
-                    };
-                    let update_keys = updates_v0(config.out.update_keys, config.updates)?;
-                    let initial_state = GenesisStateCPV0 {
-                        cryptographic_parameters,
-                        identity_providers,
-                        anonymity_revokers,
-                        update_keys,
-                        chain_parameters: params.chain_parameters(foundation_idx),
-                        leadership_election_nonce: parameters.leadership_election_nonce,
-                        accounts,
-                    };
-                    make_genesis_data_cpv0(protocol_version, core, initial_state)
-                        .context("Chain parameters version 0 should not be used in P4")?
-                    // Should go well since we know we are not in
-                }
-
-                ProtocolVersion::P4 | ProtocolVersion::P5 => {
-                    let params = match parameters.chain {
-                        GenesisChainParameters::V1(params) => params,
-                        GenesisChainParameters::V0(_) => {
-                            bail!(format!(
-                                "Protocol version P4 supports only chain parameters version 1."
-                            ))
-                        }
-                    };
-                    let update_keys = updates_v1(config.out.update_keys, &config.updates)?;
-                    let initial_state = GenesisStateCPV1 {
-                        cryptographic_parameters,
-                        identity_providers,
-                        anonymity_revokers,
-                        update_keys,
-                        chain_parameters: params.chain_parameters(foundation_idx),
-                        leadership_election_nonce: parameters.leadership_election_nonce,
-                        accounts,
-                    };
-                    match protocol_version {
-                        ProtocolVersion::P4 => GenesisData::P4 {
-                            core,
-                            initial_state,
-                        },
-                        ProtocolVersion::P5 => GenesisData::P5 {
-                            core,
-                            initial_state,
-                        },
-                        _ => {
-                            unreachable!("Already checked.")
-                        }
-                    }
-                }
-                _ => {
-                    unreachable!("Already checked.")
+    // Baker credentials
+    {
+        let mut baker_creds_iter = output.baker_credentials.iter();
+        for (i, acc_public) in output.accounts_public.iter().enumerate() {
+            if acc_public.baker.is_some() {
+                if let Some(creds) = baker_creds_iter.next() {
+                    let path = out_cfg
+                        .baker_keys
+                        .join(format!("baker-{i}-credentials.json"));
+                    std::fs::write(path, serde_json::to_string_pretty(creds).unwrap()).context(
+                        format!("Unable to write baker credentials for account {}.", i),
+                    )?;
                 }
             }
         }
-        ProtocolConfig::P6 { parameters } | ProtocolConfig::P7 { parameters } => {
-            let update_keys = updates_v1(config.out.update_keys, &config.updates)?;
+    }
 
-            let initial_state = GenesisStateCPV2 {
-                cryptographic_parameters,
-                identity_providers,
-                anonymity_revokers,
-                update_keys,
-                chain_parameters: parameters.chain.chain_parameters(foundation_idx)?,
-                leadership_election_nonce: parameters.leadership_election_nonce,
-                accounts,
-            };
-            let core = parameters.core.try_into()?;
-            match protocol_version {
-                ProtocolVersion::P6 => GenesisData::P6 {
-                    core,
-                    initial_state,
-                },
-                ProtocolVersion::P7 => GenesisData::P7 {
-                    core,
-                    initial_state,
-                },
-                _ => unreachable!("Already checked."),
-            }
+    // Governance keys and generated key pairs
+    if let Some(keys_out) = &out_cfg.update_keys {
+        for gkp in &output.generated_root_key_pairs {
+            let path = keys_out.join(format!("root-key-{}.json", gkp.index));
+            std::fs::write(path, serde_json::to_string_pretty(&gkp.key_pair).unwrap())
+                .context("Unable to write root key.")?;
         }
-        ProtocolConfig::P8 { parameters } => {
-            let update_keys = updates_v1(config.out.update_keys, &config.updates)?;
+        for gkp in &output.generated_level1_key_pairs {
+            let path = keys_out.join(format!("level1-key-{}.json", gkp.index));
+            std::fs::write(path, serde_json::to_string_pretty(&gkp.key_pair).unwrap())
+                .context("Unable to write level-1 key.")?;
+        }
+        for gkp in &output.generated_level2_key_pairs {
+            let path = keys_out.join(format!("level2-key-{}.json", gkp.index));
+            std::fs::write(path, serde_json::to_string_pretty(&gkp.key_pair).unwrap())
+                .context("Unable to write level-2 key.")?;
+        }
+        let governance_path = keys_out.join("governance-keys.json");
+        std::fs::write(
+            governance_path,
+            serde_json::to_string_pretty(&output.governance_keys).unwrap(),
+        )
+        .context("Unable to write governance keys.")?;
+    }
 
-            let initial_state = GenesisStateCPV3 {
-                cryptographic_parameters,
-                identity_providers,
-                anonymity_revokers,
-                update_keys,
-                chain_parameters: parameters.chain.chain_parameters(foundation_idx)?,
-                leadership_election_nonce: parameters.leadership_election_nonce,
-                accounts,
-            };
-            let core = parameters.core.try_into()?;
-            GenesisData::P8 {
-                core,
-                initial_state,
-            }
-        }
-        ProtocolConfig::P9 { parameters } => {
-            let update_keys = updates_v2(config.out.update_keys, &config.updates)?;
-
-            let initial_state = GenesisStateCPV3 {
-                cryptographic_parameters,
-                identity_providers,
-                anonymity_revokers,
-                update_keys,
-                chain_parameters: parameters.chain.chain_parameters(foundation_idx)?,
-                leadership_election_nonce: parameters.leadership_election_nonce,
-                accounts,
-            };
-            let core = parameters.core.try_into()?;
-            GenesisData::P9 {
-                core,
-                initial_state,
-            }
-        }
-        ProtocolConfig::P10 { parameters } => {
-            let update_keys = updates_v2(config.out.update_keys, &config.updates)?;
-
-            let initial_state = GenesisStateCPV3 {
-                cryptographic_parameters,
-                identity_providers,
-                anonymity_revokers,
-                update_keys,
-                chain_parameters: parameters.chain.chain_parameters(foundation_idx)?,
-                leadership_election_nonce: parameters.leadership_election_nonce,
-                accounts,
-            };
-            let core = parameters.core.try_into()?;
-            GenesisData::P10 {
-                core,
-                initial_state,
-            }
-        }
-        ProtocolConfig::P11 { parameters } => {
-            let update_keys = updates_v2(config.out.update_keys, &config.updates)?;
-
-            let initial_state = GenesisStateCPV3 {
-                cryptographic_parameters,
-                identity_providers,
-                anonymity_revokers,
-                update_keys,
-                chain_parameters: parameters.chain.chain_parameters(foundation_idx)?,
-                leadership_election_nonce: parameters.leadership_election_nonce,
-                accounts,
-            };
-            let core = parameters.core.try_into()?;
-            GenesisData::P11 {
-                core,
-                initial_state,
-            }
-        }
-    };
+    // Genesis block
     write_genesis(
-        config.out.genesis.as_path(),
-        config.out.genesis_hash.as_path(),
-        &genesis,
+        out_cfg.genesis.as_path(),
+        out_cfg.genesis_hash.as_path(),
+        &output.genesis_data,
     )?;
     println!("DONE");
     Ok(())
 }
 
 fn write_genesis(data_path: &Path, hash_path: &Path, genesis: &GenesisData) -> anyhow::Result<()> {
-    let mut out = Vec::new();
-    genesis.serial(&mut out);
-    std::fs::write(data_path, out).context("Unable to write genesis.")?;
-
-    let genesis_hash = genesis.hash();
+    std::fs::write(
+        data_path,
+        concordium_rust_sdk::genesis::serialize_genesis(genesis),
+    )
+    .context("Unable to write genesis.")?;
     std::fs::write(
         hash_path,
-        serde_json::to_vec_pretty(&[genesis_hash])
+        serde_json::to_vec_pretty(&[genesis.hash()])
             .expect("JSON serialization of hashes should not fail."),
     )
     .context("Unable to write the genesis hash.")?;
     Ok(())
+}
+
+// ── CPV3 handlers (P8+) ────────────────────────────────────────────────────
+
+fn handle_assemble_cpv3(config_path: &Path, config: AssembleGenesisConfig) -> anyhow::Result<()> {
+    let artifacts = load_assemble_artifacts(config_path, &config)?;
+    println!(
+        "The genesis data will be stored in {}",
+        config.genesis_out.display()
+    );
+    println!(
+        "The genesis hash will be written to {}",
+        config.genesis_hash_out.display()
+    );
+
+    use crate::config::ProtocolConfigToml;
+    let (builder, protocol_params) = match config.protocol {
+        ProtocolConfigToml::P8 { parameters } => (
+            genesis_builder_p8(),
+            concordium_rust_sdk::genesis::ProtocolParamsCPV3::try_from(parameters)?,
+        ),
+        ProtocolConfigToml::P9 { parameters } => (
+            genesis_builder_p9(),
+            concordium_rust_sdk::genesis::ProtocolParamsCPV3::try_from(parameters)?,
+        ),
+        ProtocolConfigToml::P10 { parameters } => (
+            genesis_builder_p10(),
+            concordium_rust_sdk::genesis::ProtocolParamsCPV3::try_from(parameters)?,
+        ),
+        ProtocolConfigToml::P11 { parameters } => (
+            genesis_builder_p11(),
+            concordium_rust_sdk::genesis::ProtocolParamsCPV3::try_from(parameters)?,
+        ),
+        _ => unreachable!("handle_assemble_cpv3 only receives P8–P11"),
+    };
+    let governance_keys: UpdateKeysCollectionSkeleton<AuthorizationsV1> =
+        read_json(&make_relative(config_path, &config.governance_keys)?)?;
+    let builder = populate_assemble_builder(builder, artifacts, config.foundation_account)?
+        .with_governance_keys(governance_keys)
+        .with_protocol(protocol_params);
+    let output = builder.build()?;
+    write_genesis(
+        &make_relative(config_path, &config.genesis_out)?,
+        &make_relative(config_path, &config.genesis_hash_out)?,
+        &output.genesis_data,
+    )?;
+    println!("DONE");
+    Ok(())
+}
+
+fn handle_generate_cpv3(config: Config, verbose: bool) -> anyhow::Result<()> {
+    prepare_output_directories(&config.out, verbose)?;
+
+    use crate::config::ProtocolConfigToml;
+    let (builder, protocol_params) = {
+        use concordium_rust_sdk::genesis::ProtocolParamsCPV3;
+        match config.protocol {
+            ProtocolConfigToml::P8 { parameters } => (
+                genesis_builder_p8(),
+                ProtocolParamsCPV3::try_from(parameters)?,
+            ),
+            ProtocolConfigToml::P9 { parameters } => (
+                genesis_builder_p9(),
+                ProtocolParamsCPV3::try_from(parameters)?,
+            ),
+            ProtocolConfigToml::P10 { parameters } => (
+                genesis_builder_p10(),
+                ProtocolParamsCPV3::try_from(parameters)?,
+            ),
+            ProtocolConfigToml::P11 { parameters } => (
+                genesis_builder_p11(),
+                ProtocolParamsCPV3::try_from(parameters)?,
+            ),
+            _ => unreachable!("handle_generate_cpv3 only receives P8–P11"),
+        }
+    };
+    let (builder, fresh_entries) = populate_builder(
+        builder,
+        config.cryptographic_parameters,
+        config.identity_providers,
+        config.anonymity_revokers,
+        config.accounts,
+    )?;
+    let builder = builder
+        .with_governance_keys_input(convert_update_keys_config(&config.updates)?)
+        .with_protocol(protocol_params);
+    let output = builder.build()?;
+    println!(
+        "There are {} accounts in genesis, {} of which are bakers.",
+        output.accounts_public.len(),
+        output.baker_credentials.len()
+    );
+    write_generate_output(&config.out, &fresh_entries, &output)
+}
+
+// ── CPV2 handlers (P6–P7) ────────────────────────────────────────────────────
+
+fn handle_assemble_cpv2(config_path: &Path, config: AssembleGenesisConfig) -> anyhow::Result<()> {
+    let artifacts = load_assemble_artifacts(config_path, &config)?;
+    println!(
+        "The genesis data will be stored in {}",
+        config.genesis_out.display()
+    );
+    println!(
+        "The genesis hash will be written to {}",
+        config.genesis_hash_out.display()
+    );
+
+    use crate::config::ProtocolConfigToml;
+    let (builder, protocol_params) = match config.protocol {
+        ProtocolConfigToml::P6 { parameters } => (
+            genesis_builder_p6(),
+            concordium_rust_sdk::genesis::ProtocolParamsCPV2::try_from(parameters)?,
+        ),
+        ProtocolConfigToml::P7 { parameters } => (
+            genesis_builder_p7(),
+            concordium_rust_sdk::genesis::ProtocolParamsCPV2::try_from(parameters)?,
+        ),
+        _ => unreachable!("handle_assemble_cpv2 only receives P6/P7"),
+    };
+    let governance_keys: UpdateKeysCollectionSkeleton<AuthorizationsV1> =
+        read_json(&make_relative(config_path, &config.governance_keys)?)?;
+    let builder = populate_assemble_builder(builder, artifacts, config.foundation_account)?
+        .with_governance_keys(governance_keys)
+        .with_protocol(protocol_params);
+    let output = builder.build()?;
+    write_genesis(
+        &make_relative(config_path, &config.genesis_out)?,
+        &make_relative(config_path, &config.genesis_hash_out)?,
+        &output.genesis_data,
+    )?;
+    println!("DONE");
+    Ok(())
+}
+
+fn handle_generate_cpv2(config: Config, verbose: bool) -> anyhow::Result<()> {
+    prepare_output_directories(&config.out, verbose)?;
+
+    use crate::config::ProtocolConfigToml;
+    let (builder, protocol_params) = {
+        use concordium_rust_sdk::genesis::ProtocolParamsCPV2;
+        match config.protocol {
+            ProtocolConfigToml::P6 { parameters } => (
+                genesis_builder_p6(),
+                ProtocolParamsCPV2::try_from(parameters)?,
+            ),
+            ProtocolConfigToml::P7 { parameters } => (
+                genesis_builder_p7(),
+                ProtocolParamsCPV2::try_from(parameters)?,
+            ),
+            _ => unreachable!("handle_generate_cpv2 only receives P6/P7"),
+        }
+    };
+    let (builder, fresh_entries) = populate_builder(
+        builder,
+        config.cryptographic_parameters,
+        config.identity_providers,
+        config.anonymity_revokers,
+        config.accounts,
+    )?;
+    let builder = builder
+        .with_governance_keys_input(convert_update_keys_config(&config.updates)?)
+        .with_protocol(protocol_params);
+    let output = builder.build()?;
+    println!(
+        "There are {} accounts in genesis, {} of which are bakers.",
+        output.accounts_public.len(),
+        output.baker_credentials.len()
+    );
+    write_generate_output(&config.out, &fresh_entries, &output)
+}
+
+// ── CPV1 handlers (P4–P5) ────────────────────────────────────────────────────
+
+fn handle_assemble_cpv1(config_path: &Path, config: AssembleGenesisConfig) -> anyhow::Result<()> {
+    let artifacts = load_assemble_artifacts(config_path, &config)?;
+    println!(
+        "The genesis data will be stored in {}",
+        config.genesis_out.display()
+    );
+    println!(
+        "The genesis hash will be written to {}",
+        config.genesis_hash_out.display()
+    );
+
+    use crate::config::ProtocolConfigToml;
+    let (builder, protocol_params) = match config.protocol {
+        ProtocolConfigToml::P4 { parameters } => (
+            genesis_builder_p4(),
+            concordium_rust_sdk::genesis::ProtocolParamsCPV1::try_from(parameters)?,
+        ),
+        ProtocolConfigToml::P5 { parameters } => (
+            genesis_builder_p5(),
+            concordium_rust_sdk::genesis::ProtocolParamsCPV1::try_from(parameters)?,
+        ),
+        _ => unreachable!("handle_assemble_cpv1 only receives P4/P5"),
+    };
+    let governance_keys: UpdateKeysCollectionSkeleton<AuthorizationsV1> =
+        read_json(&make_relative(config_path, &config.governance_keys)?)?;
+    let builder = populate_assemble_builder(builder, artifacts, config.foundation_account)?
+        .with_governance_keys(governance_keys)
+        .with_protocol(protocol_params);
+    let output = builder.build()?;
+    write_genesis(
+        &make_relative(config_path, &config.genesis_out)?,
+        &make_relative(config_path, &config.genesis_hash_out)?,
+        &output.genesis_data,
+    )?;
+    println!("DONE");
+    Ok(())
+}
+
+fn handle_generate_cpv1(config: Config, verbose: bool) -> anyhow::Result<()> {
+    prepare_output_directories(&config.out, verbose)?;
+
+    use crate::config::ProtocolConfigToml;
+    let (builder, protocol_params) = {
+        use concordium_rust_sdk::genesis::ProtocolParamsCPV1;
+        match config.protocol {
+            ProtocolConfigToml::P4 { parameters } => (
+                genesis_builder_p4(),
+                ProtocolParamsCPV1::try_from(parameters)?,
+            ),
+            ProtocolConfigToml::P5 { parameters } => (
+                genesis_builder_p5(),
+                ProtocolParamsCPV1::try_from(parameters)?,
+            ),
+            _ => unreachable!("handle_generate_cpv1 only receives P4/P5"),
+        }
+    };
+    let (builder, fresh_entries) = populate_builder(
+        builder,
+        config.cryptographic_parameters,
+        config.identity_providers,
+        config.anonymity_revokers,
+        config.accounts,
+    )?;
+    let builder = builder
+        .with_governance_keys_input(convert_update_keys_config(&config.updates)?)
+        .with_protocol(protocol_params);
+    let output = builder.build()?;
+    println!(
+        "There are {} accounts in genesis, {} of which are bakers.",
+        output.accounts_public.len(),
+        output.baker_credentials.len()
+    );
+    write_generate_output(&config.out, &fresh_entries, &output)
+}
+
+// ── CPV0 handlers (P1–P3) ────────────────────────────────────────────────────
+
+fn handle_assemble_cpv0(config_path: &Path, config: AssembleGenesisConfig) -> anyhow::Result<()> {
+    let artifacts = load_assemble_artifacts(config_path, &config)?;
+    println!(
+        "The genesis data will be stored in {}",
+        config.genesis_out.display()
+    );
+    println!(
+        "The genesis hash will be written to {}",
+        config.genesis_hash_out.display()
+    );
+
+    use crate::config::ProtocolConfigToml;
+    let (builder, protocol_params) = match config.protocol {
+        ProtocolConfigToml::P1 { parameters } => (
+            genesis_builder_p1(),
+            concordium_rust_sdk::genesis::ProtocolParamsCPV0::try_from(parameters)?,
+        ),
+        ProtocolConfigToml::P2 { parameters } => (
+            genesis_builder_p2(),
+            concordium_rust_sdk::genesis::ProtocolParamsCPV0::try_from(parameters)?,
+        ),
+        ProtocolConfigToml::P3 { parameters } => (
+            genesis_builder_p3(),
+            concordium_rust_sdk::genesis::ProtocolParamsCPV0::try_from(parameters)?,
+        ),
+        _ => unreachable!("handle_assemble_cpv0 only receives P1/P2/P3"),
+    };
+    let governance_keys: UpdateKeysCollectionSkeleton<AuthorizationsV0> =
+        read_json(&make_relative(config_path, &config.governance_keys)?)?;
+    let builder = populate_assemble_builder(builder, artifacts, config.foundation_account)?
+        .with_governance_keys(governance_keys)
+        .with_protocol(protocol_params);
+    let output = builder.build()?;
+    write_genesis(
+        &make_relative(config_path, &config.genesis_out)?,
+        &make_relative(config_path, &config.genesis_hash_out)?,
+        &output.genesis_data,
+    )?;
+    println!("DONE");
+    Ok(())
+}
+
+fn handle_generate_cpv0(config: Config, verbose: bool) -> anyhow::Result<()> {
+    prepare_output_directories(&config.out, verbose)?;
+
+    use crate::config::ProtocolConfigToml;
+    let (builder, protocol_params) = {
+        use concordium_rust_sdk::genesis::ProtocolParamsCPV0;
+        match config.protocol {
+            ProtocolConfigToml::P1 { parameters } => (
+                genesis_builder_p1(),
+                ProtocolParamsCPV0::try_from(parameters)?,
+            ),
+            ProtocolConfigToml::P2 { parameters } => (
+                genesis_builder_p2(),
+                ProtocolParamsCPV0::try_from(parameters)?,
+            ),
+            ProtocolConfigToml::P3 { parameters } => (
+                genesis_builder_p3(),
+                ProtocolParamsCPV0::try_from(parameters)?,
+            ),
+            _ => unreachable!("handle_generate_cpv0 only receives P1/P2/P3"),
+        }
+    };
+    let (builder, fresh_entries) = populate_builder(
+        builder,
+        config.cryptographic_parameters,
+        config.identity_providers,
+        config.anonymity_revokers,
+        config.accounts,
+    )?;
+    let builder = builder
+        .with_governance_keys_input(convert_update_keys_config_v0(&config.updates)?)
+        .with_protocol(protocol_params);
+    let output = builder.build()?;
+    println!(
+        "There are {} accounts in genesis, {} of which are bakers.",
+        output.accounts_public.len(),
+        output.baker_credentials.len()
+    );
+    write_generate_output(&config.out, &fresh_entries, &output)
+}
+
+// ── Governance key converters ─────────────────────────────────────────────────
+
+/// Convert `UpdateKeysConfig` (CLI, path-based) to the library's
+/// `GovernanceKeysInput` (in-memory).  Reads public key files from disk.
+fn convert_update_keys_config(cfg: &UpdateKeysConfig) -> anyhow::Result<GovernanceKeysInput> {
+    let root_specs = convert_key_specs(&cfg.root.keys)?;
+    let level1_specs = convert_key_specs(&cfg.level1.keys)?;
+    let level2_specs = convert_key_specs(&cfg.level2.keys)?;
+    let l2 = &cfg.level2;
+    Ok(GovernanceKeysInput::Generate(Box::new(
+        GovernanceKeysGenerateConfig {
+            root: GovernanceKeyLevelConfig {
+                threshold: cfg.root.threshold,
+                keys: root_specs,
+            },
+            level1: GovernanceKeyLevelConfig {
+                threshold: cfg.level1.threshold,
+                keys: level1_specs,
+            },
+            level2: Level2GovernanceKeysConfig {
+                keys: level2_specs,
+                emergency: level2_access(&l2.emergency),
+                protocol: level2_access(&l2.protocol),
+                election_difficulty: level2_access(&l2.election_difficulty),
+                euro_per_energy: level2_access(&l2.euro_per_energy),
+                micro_ccd_per_euro: level2_access(&l2.micro_ccd_per_euro),
+                foundation_account: level2_access(&l2.foundation_account),
+                mint_distribution: level2_access(&l2.mint_distribution),
+                transaction_fee_distribution: level2_access(&l2.transaction_fee_distribution),
+                gas_rewards: level2_access(&l2.gas_rewards),
+                pool_parameters: level2_access(&l2.pool_parameters),
+                add_anonymity_revoker: level2_access(&l2.add_anonymity_revoker),
+                add_identity_provider: level2_access(&l2.add_identity_provider),
+                cooldown_parameters: level2_access(l2.cooldown_parameters.as_ref().ok_or_else(
+                    || anyhow!("cooldownParameters missing from governance key config"),
+                )?),
+                time_parameters: level2_access(
+                    l2.time_parameters.as_ref().ok_or_else(|| {
+                        anyhow!("timeParameters missing from governance key config")
+                    })?,
+                ),
+                create_plt: l2.create_plt.as_ref().map(level2_access),
+            },
+        },
+    )))
+}
+
+/// Convert a CPV0 `UpdateKeysConfig` to the library's `GovernanceKeysInputCPV0`.
+///
+/// CPV0 does not have cooldown_parameters, time_parameters, or create_plt.
+fn convert_update_keys_config_v0(
+    cfg: &UpdateKeysConfig,
+) -> anyhow::Result<concordium_rust_sdk::genesis::GovernanceKeysInputCPV0> {
+    use concordium_rust_sdk::genesis::{
+        GovernanceKeysGenerateConfigCPV0, GovernanceKeysInputCPV0, Level2GovernanceKeysConfigV0,
+    };
+    let root_specs = convert_key_specs(&cfg.root.keys)?;
+    let level1_specs = convert_key_specs(&cfg.level1.keys)?;
+    let level2_specs = convert_key_specs(&cfg.level2.keys)?;
+    let l2 = &cfg.level2;
+    Ok(GovernanceKeysInputCPV0::Generate(Box::new(
+        GovernanceKeysGenerateConfigCPV0 {
+            root: GovernanceKeyLevelConfig {
+                threshold: cfg.root.threshold,
+                keys: root_specs,
+            },
+            level1: GovernanceKeyLevelConfig {
+                threshold: cfg.level1.threshold,
+                keys: level1_specs,
+            },
+            level2: Level2GovernanceKeysConfigV0 {
+                keys: level2_specs,
+                emergency: level2_access(&l2.emergency),
+                protocol: level2_access(&l2.protocol),
+                election_difficulty: level2_access(&l2.election_difficulty),
+                euro_per_energy: level2_access(&l2.euro_per_energy),
+                micro_ccd_per_euro: level2_access(&l2.micro_ccd_per_euro),
+                foundation_account: level2_access(&l2.foundation_account),
+                mint_distribution: level2_access(&l2.mint_distribution),
+                transaction_fee_distribution: level2_access(&l2.transaction_fee_distribution),
+                gas_rewards: level2_access(&l2.gas_rewards),
+                pool_parameters: level2_access(&l2.pool_parameters),
+                add_anonymity_revoker: level2_access(&l2.add_anonymity_revoker),
+                add_identity_provider: level2_access(&l2.add_identity_provider),
+            },
+        },
+    )))
+}
+
+fn convert_key_specs(specs: &[HigherLevelKey]) -> anyhow::Result<Vec<GovernanceKeySpec>> {
+    specs
+        .iter()
+        .map(|k| match k {
+            HigherLevelKey::Existing { source } => {
+                let data = std::fs::read(source).context(format!(
+                    "Could not read governance key file: {}",
+                    source.display()
+                ))?;
+                let key: UpdatePublicKey =
+                    serde_json::from_slice(&data).context("Could not parse update key.")?;
+                Ok(GovernanceKeySpec::Existing(key))
+            }
+            HigherLevelKey::Fresh { repeat } => Ok(GovernanceKeySpec::Fresh { count: *repeat }),
+        })
+        .collect()
+}
+
+fn level2_access(cfg: &Level2UpdateConfig) -> Level2AccessConfig {
+    Level2AccessConfig {
+        authorized_keys: cfg.authorized_keys.clone(),
+        threshold: cfg.threshold,
+    }
 }

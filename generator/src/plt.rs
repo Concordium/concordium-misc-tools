@@ -23,7 +23,6 @@ use concordium_rust_sdk::{
 use futures::{future, stream, StreamExt, TryStreamExt};
 use rand::{rngs::StdRng, seq::SliceRandom, Rng, SeedableRng};
 use rust_decimal::Decimal;
-use std::collections::HashMap;
 use std::{path::PathBuf, str::FromStr};
 
 #[derive(Debug, Args)]
@@ -212,7 +211,7 @@ impl PltOperationGenerator {
 
             async move {
                 let hash = client_clone
-                    .send_account_transaction(txn?)
+                    .send_account_transaction(txn)
                     .await
                     .context("send add allow list txn")?;
 
@@ -365,7 +364,7 @@ impl Generate for PltOperationGenerator {
             expiry,
             token_info.token_id.clone(),
             operations.into_iter().collect(),
-        )?;
+        );
 
         self.nonce.next_mut();
 
@@ -499,7 +498,6 @@ impl Generate for CreatePltGenerator {
             initial_supply: Some(self.initial_supply),
             mintable: Some(mint_burn),
             burnable: Some(mint_burn),
-            additional: HashMap::new(),
         };
 
         let create_plt = CreatePlt {
@@ -508,9 +506,7 @@ impl Generate for CreatePltGenerator {
                 "5c5c2645db84a7026d78f2501740f60a8ccb8fae5c166dc2428077fd9a699a4a",
             )?,
             decimals: Self::DECIMALS,
-            initialization_parameters: RawCbor::from(cbor::cbor_encode(
-                &initialization_parameters,
-            )?),
+            initialization_parameters: RawCbor::from(cbor::cbor_encode(&initialization_parameters)),
         };
 
         let payload = UpdatePayload::CreatePlt(create_plt);

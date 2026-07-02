@@ -32,7 +32,6 @@ async fn test_verify_account_based() {
         fixtures::chain::transaction_status_finalized(
             verify_fixture.anchor_txn_hash,
             cbor::cbor_encode(&verify_fixture.anchor)
-                .unwrap()
                 .try_into()
                 .unwrap(),
         ),
@@ -93,7 +92,6 @@ async fn test_verify_identity_based() {
         fixtures::chain::transaction_status_finalized(
             verify_fixture.anchor_txn_hash,
             cbor::cbor_encode(&verify_fixture.anchor)
-                .unwrap()
                 .try_into()
                 .unwrap(),
         ),
@@ -143,7 +141,6 @@ async fn test_verify_anchor_status_committed() {
         fixtures::chain::transaction_status_committed(
             verify_fixture.anchor_txn_hash,
             cbor::cbor_encode(&verify_fixture.anchor)
-                .unwrap()
                 .try_into()
                 .unwrap(),
         ),
@@ -193,7 +190,6 @@ async fn test_verify_fail() {
         fixtures::chain::transaction_status_finalized(
             verify_fixture.anchor_txn_hash,
             cbor::cbor_encode(&verify_fixture.anchor)
-                .unwrap()
                 .try_into()
                 .unwrap(),
         ),
@@ -332,7 +328,6 @@ async fn test_verify_account_credential_not_found() {
         fixtures::chain::transaction_status_finalized(
             verify_fixture.anchor_txn_hash,
             cbor::cbor_encode(&verify_fixture.anchor)
-                .unwrap()
                 .try_into()
                 .unwrap(),
         ),
@@ -374,7 +369,6 @@ async fn test_verify_identity_based_multistatement_both_invalid() {
         fixtures::chain::transaction_status_finalized(
             verify_fixture.anchor_txn_hash,
             cbor::cbor_encode(&verify_fixture.anchor)
-                .unwrap()
                 .try_into()
                 .unwrap(),
         ),

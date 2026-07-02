@@ -17,8 +17,6 @@ anyhow.workspace = true
 chrono = {workspace = true, features = ["serde"] }
 serde = { workspace = true, features = ["derive"] }
 rand.workspace = true
-ed25519-dalek.workspace = true
-gcd.workspace = true
-rayon.workspace = true
-sha2.workspace = true
+tracing.workspace = true
+tracing-subscriber = { workspace = true, features = ["fmt"] }
 
