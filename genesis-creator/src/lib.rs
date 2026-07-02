@@ -40,36 +40,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-/// Subcommands supported by the genesis-creator tool.
-#[derive(clap::Subcommand, Debug)]
-#[clap(author, version, about)]
-pub enum GenesisCreatorCommand {
-    Assemble {
-        #[clap(long, short)]
-        /// The TOML configuration file describing the genesis.
-        config: std::path::PathBuf,
-        #[clap(long, short)]
-        /// Whether to output additional data during genesis generation.
-        verbose: bool,
-    },
-    Generate {
-        #[clap(long, short)]
-        /// The TOML configuration file describing the genesis.
-        config: std::path::PathBuf,
-        #[clap(long, short)]
-        /// Whether to output additional data during genesis generation.
-        verbose: bool,
-    },
-}
-
-/// Run the genesis-creator tool with the given subcommand.
-pub fn run(action: GenesisCreatorCommand) -> anyhow::Result<()> {
-    match action {
-        GenesisCreatorCommand::Assemble { config, verbose } => handle_assemble(&config, verbose),
-        GenesisCreatorCommand::Generate { config, verbose } => handle_generate(&config, verbose),
-    }
-}
-
 fn read_json<S: serde::de::DeserializeOwned>(path: &Path) -> anyhow::Result<S> {
     let data_value: serde_json::Value = serde_json::from_slice(
         &std::fs::read(path).context("Could not read existing account file.")?,

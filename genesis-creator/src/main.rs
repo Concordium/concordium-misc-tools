@@ -8,13 +8,34 @@
 /// In both modes the tool takes a TOML configuration file that specifies the
 /// genesis. For details, see the README.
 use clap::Parser;
-use genesis_creator::{run, GenesisCreatorCommand};
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about)]
 struct GenesisCreator {
     #[clap(subcommand)]
     action: GenesisCreatorCommand,
+}
+
+/// Subcommands supported by the genesis-creator tool.
+#[derive(clap::Subcommand, Debug)]
+#[clap(author, version, about)]
+enum GenesisCreatorCommand {
+    Assemble {
+        #[clap(long, short)]
+        /// The TOML configuration file describing the genesis.
+        config: std::path::PathBuf,
+        #[clap(long, short)]
+        /// Whether to output additional data during genesis generation.
+        verbose: bool,
+    },
+    Generate {
+        #[clap(long, short)]
+        /// The TOML configuration file describing the genesis.
+        config: std::path::PathBuf,
+        #[clap(long, short)]
+        /// Whether to output additional data during genesis generation.
+        verbose: bool,
+    },
 }
 
 fn main() -> anyhow::Result<()> {
@@ -28,5 +49,12 @@ fn main() -> anyhow::Result<()> {
         .with_target(false)
         .init();
 
-    run(GenesisCreator::parse().action)
+    match GenesisCreator::parse().action {
+        GenesisCreatorCommand::Assemble { config, verbose } => {
+            genesis_creator::handle_assemble(&config, verbose)
+        }
+        GenesisCreatorCommand::Generate { config, verbose } => {
+            genesis_creator::handle_generate(&config, verbose)
+        }
+    }
 }
