@@ -1,5 +1,9 @@
 ## Unreleased changes
 
+- Add P11 genesis generation and assembly support for `tokenParameters` governance authorization and the `maxLockDuration` chain parameter.
+- Reject missing P11 fields and P11-only fields supplied for P8–P10 through the SDK's protocol validation.
+- Add a complete P11 example and generation/assembly smoke coverage.
+
 ## 0.8.2
 
 - Fix a bug in the computation of the genesis hash for protocol version 11.
