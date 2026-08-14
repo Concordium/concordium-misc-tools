@@ -125,6 +125,9 @@ pub struct Level2KeysConfig {
     pub cooldown_parameters: Option<Level2UpdateConfig>,
     pub time_parameters: Option<Level2UpdateConfig>,
     pub create_plt: Option<Level2UpdateConfig>,
+    /// Authorization for token and lock-related chain parameter updates.
+    /// Required for P11 and unsupported before P11.
+    pub token_parameters: Option<Level2UpdateConfig>,
 }
 
 /// Struct holding the root or the level 1 keys, together with a threshold.
@@ -348,6 +351,9 @@ pub struct GenesisChainParametersV3Toml {
     pub cooldown_parameters: CooldownParameters,
     pub finalization_committee_parameters: FinalizationCommitteeParametersConfig,
     pub validator_score_parameters: ValidatorScoreParameters,
+    /// Maximum relative duration for protocol-level token locks.
+    /// Required for P11 and unsupported before P11.
+    pub max_lock_duration: Option<Duration>,
 }
 
 impl TryFrom<GenesisChainParametersV3Toml> for GenesisChainParametersV3 {
@@ -367,6 +373,7 @@ impl TryFrom<GenesisChainParametersV3Toml> for GenesisChainParametersV3 {
             cooldown_parameters: t.cooldown_parameters,
             finalization_committee_parameters: t.finalization_committee_parameters.try_into()?,
             validator_score_parameters: t.validator_score_parameters,
+            max_lock_duration: t.max_lock_duration,
         })
     }
 }

@@ -331,6 +331,23 @@ timeParameters = {authorizedKeys = [...], threshold = ...}
 ```
 would specify these two additional chain updates.
 
+Protocol versions 9 and later require authorization for creating protocol-level
+tokens:
+
+```toml
+createPlt = {authorizedKeys = [0,1,2], threshold = 2}
+```
+
+Protocol version 11 additionally requires authorization for token and lock-related
+chain parameter updates:
+
+```toml
+tokenParameters = {authorizedKeys = [0,1,2], threshold = 2}
+```
+
+`tokenParameters` must reference existing level-2 key indices and its threshold
+must not exceed the number of authorized keys. It is rejected for P8–P10.
+
 ### Specifying the genesis parameters
 
 #### Protocol version 1 to 5
@@ -461,14 +478,33 @@ gASRewards = { baker = 0.25, accountCreation = 0.02, chainUpdate = 0.005 }
 ```
 where the concrete values above are replaced with those desired.
 
-#### Protocol version 8
+#### Protocol versions 8 to 11
 
-Protocol version 8 parameters extend the version 6/7 parameters with one additional parameter:
+Protocol versions 8 and later extend the version 6/7 parameters with validator
+score parameters:
 
 ```toml
 [parameters.chain.validatorScoreParameters]
 maxMissedRounds = 10
 ```
+
+Protocol version 11 additionally requires the maximum relative duration for a
+protocol-level token lock. Durations use the same syntax as other relative
+durations, for example:
+
+```toml
+[parameters.chain]
+maxLockDuration = "365d"
+```
+
+The CPV3 protocol constraints are:
+
+- P8: `createPlt`, `tokenParameters`, and `maxLockDuration` must be absent.
+- P9–P10: `createPlt` is required; `tokenParameters` and `maxLockDuration` must be absent.
+- P11: `createPlt`, `tokenParameters`, and `maxLockDuration` are all required.
+
+See [`examples/genesis11.toml`](examples/genesis11.toml) for a complete P11
+configuration.
 
 ## The `assemble` mode
 To generate a genesis from existing file, run
@@ -499,4 +535,4 @@ genesisOut = "path/genesis.dat"
 genesisHashOut = ".path/genesis_hash"
 ```
 
-The genesis parameters are specified in the same format as when generating a new genesis, see the section above.
+The genesis parameters are specified in the same format as when generating a new genesis, see the section above. For P11, the governance-key JSON must contain both `createPlt` and `tokenParameters`, and the chain configuration must contain `maxLockDuration`. The SDK builder applies the same protocol-specific validation in both generate and assemble modes.

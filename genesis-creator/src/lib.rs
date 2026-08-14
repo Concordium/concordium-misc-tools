@@ -901,6 +901,7 @@ fn convert_update_keys_config(cfg: &UpdateKeysConfig) -> anyhow::Result<Governan
                     })?,
                 ),
                 create_plt: l2.create_plt.as_ref().map(level2_access),
+                token_parameters: l2.token_parameters.as_ref().map(level2_access),
             },
         },
     )))
