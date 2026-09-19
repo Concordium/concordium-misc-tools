@@ -162,11 +162,32 @@ pub async fn run_with_dependencies(
         let stop_signal = cancel_token.child_token();
         info!("API server is running at {:?}", configs.api_address);
 
-        let api_router = api::router(service, configs.request_timeout).layer(metrics_layer);
+        if configs.api_key.is_none() {
+            tracing::warn!(
+                "No API key configured (--api-key / CREDENTIAL_VERIFICATION_SERVICE_API_KEY). \
+                 The verification endpoints are UNAUTHENTICATED: anyone can submit on-chain \
+                 anchor transactions at this service's expense. Do not expose this service publicly."
+            );
+        }
 
-        axum::serve(listener, api_router)
-            .with_graceful_shutdown(stop_signal.cancelled_owned())
-            .into_future()
+        let api_security = api::ApiSecurity::new(
+            configs.api_key.clone(),
+            configs.rate_limit_max,
+            Duration::from_secs(configs.rate_limit_window_secs),
+            configs.allowed_origins.clone(),
+        );
+
+        let api_router =
+            api::router(service, configs.request_timeout, api_security).layer(metrics_layer);
+
+        // Provide client socket addresses via `ConnectInfo` so the rate limiter
+        // can key on the real peer IP.
+        axum::serve(
+            listener,
+            api_router.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+        )
+        .with_graceful_shutdown(stop_signal.cancelled_owned())
+        .into_future()
     };
 
     let cancel_token_clone = cancel_token.clone();

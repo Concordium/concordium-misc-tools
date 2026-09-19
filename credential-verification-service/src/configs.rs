@@ -69,4 +69,33 @@ pub struct ServiceConfigs {
         env = "CREDENTIAL_VERIFICATION_SERVICE_LOG_LEVEL"
     )]
     pub log_level: tracing_subscriber::filter::LevelFilter,
+    #[arg(
+        long = "api-key",
+        help = "API key required in the `X-Api-Key` header for calls to the \
+                create-verification-request and verify endpoints. Protects the service from \
+                unauthenticated on-chain anchor transaction submission.",
+        env = "CREDENTIAL_VERIFICATION_SERVICE_API_KEY"
+    )]
+    pub api_key: Option<String>,
+    #[arg(
+        long = "rate-limit-max",
+        help = "Maximum number of API requests allowed per client IP within the rate limit window.",
+        default_value = "60",
+        env = "CREDENTIAL_VERIFICATION_SERVICE_RATE_LIMIT_MAX"
+    )]
+    pub rate_limit_max: u32,
+    #[arg(
+        long = "rate-limit-window-secs",
+        help = "Length of the per-IP rate limit window in seconds.",
+        default_value = "60",
+        env = "CREDENTIAL_VERIFICATION_SERVICE_RATE_LIMIT_WINDOW_SECS"
+    )]
+    pub rate_limit_window_secs: u64,
+    #[arg(
+        long = "allowed-origin",
+        help = "Allowed CORS origin for browser requests. May be supplied multiple times. \
+                If omitted, cross-origin browser requests are not allowed.",
+        env = "CREDENTIAL_VERIFICATION_SERVICE_ALLOWED_ORIGINS"
+    )]
+    pub allowed_origins: Vec<String>,
 }

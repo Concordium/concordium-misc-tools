@@ -27,6 +27,12 @@ fn config() -> ServiceConfigs {
         account: "tests/dummyaccount.json".into(),
         log_level: filter::LevelFilter::INFO,
         transaction_expiry_secs: 10,
+        // No API key in integration tests: the security middleware must remain
+        // permissive when unconfigured so existing endpoint tests keep working.
+        api_key: None,
+        rate_limit_max: 10_000,
+        rate_limit_window_secs: 60,
+        allowed_origins: Vec::new(),
     }
 }
 
